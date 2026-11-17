@@ -17,7 +17,8 @@ export default async function AdminReports() {
         <div className="field"><label htmlFor="prov">Provider</label><select id="prov" name="provider" className="select"><option value="">All</option><option value="shipmozo">Shipmozo</option><option value="demo">Demo</option></select></div>
         <div className="field"><label htmlFor="from">From (IST)</label><input id="from" name="from" type="date" className="input" defaultValue={monthAgo} /></div>
         <div className="field"><label htmlFor="to">To (IST)</label><input id="to" name="to" type="date" className="input" defaultValue={today} /></div>
-        <button className="btn btn-orange"><FileDown size={16} /> Export CSV</button>
+        <div className="field"><label htmlFor="fmt">Format</label><select id="fmt" name="format" className="select"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></div>
+        <button className="btn btn-orange"><FileDown size={16} /> Export</button>
       </form>
       <p className="tiny muted mt8">Cost and margin columns are included only for roles with cost access. Every export is recorded in the audit log.</p>
     </>

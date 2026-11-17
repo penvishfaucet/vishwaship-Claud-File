@@ -478,6 +478,36 @@ export const inAppAlerts = pgTable("in_app_alerts", {
   createdAt: created(),
 });
 
+// ---------- store integrations ----------
+export const storeConnections = pgTable("store_connections", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  platform: text("platform").notNull(), // shopify | woocommerce
+  storeUrl: text("store_url").notNull(), // https://shop.myshopify.com or https://store.example.com
+  credentialsEnc: text("credentials_enc").notNull(), // write-only
+  credentialsHint: text("credentials_hint"),
+  status: text("status").notNull().default("connected"), // connected | error | disconnected
+  warehouseId: text("warehouse_id").references(() => warehouses.id),
+  defaultPackage: jsonb("default_package").notNull().default({ lengthCm: 20, breadthCm: 15, heightCm: 10, weightKg: 0.5 }),
+  autoSync: boolean("auto_sync").notNull().default(false),
+  pushTracking: boolean("push_tracking").notNull().default(true),
+  lastSyncAt: ts("last_sync_at"),
+  lastError: text("last_error"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_conn_org_url").on(t.orgId, t.storeUrl)]);
+
+export const storeImportLog = pgTable("store_import_log", {
+  id: id(),
+  connectionId: text("connection_id").notNull().references(() => storeConnections.id),
+  runId: text("run_id").notNull(),
+  externalOrderId: text("external_order_id").notNull(),
+  externalOrderName: text("external_order_name"),
+  outcome: text("outcome").notNull(), // imported | duplicate | error | skipped
+  message: text("message"),
+  orderId: text("order_id"),
+  createdAt: created(),
+}, (t) => [index("store_import_conn").on(t.connectionId, t.createdAt)]);
+
 // ---------- developer API & webhooks ----------
 export const apiKeys = pgTable("api_keys", {
   id: id(), // public key id, e.g. vsk_live_xxx

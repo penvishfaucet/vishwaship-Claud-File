@@ -5,6 +5,7 @@ import { apiStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { apiError } from "@/server/http";
 import { toCsv } from "@/lib/csv";
+import { XLSX_TYPE, toXlsx } from "@/server/xlsx";
 
 const r2 = (p: number) => (p / 100).toFixed(2);
 
@@ -32,5 +33,8 @@ export async function GET(req: Request) {
   });
   data.push(["TOTAL", "", "", "", "", "", "", "", "", "", r2(tSell), ...(cost ? [r2(tCost), r2(tSub), r2(tSub - tCost), "", ""] : [])]);
   await audit({ actorUserId: s.userId, actorKind: "staff", action: "export.admin_shipments", details: { rows: rows.length, filters: Object.fromEntries(u.searchParams) } });
+  if (u.searchParams.get("format") === "xlsx") {
+    return new Response(await toXlsx("shipments", headers, data), { headers: { "content-type": XLSX_TYPE, "content-disposition": `attachment; filename="vishwaship-shipments-${new Date().toISOString().slice(0, 10)}.xlsx"`, "cache-control": "private, no-store" } });
+  }
   return new Response(toCsv(headers, data), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="vishwaship-shipments-${new Date().toISOString().slice(0, 10)}.csv"`, "cache-control": "private, no-store" } });
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, FileText, Ticket, Truck } from "lucide-react";
+import { BookExisting } from "@/components/portal/BookExisting";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 import { StatusChip, statusLabel } from "@/lib/status";
@@ -43,6 +44,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {!shipment && ["ready", "booking_failed", "cod_hold"].includes(order.status) && <BookExisting orderId={order.id} held={order.status === "cod_hold"} />}
+      {order.source !== "manual" && <p className="tiny muted mb8">Source: {order.source}{order.externalOrderId ? ` · store order ${order.externalOrderId}` : ""}</p>}
       <div className="row wrap mb16" style={{ gap: 8 }}>
         <span className="pill2">Order: {order.status.replace(/_/g, " ")}</span>
         <span className="pill2">Booking: {shipment?.bookingStatus ?? "—"}</span>

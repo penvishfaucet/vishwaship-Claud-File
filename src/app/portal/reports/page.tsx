@@ -18,6 +18,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <div className="field"><label htmlFor="r">Report</label><select id="r" name="r" className="select" defaultValue={sp.r ?? "orders"}>{REPORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
         <div className="field"><label htmlFor="from">From (IST)</label><input id="from" name="from" type="date" className="input" defaultValue={sp.from ?? monthAgo} /></div>
         <div className="field"><label htmlFor="to">To (IST)</label><input id="to" name="to" type="date" className="input" defaultValue={sp.to ?? today} max={today} /></div>
+        <div className="field"><label htmlFor="fmt">Format</label><select id="fmt" name="format" className="select"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></div>
         <button className="btn btn-orange"><FileDown size={16} /> Export</button>
       </form>
       <p className="tiny muted mt8">Exports use the same filters and totals as the on-screen lists, cover your workspace only, and are logged. Cells starting with = + - @ are escaped to prevent spreadsheet formula injection.</p>

@@ -23,6 +23,8 @@ Demo logins are generated into `.data/demo-credentials.txt` (local only). `.env.
 | Shiprocket | Adapter required | In catalog; cannot be enabled. |
 | DTDC / DHL / TCI / FedEx | Adapter required | Catalog entries only. |
 | Razorpay | Implemented, awaiting credentials | Server-side order, Checkout signature check, raw-body webhook HMAC, payment re-fetch before credit, credit keyed by payment id. Simulated "DEMO" recharge when not configured (blocked in production). |
+| Shopify (store) | Implemented, awaiting credentials | REST Admin API, version via `SHOPIFY_API_VERSION` (default 2025-10). Uses a custom-app Admin API token. Shopify has been moving custom apps to the Dev Dashboard; confirm the current way to get a token for your store before go-live. |
+| WooCommerce (store) | Implemented, awaiting credentials | REST API v3, consumer key/secret over HTTPS. |
 | WATI (WhatsApp) | Not implemented | Settings, credits, COD subscription and order hold are in place; sending/reply processing pending WATI account details. |
 | Resend / SMTP | Not implemented | Password reset email depends on this. |
 | SMS / OTP | Awaiting provider | Pickup-mobile OTP shows the code on screen in dev only. |
@@ -56,8 +58,9 @@ Demo logins are generated into `.data/demo-credentials.txt` (local only). `.env.
 | COD buyer confirm/reject replies | ❌ needs WATI account + approved template |
 | Background worker | ✅ in-process loop (15 s) in dev; `npm run worker` for Postgres; backoff, dead-letter + admin replay (Finance → Reconciliation) |
 | Ambiguous booking reconcile job | ⚠️ handler built; not exercised (demo provider never times out) |
-| Store connectors (Shopify/WooCommerce) | ❌ not built |
-| Bulk CSV/XLSX upload, real XLSX export | ❌ not built (exports are CSV) |
+| Bulk CSV/XLSX upload | ✅ template (CSV + XLSX); preview flags bad PIN, in-file duplicate, existing order ID with row numbers; import creates only valid rows (server re-validates); re-upload → duplicates; imported order quoted + booked from order page |
+| Real XLSX export | ✅ customer reports + admin shipments export genuine .xlsx (same rows/totals as CSV, formula guard) |
+| Store connectors (Shopify / WooCommerce) | ⚠️ Implemented, awaiting credentials. Connect (with live connection test), encrypted creds, warehouse mapping, manual + 15-min auto sync, dedupe by store + external order id, import history with errors, retry via Sync now, tracking push-back job after booking. Mapping unit-tested on synthetic payloads. Validation verified (non-myshopify host, http, bad key format, private IP, other tenant's warehouse all rejected). **Not tested against a real store.** |
 | Visual comparison 1440/1024/390 for every screen | ❌ only home (1440, 390) and portal/admin dashboards checked |
 | Public complaint form + ticket lookup without login | ❌ pending owner decision |
 | Policy pages | Owner-editable; the live site's policy pages are currently empty, so no text was copied |

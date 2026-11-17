@@ -5,6 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { apiError } from "@/server/http";
 import { listOrders } from "@/server/portal/queries";
 import { toCsv } from "@/lib/csv";
+import { XLSX_TYPE, toXlsx } from "@/server/xlsx";
 
 const rupees = (p: number) => (p / 100).toFixed(2);
 
@@ -43,6 +44,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
     return apiError(422, "validation_error", `Export "${kind}" is not available yet`);
   }
   await audit({ actorUserId: s.userId, actorKind: "customer", orgId: s.orgId, action: "export", details: { kind, rows: rows.length } });
-  const fmt = u.searchParams.get("format") === "xlsx" ? "xlsx" : "csv";
-  return new Response(toCsv(headers, rows), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="vishwaship-${kind}-${new Date().toISOString().slice(0, 10)}.${fmt === "xlsx" ? "csv" : "csv"}"`, "cache-control": "private, no-store" } });
+  const name = `vishwaship-${kind}-${new Date().toISOString().slice(0, 10)}`;
+  if (u.searchParams.get("format") === "xlsx") {
+    return new Response(await toXlsx(kind, headers, rows), { headers: { "content-type": XLSX_TYPE, "content-disposition": `attachment; filename="${name}.xlsx"`, "cache-control": "private, no-store" } });
+  }
+  return new Response(toCsv(headers, rows), { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${name}.csv"`, "cache-control": "private, no-store" } });
 }

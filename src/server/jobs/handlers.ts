@@ -97,11 +97,28 @@ registerHandler("webhook.retry", async (): Promise<JobResult> => {
   return { done: true };
 });
 
-/** Periodic sweeps: re-arm the webhook retry job and expire stale COD confirmations. */
+/** store.sync — scheduled pull for connections with auto-sync on. */
+registerHandler("store.sync", async (p): Promise<JobResult> => {
+  const { syncStore } = await import("@/server/stores/sync");
+  const r = await syncStore(String(p.connectionId), { kind: "system" });
+  return r.ok ? { done: true } : { retryInSec: 900, error: r.message };
+});
+
+/** store.push_tracking — after booking, send AWB + tracking link back to Shopify/WooCommerce. */
+registerHandler("store.push_tracking", async (p, attempt): Promise<JobResult> => {
+  const { pushTrackingForOrder } = await import("@/server/stores/sync");
+  try { await pushTrackingForOrder(String(p.orderId)); return { done: true }; }
+  catch (e) { return { retryInSec: Math.min(3600, 120 * 2 ** attempt), error: (e as Error).message }; }
+});
+
+/** Periodic sweeps: re-arm the webhook retry job, schedule store syncs, expire stale COD confirmations. */
 export async function scheduleSweeps() {
   const minute = Math.floor(Date.now() / 60_000);
   await enqueue("webhook.retry", {}, { dedupeKey: `webhook.retry:${minute}` });
   const db = await getDb();
+  const slot = Math.floor(minute / 15);
+  const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
+  for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   await db.update(schema.codConfirmations).set({ status: "needs_review" })
     .where(and(inArray(schema.codConfirmations.status, ["pending"]), lte(schema.codConfirmations.expiresAt, new Date())));
 }
