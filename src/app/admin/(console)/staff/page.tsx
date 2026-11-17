@@ -31,7 +31,7 @@ async function invite(fd: FormData) {
 async function manage(fd: FormData) {
   "use server";
   const s = await requireStaff("staff.manage");
-  const id = String(fd.get("id")), action = String(fd.get("action"));
+  const id = String(fd.get("id")), action = String(fd.get("op"));
   if (id === s.userId && action !== "revoke") redirect("/admin/staff/?err=self");
   const db = await getDb();
   if (action === "role") {
@@ -72,10 +72,13 @@ export default async function Staff({ searchParams }: { searchParams: Promise<{ 
         <tbody>{staff.map((u) => (
           <tr key={u.id}>
             <td>{u.name}{u.id === me.userId ? " (you)" : ""}</td><td className="small">{u.email}</td>
-            <td><form action={manage} className="row" style={{ gap: 4 }}><input type="hidden" name="id" value={u.id} /><input type="hidden" name="action" value="role" /><select aria-label={`Role for ${u.name}`} name="role" className="select" defaultValue={u.staffRole ?? "readonly"} disabled={u.id === me.userId}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>{u.id !== me.userId && <button className="btn btn-sm btn-outline">Set</button>}</form></td>
+            <td><form action={manage} className="row" style={{ gap: 4 }}><input type="hidden" name="id" value={u.id} /><input type="hidden" name="op" value="role" /><select aria-label={`Role for ${u.name}`} name="role" className="select" defaultValue={u.staffRole ?? "readonly"} disabled={u.id === me.userId}>{ROLES.map((r) => <option key={r}>{r}</option>)}</select>{u.id !== me.userId && <button className="btn btn-sm btn-outline">Set</button>}</form></td>
             <td><span className={`chip ${u.active ? "c-active" : "c-cancelled"}`}>{u.active ? (u.mustResetPassword ? "Invited" : "Active") : "Deactivated"}</span></td>
             <td className="small">{u.mfaEnabled ? "On" : "Off"}</td>
-            <td><form action={manage} className="row" style={{ gap: 4 }}><input type="hidden" name="id" value={u.id} /><button name="action" value="revoke" className="btn btn-sm btn-outline">Revoke sessions</button>{u.id !== me.userId && (u.active ? <button name="action" value="deactivate" className="btn btn-sm btn-red">Deactivate</button> : <button name="action" value="activate" className="btn btn-sm btn-green">Activate</button>)}</form></td>
+            <td><div className="row" style={{ gap: 4 }}>
+              <form action={manage}><input type="hidden" name="id" value={u.id} /><input type="hidden" name="op" value="revoke" /><button className="btn btn-sm btn-outline">Revoke sessions</button></form>
+              {u.id !== me.userId && <form action={manage}><input type="hidden" name="id" value={u.id} /><input type="hidden" name="op" value={u.active ? "deactivate" : "activate"} /><button className={u.active ? "btn btn-sm btn-red" : "btn btn-sm btn-green"}>{u.active ? "Deactivate" : "Activate"}</button></form>}
+            </div></td>
           </tr>
         ))}</tbody></table></div>
       <section className="card mt16" style={{ padding: 16 }}>

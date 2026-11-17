@@ -9,6 +9,8 @@ npm install
 powershell -ExecutionPolicy Bypass -File scripts/dev-setup.ps1   # migrations + demo seed
 npm run dev                                                       # http://localhost:3000
 ```
+Dev uses Turbopack (`next dev --turbopack`) because this PC has ~0.8 GB free RAM and webpack ran out of memory.
+Known pitfall fixed: in server-action forms, don't rely on which button was clicked (`<button name value>`); use one form per action with hidden fields.
 Demo logins are generated into `.data/demo-credentials.txt` (local only). `.env.local` sets `ALLOW_DEMO_STAFF_WITHOUT_MFA=1` so demo staff can skip MFA locally; never set it in staging/production.
 
 ## Provider capability matrix
@@ -41,15 +43,21 @@ Demo logins are generated into `.data/demo-credentials.txt` (local only). `.env.
 | Staff TOTP MFA | ✅ RFC 6238 vector test; enrol/verify pages built, not clicked through |
 | No page-wide overflow at 390 px (home) | ✅ |
 | B2B multipiece booking | ⚠️ quote verified (Allcargo Gati, 134 kg); booking not completed (demo wallet too small) |
-| Label / invoice / exports | ⚠️ built, not opened in browser yet |
-| KYC upload → admin approve | ⚠️ built, not exercised |
-| NDR actions, weight dispute charge/waive | ⚠️ built, not exercised |
-| Signed customer webhooks | ⚠️ built, not exercised (needs a public https endpoint) |
-| /api/v1 with API keys + idempotency | ⚠️ built, not exercised |
-| COD confirmation send/reply | ❌ needs WATI |
+| Labels (A4, 4×6, 38×100 mm), invoice | ✅ render with Code 128 barcode and DEMO stamp; cross-tenant label → 404 |
+| CSV export totals match screen | ✅ Shipping Charges ₹4,757.20 on screen = export TOTAL row |
+| KYC upload → admin approve | ✅ non-PDF and bad PAN rejected; 3 docs uploaded encrypted; 5-min signed link works, tampered link 403; approvals set org KYC = approved |
+| NDR action | ✅ reattempt acknowledged; second action on same attempt → 409 |
+| Weight dispute charge / waive | ✅ charge −₹59 once, waive posts compensating +₹59 |
+| Webhook URL safety (SSRF) | ✅ localhost, 169.254.169.254 and http:// rejected |
+| Signed webhook delivery | ⚠️ signer + retry job built; not sent to a real endpoint (needs a public https URL you control) |
+| /api/v1 with API keys + idempotency | ✅ no key 401; quote parity with portal (₹138.88); missing Idempotency-Key 400; replay returns same order; changed body 409; book → AWB; tracking; other tenant's AWB 404 |
+| COD hold for subscribed customer (API source) | ✅ order created in `cod_hold`; booking refused (409 cod_hold) |
+| COD send without WhatsApp provider | ✅ worker marks send_failed + alert; order stays on hold, never auto-confirmed |
+| COD buyer confirm/reject replies | ❌ needs WATI account + approved template |
+| Background worker | ✅ in-process loop (15 s) in dev; `npm run worker` for Postgres; backoff, dead-letter + admin replay (Finance → Reconciliation) |
+| Ambiguous booking reconcile job | ⚠️ handler built; not exercised (demo provider never times out) |
 | Store connectors (Shopify/WooCommerce) | ❌ not built |
 | Bulk CSV/XLSX upload, real XLSX export | ❌ not built (exports are CSV) |
-| Background worker (reconcile jobs, retries, webhooks retry) | ❌ jobs are queued in the `jobs` table; worker not written |
 | Visual comparison 1440/1024/390 for every screen | ❌ only home (1440, 390) and portal/admin dashboards checked |
 | Public complaint form + ticket lookup without login | ❌ pending owner decision |
 | Policy pages | Owner-editable; the live site's policy pages are currently empty, so no text was copied |

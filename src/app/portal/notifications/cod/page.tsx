@@ -6,7 +6,7 @@ import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
 import { getSetting } from "@/server/quotes/service";
 
-const FILTERS = ["pending", "confirmed", "declined", "expired", "needs_review"] as const;
+const FILTERS = ["pending", "confirmed", "declined", "expired", "needs_review", "send_failed"] as const;
 
 export default async function CodPage({ searchParams }: { searchParams: Promise<{ status?: string; q?: string }> }) {
   const sp = await searchParams;

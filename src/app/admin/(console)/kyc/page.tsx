@@ -55,11 +55,10 @@ export default async function AdminKyc({ searchParams }: { searchParams: Promise
                 <form action={decide} className="col" style={{ gap: 8 }}>
                   <input type="hidden" name="docId" value={d.id} />
                   <div className="field"><label htmlFor={`r-${d.id}`}>Reason (required unless approving)</label><input id={`r-${d.id}`} name="reason" className="input" /></div>
-                  <div className="row wrap" style={{ gap: 6 }}>
-                    <button name="status" value="approved" className="btn btn-sm btn-green">Approve</button>
-                    <button name="status" value="changes_requested" className="btn btn-sm btn-outline">Request changes</button>
-                    <button name="status" value="rejected" className="btn btn-sm btn-red">Reject</button>
+                  <div className="field"><label htmlFor={`s-${d.id}`}>Decision</label>
+                    <select id={`s-${d.id}`} name="status" className="select" defaultValue="approved"><option value="approved">Approve</option><option value="changes_requested">Request changes</option><option value="rejected">Reject</option></select>
                   </div>
+                  <button className="btn btn-sm btn-navy" style={{ alignSelf: "start" }}>Submit decision</button>
                 </form>
               )}
             </section>

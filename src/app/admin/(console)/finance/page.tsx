@@ -4,6 +4,17 @@ import { formatINR } from "@/lib/money";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 
+async function replay(fd: FormData) {
+  "use server";
+  const s = await requireStaff("finance.adjust");
+  const { replayJob } = await import("@/server/jobs/runner");
+  const { audit } = await import("@/server/audit");
+  await replayJob(String(fd.get("id")));
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "job.replay", targetType: "job", targetId: String(fd.get("id")) });
+  const { redirect } = await import("next/navigation");
+  redirect("/admin/finance/?tab=reconciliation");
+}
+
 const TABS = [["wallets", "Wallets"], ["recharges", "Recharges"], ["adjustments", "Adjustments"], ["cod", "COD"], ["reconciliation", "Reconciliation"]] as const;
 
 export default async function Finance({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -43,9 +54,12 @@ export default async function Finance({ searchParams }: { searchParams: Promise<
       {tab === "reconciliation" && await (async () => {
         const amb = await db.select().from(schema.orders).where(eq(schema.orders.status, "needs_reconcile"));
         const mm = await db.select().from(schema.recharges).where(eq(schema.recharges.status, "mismatch"));
+        const dead = await db.select().from(schema.jobs).where(eq(schema.jobs.status, "dead")).orderBy(desc(schema.jobs.createdAt)).limit(50);
         return <div className="grid2" style={{ gap: 12 }}>
           <section className="card" style={{ padding: 16 }}><b>Ambiguous bookings</b><p className="small muted">Funds held; resolved by courier lookup before any retry.</p>{amb.length ? amb.map((o) => <p key={o.id} className="small">{o.orderNumber}</p>) : <p className="small">None 🎉</p>}</section>
           <section className="card" style={{ padding: 16 }}><b>Recharge mismatches</b><p className="small muted">Captured amount/currency differs from the order; not credited.</p>{mm.length ? mm.map((r) => <p key={r.id} className="small mono">{r.razorpayPaymentId}</p>) : <p className="small">None 🎉</p>}</section>
+          <section className="card" style={{ padding: 16, gridColumn: "1 / -1" }}><b>Dead-letter jobs</b><p className="small muted">Jobs that failed after all retries. Replay re-runs them safely (handlers are idempotent).</p>
+            {dead.length ? dead.map((j) => <form key={j.id} action={replay} className="row between" style={{ gap: 8, padding: "6px 0" }}><input type="hidden" name="id" value={j.id} /><span className="small"><b>{j.queue}</b> · {j.lastError}</span><button className="btn btn-sm btn-outline">Replay</button></form>) : <p className="small">None 🎉</p>}</section>
         </div>;
       })()}
     </>

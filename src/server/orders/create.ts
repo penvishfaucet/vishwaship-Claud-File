@@ -56,7 +56,12 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
     await db.insert(schema.packages).values({ id: newId("pkg"), orderId: id, count: p.count, lengthMm: Math.round(p.lengthCm * 10), breadthMm: Math.round(p.breadthCm * 10), heightMm: Math.round(p.heightCm * 10), actualWeightGrams: Math.round(p.weightKg * 1000) });
   }
   if (codHold) {
-    await db.insert(schema.codConfirmations).values({ id: newId("cod"), orgId, orderId: id, status: "pending" });
+    const [cfgRow] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "cod_confirmation"));
+    const cfg = (cfgRow?.value as { reminderMinutes?: number; expiryMinutes?: number } | undefined) ?? {};
+    await db.insert(schema.codConfirmations).values({
+      id: newId("cod"), orgId, orderId: id, status: "pending",
+      reminderAt: new Date(Date.now() + (cfg.reminderMinutes ?? 120) * 60_000), expiresAt: new Date(Date.now() + (cfg.expiryMinutes ?? 1440) * 60_000),
+    });
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "cod.send", payload: { orderId: id }, dedupeKey: `cod.send:${id}` });
   }
   return { ok: true as const, orderId: id, orderNumber, codHold, origin: wh.pincode };

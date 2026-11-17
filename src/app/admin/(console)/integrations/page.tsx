@@ -97,15 +97,14 @@ export default async function Integrations({ searchParams }: { searchParams: Pro
               <h3 className="small b">Capabilities</h3>
               <ul className="plain-list">{Object.entries((sel.capabilities as Record<string, string>) ?? {}).map(([k, v]) => <li key={k} className="row between"><span className="small">{k}</span><span className="chip c-pending">{v.replace(/_/g, " ")}</span></li>)}{Object.keys(sel.capabilities as object).length === 0 && <li className="small muted">Not certified yet — every capability is “implemented / awaiting credentials” or “unsupported”.</li>}</ul>
               {write && (
-                <form action={setStatus} className="mt12 col" style={{ gap: 6 }}>
-                  <input type="hidden" name="id" value={sel.id} />
+                <div className="mt12 col" style={{ gap: 6 }}>
                   <p className="tiny muted">Disabling stops new bookings/sends via this account. {openShipments} existing shipment(s) stay linked and keep tracking/reconciliation.</p>
                   <div className="row" style={{ gap: 6 }}>
-                    {sel.status !== "enabled" && <button name="status" value="enabled" className="btn btn-sm btn-green">Enable</button>}
-                    {sel.status === "enabled" && <button name="status" value="disabled" className="btn btn-sm btn-outline">Disable</button>}
-                    {sel.status === "disabled" && <button name="status" value="archived" className="btn btn-sm btn-red">Archive</button>}
+                    {([["enabled", "Enable", "btn-green", sel.status !== "enabled"], ["disabled", "Disable", "btn-outline", sel.status === "enabled"], ["archived", "Archive", "btn-red", sel.status === "disabled"]] as const).filter(([, , , show]) => show).map(([v, l, c]) => (
+                      <form key={v} action={setStatus}><input type="hidden" name="id" value={sel.id} /><input type="hidden" name="status" value={v} /><button className={`btn btn-sm ${c}`}>{l}</button></form>
+                    ))}
                   </div>
-                </form>
+                </div>
               )}
             </div>
           </div>
