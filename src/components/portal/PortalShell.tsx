@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, CornerUpLeft, Home, LayoutGrid, Menu, Package, Search, ShieldCheck, Ticket, Wallet, X } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { CUSTOMER_NAV } from "./nav";
+import { SidebarBrand, TopbarBrand } from "@/components/BrandLogo";
 
 interface Props {
   user: { name: string; orgName: string; kycStatus: string };
@@ -46,10 +47,7 @@ export function PortalShell({ user, walletPaise, unreadAlerts, logout, children 
   return (
     <div className="shell">
       <aside className={drawer ? "side open" : "side"} aria-label="Portal navigation">
-        <div className="brand">
-          <Link href="/portal/" onClick={() => setDrawer(false)}><img src="/brand/logo-full.png" alt="vishwaship.com" className="logo-dark-fix" style={{ height: 28, filter: "brightness(0) invert(1)" }} /></Link>
-          <div className="portal">CUSTOMER PORTAL</div>
-        </div>
+        <SidebarBrand href="/portal/" label="CUSTOMER PORTAL" onClick={() => setDrawer(false)} />
         <nav>
           {CUSTOMER_NAV.map((n) => (
             <Link key={n.href} href={n.href} className={active(n.href) ? "item on" : "item"} aria-current={active(n.href) ? "page" : undefined} onClick={() => setDrawer(false)}>
@@ -62,7 +60,7 @@ export function PortalShell({ user, walletPaise, unreadAlerts, logout, children 
       <div className="main">
         <header className="top" ref={ref}>
           <button className="icon-btn show-sm-flex" aria-label={drawer ? "Close menu" : "Open menu"} onClick={() => setDrawer((d) => !d)}>{drawer ? <X size={20} /> : <Menu size={20} />}</button>
-          <Link href="/portal/" className="show-sm" aria-label="Dashboard"><img src="/brand/logo-full.png" alt="vishwaship.com" style={{ height: 24 }} /></Link>
+          <TopbarBrand href="/portal/" label="Dashboard" />
           <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); const q = new FormData(e.currentTarget).get("q"); if (q) router.push(`/portal/orders/?q=${encodeURIComponent(String(q))}`); }}>
             <Search size={16} aria-hidden /><label htmlFor="gq" className="sr-only">Search orders</label>
             <input id="gq" name="q" placeholder="Order ID, AWB / LR or phone" />

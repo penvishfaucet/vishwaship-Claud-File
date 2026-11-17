@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeIndianRupee, Bell, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, BadgeIndianRupee, Bell, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -25,6 +25,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "SETTINGS", items: [
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
+    { href: "/admin/api-credentials/", label: "API Credentials", icon: KeyRound, perm: "api_keys.manage" },
     { href: "/admin/staff/", label: "Staff & Roles", icon: Activity, perm: "staff.manage" },
     { href: "/admin/audit/", label: "Audit Log", icon: ScrollText, perm: "audit.read" },
   ] },

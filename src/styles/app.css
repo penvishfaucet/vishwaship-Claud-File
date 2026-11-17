@@ -66,5 +66,14 @@ ol.stepper li+li::before{content:"";width:28px;height:1px;background:var(--line)
 .vs-switch span{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
 .vs-switch.on{background:var(--orange)}.vs-switch.on span{left:21px}
 .vs-switch:disabled{opacity:.45;cursor:not-allowed}
+/* original logo on navy sidebar: white card keeps the brand colours intact */
+.side .brand .brand-chip{display:block;background:#fff;border-radius:10px;padding:8px 10px;line-height:0}
+.side .brand .brand-chip img{display:block;width:100%;height:auto;max-height:36px;object-fit:contain;object-position:left center}
+.side .brand .brand-chip:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.topbar-brand{line-height:0;flex-shrink:0}
+.topbar-brand img{display:block;height:24px;width:auto}
+.topbar-brand .tb-icon{display:none;height:28px}
+@media (max-width:380px){.topbar-brand .tb-full{display:none}.topbar-brand .tb-icon{display:block}}
+html.dark .side .brand .brand-chip{background:#fff}
 .only-mobile{display:none}
 @media (max-width:900px){.only-desktop{display:none}.only-mobile{display:block}}
