@@ -4,15 +4,15 @@
  *
  * Runs automatically when the web app starts (src/instrumentation.ts), because some hosts (e.g. Hostinger
  * Web Apps) start the app without running `npm start`'s prestart hook. Also used by scripts/release.mts.
+ * Migrations are embedded in the build (migrations.generated.ts, made by scripts/embed-migrations.mjs) because
+ * such hosts ship only the build output, not the /migrations folder. Same bookkeeping table as drizzle-kit.
  * Safe to repeat: migrations are idempotent and a PostgreSQL advisory lock stops two instances racing.
  * No alias ("@/…") or "server-only" imports so tsx scripts can import it too.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { EMBEDDED_MIGRATIONS } from "./migrations.generated";
 import * as schemaNs from "./schema";
 
 // tsx loads schema.ts as CommonJS (namespace under "default"); the bundler gives the plain namespace. Dynamic key avoids a bundler warning.
@@ -22,18 +22,16 @@ const LOCK_ID = 7_310_442_901; // arbitrary, constant advisory-lock key for "vis
 
 export async function runRelease(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("runRelease needs DATABASE_URL");
-  const migrationsFolder = join(process.cwd(), "migrations");
-  if (!existsSync(join(migrationsFolder, "meta", "_journal.json"))) {
-    throw new Error(`[release] migrations folder not found at ${migrationsFolder} — deploy must include /migrations`);
-  }
   const { Pool } = await import("pg");
   const pool = new Pool({ connectionString: url, max: 1 });
   const client = await pool.connect();
   try {
     await client.query("select pg_advisory_lock($1)", [LOCK_ID]);
     const db = drizzle(client, { schema });
-    await migrate(db, { migrationsFolder });
-    console.log("[release] migrations applied");
+    // drizzle's own migrator, fed from the embedded copy instead of reading /migrations from disk
+    const internal = db as unknown as { dialect: { migrate: (m: unknown, session: unknown, cfg: object) => Promise<void> }; session: unknown };
+    await internal.dialect.migrate(EMBEDDED_MIGRATIONS, internal.session, {});
+    console.log(`[release] migrations applied (${EMBEDDED_MIGRATIONS.length} known)`);
     await bootstrapOwner(db);
   } finally {
     await client.query("select pg_advisory_unlock($1)", [LOCK_ID]).catch(() => {});
