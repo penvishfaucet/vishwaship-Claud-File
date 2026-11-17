@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasFeature } from "@/server/features";
 import { and, eq, inArray } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
 import { audit } from "@/server/audit";
@@ -13,6 +14,7 @@ import { toCsv } from "@/lib/csv";
 export async function GET(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (!(await hasFeature(s.orgId, "bulk_upload"))) return apiError(403, "forbidden", "Bulk upload is not enabled for your account");
   const fmt = new URL(req.url).searchParams.get("template");
   if (fmt === "xlsx") {
     const ExcelJS = (await import("exceljs")).default;
@@ -36,6 +38,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (!(await hasFeature(s.orgId, "bulk_upload"))) return apiError(403, "forbidden", "Bulk upload is not enabled for your account");
   const rl = await rateLimit(`bulk:${s.orgId}`, 30, 3600);
   if (!rl.ok) return apiError(429, "rate_limited", "Too many uploads. Try again later.");
   const fd = await req.formData();

@@ -1,12 +1,14 @@
 import { and, eq, inArray, lte, lt } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
+import { hasFeature } from "@/server/features";
 import { withLedger } from "@/server/ledger/db-store";
 import { release, settle } from "@/server/ledger/wallet";
 import { getAdapter, providerContext } from "@/server/providers/registry";
 import { decrypt, hmacSha256Hex } from "@/server/security/crypto";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { newId } from "@/server/util/ids";
+import { codSendFailed, giveUp, runCarrierCancellation, sendCodConfirmation, sendOutForDelivery, sweepNoResponse } from "@/server/whatsapp/service";
 import { type JobResult, enqueue, registerHandler } from "./runner";
 
 /**
@@ -55,26 +57,36 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
 });
 
 /**
- * cod.send — WhatsApp COD confirmation. Requires an enabled WATI account and credits. If either is
- * missing the confirmation goes to the exception queue (send_failed / no credit); the order stays
- * on hold and is NEVER auto-confirmed.
+ * cod.send — WhatsApp COD confirmation (order stays on hold until the buyer answers or the admin timeout runs).
+ * whatsapp.send — Out for Delivery message. cod.cancel — carrier cancellation after a buyer "Cancel Order".
+ * All three are idempotent: message rows dedupe on their key, credits charge once per message,
+ * decisions apply once, refunds use a fixed ledger idempotency key.
  */
-registerHandler("cod.send", async (p): Promise<JobResult> => {
+registerHandler("cod.send", async (p, attempt): Promise<JobResult> => {
   const { orderId } = p as { orderId: string };
-  const db = await getDb();
-  const [c] = await db.select().from(schema.codConfirmations).where(eq(schema.codConfirmations.orderId, orderId));
-  if (!c || c.status !== "pending" || c.sentAt) return { done: true };
-  const [wati] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, "wati"), eq(schema.providerAccounts.status, "enabled")));
-  const [bal] = await db.select().from(schema.creditBalances).where(eq(schema.creditBalances.orgId, c.orgId));
-  const reason = !wati ? "WhatsApp provider not configured" : (bal?.credits ?? 0) < 2 ? "Insufficient notification credits" : null;
-  if (reason) {
-    await db.update(schema.codConfirmations).set({ status: "send_failed" }).where(eq(schema.codConfirmations.id, c.id));
-    await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: c.orgId, kind: "cod", title: `COD confirmation not sent: ${reason}. Order is on hold.`, href: "/portal/notifications/cod/?status=send_failed" });
-    await audit({ actorKind: "system", orgId: c.orgId, action: "cod.send_failed", targetType: "order", targetId: orderId, details: { reason } });
-    return { done: true };
+  const r = await sendCodConfirmation(orderId);
+  if (r.retryable) {
+    if (attempt < 5) return { retryInSec: 30 * 2 ** attempt, error: r.reason };
+    await giveUp(`wa:cod:${orderId}`, r.reason ?? "Gave up after retries");
+    await codSendFailed(orderId, r.reason ?? "Gave up after retries");
   }
-  // WATI template send goes here once the account, sender and approved template are provided.
-  return { dead: "WATI sending not implemented yet" };
+  return { done: true };
+});
+
+registerHandler("whatsapp.send", async (p, attempt): Promise<JobResult> => {
+  const { shipmentId, day } = p as { shipmentId: string; day?: string };
+  const key = `wa:ofd:${shipmentId}:${day ?? new Date().toISOString().slice(0, 10)}`;
+  const r = await sendOutForDelivery(shipmentId, key);
+  if (r.retryable) {
+    if (attempt < 5) return { retryInSec: 30 * 2 ** attempt, error: r.reason };
+    await giveUp(key, r.reason ?? "Gave up after retries");
+  }
+  return { done: true };
+});
+
+registerHandler("cod.cancel", async (p, attempt): Promise<JobResult> => {
+  const { confirmationId, shipmentId } = p as { confirmationId: string; shipmentId: string };
+  return runCarrierCancellation(confirmationId, shipmentId, attempt);
 });
 
 /** webhook.retry — retry failed customer webhook deliveries with backoff (max 6 attempts). */
@@ -100,6 +112,9 @@ registerHandler("webhook.retry", async (): Promise<JobResult> => {
 /** store.sync — scheduled pull for connections with auto-sync on. */
 registerHandler("store.sync", async (p): Promise<JobResult> => {
   const { syncStore } = await import("@/server/stores/sync");
+  const db = await getDb();
+  const [conn] = await db.select({ orgId: schema.storeConnections.orgId }).from(schema.storeConnections).where(eq(schema.storeConnections.id, String(p.connectionId)));
+  if (!conn || !(await hasFeature(conn.orgId, "store_channels"))) return { done: true }; // module switched off by Admin
   const r = await syncStore(String(p.connectionId), { kind: "system" });
   return r.ok ? { done: true } : { retryInSec: 900, error: r.message };
 });
@@ -119,6 +134,5 @@ export async function scheduleSweeps() {
   const slot = Math.floor(minute / 15);
   const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
   for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
-  await db.update(schema.codConfirmations).set({ status: "needs_review" })
-    .where(and(inArray(schema.codConfirmations.status, ["pending"]), lte(schema.codConfirmations.expiresAt, new Date())));
+  await sweepNoResponse();
 }

@@ -130,8 +130,13 @@ export const warehouses = pgTable("warehouses", {
   pincode: text("pincode").notNull(),
   city: text("city").notNull(),
   state: text("state").notNull(),
+  email: text("email"),
+  code: text("code"), // short human ID shown in lists (e.g. W1001)
   active: boolean("active").notNull().default(true),
   isDefault: boolean("is_default").notNull().default(false),
+  createdBy: text("created_by"),
+  deactivatedAt: ts("deactivated_at"),
+  updatedAt: ts("updated_at"),
   createdAt: created(),
 });
 
@@ -229,6 +234,8 @@ export const orders = pgTable("orders", {
   codAmountPaise: paise("cod_amount_paise").notNull().default(0), // buyer collection, never marked up
   declaredValuePaise: paise("declared_value_paise").notNull(),
   warehouseId: text("warehouse_id").references(() => warehouses.id),
+  /** Copy of the pickup address at order time, so later warehouse edits never change history. */
+  pickupSnapshot: jsonb("pickup_snapshot"),
   consignee: jsonb("consignee").notNull(), // name, mobile, address, pincode, city, state
   products: jsonb("products").notNull().default([]),
   invoiceNumber: text("invoice_number"),
@@ -262,6 +269,8 @@ export const shipments = pgTable("shipments", {
   serviceName: text("service_name").notNull(),
   providerOrderRef: text("provider_order_ref"),
   awb: text("awb"), // only ever set from a provider response
+  /** Unguessable reference for public/branded tracking links (never the AWB). */
+  publicRef: text("public_ref").unique(),
   lrNumber: text("lr_number"),
   pieceIds: jsonb("piece_ids"),
   bookingStatus: text("booking_status").notNull(), // pending | confirmed | failed | ambiguous | cancelled
@@ -437,8 +446,13 @@ export const codConfirmations = pgTable("cod_confirmations", {
   id: id(),
   orgId: text("org_id").notNull(),
   orderId: text("order_id").notNull().unique().references(() => orders.id),
-  status: text("status").notNull(), // pending | confirmed | declined | expired | needs_review | send_failed
+  status: text("status").notNull(),
+  // pending | confirmed | rejected | no_response | needs_review | send_failed | expired
   sentAt: ts("sent_at"),
+  buyerResponse: text("buyer_response"), // confirm | cancel
+  cancellationStatus: text("cancellation_status"), // requested | cancelled | failed | action_required
+  cancellationReason: text("cancellation_reason"),
+  cancellationAt: ts("cancellation_at"),
   reminderAt: ts("reminder_at"),
   expiresAt: ts("expires_at"),
   decidedAt: ts("decided_at"),
@@ -576,3 +590,83 @@ export const jobs = pgTable("jobs", {
   dedupeKey: text("dedupe_key").unique(),
   createdAt: created(),
 });
+
+// ---------- subscriptions & feature access ----------
+export const plans = pgTable("plans", {
+  id: id(),
+  name: text("name").notNull(),
+  description: text("description"),
+  pricePaise: paise("price_paise").notNull().default(0),
+  billingPeriodDays: integer("billing_period_days").notNull().default(30),
+  modules: jsonb("modules").notNull().default([]), // module keys included
+  events: jsonb("events").notNull().default([]), // notification events included (e.g. whatsapp:out_for_delivery)
+  active: boolean("active").notNull().default(true),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+  createdAt: created(),
+});
+
+export const orgSubscriptions = pgTable("org_subscriptions", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  planId: text("plan_id").notNull().references(() => plans.id),
+  status: text("status").notNull().default("active"), // active | cancelled
+  startsAt: ts("starts_at").notNull().default(sql`now()`),
+  expiresAt: ts("expires_at"),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [index("org_sub_org").on(t.orgId)]);
+
+/** scope=global (orgId null) or scope=org. An org override beats the plan; global default beats module default. */
+export const featureOverrides = pgTable("feature_overrides", {
+  id: id(),
+  orgId: text("org_id"),
+  module: text("module").notNull(),
+  enabled: boolean("enabled").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("feature_override_scope").on(t.orgId, t.module)]);
+
+// ---------- editable customer-facing content ----------
+export const contentBlocks = pgTable("content_blocks", {
+  key: text("key").notNull(),
+  locale: text("locale").notNull().default("en"),
+  draft: text("draft"),
+  published: text("published"),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+  publishedBy: text("published_by"),
+  publishedAt: ts("published_at"),
+}, (t) => [uniqueIndex("content_key_locale").on(t.key, t.locale)]);
+
+// ---------- branded tracking page ----------
+export const trackingPages = pgTable("tracking_pages", {
+  orgId: text("org_id").primaryKey().references(() => orgs.id),
+  slug: text("slug").notNull().unique(),
+  draft: jsonb("draft").notNull().default({}),
+  published: jsonb("published"),
+  isPublished: boolean("is_published").notNull().default(false),
+  publishedAt: ts("published_at"),
+  disabledByAdmin: boolean("disabled_by_admin").notNull().default(false),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+});
+
+// ---------- WhatsApp message log ----------
+export const whatsappMessages = pgTable("whatsapp_messages", {
+  id: id(),
+  orgId: text("org_id").notNull(),
+  orderId: text("order_id"),
+  shipmentId: text("shipment_id"),
+  event: text("event").notNull(), // out_for_delivery | cod_confirmation
+  templateName: text("template_name"),
+  recipientMasked: text("recipient_masked").notNull(),
+  dedupeKey: text("dedupe_key").notNull().unique(),
+  providerMessageId: text("provider_message_id"),
+  status: text("status").notNull(), // queued | sent | delivered | read | failed | skipped
+  buyerResponse: text("buyer_response"),
+  respondedAt: ts("responded_at"),
+  error: text("error"),
+  creditsCharged: integer("credits_charged").notNull().default(0),
+  isDemo: boolean("is_demo").notNull().default(false),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [index("wa_org_created").on(t.orgId, t.createdAt), index("wa_provider_msg").on(t.providerMessageId)]);

@@ -1,4 +1,5 @@
 import "server-only";
+import { hasFeature } from "@/server/features";
 import { createHash } from "node:crypto";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -23,6 +24,7 @@ export async function apiKeyAuth(req: Request, scope: ApiScope) {
   if (!k || !safeEqual(k.secretHash, sha256(m[2]))) return { ok: false as const, res: v1Error(401, "unauthorized", "Invalid API key") };
   if (!(k.scopes as string[]).includes(scope)) return { ok: false as const, res: v1Error(403, "forbidden", `Key lacks scope ${scope}`) };
   if (!k.orgId) return { ok: false as const, res: v1Error(403, "forbidden", "Service-account keys must use the admin API") };
+  if (!(await hasFeature(k.orgId, "api_integration"))) return { ok: false as const, res: v1Error(403, "forbidden", "API integration is not enabled for this account") };
   const rl = await rateLimit(`api:${k.id}`, 120, 60);
   if (!rl.ok) return { ok: false as const, res: NextResponse.json({ error: { code: "rate_limited", message: "Rate limit exceeded" } }, { status: 429, headers: { "retry-after": String(rl.retryAfter) } }) };
   await db.update(schema.apiKeys).set({ lastUsedAt: new Date() }).where(eq(schema.apiKeys.id, k.id));

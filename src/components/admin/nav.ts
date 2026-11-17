@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeIndianRupee, Bell, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, BadgeIndianRupee, Bell, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -15,6 +15,9 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "CUSTOMERS", items: [
     { href: "/admin/customers/", label: "Customers", icon: Users, perm: "customers.read" },
     { href: "/admin/kyc/", label: "KYC", icon: ShieldCheck, perm: "kyc.review" },
+    { href: "/admin/plans/", label: "Plans & Features", icon: Layers, perm: "customers.read" },
+    { href: "/admin/warehouses/", label: "Warehouses", icon: MapPin, perm: "customers.read" },
+    { href: "/admin/tracking-pages/", label: "Tracking Pages", icon: Palette, perm: "customers.read" },
   ] },
   { group: "FINANCE", items: [
     { href: "/admin/pricing/", label: "Pricing", icon: Tags, perm: "pricing.read" },
@@ -25,6 +28,8 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "SETTINGS", items: [
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
+    { href: "/admin/whatsapp/", label: "WhatsApp Ops", icon: MessageCircle, perm: "notifications.read" },
+    { href: "/admin/content/", label: "Content", icon: FileText, perm: "customers.read" },
     { href: "/admin/api-credentials/", label: "API Credentials", icon: KeyRound, perm: "api_keys.manage" },
     { href: "/admin/staff/", label: "Staff & Roles", icon: Activity, perm: "staff.manage" },
     { href: "/admin/audit/", label: "Audit Log", icon: ScrollText, perm: "audit.read" },

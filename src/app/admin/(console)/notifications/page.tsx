@@ -23,7 +23,7 @@ async function saveCod(fd: FormData) {
 export default async function AdminNotifications({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("notifications.read");
-  const cfg = await getSetting("cod_confirmation", { reminderMinutes: 120, expiryMinutes: 1440, noReply: "hold_for_review", credits: 2 });
+  const cfg = await getSetting("cod_confirmation", { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 2 });
   const costs = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 2 });
   const db = await getDb();
   const packs = await db.select().from(schema.creditPacks);

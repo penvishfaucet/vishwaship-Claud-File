@@ -142,7 +142,10 @@ export const demoAdapter: ShippingAdapter = {
     return { ok: true, value: { awb, carrierName: "Demo", status: DEMO_TIMELINE[step], events, etaDate: new Date(base + 6 * 18 * 3600_000).toISOString() } };
   },
 
-  async cancel() {
+  async cancel(ctx) {
+    // Demo-only switch (provider account config "demoRefuseCancel": true) to exercise the
+    // "Cancellation Failed" path locally. Real adapters return the courier's actual answer.
+    if (ctx.config.demoRefuseCancel) return { ok: false, error: { category: "validation", message: "Demo courier: shipment already manifested, cancellation refused", retryable: false } };
     return { ok: true, value: { acknowledged: true } };
   },
 

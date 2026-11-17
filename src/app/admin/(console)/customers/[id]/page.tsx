@@ -16,8 +16,11 @@ import { loadMarkupSettings } from "@/server/quotes/service";
 import { withLedger } from "@/server/ledger/db-store";
 import { credit, debit } from "@/server/ledger/wallet";
 import { newId } from "@/server/util/ids";
+import { MODULES } from "@/lib/modules";
+import { FeatureButtons, PlanControls } from "@/components/admin/FeatureControls";
+import { resolveFeatures } from "@/server/features";
 
-const TABS = ["overview", "shipments", "kyc", "pricing", "wallet", "notifications"] as const;
+const TABS = ["overview", "shipments", "kyc", "pricing", "wallet", "features", "notifications"] as const;
 
 export default async function CustomerDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; msg?: string }> }) {
   const { id } = await params;
@@ -90,7 +93,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
         <div className="s">{wallet && wallet.reservedPaise > 0 ? `${formatINR(wallet.reservedPaise)} on hold for bookings · ` : ""}View passbook</div>
       </Link>
       <nav className="tabs">{TABS.map((t) => <Link key={t} href={`/admin/customers/${id}/?tab=${t}`} className={tab === t ? "on" : ""}>{t[0].toUpperCase() + t.slice(1)}</Link>)}</nav>
-      {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" ? "small t-credit mb12" : "small err mb12"} role="status">{{ nouser: "This customer has no active login user to open.", saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
+      {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" || sp.msg.includes(" ") ? "small t-credit mb12" : "small err mb12"} role="status">{{ nouser: "This customer has no active login user to open.", saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
 
       {tab === "overview" && (
         <div className="grid2" style={{ gap: 12 }}>
@@ -135,7 +138,43 @@ export default async function CustomerDetail({ params, searchParams }: { params:
             <tbody>{ledger.map((l) => <tr key={l.id}><td className="small">{l.createdAt.toLocaleString("en-IN")}</td><td className="small">{l.kind}</td><td className="small">{l.memo}</td><td className="r">{formatINR(l.amountPaise)}</td><td className="r">{formatINR(l.balanceAfterPaise)}</td></tr>)}</tbody></table></div>
         </>
       )}
+      {tab === "features" && <FeaturesTab orgId={id} write={can(s.role, "modules.manage")} />}
       {tab === "notifications" && <p className="small muted">Customer channel settings and delivery logs: <Link className="link" href={`/admin/notifications/?org=${id}`}>open in Notifications</Link>.</p>}
     </>
+  );
+}
+
+async function FeaturesTab({ orgId, write }: { orgId: string; write: boolean }) {
+  const db = await getDb();
+  const f = await resolveFeatures(orgId);
+  const plans = await db.select().from(schema.plans).where(eq(schema.plans.active, true));
+  const history = await db.select({ s: schema.orgSubscriptions, p: schema.plans }).from(schema.orgSubscriptions).innerJoin(schema.plans, eq(schema.plans.id, schema.orgSubscriptions.planId)).where(eq(schema.orgSubscriptions.orgId, orgId)).orderBy(desc(schema.orgSubscriptions.createdAt)).limit(10);
+  const SRC: Record<string, string> = { customer: "Customer override", plan: "From plan", global: "Global setting", default: "Default" };
+  return (
+    <div className="split" style={{ gap: 16, alignItems: "start" }}>
+      <section className="card p0">
+        <h2 className="b small card-h" style={{ margin: 0 }}>Effective modules</h2>
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Module</th><th>Status</th><th>Why</th>{write && <th>Override</th>}</tr></thead>
+          <tbody>{MODULES.map((m) => {
+            const e = f.modules[m.key];
+            return (
+              <tr key={m.key}>
+                <td className="small">{m.label}</td>
+                <td><span className={`chip ${e.enabled ? "c-active" : "c-draft"}`}>{e.enabled ? "On" : "Off"}</span></td>
+                <td className="tiny muted">{SRC[e.source]}</td>
+                {write && <td><FeatureButtons orgId={orgId} module={m.key} label={m.label} current={e.source === "customer" ? (e.enabled ? "on" : "off") : "inherit"} /></td>}
+              </tr>
+            );
+          })}</tbody></table></div>
+        <p className="tiny muted" style={{ padding: "0 16px 12px" }}>A customer override with WhatsApp notifications “On” also allows both WhatsApp events without a plan.</p>
+      </section>
+      <section className="card" style={{ padding: 18 }}>
+        <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Subscription</h2>
+        {f.plan ? <p className="small">Active plan: <b>{f.plan.name}</b>{f.subscription?.expiresAt ? ` · expires ${f.subscription.expiresAt.toLocaleDateString("en-IN")}` : " · no expiry"}</p> : <p className="small muted">No active plan.</p>}
+        {write && <PlanControls orgId={orgId} currentPlanId={f.plan?.id ?? null} plans={plans.map((p) => ({ id: p.id, label: `${p.name} · ${formatINR(p.pricePaise)}/${p.billingPeriodDays}d` }))} />}
+        {write && plans.length === 0 && <p className="tiny muted mt8">Create a plan first in <Link className="link" href="/admin/plans/">Plans &amp; Features</Link>.</p>}
+        {history.length > 0 && <ul className="plain-list mt12">{history.map(({ s: h, p }) => <li key={h.id} className="small row between"><span>{p.name} · {h.startsAt.toLocaleDateString("en-IN")}{h.expiresAt ? ` → ${h.expiresAt.toLocaleDateString("en-IN")}` : ""}</span><span className={`chip ${h.status === "active" ? "c-active" : "c-draft"}`}>{h.status}</span></li>)}</ul>}
+      </section>
+    </div>
   );
 }

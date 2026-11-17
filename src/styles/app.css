@@ -83,3 +83,16 @@ ol.stepper li+li::before{content:"";width:28px;height:1px;background:var(--line)
 @media (max-width:900px){.only-desktop{display:none}.only-mobile{display:block}}
 
 :root{--font-roboto:"Roboto"}
+
+/* grouped customer sidebar */
+.side details.grp{margin-bottom:2px}
+.side details.grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#d6dbe8;cursor:pointer;user-select:none}
+.side details.grp>summary::-webkit-details-marker{display:none}
+.side details.grp>summary:hover{background:rgba(255,255,255,.06)}
+.side details.grp>summary:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.side details.grp>summary svg{width:15px;height:15px;opacity:.9;flex-shrink:0}
+.side details.grp>summary .chev{margin-left:auto;transition:transform .15s}
+.side details.grp[open]>summary .chev{transform:rotate(180deg)}
+.side details.grp .sub{padding-left:14px}
+.side-support{display:flex;gap:8px;align-items:center;margin:14px 12px 18px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;font-weight:600;text-decoration:none}
+.side-support small{display:block;font-size:11px;font-weight:500;color:#aab3c8}

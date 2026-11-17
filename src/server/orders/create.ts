@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
 import { rupeesToPaise } from "@/lib/money";
 import { newId } from "@/server/util/ids";
+import { pickupSnapshot } from "@/server/warehouses";
 
 const pin = z.string().regex(/^[1-9]\d{5}$/, "PIN code must be 6 digits");
 const mobile = z.string().transform((s) => s.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile"));
@@ -35,6 +36,7 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
   const db = await getDb();
   const [wh] = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.id, input.warehouseId), eq(schema.warehouses.orgId, orgId)));
   if (!wh) return { ok: false as const, message: "Pickup address not found" };
+  if (!wh.active) return { ok: false as const, message: "This pickup address is deactivated. Choose an active one." };
   const id = newId("ord");
   const orderNumber = input.orderNumber ?? `VS${Date.now().toString(36).toUpperCase()}`;
   const dup = await db.select({ id: schema.orders.id }).from(schema.orders).where(and(eq(schema.orders.orgId, orgId), eq(schema.orders.orderNumber, orderNumber)));
@@ -48,7 +50,7 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
     id, orgId, orderNumber, source, externalStoreId: external?.storeId, externalOrderId: external?.orderId,
     status: codHold ? "cod_hold" : "ready", mode: input.mode, direction: input.direction, paymentType: input.paymentType,
     codAmountPaise: input.paymentType === "cod" ? rupeesToPaise(input.codAmountRupees) : 0,
-    declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, consignee: input.consignee,
+    declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, pickupSnapshot: pickupSnapshot(wh), consignee: input.consignee,
     products: input.products.map((p) => ({ name: p.name, sku: p.sku, qty: p.qty, unitPrice: rupeesToPaise(p.unitPriceRupees), hsn: p.hsn })),
     invoiceNumber: input.invoiceNumber, ewayBill: input.ewayBill || null, buyerGstin: input.buyerGstin || null,
   });

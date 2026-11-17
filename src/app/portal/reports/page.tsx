@@ -1,27 +1,24 @@
+import Link from "next/link";
 import { FileDown } from "lucide-react";
+import { t } from "@/server/content";
+import { requireFeature } from "@/server/features";
 import { portalContext } from "@/server/portal/context";
+import { REPORTS } from "@/server/reports";
 
-const REPORTS = [
-  ["orders", "Orders"], ["shipments", "Shipments & delivery performance"], ["ndr", "NDR / RTO"], ["charges", "Shipping charges"],
-  ["passbook", "Wallet ledger"], ["cod", "COD / remittance"], ["disputes", "Weight disputes"], ["credits", "Notification usage"],
-] as const;
-
-export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ r?: string; from?: string; to?: string }> }) {
-  const sp = await searchParams;
-  await portalContext();
-  const today = new Date().toISOString().slice(0, 10);
-  const monthAgo = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 10);
+export default async function ReportsHome() {
+  const ctx = await portalContext();
+  await requireFeature(ctx.org.id, "reports");
   return (
     <>
-      <div className="page-h"><h1>Reports</h1></div>
-      <form className="card row wrap" style={{ padding: 16, gap: 10, alignItems: "end" }} action="/api/portal/export/report" method="get">
-        <div className="field"><label htmlFor="r">Report</label><select id="r" name="r" className="select" defaultValue={sp.r ?? "orders"}>{REPORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
-        <div className="field"><label htmlFor="from">From (IST)</label><input id="from" name="from" type="date" className="input" defaultValue={sp.from ?? monthAgo} /></div>
-        <div className="field"><label htmlFor="to">To (IST)</label><input id="to" name="to" type="date" className="input" defaultValue={sp.to ?? today} max={today} /></div>
-        <div className="field"><label htmlFor="fmt">Format</label><select id="fmt" name="format" className="select"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select></div>
-        <button className="btn btn-orange"><FileDown size={16} /> Export</button>
-      </form>
-      <p className="tiny muted mt8">Exports use the same filters and totals as the on-screen lists, cover your workspace only, and are logged. Cells starting with = + - @ are escaped to prevent spreadsheet formula injection.</p>
+      <div className="page-h"><div><h1>Reports</h1><p className="small muted" style={{ margin: "4px 0 0" }}>{await t("portal.reports.help")}</p></div></div>
+      <div className="grid3" style={{ gap: 12 }}>
+        {Object.entries(REPORTS).map(([k, r]) => (
+          <Link key={k} href={`/portal/reports/${k}/`} className="card stat-link" style={{ padding: 16, display: "block" }}>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}><FileDown size={18} color="var(--orange)" /><b>{r.title}</b></div>
+            <p className="small muted" style={{ margin: "6px 0 0" }}>{r.desc}</p>
+          </Link>
+        ))}
+      </div>
     </>
   );
 }

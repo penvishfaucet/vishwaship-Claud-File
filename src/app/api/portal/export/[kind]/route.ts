@@ -40,6 +40,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
     rows = l.map(({ s: x, o }) => [x.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), o.orderNumber, x.awb, x.carrierName, (x.chargeableWeightGrams / 1000).toFixed(2), rupees(x.sellPaise)]);
     const total = l.reduce((t, r) => t + r.s.sellPaise, 0);
     rows.push(["TOTAL", "", "", "", "", rupees(total)]);
+  } else if (kind === "warehouses") {
+    let w = await db.select().from(schema.warehouses).where(eq(schema.warehouses.orgId, s.orgId));
+    const q = u.searchParams.get("q")?.toLowerCase(), code = u.searchParams.get("code")?.toLowerCase(), st = u.searchParams.get("status");
+    if (q) w = w.filter((x) => x.label.toLowerCase().includes(q));
+    if (code) w = w.filter((x) => (x.code ?? x.id).toLowerCase().includes(code));
+    if (st === "active") w = w.filter((x) => x.active); if (st === "inactive") w = w.filter((x) => !x.active);
+    headers = ["ID", "Title", "Contact name", "Email", "Mobile", "Mobile verified", "Address", "City", "State", "Pincode", "Default", "Status", "Created by", "Created at (IST)"];
+    rows = w.map((x) => [x.code ?? x.id, x.label, x.contactName, x.email ?? "", x.mobile, x.mobileVerifiedAt ? "Yes" : "No", [x.line1, x.line2].filter(Boolean).join(", "), x.city, x.state, x.pincode, x.isDefault ? "Yes" : "No", x.active ? "Active" : "Inactive", x.createdBy ?? "", x.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })]);
   } else {
     return apiError(422, "validation_error", `Export "${kind}" is not available yet`);
   }

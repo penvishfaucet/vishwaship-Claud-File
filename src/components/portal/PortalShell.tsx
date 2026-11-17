@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, CornerUpLeft, Home, LayoutGrid, Menu, Package, Search, ShieldCheck, Ticket, Wallet, X } from "lucide-react";
+import { Bell, ChevronDown, CornerUpLeft, Home, LayoutGrid, Menu, Package, Phone, Search, ShieldCheck, Ticket, Wallet, X } from "lucide-react";
 import { formatINR } from "@/lib/money";
-import { CUSTOMER_NAV } from "./nav";
+import { SITE } from "@/lib/site";
+import { flatNav, isNavGroup, visibleNav } from "./nav";
 import { SidebarBrand } from "@/components/BrandLogo";
 
 interface Props {
@@ -12,6 +13,9 @@ interface Props {
   walletPaise: number;
   unreadAlerts: Array<{ id: string; title: string; href: string | null; createdAt: string }>;
   logout: () => Promise<void>;
+  /** Module keys enabled for this account (Admin feature access); gates sidebar entries. */
+  modules: string[];
+  supportLabel: string;
   children: React.ReactNode;
 }
 
@@ -27,14 +31,18 @@ function useClickAway(open: boolean, close: () => void) {
   return ref;
 }
 
-export function PortalShell({ user, walletPaise, unreadAlerts, logout, children }: Props) {
+export function PortalShell({ user, walletPaise, unreadAlerts, logout, modules, supportLabel, children }: Props) {
   const path = usePathname();
+  const nav = visibleNav(modules);
   const router = useRouter();
   const [drawer, setDrawer] = useState(false);
   const [menu, setMenu] = useState<null | "tickets" | "alerts" | "profile">(null);
   const close = () => setMenu(null);
   const ref = useClickAway(menu !== null, close);
-  const active = (href: string) => (href === "/portal/" ? path === "/portal" || path === "/portal/" : path.startsWith(href.replace(/\/$/, "")));
+  const matches = (href: string) => (href === "/portal/" ? path === "/portal" || path === "/portal/" : path.startsWith(href.replace(/\/$/, "")));
+  // only the most specific link is active (e.g. Bulk Upload, not also Orders)
+  const best = flatNav(nav).map((n) => n.href).filter(matches).sort((a, b) => b.length - a.length)[0];
+  const active = (href: string) => href === best || (!flatNav(nav).some((n) => n.href === href) && matches(href));
   useEffect(() => {
     try {
       const m = localStorage.getItem("vs-theme");
@@ -49,12 +57,24 @@ export function PortalShell({ user, walletPaise, unreadAlerts, logout, children 
       <aside className={drawer ? "side open" : "side"} aria-label="Portal navigation">
         <SidebarBrand href="/portal/" label="CUSTOMER PORTAL" onClick={() => setDrawer(false)} />
         <nav>
-          {CUSTOMER_NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={active(n.href) ? "item on" : "item"} aria-current={active(n.href) ? "page" : undefined} onClick={() => setDrawer(false)}>
-              <n.icon aria-hidden />{n.label}
+          {nav.map((e) => isNavGroup(e) ? (
+            <details key={e.group} className="grp" open={e.items.some((n) => active(n.href)) || undefined}>
+              <summary className="item"><e.icon aria-hidden />{e.group}<ChevronDown className="chev" aria-hidden /></summary>
+              <div className="sub">
+                {e.items.map((n) => (
+                  <Link key={n.href} href={n.href} className={active(n.href) ? "item on" : "item"} aria-current={active(n.href) ? "page" : undefined} onClick={() => setDrawer(false)}>
+                    <n.icon aria-hidden />{n.label}
+                  </Link>
+                ))}
+              </div>
+            </details>
+          ) : (
+            <Link key={e.href} href={e.href} className={active(e.href) ? "item on" : "item"} aria-current={active(e.href) ? "page" : undefined} onClick={() => setDrawer(false)}>
+              <e.icon aria-hidden />{e.label}
             </Link>
           ))}
         </nav>
+        <a className="side-support" href={`tel:${SITE.phone.replace(/\s/g, "")}`}><Phone aria-hidden size={14} /><span><small>{supportLabel}</small>{SITE.phone}</span></a>
       </aside>
       {drawer && <div className="backdrop on" onClick={() => setDrawer(false)} aria-hidden />}
       <div className="main">

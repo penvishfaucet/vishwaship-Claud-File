@@ -15,7 +15,7 @@ export const NOTIFY_EVENTS = [
 export const CHANNELS = ["email", "sms", "whatsapp", "webhook"] as const;
 export type Channel = (typeof CHANNELS)[number];
 
-export const TEMPLATE_VARS = ["merchant_name", "order_id", "awb", "carrier", "status", "tracking_link"] as const;
+export const TEMPLATE_VARS = ["merchant_name", "order_id", "awb", "carrier", "status", "tracking_link", "buyer_name", "cod_amount"] as const;
 
 export const DEFAULT_TEMPLATE = (event: string) =>
   `Hi, your order {{order_id}} from {{merchant_name}} is now "${event}". Courier: {{carrier}}, AWB {{awb}}. Track: {{tracking_link}}`;

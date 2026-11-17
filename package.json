@@ -16,6 +16,7 @@
     "db:migrate": "tsx scripts/migrate.mts",
     "db:seed": "tsx scripts/seed.mts",
     "owner:bootstrap": "tsx scripts/bootstrap-owner.mts",
+    "verify:whatsapp": "tsx --tsconfig tsconfig.json --require ./scripts/stub-server-only.cjs scripts/verify-whatsapp.ts",
     "worker": "tsx --conditions=react-server --tsconfig tsconfig.json src/server/jobs/worker.ts",
     "prestart": "tsx scripts/release.mts"
   },

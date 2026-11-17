@@ -1,26 +1,26 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { apiCustomer } from "@/server/auth/session";
+import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
+import { hasFeature } from "@/server/features";
 import { apiError, parseJson } from "@/server/http";
 import { newId } from "@/server/util/ids";
-
-const Body = z.object({
-  label: z.string().trim().min(2).max(60), contactName: z.string().trim().min(2).max(80),
-  mobile: z.string().transform((s) => s.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile")),
-  line1: z.string().trim().min(5).max(200), line2: z.string().trim().max(200).optional(),
-  pincode: z.string().regex(/^[1-9]\d{5}$/, "PIN code must be 6 digits"), city: z.string().trim().min(2).max(60), state: z.string().trim().min(2).max(60),
-});
+import { WarehouseInput, nextWarehouseCode } from "@/server/warehouses";
 
 export async function POST(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
-  const p = await parseJson(req, Body);
+  if (!(await hasFeature(s.orgId, "warehouses"))) return apiError(403, "forbidden", "Warehouses are not enabled for your account");
+  const p = await parseJson(req, WarehouseInput);
   if (!p.ok) return p.res;
   const db = await getDb();
   const existing = await db.select({ id: schema.warehouses.id }).from(schema.warehouses).where(eq(schema.warehouses.orgId, s.orgId));
   const id = newId("wh");
-  await db.insert(schema.warehouses).values({ id, orgId: s.orgId, ...p.data, line2: p.data.line2 || null, isDefault: existing.length === 0 });
+  await db.insert(schema.warehouses).values({
+    id, orgId: s.orgId, ...p.data, email: p.data.email || null, line2: p.data.line2 || null,
+    isDefault: existing.length === 0, code: await nextWarehouseCode(), createdBy: s.name,
+  });
+  await audit({ actorUserId: s.userId, actorKind: s.impersonatorId ? "staff" : "customer", orgId: s.orgId, action: "warehouse.create", targetType: "warehouse", targetId: id, details: s.impersonatorId ? { viaAdmin: s.impersonatorId } : undefined });
   return NextResponse.json({ id }, { status: 201 });
 }

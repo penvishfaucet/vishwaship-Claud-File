@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasFeature } from "@/server/features";
 import { and, eq } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -10,6 +11,7 @@ import { syncStore } from "@/server/stores/sync";
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (!(await hasFeature(s.orgId, "store_channels"))) return apiError(403, "forbidden", "Store channels is not enabled for your account");
   const { id } = await params;
   const db = await getDb();
   const [c] = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.id, id), eq(schema.storeConnections.orgId, s.orgId)));

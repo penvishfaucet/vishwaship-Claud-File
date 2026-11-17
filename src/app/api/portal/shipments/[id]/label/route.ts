@@ -37,6 +37,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (r.value.url) return Response.redirect(r.value.url, 302);
   }
 
+  const snap = row.o.pickupSnapshot as { label: string; line1: string; city: string; pincode: string } | null;
+  const pw = snap ?? row.w;
   const c = row.o.consignee as { name: string; line1: string; line2?: string; city: string; state: string; pincode: string; mobile: string };
   const small = format === "thermal_2x4" || format === "thermal_38x100";
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Label ${esc(row.s.awb)}</title>
@@ -49,7 +51,7 @@ ${row.s.provider === "demo" ? `<div class="demo">DEMO LABEL — NOT VALID FOR CA
 <div class="r"><span class="b h">${esc(row.s.carrierName)}</span><span class="b">${esc(row.o.mode)} · ${row.o.paymentType === "cod" ? `COD ${esc(formatINR(row.o.codAmountPaise))}` : "PREPAID"}</span></div>
 <div class="bc">${code128Svg(row.s.awb)}</div><div class="b" style="text-align:center">${esc(row.s.awb)}</div>
 <div class="box"><div class="b">Deliver to</div>${esc(c.name)}<br>${esc(c.line1)}${c.line2 ? ", " + esc(c.line2) : ""}<br>${esc(c.city)}, ${esc(c.state)} <b>${esc(c.pincode)}</b>${small ? "" : `<br>Ph: ${esc(c.mobile)}`}</div>
-${small ? "" : `<div class="box"><div class="b">Return / pickup</div>${esc(row.w?.label)}, ${esc(row.w?.line1)}, ${esc(row.w?.city)} ${esc(row.w?.pincode)}</div>`}
+${small ? "" : `<div class="box"><div class="b">Return / pickup</div>${esc(pw?.label)}, ${esc(pw?.line1)}, ${esc(pw?.city)} ${esc(pw?.pincode)}</div>`}
 <div class="r"><span>Order ${esc(row.o.orderNumber)}</span><span>${(row.s.chargeableWeightGrams / 1000).toFixed(2)} kg</span></div>
 ${small ? "" : `<div class="bc">${code128Svg(row.o.orderNumber)}</div>`}
 </div></body></html>`;

@@ -58,7 +58,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <div className="grid2" style={{ gap: 14 }}>
             <section className="card" style={{ padding: 16 }}>
               <h2 className="b small" style={{ marginTop: 0 }}>Pickup</h2>
-              {warehouse ? <p className="small" style={{ margin: 0 }}>{warehouse.label}<br />{warehouse.line1}<br />{warehouse.city}, {warehouse.state} {warehouse.pincode}</p> : <p className="muted small">—</p>}
+              {(() => { const p = (order.pickupSnapshot as { label: string; line1: string; city: string; state: string; pincode: string } | null) ?? warehouse; return p ? <p className="small" style={{ margin: 0 }}>{p.label}<br />{p.line1}<br />{p.city}, {p.state} {p.pincode}</p> : <p className="muted small">—</p>; })()}
             </section>
             <section className="card" style={{ padding: 16 }}>
               <h2 className="b small" style={{ marginTop: 0 }}>Deliver to</h2>

@@ -1,10 +1,14 @@
 import Link from "next/link";
 import { ChevronRight, LogOut, Settings, ShieldCheck, User } from "lucide-react";
 import { CUSTOMER_NAV } from "@/components/portal/nav";
+import { resolveFeatures } from "@/server/features";
+import { portalContext } from "@/server/portal/context";
 import { customerLogout } from "@/server/auth/actions";
 
-export default function MorePage() {
-  const extra = CUSTOMER_NAV.filter((n) => !["/portal/", "/portal/orders/", "/portal/ndr/"].includes(n.href));
+export default async function MorePage() {
+  const ctx = await portalContext();
+  const f = await resolveFeatures(ctx.org.id);
+  const extra = CUSTOMER_NAV.filter((n) => !["/portal/", "/portal/orders/", "/portal/ndr/"].includes(n.href) && (!n.module || f.modules[n.module].enabled));
   return (
     <>
       <h1 style={{ fontSize: 22 }}>More</h1>

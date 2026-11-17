@@ -3,9 +3,11 @@ import { and, eq } from "drizzle-orm";
 import { BulkUpload } from "@/components/portal/BulkUpload";
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
+import { requireFeature } from "@/server/features";
 
 export default async function BulkPage() {
   const ctx = await portalContext();
+  await requireFeature(ctx.org.id, "bulk_upload");
   const db = await getDb();
   const wh = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, ctx.org.id), eq(schema.warehouses.active, true)));
   return (

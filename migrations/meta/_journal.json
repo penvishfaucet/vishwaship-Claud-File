@@ -22,6 +22,13 @@
       "when": 1794912948702,
       "tag": "0002_impersonation",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794913684253,
+      "tag": "0003_modules_tracking_whatsapp",
+      "breakpoints": true
     }
   ]
 }

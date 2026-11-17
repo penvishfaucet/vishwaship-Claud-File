@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasFeature } from "@/server/features";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { apiCustomer } from "@/server/auth/session";
@@ -18,6 +19,7 @@ const Connect = z.discriminatedUnion("platform", [
 export async function POST(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (!(await hasFeature(s.orgId, "store_channels"))) return apiError(403, "forbidden", "Store channels is not enabled for your account");
   const p = await parseJson(req, Connect);
   if (!p.ok) return p.res;
   const db = await getDb();
@@ -44,6 +46,7 @@ const Settings = z.object({ id: z.string(), warehouseId: z.string().optional(), 
 export async function PATCH(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (!(await hasFeature(s.orgId, "store_channels"))) return apiError(403, "forbidden", "Store channels is not enabled for your account");
   const p = await parseJson(req, Settings);
   if (!p.ok) return p.res;
   const db = await getDb();

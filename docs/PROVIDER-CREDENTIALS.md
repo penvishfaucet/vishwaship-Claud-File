@@ -25,7 +25,7 @@
 | **Delhivery B2B (LTL)** | Adapter required | API username + password (इनसे login token बनता है), client/warehouse code | Delhivery B2B account manager / Delhivery One developer portal (B2B) | (adapter बनने पर) `username`, `password`, `clientCode` |
 | **Shiprocket** | Adapter required | API user email + password (अलग "API user") | Shiprocket panel → Settings → API → Configure → Create API User | (adapter बनने पर) `apiEmail`, `apiPassword` |
 | **Razorpay** | Implemented, credentials बाकी | Key ID, Key Secret, Webhook Secret | Razorpay Dashboard → Account & Settings → API Keys (Test और Live अलग); Webhooks में URL `https://<आपका-domain>/api/webhooks/razorpay`, events `payment.captured`, `order.paid` | `keyId`, `keySecret`, `webhookSecret` |
-| **WATI (WhatsApp)** | Sending बाकी | API endpoint URL, Access token, approved template के नाम | WATI dashboard → API Docs / Integrations | `apiEndpoint`, `accessToken`, `webhookToken` |
+| **WATI (WhatsApp)** | Implemented (demo mode में verified; live account बाकी) | API endpoint URL, Access token, approved template के नाम | WATI dashboard → API Docs / Integrations | `apiEndpoint`, `accessToken`, `webhookToken` |
 | **Resend (email)** | Sending बाकी | API key + verified sending domain | resend.com → API Keys, Domains | `apiKey` |
 | **Custom SMTP** | Sending बाकी | Host, port, username, password | आपका email provider | `host`, `port`, `username`, `password` |
 | **SMS / OTP** | Provider चुनना बाकी | API key, DLT sender ID, DLT-approved template IDs | आपका SMS provider + DLT portal | `apiKey`, `senderId` |
@@ -38,3 +38,19 @@
 4. **WATI**: account, sender number और Meta-approved COD Confirm/Cancel template।
 
 Credentials कभी चैट, ईमेल, स्क्रीनशॉट या GitHub में न भेजें — सीधे Admin → Integrations में खुद डालें।
+
+## WhatsApp (WATI) setup — Out for Delivery + COD Confirmation
+
+1. **WATI account** बनाएँ और अपना WhatsApp Business sender number जोड़ें (Meta verification WATI करवाता है)।
+2. WATI में दो templates बनाकर Meta approval के लिए भेजें:
+   - `out_for_delivery_v1` (Utility) — variables: `{{buyer_name}}`, `{{order_id}}`, `{{merchant_name}}`, `{{carrier}}`, `{{awb}}`, `{{tracking_link}}`
+   - `cod_confirm_v1` (Utility) — variables: `{{buyer_name}}`, `{{order_id}}`, `{{merchant_name}}`, `{{cod_amount}}`, और दो **Quick Reply buttons**: बिल्कुल `Confirm Order` और `Cancel Order`
+3. WATI → API Docs से **API endpoint** (जैसे `https://live-mt-server.wati.io/<tenant-id>`) और **Access token** कॉपी करें।
+4. एक लंबा random **webhook token** बनाएँ (कम से कम 32 अक्षर)।
+5. Admin → Integrations → WATI में `apiEndpoint`, `accessToken`, `webhookToken` डालें; *allowed hosts* में WATI का host (जैसे `live-mt-server.wati.io`) डालें; account को **Enabled** करें और *Test* दबाएँ।
+6. WATI → Webhooks में URL डालें: `https://<आपकी-site>/api/webhooks/wati?token=<webhookToken>` — events: *Message received* और *Sent message status*।
+7. Admin → WhatsApp Ops → Template mapping में दोनों template के नाम डालें और Meta approve होने पर **Approved** चुनें (सिर्फ़ Approved templates से live भेजा जाता है)।
+8. Admin → Plans & Features में plan बनाएँ जिसमें *WhatsApp notifications* module + दोनों events हों, और ग्राहक को plan दें। ग्राहक फिर Settings → Shipping Notifications / COD Confirmation में चालू करे।
+9. COD का no-response timeout और उसके बाद क्या हो (order active रखें / review / cancel) Admin → WhatsApp Ops में सेट करें।
+
+Environment में कुछ नया नहीं चाहिए — `APP_URL` सही होना चाहिए (tracking link और webhook URL उसी से बनते हैं)। जब तक WATI account जुड़ा नहीं है, local/dev में **demo mode** चलता है (message सिर्फ़ record होते हैं, credits नहीं कटते); production में demo mode कभी चालू नहीं होता।
