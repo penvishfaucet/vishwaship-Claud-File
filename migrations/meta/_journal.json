@@ -43,6 +43,13 @@
       "when": 1794929697776,
       "tag": "0005_delhivery_fod",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794955266401,
+      "tag": "0006_site_assets",
+      "breakpoints": true
     }
   ]
 }

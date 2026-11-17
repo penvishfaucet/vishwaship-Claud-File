@@ -201,5 +201,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1794929697776,
   "hash": "1baf13a5983fb6d2a04bb93b1825aa7d30f3942cc4a9f63a6167df3f2e9dd785"
+ },
+ {
+  "tag": "0006_site_assets",
+  "sql": [
+   "CREATE TABLE \"site_assets\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"kind\" text NOT NULL,\n\t\"mime\" text NOT NULL,\n\t\"size_bytes\" integer NOT NULL,\n\t\"name\" text,\n\t\"data\" \"bytea\" NOT NULL,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n"
+  ],
+  "bps": true,
+  "folderMillis": 1794955266401,
+  "hash": "36847f6a44e9f385e97c97d15214dd55e975e70fc5723dc87808b68a38ac6319"
  }
 ];

@@ -5,6 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  customType,
   bigint, boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -826,3 +827,17 @@ export const earlyCodSubscriptions = pgTable("early_cod_subscriptions", {
   cancelledAt: ts("cancelled_at"),
   createdAt: created(),
 }, (t) => [index("early_cod_org").on(t.orgId)]);
+
+// ---------- public website media (logos, team photos, hero video/poster, page images) ----------
+// Stored in the database so uploads survive redeploys on hosts that replace the disk. Public by design.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+export const siteAssets = pgTable("site_assets", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull(), // image | video
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  name: text("name"),
+  data: bytea("data").notNull(),
+  createdBy: text("created_by"),
+  createdAt: created(),
+});

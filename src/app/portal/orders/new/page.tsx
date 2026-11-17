@@ -5,7 +5,15 @@ import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
 import { getSetting } from "@/server/quotes/service";
 
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string }> }) {
+/** Cartons carried over from the public Rate Calculator: "count*l*b*h*kg" items joined by "~". */
+function parsePk(v?: string) {
+  if (!v) return undefined;
+  const out = v.split("~").slice(0, 20).map((x) => x.split("*")).filter((p) => p.length === 5 && p.every((n) => /^\d{1,5}(\.\d{1,3})?$/.test(n)))
+    .map(([count, l, b, h, w]) => ({ count, l, b, h, w }));
+  return out.length ? out : undefined;
+}
+
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string; pay?: string; cod?: string; pk?: string }> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const db = await getDb();
@@ -40,7 +48,9 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           walletPaise={ctx.walletAvailable}
           b2bThresholdGrams={threshold.value}
           direction={sp.direction === "reverse" ? "reverse" : "forward"}
-          initial={{ destination: sp.dest, weightKg: sp.weight, mode: sp.mode === "B2B" ? "B2B" : undefined }}
+          initial={{ destination: sp.dest, weightKg: sp.weight, mode: sp.mode === "B2B" ? "B2B" : sp.mode === "B2C" ? "B2C" : undefined,
+            payment: sp.pay === "cod" || sp.pay === "fod" || sp.pay === "prepaid" ? sp.pay : undefined, codAmount: sp.cod && /^\d{1,7}(\.\d{1,2})?$/.test(sp.cod) ? sp.cod : undefined,
+            packages: parsePk(sp.pk) }}
           library={library}
         />
       )}

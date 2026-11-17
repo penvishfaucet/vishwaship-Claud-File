@@ -26,7 +26,7 @@ const PRESETS: Array<{ label: string; pkg: Pkg }> = [
 
 const STEPS = ["Addresses", "Packages", "Courier & Payment"] as const;
 
-export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" }; library?: Library }) {
+export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" | "B2C"; payment?: "prepaid" | "cod" | "fod"; codAmount?: string; packages?: Pkg[] }; library?: Library }) {
   const lib = props.library ?? { buyers: [], products: [], presets: [], tags: [] };
   const myPresets: Array<{ label: string; pkg: Pkg }> = lib.presets.map((p) => ({ label: `${p.name} ${p.l}×${p.b}×${p.h}`, pkg: { count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(Math.max(p.tareKg, 0.1)) } }));
   const allPresets = [...myPresets, ...PRESETS];
@@ -50,14 +50,14 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const [pickupDate, setPickupDate] = useState(new Date(Date.now() + 86400_000).toISOString().slice(0, 10));
   const [c, setC] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: props.initial.destination ?? "", city: "", state: "" });
   const [orderNumber, setOrderNumber] = useState("");
-  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">("prepaid");
+  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">(props.initial.payment ?? "prepaid");
   const [notices, setNotices] = useState<string[]>([]);
-  const [cod, setCod] = useState("");
+  const [cod, setCod] = useState(props.initial.codAmount ?? "");
   const [declared, setDeclared] = useState("");
   const [invoice, setInvoice] = useState("");
   const [eway, setEway] = useState("");
   const [products, setProducts] = useState<Prod[]>([{ name: "", qty: "1", price: "", hsn: "" }]);
-  const [pkgs, setPkgs] = useState<Pkg[]>([defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
+  const [pkgs, setPkgs] = useState<Pkg[]>(props.initial.packages?.length ? props.initial.packages : [defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
   const [modeOverride, setModeOverride] = useState<"B2C" | "B2B" | null>(props.initial.mode ?? null);
   const [offers, setOffers] = useState<OfferView[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);

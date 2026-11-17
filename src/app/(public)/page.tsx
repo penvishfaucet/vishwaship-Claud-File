@@ -1,123 +1,163 @@
 import Link from "next/link";
-import { Check, FileText, MapPin, PackageCheck, Plane, Smile, Truck, Package } from "lucide-react";
-import { ArrowRight, Underline } from "@/components/icons";
-import { RateCalculator } from "@/components/public/RateCalculator";
-import { TrackForm } from "@/components/public/TrackForm";
-import { RateCardTable } from "@/components/public/RateCardTable";
-import { CARRIERS } from "@/lib/site";
+import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
+import { HeroMedia } from "@/components/site/HeroMedia";
+import { PartnerCarousel } from "@/components/site/PartnerCarousel";
+import { completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
+import { b2bThresholdGrams, getSiteContent } from "@/server/site/content";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Vishwaship — Big & Small, We Ship It All",
+  description: "Compare courier rates, book parcels and cargo, schedule pickups and track shipments across India with Vishwaship.",
+};
 
-export default function HomePage() {
-  const strip = [...CARRIERS, ...CARRIERS];
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
+  const sp = await searchParams;
+  const c = await getSiteContent({ preview: sp.preview === "1" });
+  const h = c.home;
+  const partners = visiblePartners(c.partners);
+  const kg = (await b2bThresholdGrams()) / 1000;
+  const regions = c.team.members.filter((m) => m.visible && m.name.trim());
+  const signup = safeHref(c.links.signUp, "/signup/");
   return (
     <>
-      <section className="vs-hero">
-        <div className="vs-wrap">
-          <div>
-            <span className="vs-eyebrow"><i />YOUR PAN-INDIA SHIPPING PARTNER</span>
-            <h1 className="vs-h1">Big or small.<br />We ship it <span className="o">all.<Underline /></span></h1>
-            <p className="lead2">From everyday parcels to heavy cargo, we bring reliable shipping right to your doorstep. Anywhere in India.</p>
-            <div className="row wrap" style={{ gap: 30 }}>
-              <Link className="vs-btn" href="/login/">LOGIN <ArrowRight /></Link>
-              <Link className="vs-link" href="/signup/">CREATE AN ACCOUNT <ArrowRight /></Link>
-            </div>
-            <div className="vs-checks">
-              <span><Check size={16} />Doorstep pickup</span>
-              <span><Check size={16} />Pan-India delivery</span>
-              <span><Check size={16} />Easy online booking</span>
-            </div>
+      <section className="w-hero" aria-labelledby="hero-h">
+        <HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} />
+        <div className="w-wrap in">
+          <span className="w-eyebrow">Parcels &amp; cargo across India</span>
+          <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
+          <p className="w-lead">{h.heroText}</p>
+          <div className="w-btns">
+            <Link className="w-btn pri" href="/shipping-rate-calculator/">{h.primaryCta} <ArrowRight size={18} aria-hidden="true" /></Link>
+            <a className="w-btn sec" href={signup}>{h.secondaryCta}</a>
           </div>
-          <div>
-            <div className="vs-photo">
-              <div className="img"><img alt="Courier holding parcels beside a delivery van" src="/brand/hero.jpg" /></div>
-              <div className="vs-pill a"><span className="ic"><PackageCheck size={16} /></span>Picked up. On its way.</div>
-              <div className="vs-pill b"><span className="ic"><Smile size={16} /></span>Shipping made simple.</div>
-            </div>
-            <div className="vs-tags"><span>Connecting India, doorstep to doorstep</span><span>Handled with care. Delivered with confidence.</span></div>
+          <div className="w-hero-checks">
+            <span><Check size={16} aria-hidden="true" />B2C parcels &amp; B2B cargo</span>
+            <span><Check size={16} aria-hidden="true" />Compare courier rates</span>
+            <span><Check size={16} aria-hidden="true" />Pickup &amp; tracking</span>
           </div>
         </div>
       </section>
 
-      <div className="vs-wrap vs-partners vs-partners-top">
-        <span className="vs-eyebrow">ONE PLATFORM. A WORLD OF COURIER CHOICES.</span>
-        <div className="lslide" aria-label="Courier partners">
-          <div className="lslide-track" style={{ animationDuration: "101.2s" }}>
-            {strip.map((c, i) => (
-              <div key={`${c.code}-${i}`} className="lslide-item" aria-hidden={i >= CARRIERS.length}>
-                <img src={`/couriers/${c.code}.webp`} alt={c.name} />
+      <div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} /></div>
+
+      <section className="w-sec alt" aria-labelledby="svc-h">
+        <div className="w-wrap">
+          <span className="w-eyebrow">Services</span>
+          <h2 id="svc-h" className="w-h2">{h.servicesHeading}</h2>
+          <div className="w-grid2">
+            <article className="w-card w-svc">
+              <span className="tag">B2C</span>
+              <div className="ic"><Package size={26} aria-hidden="true" /></div>
+              <h3 className="w-h3">{h.b2cTitle}</h3>
+              <p>{h.b2cText}</p>
+              <ul><li><Check size={16} aria-hidden="true" />Shipments under {kg} kg are matched to parcel services</li><li><Check size={16} aria-hidden="true" />Prepaid and COD where the courier supports it</li></ul>
+              <Link className="more" href="/shipping-rate-calculator/">Check parcel rates <ArrowRight size={16} aria-hidden="true" /></Link>
+            </article>
+            <article className="w-card w-svc navy">
+              <span className="tag">B2B</span>
+              <div className="ic"><Truck size={26} aria-hidden="true" /></div>
+              <h3 className="w-h3">{h.b2bTitle}</h3>
+              <p>{h.b2bText}</p>
+              <ul><li><Check size={16} aria-hidden="true" />{kg} kg and above are matched to cargo services</li><li><Check size={16} aria-hidden="true" />Multiple cartons per consignment</li></ul>
+              <Link className="more" href="/shipping-rate-calculator/">Check cargo rates <ArrowRight size={16} aria-hidden="true" /></Link>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="w-sec" aria-labelledby="calc-h">
+        <div className="w-wrap w-split">
+          <div>
+            <span className="w-eyebrow">Rate calculator</span>
+            <h2 id="calc-h" className="w-h2">{h.calcHeading}</h2>
+            <p className="w-lead">{h.calcText}</p>
+          </div>
+          <form className="w-card w-form" action="/shipping-rate-calculator/" method="get">
+            <div className="w-row">
+              <div className="w-fld"><label htmlFor="q-o">Pickup PIN code</label><input id="q-o" name="o" className="w-in" inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} placeholder="e.g. 249402" required /></div>
+              <div className="w-fld"><label htmlFor="q-d">Delivery PIN code</label><input id="q-d" name="d" className="w-in" inputMode="numeric" pattern="[1-9][0-9]{5}" maxLength={6} placeholder="e.g. 400001" required /></div>
+            </div>
+            <div className="w-fld" style={{ marginTop: 14 }}><label htmlFor="q-w">Actual weight (kg)</label><input id="q-w" name="w" className="w-in" inputMode="decimal" placeholder="e.g. 2.5" required /><span className="hint">Under {kg} kg → B2C parcel · {kg} kg or more → B2B cargo</span></div>
+            <button className="w-btn pri" style={{ width: "100%", marginTop: 18 }}>Compare rates <ArrowRight size={18} aria-hidden="true" /></button>
+          </form>
+        </div>
+      </section>
+
+      <section className="w-sec alt" aria-labelledby="jr-h">
+        <div className="w-wrap">
+          <span className="w-eyebrow">How it works</span>
+          <h2 id="jr-h" className="w-h2">{h.journeyHeading}</h2>
+          <div className="w-journey">
+            <div className="w-road" aria-hidden="true">
+              <div className="w-lane">
+                <svg className="w-truck" viewBox="0 0 96 56" fill="none">
+                  <rect x="2" y="8" width="56" height="34" rx="4" fill="#0b1f3a" />
+                  <rect x="8" y="14" width="44" height="6" rx="2" fill="#f0712c" />
+                  <path d="M58 18h18l14 14v10H58z" fill="#13294b" />
+                  <path d="M62 22h12l9 9H62z" fill="#cfe0ff" />
+                  <g className="wheel"><circle cx="20" cy="44" r="8" fill="#0b1f3a" /><circle cx="20" cy="44" r="3" fill="#fff" /></g>
+                  <g className="wheel"><circle cx="74" cy="44" r="8" fill="#0b1f3a" /><circle cx="74" cy="44" r="3" fill="#fff" /></g>
+                </svg>
               </div>
-            ))}
-          </div>
-        </div>
-        <div className="small muted">Carrier allocation depends on serviceability and availability.</div>
-      </div>
-
-      <div className="vs-wrap vs-track vs-track-flat" id="track">
-        <div className="vs-trackcard">
-          <div>
-            <h3>Where’s your shipment?</h3>
-            <p className="muted" style={{ margin: "8px 0 0", fontSize: 15 }}>Enter your AWB number to see live status — or log in to see all your shipments.</p>
-          </div>
-          <TrackForm />
-        </div>
-      </div>
-
-      <section className="vs-sec" id="services">
-        <div className="vs-wrap">
-          <span className="vs-eyebrow">BUILT FOR EVERY SHIPMENT</span>
-          <h2 className="vs-h2">Your shipping needs.<br />Our complete solutions.</h2>
-          <div className="vs-cards">
-            <div className="vs-card"><span className="n">01</span><span className="tile"><Package size={22} /></span><h3>Doorstep Courier</h3><p>Documents and parcels picked up from your door and delivered across India.</p><Link href="/book/">Send a parcel <ArrowRight /></Link></div>
-            <div className="vs-card hl"><span className="n">02</span><span className="tile"><Truck size={22} /></span><h3>Cargo Shipping</h3><p>Heavy and bulk consignments moved safely with surface cargo options.</p><Link href="/book/">Ship your cargo <ArrowRight /></Link></div>
-            <div className="vs-card"><span className="n">03</span><span className="tile"><Plane size={22} /></span><h3>Express Delivery</h3><p>When your shipment needs priority, choose express shipping to serviceable destinations.</p><Link href="/book/">Choose express <ArrowRight /></Link></div>
-          </div>
-        </div>
-      </section>
-
-      <section className="vs-sec" style={{ paddingTop: 0 }} id="calculator">
-        <div className="vs-wrap">
-          <div className="split" style={{ gap: 40, alignItems: "start" }}>
-            <div>
-              <span className="vs-eyebrow">TRANSPARENT PRICING</span>
-              <h2 className="vs-h2">Know your rate.<br />Before you book.</h2>
-              <p className="muted" style={{ fontSize: 16, lineHeight: 1.75, marginTop: 18 }}>Enter pickup and delivery pincodes with weight and size — see the final price instantly. No hidden charges.</p>
             </div>
-            <div><RateCalculator scope="public" /></div>
+            <ol className="w-steps" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              <li className="w-step"><span className="num">1</span><h3 className="w-h3"><Scale size={18} aria-hidden="true" style={{ verticalAlign: "-3px", marginRight: 6, color: "var(--o)" }} />Compare rates</h3><p>Enter PIN codes and package details to see available courier options and prices.</p></li>
+              <li className="w-step"><span className="num">2</span><h3 className="w-h3"><Package size={18} aria-hidden="true" style={{ verticalAlign: "-3px", marginRight: 6, color: "var(--o)" }} />Book</h3><p>Choose a service and book from your account. Labels are generated for the courier.</p></li>
+              <li className="w-step"><span className="num">3</span><h3 className="w-h3"><Truck size={18} aria-hidden="true" style={{ verticalAlign: "-3px", marginRight: 6, color: "var(--o)" }} />Pickup</h3><p>Schedule a pickup from your saved warehouse address.</p></li>
+              <li className="w-step"><span className="num">4</span><h3 className="w-h3"><PackageSearch size={18} aria-hidden="true" style={{ verticalAlign: "-3px", marginRight: 6, color: "var(--o)" }} />Track</h3><p>Follow shipment status with the AWB number until delivery.</p></li>
+            </ol>
           </div>
         </div>
       </section>
 
-      <section className="vs-sec" style={{ paddingTop: 0 }} id="how">
-        <div className="vs-wrap">
-          <span className="vs-eyebrow">LESS EFFORT. MORE MOVEMENT.</span>
-          <h2 className="vs-h2">From your door to theirs.<br />In three simple steps.</h2>
-          <div className="vs-steps">
-            <div className="vs-step"><div className="ic"><FileText size={22} /></div><small>01 / BOOK ONLINE</small><h4>Tell us what’s shipping</h4><p>Choose a service and add your pickup and delivery details.</p></div>
-            <div className="vs-step"><div className="ic"><Truck size={22} /></div><small>02 / WE PICK IT UP</small><h4>Leave the trip to us</h4><p>Pack your shipment securely. We coordinate a convenient doorstep pickup.</p></div>
-            <div className="vs-step"><div className="ic"><MapPin size={22} /></div><small>03 / TRACK &amp; RELAX</small><h4>Follow every milestone</h4><p>Once dispatched, use your AWB number to check shipment updates.</p></div>
+      <section className="w-sec dark" aria-labelledby="ft-h">
+        <div className="w-wrap">
+          <span className="w-eyebrow">Features</span>
+          <h2 id="ft-h" className="w-h2">{h.featuresHeading}</h2>
+          <div className="w-grid4">
+            <div className="w-feat"><div className="ic"><Warehouse size={22} aria-hidden="true" /></div><h3 className="w-h3">Pickup warehouses</h3><p>Save multiple pickup addresses, verify them by OTP and choose one per shipment.</p></div>
+            <div className="w-feat"><div className="ic"><MapPin size={22} aria-hidden="true" /></div><h3 className="w-h3">Shipment tracking</h3><p>Track by AWB, order ID or LR number, and share a tracking page with your buyers.</p></div>
+            <div className="w-feat"><div className="ic"><IndianRupee size={22} aria-hidden="true" /></div><h3 className="w-h3">Cash on Delivery</h3><p>Offer COD on supported services and follow remittances from your account.</p></div>
+            <div className="w-feat"><div className="ic"><Bell size={22} aria-hidden="true" /></div><h3 className="w-h3">WhatsApp notifications</h3><p>Subscription-based WhatsApp updates for your buyers, such as out-for-delivery alerts.</p></div>
           </div>
         </div>
       </section>
 
-      <section className="vs-sec" style={{ paddingTop: 0 }} id="pricing">
-        <div className="vs-wrap">
-          <span className="vs-eyebrow">RATE CARD</span>
-          <h2 className="vs-h2">Simple, zone-based pricing.</h2>
-          <RateCardTable />
+      <section className="w-sec" aria-labelledby="care-h">
+        <div className="w-wrap w-split" style={{ alignItems: "start" }}>
+          <div>
+            <span className="w-eyebrow">Customer care</span>
+            <h2 id="care-h" className="w-h2">{h.careHeading}</h2>
+            <p className="w-lead">{h.careText}</p>
+            <div className="w-btns"><Link className="w-btn navy" href="/customer-care/">Meet the support team <ArrowRight size={18} aria-hidden="true" /></Link></div>
+          </div>
+          <ul className="w-card" style={{ listStyle: "none", margin: 0, padding: 8 }}>
+            {regions.map((m) => {
+              const ph = completeMobile(m.phone);
+              return (
+                <li key={m.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 12px", borderBottom: "1px solid var(--ln)", flexWrap: "wrap" }}>
+                  <span className="w-chip o" style={{ minWidth: 86, justifyContent: "center" }}>{m.region}</span>
+                  <span style={{ flex: "1 1 160px", minWidth: 0 }}><b style={{ display: "block" }}>{m.name}</b><span style={{ fontSize: 13.5, color: "var(--mut)" }}>{m.role}</span></span>
+                  {ph ? <a className="w-btn ghost sm" href={`tel:+91${ph}`} aria-label={`Call ${m.name}`}>Call</a> : <span style={{ fontSize: 13, color: "var(--mut)" }}>Number coming soon</span>}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       </section>
 
-      <div className="vs-wrap">
-        <div className="vs-cta">
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <span className="vs-eyebrow">YOUR NEXT DELIVERY STARTS HERE</span>
-            <h2>Ready, set, ship.</h2>
-            <p>Small parcel or big plans. Let’s get them moving.</p>
+      <section className="w-sec tight" style={{ paddingTop: 0 }}>
+        <div className="w-wrap">
+          <div className="w-cta">
+            <div><h2 className="w-h2" style={{ margin: 0 }}>{h.ctaTitle}</h2><p>{h.ctaText}</p></div>
+            <div className="w-btns" style={{ marginTop: 0 }}>
+              <a className="w-btn pri" href={signup}>{h.secondaryCta}</a>
+              <Link className="w-btn sec" href="/shipping-rate-calculator/"><Boxes size={18} aria-hidden="true" />Calculate rates</Link>
+            </div>
           </div>
-          <Link className="vs-btn" style={{ position: "relative", zIndex: 1 }} href="/book/">Book your shipment <ArrowRight /></Link>
         </div>
-      </div>
+      </section>
     </>
   );
 }
