@@ -2,6 +2,7 @@ import "server-only";
 import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { STATUS_GROUPS } from "@/lib/status";
+import { bucketCondition, dashRange, isBucket, rangeCondition } from "@/server/portal/buckets";
 
 /** All functions take orgId from portalContext(); never from user input. */
 
@@ -13,14 +14,17 @@ export async function statusCounts(orgId: string) {
   return STATUS_GROUPS.map((g) => ({ ...g, count: g.statuses.reduce((s, st) => s + (by[st] ?? 0), 0) }));
 }
 
-export async function listOrders(orgId: string, opts: { q?: string; group?: string; payment?: string; mode?: string; tag?: string; page?: number; pageSize?: number }) {
+export async function listOrders(orgId: string, opts: { q?: string; group?: string; payment?: string; mode?: string; tag?: string; bucket?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
   const db = await getDb();
   const pageSize = opts.pageSize ?? 20;
   const page = Math.max(1, opts.page ?? 1);
   const conds = [eq(schema.orders.orgId, orgId)];
   const grp = STATUS_GROUPS.find((g) => g.key === opts.group);
   if (grp) conds.push(inArray(schema.shipments.status, grp.statuses));
-  if (opts.payment === "cod" || opts.payment === "prepaid") conds.push(eq(schema.orders.paymentType, opts.payment));
+  if (opts.payment === "cod" || opts.payment === "prepaid" || opts.payment === "fod") conds.push(eq(schema.orders.paymentType, opts.payment));
+  // dashboard buckets + date range: identical conditions to the dashboard counts
+  if (isBucket(opts.bucket)) { const c = bucketCondition(opts.bucket); if (c) conds.push(c); }
+  if (opts.from || opts.to || isBucket(opts.bucket)) conds.push(rangeCondition(dashRange({ from: opts.from, to: opts.to }))!);
   if (opts.mode === "B2B" || opts.mode === "B2C") conds.push(eq(schema.orders.mode, opts.mode));
   if (opts.tag) conds.push(sql`exists (select 1 from ${schema.orderTagLinks} l join ${schema.orderTags} t on t.id = l.tag_id where l.order_id = ${schema.orders.id} and t.id = ${opts.tag} and t.org_id = ${orgId})`);
   if (opts.q) {

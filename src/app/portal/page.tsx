@@ -1,123 +1,169 @@
-import { codOverview } from "@/server/billing";
 import Link from "next/link";
-import { Calculator, CornerUpLeft, MessageSquare, PackagePlus, Plus, Search, ShieldAlert, Ticket, Truck, Wallet, Zap } from "lucide-react";
+import { Suspense } from "react";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
+import { Boxes, CalendarCheck, Download, PackageOpen, PackagePlus, RotateCcw, ShieldAlert, Truck, Undo2 } from "lucide-react";
+import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 import { StatusChip } from "@/lib/status";
+import { t } from "@/server/content";
+import { getDb, schema } from "@/server/db/client";
+import { BUCKETS, type BucketKey, bucketCounts, dashRange, isBucket } from "@/server/portal/buckets";
 import { portalContext } from "@/server/portal/context";
-import { listOrders, recentTransactions, statusCounts } from "@/server/portal/queries";
+import { listOrders } from "@/server/portal/queries";
 
-const QUICK = [
-  { href: "/portal/orders/new/", label: "Add Order", icon: Plus },
-  { href: "/portal/orders/new/?quick=1", label: "Quick Add", icon: Zap },
-  { href: "/portal/orders/new/?direction=reverse", label: "Return", icon: CornerUpLeft },
-  { href: "/portal/billing/passbook/?recharge=1", label: "Recharge", icon: Wallet },
-  { href: "/portal/rates/", label: "Rate Calculator", icon: Calculator },
-  { href: "/portal/track/", label: "Track", icon: Truck },
-  { href: "/portal/support/", label: "Tickets", icon: Ticket },
-  { href: "/portal/notifications/", label: "Shipping Notifications", icon: MessageSquare },
+const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
+  { key: "new", icon: PackagePlus, tone: "blue" },
+  { key: "assigned", icon: PackageOpen, tone: "orange" },
+  { key: "scheduled", icon: CalendarCheck, tone: "teal" },
+  { key: "all", icon: Boxes, tone: "blue" },
+  { key: "returns", icon: Undo2, tone: "red" },
+  { key: "rto", icon: RotateCcw, tone: "yellow" },
 ];
+const DONUT: Array<{ key: BucketKey; color: string }> = [
+  { key: "delivered", color: "#4f9cf9" }, { key: "rto_in_transit", color: "#f4845f" }, { key: "rto_delivered", color: "#b5d334" }, { key: "ndr", color: "#f5a623" },
+];
+const PIPE: BucketKey[] = ["new", "assigned", "scheduled", "in_transit", "ofd", "delivered", "ndr", "rto"];
+type SP = { tab?: string; from?: string; to?: string; stage?: string; welcome?: string };
+const dt = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
 
-export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
-  const cod = await codOverview(ctx.org.id);
-  const [counts, recent, txns] = await Promise.all([
-    statusCounts(ctx.org.id), listOrders(ctx.org.id, { pageSize: 6 }), recentTransactions(ctx.walletId),
-  ]);
+  const r = dashRange(sp);
+  const tab = sp.tab === "status" ? "status" : "analytics";
+  const rq = `from=${r.fromStr}&to=${r.toStr}`;
+  const href = (b: BucketKey) => `/portal/orders/?bucket=${b}&${rq}`;
+  const counts = await bucketCounts(ctx.org.id, r, [...new Set<BucketKey>([...CARDS.map((c) => c.key), ...DONUT.map((d) => d.key), ...PIPE])]);
+  const announcement = await t("portal.dashboard.announcement");
   return (
     <>
-      <div className="row between wrap mb16" style={{ gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 22, margin: 0 }}>{sp.welcome ? "Welcome to Vishwaship" : `Hello, ${ctx.session.name.split(" ")[0]}`}</h1>
-          <p className="muted small" style={{ margin: "4px 0 0" }}>{ctx.org.businessName}</p>
-        </div>
-        <Link className="btn btn-orange" href="/portal/orders/new/"><PackagePlus size={16} /> Add Order</Link>
-      </div>
-
-      <form className="mh-search mb16" action="/portal/orders/" role="search">
-        <Search size={18} aria-hidden /><label htmlFor="dq" className="sr-only">Search</label>
-        <input id="dq" name="q" placeholder="Search order ID, AWB / LR or buyer phone" />
-      </form>
-
-      <section aria-labelledby="qa-h" className="card mb16" style={{ padding: 16 }}>
-        <h2 id="qa-h" className="b small mb12" style={{ margin: 0 }}>Quick actions</h2>
-        <div className="qa-list">
-          {QUICK.map((q) => <Link key={q.label} href={q.href} className="qa-item"><span className="qa-ic"><q.icon size={18} /></span>{q.label}</Link>)}
-        </div>
-      </section>
-
-      <div className="grid3 mb16" style={{ gap: 12 }}>
-        <Link className="stat bl-green stat-link" href="/portal/billing/cod-remittance/">
-          <div className="t"><Wallet size={14} /> COD remittance</div>
-          <div className="v">{formatINR(cod.totals.unbatched + cod.totals.scheduled)}</div>
-          <div className="s">Pending payout · remitted {formatINR(cod.totals.paid)}{cod.totals.scheduled ? ` · ${formatINR(cod.totals.scheduled)} scheduled` : ""}</div>
-        </Link>
-        <div className="stat bl-orange">
-          <div className="t"><Wallet size={14} /> Wallet balance</div>
-          <div className="v">{formatINR(ctx.walletAvailable)}</div>
-          <div className="s">{ctx.walletReserved > 0 ? `${formatINR(ctx.walletReserved)} on hold for bookings · ` : ""}<Link className="link" href="/portal/billing/passbook/?recharge=1">Recharge</Link></div>
-        </div>
-        <div className="stat bl-navy">
-          <div className="t"><MessageSquare size={14} /> Notification credits</div>
-          <div className="v">{ctx.credits.toLocaleString("en-IN")}</div>
-          <div className="s"><Link className="link" href="/portal/billing/notification-credits/">Buy credits</Link> · <Link className="link-navy" href="/portal/notifications/">Preferences</Link></div>
-        </div>
-      </div>
-
+      {announcement && <p className="note small mb12">{announcement}</p>}
       {ctx.org.kycStatus !== "approved" && (
-        <Link href="/portal/kyc/" className="note row mb16" style={{ gap: 10, alignItems: "center" }}>
-          <ShieldAlert size={18} />
-          <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : ctx.org.kycStatus === "changes_requested" ? "KYC changes requested" : ctx.org.kycStatus === "rejected" ? "KYC rejected" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : "required for COD and remittances. Takes 2 minutes."}</span>
-        </Link>
+        <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
+          <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>
       )}
+      <div className="row between wrap mb12" style={{ gap: 12 }}>
+        <nav className="seg-tabs" aria-label="Dashboard view">
+          <Link href={`/portal/?${rq}`} className={tab === "analytics" ? "on" : ""} aria-current={tab === "analytics" ? "page" : undefined}>Analytics</Link>
+          <Link href={`/portal/?tab=status&${rq}`} className={tab === "status" ? "on" : ""} aria-current={tab === "status" ? "page" : undefined}>Order Status</Link>
+        </nav>
+        <Suspense fallback={<span className="small muted">{r.fromStr} to {r.toStr}</span>}><DateRangePicker from={r.fromStr} to={r.toStr} /></Suspense>
+      </div>
 
-      <section aria-label="Shipments by status" className="stats mb16 dash-tiles">
-        {counts.map((c) => (
-          <Link key={c.key} className="stat plain stat-link" href={`/portal/orders/?group=${c.key}`}>
-            <div className="t">{c.label}</div><div className="v">{c.count}</div>
+      {tab === "analytics" ? <Analytics orgId={ctx.org.id} walletId={ctx.walletId} counts={counts} href={href} r={r} rq={rq} /> : <OrderStatus orgId={ctx.org.id} counts={counts} stage={isBucket(sp.stage) ? sp.stage : "new"} r={r} rq={rq} />}
+    </>
+  );
+}
+
+async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: string; walletId: string | null; counts: Record<BucketKey, number>; href: (b: BucketKey) => string; r: ReturnType<typeof dashRange>; rq: string }) {
+  const db = await getDb();
+  const txns = walletId ? await db.select().from(schema.ledgerEntries).where(and(eq(schema.ledgerEntries.walletId, walletId), gte(schema.ledgerEntries.createdAt, r.from), lte(schema.ledgerEntries.createdAt, r.to))).orderBy(desc(schema.ledgerEntries.createdAt)).limit(7) : [];
+  const recent = await listOrders(orgId, { from: r.fromStr, to: r.toStr, pageSize: 8 });
+  const donutTotal = DONUT.reduce((t, d) => t + counts[d.key], 0);
+  // donut geometry
+  const R = 70, C = 2 * Math.PI * R;
+  let offset = 0;
+  const segs = DONUT.map((d) => { const len = donutTotal ? (counts[d.key] / donutTotal) * C : 0; const s = { ...d, len, offset }; offset += len; return s; });
+  return (
+    <>
+      <section className="dash-cards mb16" aria-label="Order summary">
+        {CARDS.map((c) => (
+          <Link key={c.key} href={href(c.key)} className={`dcard t-${c.tone}`} aria-label={`${BUCKETS[c.key].label}: ${counts[c.key]} — open list`}>
+            <c.icon size={34} strokeWidth={1.6} aria-hidden />
+            <span className="dl">{BUCKETS[c.key].label}</span>
+            <span className="dn">{counts[c.key].toLocaleString("en-IN")}</span>
           </Link>
         ))}
       </section>
 
-      <div className="split dash-panels" style={{ gap: 16, alignItems: "start" }}>
-        <section className="card p0" aria-labelledby="ro-h">
-          <div className="row between card-h"><h2 id="ro-h" className="b" style={{ fontSize: 15, margin: 0 }}>Recent orders</h2><Link className="link small" href="/portal/orders/">View all</Link></div>
-          {recent.rows.length === 0 ? (
-            <div className="empty"><p className="muted">No orders yet.</p><Link className="btn btn-orange btn-sm" href="/portal/orders/new/">Create your first order</Link></div>
-          ) : (
-            <ul className="plain-list">
-              {recent.rows.map((r) => {
-                const logo = r.carrierCode ? carrierLogo(r.carrierCode) : null;
-                return (
-                  <li key={r.orderId}>
-                    <Link href={`/portal/orders/${r.orderId}/`} className="row between" style={{ gap: 10 }}>
-                      <span className="row" style={{ gap: 10, minWidth: 0 }}>
-                        {logo ? <img className="clogo-sm" src={logo} alt={r.carrierName ?? ""} /> : null}
-                        <span style={{ minWidth: 0 }}><span className="b small">{r.orderNumber}</span><span className="tiny muted mono" style={{ display: "block" }}>{r.awb ?? "Not booked"}</span></span>
-                      </span>
-                      {r.status ? <StatusChip status={r.status} /> : <span className="chip c-draft">{r.orderStatus}</span>}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+      <div className="dash-panels mb16">
+        <section className="card p0" aria-labelledby="wt-h">
+          <div className="row between card-h"><h2 id="wt-h" className="b" style={{ fontSize: 16, margin: 0 }}>Wallet Transactions</h2><Link className="btn btn-sm btn-soft" href={`/portal/billing/passbook/?${rq}`}>View All</Link></div>
+          {txns.length === 0 ? <div className="empty" style={{ minHeight: 260, justifyContent: "center" }}><p className="muted small">No wallet transactions in this period.</p></div> : (
+            <ul className="plain-list">{txns.map((x) => (
+              <li key={x.id}><Link href={`/portal/billing/passbook/?${rq}`} className="row between" style={{ gap: 10 }}>
+                <span style={{ minWidth: 0 }}><span className="small b" style={{ display: "block" }}>{x.memo ?? x.kind.replace(/_/g, " ")}</span><span className="tiny muted">{x.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}{x.refId ? ` · ${x.refId}` : ""}</span></span>
+                <span style={{ textAlign: "right" }}><span className={`b small ${x.amountPaise > 0 ? "t-credit" : x.amountPaise < 0 ? "t-debit" : ""}`} style={{ display: "block" }}>{x.amountPaise === 0 ? formatINR(Math.abs(x.holdDeltaPaise)) : `${x.amountPaise > 0 ? "+" : "−"}${formatINR(Math.abs(x.amountPaise))}`}</span><span className="tiny muted">{x.amountPaise === 0 ? (x.holdDeltaPaise > 0 ? "On hold" : "Released") : "Posted"}</span></span>
+              </Link></li>
+            ))}</ul>
           )}
         </section>
-        <section className="card p0" aria-labelledby="rt-h">
-          <div className="row between card-h"><h2 id="rt-h" className="b" style={{ fontSize: 15, margin: 0 }}>Recent transactions</h2><Link className="link small" href="/portal/billing/">Passbook</Link></div>
-          {txns.length === 0 ? <div className="empty"><p className="muted">No wallet activity yet.</p></div> : (
-            <ul className="plain-list">
-              {txns.map((t) => (
-                <li key={t.id} className="row between" style={{ gap: 10 }}>
-                  <span><span className="small b">{t.memo ?? t.kind.replace(/_/g, " ")}</span><span className="tiny muted" style={{ display: "block" }}>{t.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })}</span></span>
-                  <span className={t.amountPaise > 0 ? "b small t-credit" : t.amountPaise < 0 ? "b small t-debit" : "small muted"}>{t.amountPaise === 0 ? `hold ${formatINR(Math.abs(t.holdDeltaPaise))}` : (t.amountPaise > 0 ? "+" : "") + formatINR(t.amountPaise)}</span>
-                </li>
-              ))}
-            </ul>
+        <section className="card p0" aria-labelledby="sh-h">
+          <div className="card-h"><h2 id="sh-h" className="b" style={{ fontSize: 16, margin: 0 }}>Shipment</h2></div>
+          {donutTotal === 0 ? <div className="empty" style={{ minHeight: 260, justifyContent: "center" }}><p className="muted small">No delivered, RTO or NDR shipments in this period.</p></div> : (
+            <div className="donut-wrap">
+              <svg viewBox="0 0 200 200" width="220" height="220" role="img" aria-label={`Shipment outcomes: ${DONUT.map((d) => `${BUCKETS[d.key].label} ${counts[d.key]}`).join(", ")}`}>
+                <g transform="rotate(-90 100 100)">
+                  {segs.filter((s) => s.len > 0).map((s) => (
+                    <a key={s.key} href={href(s.key)} aria-label={`${BUCKETS[s.key].label}: ${counts[s.key]}`}>
+                      <circle cx="100" cy="100" r={R} fill="none" stroke={s.color} strokeWidth="34" strokeDasharray={`${s.len} ${C - s.len}`} strokeDashoffset={-s.offset} className="donut-seg"><title>{`${BUCKETS[s.key].label}: ${counts[s.key]} (${((counts[s.key] / donutTotal) * 100).toFixed(1)}%)`}</title></circle>
+                    </a>
+                  ))}
+                </g>
+                <text x="100" y="96" textAnchor="middle" className="donut-n">{donutTotal}</text>
+                <text x="100" y="116" textAnchor="middle" className="donut-l">shipments</text>
+              </svg>
+              <ul className="donut-legend" aria-label="Legend">
+                {DONUT.map((d) => <li key={d.key}><Link href={href(d.key)}><i style={{ background: d.color }} />{BUCKETS[d.key].label} <b>{counts[d.key]}</b> <span className="tiny muted">{((counts[d.key] / donutTotal) * 100).toFixed(1)}%</span></Link></li>)}
+              </ul>
+            </div>
           )}
         </section>
       </div>
+
+      <section className="card p0" aria-labelledby="ro-h">
+        <div className="row between card-h"><h2 id="ro-h" className="b" style={{ fontSize: 16, margin: 0 }}>Recent Orders</h2><Link className="btn btn-sm btn-soft" href={`/portal/orders/?bucket=all&${rq}`}>View All Orders</Link></div>
+        {recent.rows.length === 0 ? <div className="empty"><p className="muted small">No orders in this period.</p><Link className="btn btn-orange btn-sm" href="/portal/orders/new/">Create Shipment</Link></div> : (
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Order ID</th><th>AWB / LR</th><th>Recipient</th><th>Courier</th><th>Payment</th><th>Status</th><th>Order date</th><th><span className="sr-only">Actions</span></th></tr></thead>
+            <tbody>{recent.rows.map((o) => {
+              const c = o.consignee as { name: string; city: string };
+              const logo = o.carrierCode ? carrierLogo(o.carrierCode) : null;
+              return (
+                <tr key={o.orderId}>
+                  <td><Link className="b link-navy" href={`/portal/orders/${o.orderId}/`}>{o.orderNumber}</Link></td>
+                  <td className="mono small">{o.awb ?? o.lr ?? <span className="muted">—</span>}{o.lr && o.lr !== o.awb && o.awb ? <div className="tiny muted">LR {o.lr}</div> : null}</td>
+                  <td className="small">{c.name}<div className="tiny muted">{c.city}</div></td>
+                  <td>{logo ? <img className="clogo-sm" src={logo} alt={o.carrierName ?? ""} title={o.carrierName ?? ""} /> : <span className="small muted">{o.carrierName ?? "—"}</span>}</td>
+                  <td><span className={`chip ${o.paymentType === "cod" ? "c-cod" : "c-prepaid"}`}>{o.paymentType === "cod" ? `COD ${formatINR(o.codAmount)}` : o.paymentType === "fod" ? "FOD" : "Prepaid"}</span></td>
+                  <td>{o.status ? <StatusChip status={o.status} /> : <span className="chip c-draft">{o.orderStatus.replace(/_/g, " ")}</span>}</td>
+                  <td className="small">{dt(o.createdAt)}</td>
+                  <td><span className="row" style={{ gap: 4 }}>
+                    {o.awb && <Link className="btn btn-sm btn-outline" href={`/portal/track/?q=${encodeURIComponent(o.awb)}`} title="Track"><Truck size={14} /></Link>}
+                    {o.shipmentId && o.awb && <a className="btn btn-sm btn-outline" href={`/api/portal/shipments/${o.shipmentId}/label`} title="Download label"><Download size={14} /></a>}
+                  </span></td>
+                </tr>
+              );
+            })}</tbody>
+          </table></div>
+        )}
+      </section>
+    </>
+  );
+}
+
+async function OrderStatus({ orgId, counts, stage, r, rq }: { orgId: string; counts: Record<BucketKey, number>; stage: BucketKey; r: ReturnType<typeof dashRange>; rq: string }) {
+  const list = await listOrders(orgId, { bucket: stage, from: r.fromStr, to: r.toStr, pageSize: 20 });
+  return (
+    <>
+      <nav className="pipeline mb16" aria-label="Order pipeline">
+        {PIPE.map((k, i) => (
+          <Link key={k} href={`/portal/?tab=status&stage=${k}&${rq}`} className={stage === k ? "on" : ""} aria-current={stage === k ? "true" : undefined}>
+            <span className="pn">{counts[k]}</span><span className="pl">{BUCKETS[k].label}</span>{i < PIPE.length - 1 && <span className="parrow" aria-hidden>›</span>}
+          </Link>
+        ))}
+      </nav>
+      <section className="card p0">
+        <div className="row between card-h"><h2 className="b" style={{ fontSize: 16, margin: 0 }}>{BUCKETS[stage].label} <span className="small muted">· {BUCKETS[stage].desc}</span></h2><Link className="btn btn-sm btn-soft" href={`/portal/orders/?bucket=${stage}&${rq}`}>Open in Orders</Link></div>
+        {list.rows.length === 0 ? <div className="empty"><p className="muted small">No orders at this stage in the selected dates.</p></div> : (
+          <div className="tbl-wrap"><table className="tbl">
+            <thead><tr><th>Order ID</th><th>AWB / LR</th><th>Recipient</th><th>Courier</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>{list.rows.map((o) => <tr key={o.orderId}><td><Link className="b link-navy" href={`/portal/orders/${o.orderId}/`}>{o.orderNumber}</Link></td><td className="mono small">{o.awb ?? o.lr ?? "—"}</td><td className="small">{(o.consignee as { name: string }).name}</td><td className="small">{o.carrierName ?? "—"}</td><td>{o.status ? <StatusChip status={o.status} /> : <span className="chip c-draft">{o.orderStatus.replace(/_/g, " ")}</span>}</td><td className="small">{dt(o.createdAt)}</td></tr>)}</tbody>
+          </table></div>
+        )}
+        {list.total > list.rows.length && <p className="small" style={{ padding: "8px 16px" }}><Link className="link" href={`/portal/orders/?bucket=${stage}&${rq}`}>View all {list.total} →</Link></p>}
+      </section>
     </>
   );
 }

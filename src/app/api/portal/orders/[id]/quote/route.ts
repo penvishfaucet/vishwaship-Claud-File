@@ -1,3 +1,4 @@
+import { presentNotices, presentOffer } from "@/server/quotes/present";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
@@ -17,10 +18,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!wh) return apiError(422, "validation_error", "Order has no pickup address");
   const pk = await db.select().from(schema.packages).where(eq(schema.packages.orderId, id));
   const c = o.consignee as { pincode: string };
-  const { offers } = await getQuotes({
-    mode: o.mode as "B2C" | "B2B", originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: o.paymentType as "prepaid" | "cod",
+  const { offers, errors } = await getQuotes({
+    mode: o.mode as "B2C" | "B2B", originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: o.paymentType as "prepaid" | "cod" | "fod",
     codAmount: o.codAmountPaise, declaredValue: o.declaredValuePaise, direction: o.direction as "forward" | "reverse",
     packages: pk.map((p) => ({ count: p.count, lengthMm: p.lengthMm, breadthMm: p.breadthMm, heightMm: p.heightMm, actualWeightGrams: p.actualWeightGrams })),
   }, s.orgId);
-  return NextResponse.json({ offers: offers.map((x) => ({ quoteId: x.quoteId, carrierCode: x.carrierCode, carrierName: x.carrierName, serviceName: x.serviceName, mode: x.mode, etaDays: x.etaDays, chargeableWeightGrams: x.chargeableWeightGrams, gst: x.gst, total: x.total, expiresAt: x.expiresAt, isDemo: x.isDemo })) });
+  return NextResponse.json({ offers: offers.map(presentOffer), notices: presentNotices(errors) });
 }

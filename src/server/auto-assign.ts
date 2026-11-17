@@ -7,7 +7,7 @@ import { getQuotes, type QuoteOffer } from "@/server/quotes/service";
 
 export const RuleConditions = z.object({
   mode: z.enum(["B2C", "B2B"]).optional(),
-  payment: z.enum(["prepaid", "cod"]).optional(),
+  payment: z.enum(["prepaid", "cod", "fod"]).optional(),
   warehouseId: z.string().max(60).optional(),
   pinPrefixes: z.array(z.string().regex(/^\d{1,6}$/)).max(50).default([]),
   minGrams: z.number().int().min(0).max(5_000_000).optional(),
@@ -71,7 +71,7 @@ export async function autoAssign(orgId: string, orderId: string) {
   const pk = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
   const c = o.consignee as { pincode: string };
   const { offers } = await getQuotes({
-    mode: o.mode as "B2C" | "B2B", originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: o.paymentType as "prepaid" | "cod",
+    mode: o.mode as "B2C" | "B2B", originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: o.paymentType as "prepaid" | "cod" | "fod",
     codAmount: o.codAmountPaise, declaredValue: o.declaredValuePaise, direction: o.direction as "forward" | "reverse",
     packages: pk.map((p) => ({ count: p.count, lengthMm: p.lengthMm, breadthMm: p.breadthMm, heightMm: p.heightMm, actualWeightGrams: p.actualWeightGrams })),
   }, orgId);

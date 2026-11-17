@@ -191,3 +191,14 @@ export function resolveMarkup(settings: MarkupSettings, orgId: string | null, no
   }
   return { bps: settings.global.bps, source: "global", ruleId: settings.global.ruleId, ruleVersion: settings.global.version };
 }
+
+/**
+ * Delhivery Direct B2B: "Customer B2B freight = Delhivery base freight × (1 + markup / 100)".
+ * Only the base freight receives the markup; fuel, docket, ROV, ODA, COD/FOD and other carrier charges pass
+ * through at cost, and GST is charged once on the Vishwaship subtotal.
+ */
+export const DELHIVERY_B2B_COMPONENT_RULES: Record<ComponentCode, ComponentRule> = {
+  freight: { markupEligible: true },
+  fuel: { markupEligible: false }, docket: { markupEligible: false }, rto: { markupEligible: false }, reverse: { markupEligible: false },
+  handling: { markupEligible: false }, oda: { markupEligible: false }, fov: { markupEligible: false }, cod_fee: { markupEligible: false }, other: { markupEligible: false },
+};

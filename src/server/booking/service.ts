@@ -1,3 +1,5 @@
+import { modeAllowed, paymentConfig } from "@/server/payment-modes";
+import type { PaymentMode } from "@/server/providers/types";
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
@@ -50,14 +52,37 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   if (!wh || !wh.active) return { ok: false, code: "not_found", message: "Select an active pickup address" };
   if (!wh.mobileVerifiedAt) return { ok: false, code: "not_found", message: "Verify the pickup mobile number with OTP before booking" };
 
+  // Payment mode must be enabled for this carrier account (Admin → Carrier Integrations) — enforced here, not only in the UI.
+  const pay = paymentConfig(acct, adapter);
+  const modeOk = modeAllowed(pay, order.paymentType as PaymentMode);
+  if (!modeOk.ok) return { ok: false, code: "unsupported", message: modeOk.reason };
+  const pricedQ = quote.priced as { payer?: { sender: number; receiver: number; basis: string } };
+  const senderPays = pricedQ.payer?.sender ?? quote.totalPaise;
+  const receiverPays = pricedQ.payer?.receiver ?? 0;
+
+  // Carrier pickup location (registered once per warehouse + carrier account).
+  let providerWarehouseRef: string | undefined;
+  if (adapter.registerWarehouse) {
+    const [sync] = await db.select().from(schema.warehouseProviderSync).where(and(eq(schema.warehouseProviderSync.warehouseId, wh.id), eq(schema.warehouseProviderSync.providerAccountId, acct.id)));
+    if (sync?.status === "registered" && sync.providerWarehouseRef) providerWarehouseRef = sync.providerWarehouseRef;
+    else {
+      const reg = await adapter.registerWarehouse(await providerContext(acct), { code: wh.code ?? wh.id, label: wh.label, contactName: wh.contactName, mobile: wh.mobile, email: wh.email, line1: wh.line1, line2: wh.line2, pincode: wh.pincode, city: wh.city, state: wh.state });
+      const row = { status: reg.ok ? "registered" : "failed", providerWarehouseRef: reg.ok ? reg.value.ref : null, lastError: reg.ok ? null : reg.error.message, updatedAt: new Date() };
+      await db.insert(schema.warehouseProviderSync).values({ id: newId("wps"), warehouseId: wh.id, providerAccountId: acct.id, ...row }).onConflictDoUpdate({ target: [schema.warehouseProviderSync.warehouseId, schema.warehouseProviderSync.providerAccountId], set: row });
+      if (!reg.ok) return { ok: false, code: "provider_failed", message: `Could not register this pickup address with ${acct.label}: ${reg.error.message}` };
+      providerWarehouseRef = reg.value.ref;
+    }
+  }
+
   // Claim the order (prevents double-submit races).
   const claimed = await db.update(schema.orders).set({ status: "booking" })
     .where(and(eq(schema.orders.id, order.id), eq(schema.orders.status, order.status))).returning({ id: schema.orders.id });
   if (!claimed.length) return { ok: false, code: "already_booked", message: "This order is already being booked" };
 
-  const reservationId = `res_${order.id}_${quote.id}`;
+  // FOD with the full rate collected from the receiver: nothing is held from the sender's wallet.
+  const reservationId = senderPays > 0 ? `res_${order.id}_${quote.id}` : null;
   try {
-    await withLedger((s) => reserve(s, { walletId: wallet.id, amount: quote.totalPaise, reservationId, idempotencyKey: `reserve:${reservationId}`, refType: "order", refId: order.id, memo: `Hold for ${order.orderNumber}` }));
+    if (reservationId) await withLedger((s) => reserve(s, { walletId: wallet.id, amount: senderPays, reservationId, idempotencyKey: `reserve:${reservationId}`, refType: "order", refId: order.id, memo: `Hold for ${order.orderNumber}` }));
   } catch (e) {
     await db.update(schema.orders).set({ status: order.status }).where(eq(schema.orders.id, order.id));
     if (e instanceof InsufficientBalanceError) return { ok: false, code: "insufficient_balance", message: "Insufficient wallet balance. Recharge to continue." };
@@ -70,9 +95,9 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   const req: BookRequest = {
     vishwashipOrderId: order.id, orderNumber: order.orderNumber,
     quote: { carrierCode: quote.carrierCode, serviceName: quote.serviceName, providerQuoteRef: priced.providerQuoteRef },
-    mode: order.mode as "B2C" | "B2B", paymentType: order.paymentType as "prepaid" | "cod", codAmount: order.codAmountPaise,
+    mode: order.mode as "B2C" | "B2B", paymentType: order.paymentType as PaymentMode, codAmount: order.codAmountPaise,
     declaredValue: order.declaredValuePaise,
-    pickup: { name: wh.contactName, mobile: wh.mobile, line1: wh.line1, line2: wh.line2 ?? undefined, pincode: wh.pincode, city: wh.city, state: wh.state },
+    pickup: { name: wh.contactName, mobile: wh.mobile, line1: wh.line1, line2: wh.line2 ?? undefined, pincode: wh.pincode, city: wh.city, state: wh.state, providerWarehouseRef },
     consignee, packages: pkgs.map((p) => ({ count: p.count, lengthMm: p.lengthMm, breadthMm: p.breadthMm, heightMm: p.heightMm, actualWeightGrams: p.actualWeightGrams })),
     products: (order.products as BookRequest["products"]) ?? [], invoiceNumber: order.invoiceNumber ?? undefined, ewayBill: order.ewayBill ?? undefined,
   };
@@ -92,7 +117,7 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
       await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.ambiguous", targetType: "order", targetId: order.id, details: { provider: acct.adapter, message: res.error.message } });
       return { ok: false, code: "ambiguous", message: "The courier did not confirm in time. Funds stay on hold while we check with the courier — no duplicate booking will be made." };
     }
-    await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: order.id, memo: `Released: ${order.orderNumber} not booked` }));
+    if (reservationId) await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: order.id, memo: `Released: ${order.orderNumber} not booked` }));
     await db.update(schema.orders).set({ status: "booking_failed" }).where(eq(schema.orders.id, order.id));
     return { ok: false, code: res.error.category === "unsupported" ? "unsupported" : "provider_failed", message: res.error.message };
   }
@@ -104,11 +129,12 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
     carrierCode: quote.carrierCode, carrierName: priced.carrierName, serviceName: quote.serviceName,
     providerOrderRef: b.providerOrderRef, awb: b.awb, lrNumber: b.lrNumber ?? null, pieceIds: b.pieceIds ?? null,
     bookingStatus: b.state === "confirmed" ? "confirmed" : "pending", labelStatus: b.labelAvailable ? "available" : "not_generated",
-    status: "booked", quoteId: quote.id, sellPaise: quote.totalPaise, costPaise: priced.costPreTax, reservationId,
+    status: "booked", quoteId: quote.id, sellPaise: senderPays, costPaise: priced.costPreTax, reservationId,
+    freightPayer: order.paymentType === "fod" ? "receiver" : "sender", receiverFreightPaise: receiverPays, fodStatus: order.paymentType === "fod" ? "pending_collection" : null,
     chargeableWeightGrams: priced.chargeableWeightGrams, etaDate: priced.etaDays ? new Date(Date.now() + priced.etaDays * 86400_000) : null,
   });
   if (b.state === "confirmed") {
-    await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber}${b.awb ? ` · ${b.awb}` : ""}` }));
+    if (reservationId) await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber}${b.awb ? ` · ${b.awb}` : ""}` }));
   } else {
     // Async manifestation (e.g. Delhivery B2B): keep the hold until lookup confirms.
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "booking.reconcile", payload: { orderId: order.id, quoteId: quote.id, reservationId, shipmentId }, dedupeKey: `reconcile:${order.id}:${quote.id}` }).onConflictDoNothing();
@@ -118,6 +144,6 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "store.push_tracking", payload: { orderId: order.id }, dedupeKey: `push:${order.id}` }).onConflictDoNothing();
   }
   await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `booked:${shipmentId}`, status: "booked", rawStatus: "BOOKED", occurredAt: new Date(), source: "manual" });
-  await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.created", targetType: "shipment", targetId: shipmentId, details: { quoteId: quote.id, totalPaise: quote.totalPaise, provider: acct.adapter } });
+  await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.created", targetType: "shipment", targetId: shipmentId, details: { quoteId: quote.id, totalPaise: quote.totalPaise, senderPays, receiverPays, paymentMode: order.paymentType, provider: acct.adapter, providerRef: b.providerOrderRef } });
   return { ok: true, shipmentId, awb: b.awb, state: b.state };
 }

@@ -17,6 +17,7 @@
     "db:seed": "tsx scripts/seed.mts",
     "owner:bootstrap": "tsx scripts/bootstrap-owner.mts",
     "verify:whatsapp": "tsx --tsconfig tsconfig.json --require ./scripts/stub-server-only.cjs scripts/verify-whatsapp.ts",
+    "verify:fod": "tsx --tsconfig tsconfig.json --require ./scripts/stub-server-only.cjs scripts/verify-fod.ts",
     "worker": "tsx --conditions=react-server --tsconfig tsconfig.json src/server/jobs/worker.ts",
     "prestart": "tsx scripts/release.mts"
   },

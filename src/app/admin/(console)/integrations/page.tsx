@@ -10,7 +10,7 @@ import { encryptJson, maskSecret } from "@/server/security/crypto";
 
 const CATS = [["shipping", "Shipping"], ["payments", "Payments"], ["messaging", "WhatsApp/SMS"], ["email", "Email"]] as const;
 const SECRET_FIELDS: Record<string, string[]> = {
-  shipmozo: ["publicKey", "privateKey"], razorpay: ["keyId", "keySecret", "webhookSecret"], wati: ["apiEndpoint", "accessToken", "webhookToken"],
+  shipmozo: ["publicKey", "privateKey"], delhivery_b2b: ["username", "password"], delhivery_b2c: ["apiToken"], razorpay: ["keyId", "keySecret", "webhookSecret"], wati: ["apiEndpoint", "accessToken", "webhookToken"],
   resend: ["apiKey"], smtp: ["host", "port", "username", "password"], sms: ["apiKey", "senderId"], demo: [],
 };
 

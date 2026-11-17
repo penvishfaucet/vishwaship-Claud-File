@@ -1,18 +1,21 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { guessPincode } from "@/lib/pincodes";
 
 /** Add a pickup address, or (verifyId set) run the OTP verification for an existing one. */
 type Editing = { id: string; label: string; contactName: string; email: string | null; mobile: string; line1: string; line2: string | null; pincode: string; city: string; state: string };
 
 /** Add or edit a pickup address, or (verifyId set) run the OTP verification for an existing one. */
-export function AddressForm({ verifyId, mobile, editing, onDone }: { verifyId?: string; mobile?: string; editing?: Editing; onDone?: () => void }) {
+export type SavedWarehouse = { id: string; label: string; city: string; pincode: string; verified: boolean; isDefault: boolean; mobileMasked: string };
+
+export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVerified, onCancel }: { verifyId?: string; mobile?: string; editing?: Editing; onDone?: () => void; onSaved?: (w: SavedWarehouse) => void; onVerified?: (id: string) => void; onCancel?: () => void }) {
   const router = useRouter();
   const [f, setF] = useState(editing
     ? { label: editing.label, contactName: editing.contactName, email: editing.email ?? "", mobile: editing.mobile, line1: editing.line1, line2: editing.line2 ?? "", pincode: editing.pincode, city: editing.city, state: editing.state }
     : { label: "", contactName: "", email: "", mobile: "", line1: "", line2: "", pincode: "", city: "", state: "" });
   const [otpFor, setOtpFor] = useState<string | null>(verifyId ?? null);
+  const pinRef = useRef("");
   const [otpSent, setOtpSent] = useState(false);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -26,6 +29,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone }: { verifyId?: 
     if (!r.ok) { setErr(j.error?.issues?.[0]?.message ?? j.error?.message ?? "Could not save"); return; }
     if (editing && !j.mobileChanged) { onDone ? onDone() : router.refresh(); return; }
     const id = editing ? editing.id : j.id;
+    if (!editing && onSaved) onSaved({ id, label: f.label, city: f.city, pincode: f.pincode, verified: false, isDefault: false, mobileMasked: `••••••${f.mobile.replace(/D/g, "").slice(-4)}` });
     setOtpFor(id); await send(id);
   }
   async function send(id = otpFor!) {
@@ -40,6 +44,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone }: { verifyId?: 
     const r = await fetch(`/api/portal/warehouses/${otpFor}/otp`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
     const j = await r.json(); setBusy(false);
     if (!r.ok) { setErr(j.error?.message ?? "Incorrect code"); return; }
+    if (onVerified) { onVerified(otpFor!); return; }
     router.push("/portal/addresses/"); router.refresh();
   }
 
@@ -70,12 +75,22 @@ export function AddressForm({ verifyId, mobile, editing, onDone }: { verifyId?: 
         <div className="field"><label htmlFor="a-e">Email (optional)</label><input id="a-e" className="input" type="email" value={f.email} onChange={set("email")} /></div>
         <div className="field"><label htmlFor="a-m">Pickup mobile</label><input id="a-m" className="input" required inputMode="tel" value={f.mobile} onChange={set("mobile")} /></div>
         <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="a-1">Address</label><input id="a-1" className="input" required value={f.line1} onChange={set("line1")} /></div>
-        <div className="field"><label htmlFor="a-p">PIN code</label><input id="a-p" className="input" required inputMode="numeric" maxLength={6} value={f.pincode} onChange={(e) => { const v = e.target.value.replace(/\D/g, ""); const g = v.length === 6 ? guessPincode(v) : {}; setF({ ...f, pincode: v, city: f.city || g.city || "", state: f.state || g.state || "" }); }} /></div>
+        <div className="field"><label htmlFor="a-p">PIN code</label><input id="a-p" className="input" required inputMode="numeric" maxLength={6} value={f.pincode} onChange={(e) => {
+          const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+          setF((x) => ({ ...x, pincode: v, ...(v !== x.pincode ? { city: "", state: "" } : {}) }));
+          pinRef.current = v;
+          if (!/^[1-9]\d{5}$/.test(v)) return;
+          fetch(`/api/portal/pincode/${v}`).then((r) => (r.ok ? r.json() : null)).then((j) => {
+            if (pinRef.current !== v) return; // a newer PIN was typed
+            const g = j ?? guessPincode(v);
+            setF((x) => ({ ...x, city: g.city || x.city, state: g.state || x.state }));
+          }).catch(() => undefined);
+        }} /></div>
         <div className="field"><label htmlFor="a-ci">City</label><input id="a-ci" className="input" required value={f.city} onChange={set("city")} /></div>
         <div className="field"><label htmlFor="a-s">State</label><input id="a-s" className="input" required value={f.state} onChange={set("state")} /></div>
       </div>
       {err && <p className="err small" role="alert">{err}</p>}
-      <div className="row mt12" style={{ gap: 8 }}><button className="btn btn-orange" disabled={busy}>{editing ? "Save changes" : "Save & verify mobile"}</button>{editing ? <button type="button" className="btn btn-outline" onClick={() => onDone?.()}>Cancel</button> : <a className="btn btn-outline" href="/portal/addresses/">Cancel</a>}</div>
+      <div className="row mt12" style={{ gap: 8 }}><button className="btn btn-orange" disabled={busy}>{editing ? "Save changes" : "Save & verify mobile"}</button>{editing ? <button type="button" className="btn btn-outline" onClick={() => onDone?.()}>Cancel</button> : onCancel ? <button type="button" className="btn btn-outline" onClick={onCancel}>Cancel</button> : <a className="btn btn-outline" href="/portal/addresses/">Cancel</a>}</div>
     </form>
   );
 }

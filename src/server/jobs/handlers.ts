@@ -17,7 +17,7 @@ import { type JobResult, enqueue, registerHandler } from "./runner";
  * Still unknown -> back off. Never invents an AWB.
  */
 registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
-  const { orderId, quoteId, reservationId } = p as { orderId: string; quoteId: string; reservationId: string };
+  const { orderId, quoteId, reservationId } = p as { orderId: string; quoteId: string; reservationId: string | null };
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
   const [quote] = await db.select().from(schema.quotes).where(eq(schema.quotes.id, quoteId));
@@ -26,14 +26,16 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
   const ad = acct && getAdapter(acct.adapter);
   if (!ad) return { dead: "adapter unavailable" };
-  const r = await ad.lookupBooking(await providerContext(acct), { vishwashipOrderId: orderId });
-  if (!r.ok) return { retryInSec: Math.min(3600, 60 * 2 ** attempt), error: r.error.message };
   const [existing] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, orderId));
+  // async carriers (Delhivery B2B) need the job / LR reference returned at booking
+  const r = await ad.lookupBooking(await providerContext(acct), { vishwashipOrderId: orderId, providerOrderRef: existing?.providerOrderRef ?? undefined });
+  if (!r.ok) return { retryInSec: Math.min(3600, 60 * 2 ** attempt), error: r.error.message };
   if (r.value && r.value.state === "confirmed") {
     const priced = quote.priced as { carrierName: string; costPreTax: number; chargeableWeightGrams: number };
     const shipmentId = existing?.id ?? newId("shp");
     if (existing) {
-      await db.update(schema.shipments).set({ bookingStatus: "confirmed", awb: r.value.awb ?? existing.awb, lrNumber: r.value.lrNumber ?? existing.lrNumber }).where(eq(schema.shipments.id, existing.id));
+      await db.update(schema.shipments).set({ bookingStatus: "confirmed", providerOrderRef: r.value.providerOrderRef || existing.providerOrderRef, awb: r.value.awb ?? existing.awb, lrNumber: r.value.lrNumber ?? existing.lrNumber, pieceIds: r.value.pieceIds ?? existing.pieceIds, labelStatus: r.value.labelAvailable ? "available" : existing.labelStatus }).where(eq(schema.shipments.id, existing.id));
+      await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: order.orgId, kind: "tracking", title: `Booking confirmed by the courier${r.value.lrNumber ? ` — LR ${r.value.lrNumber}` : r.value.awb ? ` — AWB ${r.value.awb}` : ""}`, href: `/portal/orders/${orderId}/` });
     } else {
       await db.insert(schema.shipments).values({
         id: shipmentId, orgId: order.orgId, orderId, providerAccountId: acct.id, provider: acct.adapter, carrierCode: quote.carrierCode, carrierName: priced.carrierName,
@@ -41,14 +43,15 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
         status: "booked", quoteId, sellPaise: quote.totalPaise, costPaise: priced.costPreTax, reservationId, chargeableWeightGrams: priced.chargeableWeightGrams,
       });
     }
-    await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber} (reconciled)` }));
+    if (reservationId) await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber} (reconciled)` }));
     await db.update(schema.orders).set({ status: "booked" }).where(eq(schema.orders.id, orderId));
     await audit({ actorKind: "system", orgId: order.orgId, action: "booking.reconciled_confirmed", targetType: "order", targetId: orderId });
     return { done: true };
   }
   if (r.value === null) {
-    if (existing) return { dead: "shipment exists but provider reports none — manual review" };
-    await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: orderId, memo: `Released: ${order.orderNumber} not booked (reconciled)` }));
+    if (existing && existing.bookingStatus === "confirmed") return { dead: "shipment exists but provider reports none — manual review" };
+    if (existing) await db.update(schema.shipments).set({ bookingStatus: "failed", status: "cancelled" }).where(eq(schema.shipments.id, existing.id));
+    if (reservationId) await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: orderId, memo: `Released: ${order.orderNumber} not booked (reconciled)` }));
     await db.update(schema.orders).set({ status: "booking_failed" }).where(eq(schema.orders.id, orderId));
     await audit({ actorKind: "system", orgId: order.orgId, action: "booking.reconciled_absent", targetType: "order", targetId: orderId });
     return { done: true };
@@ -135,6 +138,7 @@ export async function scheduleSweeps() {
   const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
   for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   await sweepNoResponse();
+  await scheduleTrackingPolls();
 }
 
 /** report.export — build a CSV/XLSX for Tools → Report Download (same filters and tenant scope as on screen). */
@@ -160,3 +164,23 @@ registerHandler("report.export", async (p): Promise<JobResult> => {
   }
   return { done: true };
 });
+
+/** tracking.poll — refresh live-courier shipments (Delhivery etc.). Demo shipments are refreshed on demand only. */
+registerHandler("tracking.poll", async (p): Promise<JobResult> => {
+  const { refreshFromCarrier } = await import("@/server/tracking/service");
+  await refreshFromCarrier(String(p.shipmentId)).catch(() => null);
+  return { done: true };
+});
+
+let lastPollSlot = -1;
+export async function scheduleTrackingPolls() {
+  const slot = Math.floor(Date.now() / (30 * 60_000));
+  if (slot === lastPollSlot) return; // once per 30-minute slot per process (jobs are also deduped per slot)
+  lastPollSlot = slot;
+  const db = await getDb();
+  const live = await db.select({ id: schema.shipments.id }).from(schema.shipments)
+    .where(and(eq(schema.shipments.bookingStatus, "confirmed"), inArray(schema.shipments.provider, ["delhivery_b2b", "delhivery_b2c", "shipmozo"]),
+      inArray(schema.shipments.status, ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "ndr", "rto_initiated", "rto_in_transit"])))
+    .limit(500);
+  for (const s of live) await enqueue("tracking.poll", { shipmentId: s.id }, { dedupeKey: `track:${s.id}:${slot}` });
+}

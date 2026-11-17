@@ -1,8 +1,10 @@
+import { modeAllowed, paymentConfig, payerSplit, type PayerSplit } from "@/server/payment-modes";
+import type { PaymentMode } from "@/server/providers/types";
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { newId } from "@/server/util/ids";
-import { type MarkupSettings, type PricedQuote, DEFAULT_COMPONENT_RULES, priceQuote, resolveMarkup } from "@/server/pricing/engine";
+import { type MarkupSettings, type PricedQuote, DEFAULT_COMPONENT_RULES, DELHIVERY_B2B_COMPONENT_RULES, priceQuote, resolveMarkup } from "@/server/pricing/engine";
 import { getAdapter, providerContext } from "@/server/providers/registry";
 import type { QuoteRequest } from "@/server/providers/types";
 
@@ -28,6 +30,9 @@ export async function getSetting<T>(key: string, fallback: T): Promise<{ value: 
 }
 
 export interface QuoteOffer extends PricedQuote {
+  payer: PayerSplit;
+  pricingSource: string;
+  paymentMode: PaymentMode;
   quoteId: string;
   expiresAt: string;
   isDemo: boolean;
@@ -53,6 +58,9 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
   for (const acct of accounts) {
     const adapter = getAdapter(acct.adapter);
     if (!adapter) { errors.push(`${acct.label}: adapter required`); continue; }
+    const pay = paymentConfig(acct, adapter);
+    const allowedMode = modeAllowed(pay, req.paymentType);
+    if (!allowedMode.ok) { if (pay.fodStatus !== "not_supported" || req.paymentType !== "fod") errors.push(`${acct.label}: ${allowedMode.reason}`); continue; }
     const ctx = await providerContext(acct);
     const res = await adapter.quote(ctx, req);
     if (!res.ok) { if (res.error.category !== "unsupported") errors.push(`${acct.label}: ${res.error.message}`); continue; }
@@ -62,16 +70,20 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     const markupProvider = acct.adapter === "demo" ? "shipmozo" : acct.adapter;
     const settings = await loadMarkupSettings(markupProvider);
     const markup = resolveMarkup(settings, orgId, now);
+    // Delhivery B2B: the markup applies to the base freight only (see DELHIVERY_B2B_COMPONENT_RULES); other charges pass through.
+    const provRules = await getSetting(`component_rules:${acct.adapter}`, acct.adapter === "delhivery_b2b" ? DELHIVERY_B2B_COMPONENT_RULES : rules.value);
 
     for (const q of res.value) {
       if (!allowed(q.carrierCode)) continue; // switched off by Admin or by this customer (Manage Courier)
-      const priced = priceQuote(q, markup, { gstBps: gst.value, componentRules: rules.value, componentRulesVersion: rules.version });
+      const priced = priceQuote(q, markup, { gstBps: gst.value, componentRules: provRules.value, componentRulesVersion: provRules.version });
+      const payer = payerSplit(priced, req.paymentType, pay.fodBasis, gst.value);
+      const pricingSource = q.providerQuoteRef?.split(":")[0] ?? acct.adapter;
       const quoteId = newId("qt");
       const expiresAt = new Date(now.getTime() + QUOTE_TTL_MS);
-      offers.push({ ...priced, quoteId, expiresAt: expiresAt.toISOString(), isDemo: acct.adapter === "demo" });
+      offers.push({ ...priced, quoteId, expiresAt: expiresAt.toISOString(), isDemo: acct.adapter === "demo", payer, pricingSource, paymentMode: req.paymentType });
       if (persist) await db.insert(schema.quotes).values({
         id: quoteId, orgId, providerAccountId: acct.id, provider: acct.adapter, carrierCode: q.carrierCode,
-        serviceName: q.serviceName, mode: q.mode, request: req, priced: { ...priced, providerQuoteRef: q.providerQuoteRef },
+        serviceName: q.serviceName, mode: q.mode, request: req, priced: { ...priced, providerQuoteRef: q.providerQuoteRef, payer, pricingSource, paymentMode: req.paymentType, markupProvider },
         totalPaise: priced.total, expiresAt,
       });
     }

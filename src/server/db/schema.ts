@@ -281,6 +281,13 @@ export const shipments = pgTable("shipments", {
   sellPaise: paise("sell_paise").notNull(),
   costPaise: paise("cost_paise").notNull(),
   reservationId: text("reservation_id"),
+  /** sender (Prepaid/COD) | receiver (FOD: freight collected from the receiver at delivery) */
+  freightPayer: text("freight_payer").notNull().default("sender"),
+  /** FOD: freight the courier collects from the receiver (paise), as shown before booking. */
+  receiverFreightPaise: paise("receiver_freight_paise").notNull().default(0),
+  fodStatus: text("fod_status"), // pending_collection | collected | settled | disputed
+  pickupRef: text("pickup_ref"),
+  pickupDate: ts("pickup_date"),
   chargeableWeightGrams: integer("chargeable_weight_grams").notNull(),
   carrierWeightGrams: integer("carrier_weight_grams"),
   etaDate: ts("eta_date"),

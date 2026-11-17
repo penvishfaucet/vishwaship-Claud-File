@@ -1,3 +1,4 @@
+import { BUCKETS, dashRange, isBucket } from "@/server/portal/buckets";
 import Link from "next/link";
 import { Download, FileStack, PackagePlus, RefreshCw, Upload, Zap } from "lucide-react";
 import { formatINR } from "@/lib/money";
@@ -9,14 +10,14 @@ import { asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { tagsForOrders } from "@/server/orders/extras";
 
-type SP = { q?: string; group?: string; payment?: string; mode?: string; tag?: string; page?: string };
+type SP = { q?: string; group?: string; payment?: string; mode?: string; tag?: string; bucket?: string; from?: string; to?: string; page?: string };
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const [counts, data] = await Promise.all([
     statusCounts(ctx.org.id),
-    listOrders(ctx.org.id, { q: sp.q, group: sp.group, payment: sp.payment, mode: sp.mode, tag: sp.tag, page: Number(sp.page ?? 1) }),
+    listOrders(ctx.org.id, { q: sp.q, group: sp.group, payment: sp.payment, mode: sp.mode, tag: sp.tag, bucket: sp.bucket, from: sp.from, to: sp.to, page: Number(sp.page ?? 1) }),
   ]);
   const db = await getDb();
   const tags = await db.select().from(schema.orderTags).where(eq(schema.orderTags.orgId, ctx.org.id)).orderBy(asc(schema.orderTags.name));
@@ -43,17 +44,23 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         </div>
       </div>
 
+      {(isBucket(sp.bucket) || sp.from || sp.to) && (() => { const r = dashRange(sp); return (
+        <div className="note row wrap mb12" style={{ gap: 8, alignItems: "center" }} role="status">
+          <span className="small">Showing <b>{isBucket(sp.bucket) ? BUCKETS[sp.bucket].label : "all orders"}</b> · {new Date(r.from).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} – {new Date(r.to).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · {data.total} order{data.total === 1 ? "" : "s"}</span>
+          <Link className="btn btn-sm btn-outline" href="/portal/orders/">Clear filter</Link>
+          <Link className="btn btn-sm btn-outline" href={`/portal/?from=${r.fromStr}&to=${r.toStr}`}>Back to dashboard</Link>
+        </div>); })()}
       <nav className="tabs" aria-label="Order status">
         <Link href={qs({ group: undefined, page: undefined })} className={!sp.group ? "on" : ""}>All<span className="n">{all}</span></Link>
         {counts.map((c) => <Link key={c.key} href={qs({ group: c.key, page: undefined })} className={sp.group === c.key ? "on" : ""}>{c.label}<span className="n">{c.count}</span></Link>)}
       </nav>
 
       <form className="row wrap mb12" style={{ gap: 8 }} role="search">
-        {sp.group && <input type="hidden" name="group" value={sp.group} />}
+        {sp.group && <input type="hidden" name="group" value={sp.group} />}{sp.bucket && <input type="hidden" name="bucket" value={sp.bucket} />}{sp.from && <input type="hidden" name="from" value={sp.from} />}{sp.to && <input type="hidden" name="to" value={sp.to} />}
         <label className="sr-only" htmlFor="oq">Search</label>
         <input id="oq" className="input" name="q" defaultValue={sp.q} placeholder="Order ID, AWB / LR, phone" style={{ maxWidth: 280 }} />
         <label className="sr-only" htmlFor="opay">Payment</label>
-        <select id="opay" className="select" name="payment" defaultValue={sp.payment ?? ""} style={{ maxWidth: 150 }}><option value="">All payments</option><option value="prepaid">Prepaid</option><option value="cod">COD</option></select>
+        <select id="opay" className="select" name="payment" defaultValue={sp.payment ?? ""} style={{ maxWidth: 150 }}><option value="">All payments</option><option value="prepaid">Prepaid</option><option value="cod">COD</option><option value="fod">FOD</option></select>
         <label className="sr-only" htmlFor="omode">Type</label>
         <select id="omode" className="select" name="mode" defaultValue={sp.mode ?? ""} style={{ maxWidth: 130 }}><option value="">B2C + B2B</option><option value="B2C">B2C</option><option value="B2B">B2B</option></select>
         {tags.length > 0 && <><label className="sr-only" htmlFor="otag">Tag</label><select id="otag" className="select" name="tag" defaultValue={sp.tag ?? ""} style={{ maxWidth: 150 }}><option value="">All tags</option>{tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></>}

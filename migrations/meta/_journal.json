@@ -36,6 +36,13 @@
       "when": 1794919488103,
       "tag": "0004_others_billing_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794929697776,
+      "tag": "0005_delhivery_fod",
+      "breakpoints": true
     }
   ]
 }

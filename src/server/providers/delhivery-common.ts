@@ -1,0 +1,101 @@
+import type { ComponentCode, ProviderQuoteComponent } from "@/server/pricing/engine";
+
+/**
+ * Helpers shared by the Delhivery adapters. Delhivery's developer portal documents requests but not
+ * response bodies, so responses are parsed defensively (several known field spellings) and a quote is
+ * only returned when a positive base freight is found — a missing rate is never shown as ₹0.
+ */
+export async function jsonOrNull(r: Response): Promise<unknown> {
+  const t = await r.text();
+  try { return JSON.parse(t); } catch { return t ? { raw: t.slice(0, 500) } : null; }
+}
+
+/** Read the first non-empty value at any of the dotted paths (array indexes allowed: "data.0.x"). */
+export function firstString(obj: unknown, paths: string[]): string | null {
+  for (const p of paths) {
+    let cur: unknown = obj;
+    for (const k of p.split(".")) {
+      if (cur == null) break;
+      cur = Array.isArray(cur) ? cur[Number(k)] : (cur as Record<string, unknown>)[k];
+    }
+    if (cur != null && cur !== "" && (typeof cur === "string" || typeof cur === "number" || typeof cur === "boolean")) return String(cur);
+  }
+  return null;
+}
+
+export function providerError(j: unknown, fallback: string) {
+  const m = firstString(j, ["error.message", "message", "error", "detail", "rmk", "data.message", "packages.0.remarks.0", "remarks", "raw"]);
+  return (m ? `${fallback}: ${m}` : fallback).slice(0, 300);
+}
+
+export const rupees = (paise: number) => Math.round(paise) / 100;
+export function amountToPaise(v: unknown): number {
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[,₹\s]/g, "")) : NaN;
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+const TAX = /(^|_)(gst|igst|cgst|sgst|utgst|tax|taxes)(_|$)/i;
+const TOTAL = /(^|_)(total|grand|gross|net_amount|amount_payable|final)/i;
+function classify(key: string): { code: ComponentCode; label: string } | null {
+  const k = key.toLowerCase();
+  if (/green/.test(k)) return { code: "docket", label: "Green tax" }; // a carrier charge, not GST
+  if (TAX.test(k) || TOTAL.test(k)) return null;
+  // request echoes / non-money fields
+  if (/cod_amount|inv_amount|invoice|weight|wt$|pin|box|count|length|width|height|_cm$|_g$|tat|days|zone|rate$|percent|pct/.test(k)) return null;
+  if (/(^|_)(base_freight|freight_charge|basic_freight|freight|base|min_freight|charge_dl)$/.test(k) || k === "freight_charges") return { code: "freight", label: "Base freight" };
+  if (/fuel|fsc|charge_fs/.test(k)) return { code: "fuel", label: "Fuel surcharge" };
+  if (/rov|fov|insurance|risk/.test(k)) return { code: "fov", label: "ROV / insurance" };
+  if (/oda|odc|remote/.test(k)) return { code: "oda", label: "ODA charge" };
+  if (/fod/.test(k)) return { code: "other", label: "FOD charge" };
+  if (/cod|charge_cod|charge_ccod/.test(k)) return { code: "cod_fee", label: "COD charge" };
+  if (/docket|lr_charge|lr_fee|green|dph|charge_dph/.test(k)) return { code: "docket", label: "Docket / handling" };
+  if (/handling|appointment|labour|loading|warai|mathadi/.test(k)) return { code: "handling", label: "Handling" };
+  if (/charge|fee|surcharge/.test(k)) return { code: "other", label: key.replace(/_/g, " ") };
+  return null;
+}
+
+/** Collect numeric charge fields from the first object that looks like a breakup. */
+function collect(obj: unknown, depth = 0, out: Array<[string, number]> = []): Array<[string, number]> {
+  if (!obj || typeof obj !== "object" || depth > 3) return out;
+  if (Array.isArray(obj)) { if (obj.length) collect(obj[0], depth + 1, out); return out; }
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))) out.push([k, Number(v)]);
+    else if (v && typeof v === "object" && /data|breakup|break_up|price|charges|details|result|freight/i.test(k)) collect(v, depth + 1, out);
+  }
+  return out;
+}
+
+function toComponents(pairs: Array<[string, number]>): ProviderQuoteComponent[] {
+  const byCode = new Map<string, ProviderQuoteComponent>();
+  for (const [k, v] of pairs) {
+    if (!(v > 0)) continue;
+    const c = classify(k);
+    if (!c) continue;
+    const key = c.code === "other" ? `other:${c.label}` : c.code;
+    const prev = byCode.get(key);
+    byCode.set(key, { code: c.code, label: c.label, amount: (prev?.amount ?? 0) + amountToPaise(v) });
+  }
+  return [...byCode.values()];
+}
+
+/** B2B /freight/estimate → components (pre-tax, paise) + chargeable weight if returned. */
+export function b2bCharges(j: unknown): { components: ProviderQuoteComponent[]; chargeableGrams?: number } | null {
+  const pairs = collect(j);
+  const components = toComponents(pairs);
+  if (!components.some((c) => c.code === "freight")) return null;
+  const cw = pairs.find(([k]) => /charged_wt|chargeable_weight|charged_weight|billed_weight/i.test(k))?.[1];
+  return { components, chargeableGrams: cw ? (cw < 1000 ? Math.round(cw * 1000) : Math.round(cw)) : undefined };
+}
+
+/** B2C kinko invoice charges → components (pre-tax, paise). */
+export function b2cCharges(j: unknown): ProviderQuoteComponent[] | null {
+  const row = Array.isArray(j) ? j[0] : j;
+  if (!row || typeof row !== "object") return null;
+  const pairs = Object.entries(row as Record<string, unknown>).filter(([k, v]) => /^charge_/i.test(k) && Number(v) > 0).map(([k, v]) => [k, Number(v)] as [string, number]);
+  let components = toComponents(pairs);
+  if (!components.some((c) => c.code === "freight")) {
+    const gross = Number((row as Record<string, unknown>).gross_amount);
+    if (gross > 0) components = [{ code: "freight", label: "Base freight", amount: amountToPaise(gross) - components.reduce((t, c) => t + c.amount, 0) }, ...components];
+  }
+  return components.some((c) => c.code === "freight" && c.amount > 0) ? components : null;
+}

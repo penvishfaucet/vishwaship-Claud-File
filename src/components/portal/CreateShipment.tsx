@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { AddressForm, type SavedWarehouse } from "@/components/portal/AddressForm";
 import { formatINR } from "@/lib/money";
-import { guessPincode } from "@/lib/pincodes";
 import { carrierLogo } from "@/lib/site";
 import type { OfferView } from "@/components/public/RateCalculator";
 
-type WH = { id: string; label: string; city: string; pincode: string; verified: boolean; isDefault: boolean };
+type WH = { id: string; label: string; city: string; pincode: string; verified: boolean; isDefault: boolean; mobileMasked?: string };
+type Addr = { label: string; line1: string; line2?: string; pincode: string; city: string; state: string };
 type Pkg = { count: string; l: string; b: string; h: string; w: string };
 type Prod = { name: string; qty: string; price: string; hsn: string };
 export type Library = {
@@ -32,13 +33,25 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const defBox = myPresets[lib.presets.findIndex((p) => p.isDefault)];
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [saveBuyer, setSaveBuyer] = useState(false);
+  const [whs, setWhs] = useState<WH[]>(props.warehouses);
   const def = props.warehouses.find((w) => w.isDefault) ?? props.warehouses[0];
+  const [dialog, setDialog] = useState<null | "add" | "change">(null);
+  const [verifying, setVerifying] = useState(false);
+  const [whNote, setWhNote] = useState<string | null>(null);
+  const [whBusy, setWhBusy] = useState<string | null>(null);
+  const [fe, setFe] = useState<{ line1?: string; pin?: string; pinRetry?: boolean; mobile?: string }>({});
+  const [pinState, setPinState] = useState<"idle" | "loading">("idle");
+  const [match, setMatch] = useState<null | { id: string; name: string; email: string; addresses: Addr[] }>(null);
+  const [matchState, setMatchState] = useState<"idle" | "loading" | "none">("idle");
+  const latestPin = useRef("");
+  const latestMobile = useRef("");
   const [step, setStep] = useState(0);
   const [warehouseId, setWarehouseId] = useState(def.id);
   const [pickupDate, setPickupDate] = useState(new Date(Date.now() + 86400_000).toISOString().slice(0, 10));
   const [c, setC] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: props.initial.destination ?? "", city: "", state: "" });
   const [orderNumber, setOrderNumber] = useState("");
-  const [payment, setPayment] = useState<"prepaid" | "cod">("prepaid");
+  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">("prepaid");
+  const [notices, setNotices] = useState<string[]>([]);
   const [cod, setCod] = useState("");
   const [declared, setDeclared] = useState("");
   const [invoice, setInvoice] = useState("");
@@ -53,7 +66,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const [orderId, setOrderId] = useState<string | null>(null);
   const [done, setDone] = useState<{ awb: string | null; shipmentId: string; state: string } | null>(null);
 
-  const wh = props.warehouses.find((w) => w.id === warehouseId)!;
+  const wh = whs.find((w) => w.id === warehouseId) ?? whs[0];
   const weights = useMemo(() => {
     let actual = 0, vol = 0, boxes = 0;
     const per = pkgs.map((p) => {
@@ -69,20 +82,84 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const declaredValue = Number(declared) || products.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const chosen = offers?.find((o) => o.quoteId === selected) ?? null;
 
+  async function lookupPin(v: string) {
+    latestPin.current = v;
+    setPinState("loading"); setFe((x) => ({ ...x, pin: undefined, pinRetry: false }));
+    try {
+      const r = await fetch(`/api/portal/pincode/${v}`);
+      const j = await r.json().catch(() => ({}));
+      if (latestPin.current !== v) return; // a newer PIN was typed — ignore this late answer
+      if (r.ok) setC((s) => (s.pincode === v ? { ...s, city: j.city || s.city, state: j.state || s.state } : s));
+      else if (r.status === 404 || r.status === 422) setFe((x) => ({ ...x, pin: j.error?.message ?? "No match for this PIN code" }));
+      else setFe((x) => ({ ...x, pin: "Could not look up this PIN right now.", pinRetry: true }));
+    } catch { if (latestPin.current === v) setFe((x) => ({ ...x, pin: "Could not look up this PIN right now.", pinRetry: true })); }
+    finally { if (latestPin.current === v) setPinState("idle"); }
+  }
   const setPin = (pin: string) => {
     const v = pin.replace(/\D/g, "").slice(0, 6);
-    const g = v.length === 6 ? guessPincode(v) : {};
-    setC((s) => ({ ...s, pincode: v, city: s.city || g.city || "", state: s.state || g.state || "" }));
+    if (v === c.pincode) return;
+    // new PIN → clear the old locality, then look it up automatically once complete
+    setC((s) => ({ ...s, pincode: v, city: "", state: "" }));
+    setFe((x) => ({ ...x, pin: undefined, pinRetry: false }));
+    latestPin.current = v;
+    if (/^[1-9]\d{5}$/.test(v)) void lookupPin(v);
+    else if (v.length === 6) setFe((x) => ({ ...x, pin: "Enter a valid 6-digit PIN code" }));
   };
+  const fillFrom = (b: { name: string; email: string; mobile?: string }, a: Addr) => {
+    latestPin.current = a.pincode;
+    setC((s) => ({ ...s, name: b.name, email: b.email || s.email, line1: a.line1, line2: a.line2 ?? "", pincode: a.pincode, city: a.city, state: a.state }));
+    setFe({});
+  };
+  async function lookupMobile(m: string) {
+    latestMobile.current = m;
+    setMatchState("loading");
+    try {
+      const r = await fetch(`/api/portal/buyers/lookup?mobile=${m}`);
+      const j = await r.json().catch(() => ({}));
+      if (latestMobile.current !== m) return; // number changed while looking up
+      if (r.ok && j.match) {
+        setMatch(j.match); setMatchState("idle");
+        if (j.match.addresses.length === 1) fillFrom(j.match, j.match.addresses[0]);
+      } else { setMatch(null); setMatchState("none"); }
+    } catch { if (latestMobile.current === m) { setMatch(null); setMatchState("idle"); } }
+  }
+  const setMobile = (raw: string) => {
+    setC((s) => ({ ...s, mobile: raw }));
+    const m = raw.replace(/\D/g, "").replace(/^(91|0)(?=[6-9]\d{9}$)/, "");
+    latestMobile.current = m;
+    if (/^[6-9]\d{9}$/.test(m)) void lookupMobile(m); else { setMatch(null); setMatchState("idle"); }
+  };
+  useEffect(() => { if (/^[1-9]\d{5}$/.test(c.pincode) && !c.city && !c.state) void lookupPin(c.pincode); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  /** Switch the pickup warehouse for THIS shipment only; rates and pickup date are re-checked. */
+  function chooseWarehouse(id: string, note?: string) {
+    const next = whs.find((w) => w.id === id);
+    setWarehouseId(id);
+    setDialog(null); setVerifying(false);
+    if (offers) { setOffers(null); setSelected(null); }
+    const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
+    const pd = pickupDate < today ? new Date(Date.now() + 86400_000).toISOString().slice(0, 10) : pickupDate;
+    if (pd !== pickupDate) setPickupDate(pd);
+    setWhNote(note ?? (next && next.pincode !== wh?.pincode ? `Pickup changed to ${next.label} (${next.pincode}). Courier rates will be refreshed before you book.` : null));
+  }
+  async function setDefaultWarehouse(id: string) {
+    setWhBusy(id);
+    const r = await fetch(`/api/portal/warehouses/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "set_default" }) });
+    setWhBusy(null);
+    if (r.ok) setWhs((l) => l.map((w) => ({ ...w, isDefault: w.id === id })));
+    else setWhNote((await r.json().catch(() => ({}))).error?.message ?? "Could not set default");
+  }
 
   function validateStep(i: number): string | null {
     if (i === 0) {
-      if (!wh.verified) return "Verify this pickup address’s mobile number before booking (Pickup Addresses).";
+      if (!wh) return "Add a pickup warehouse first.";
+      if (!wh.verified) return "Verify this pickup mobile with OTP before continuing.";
       if (c.name.trim().length < 2) return "Enter the consignee name.";
       if (!/^[6-9]\d{9}$/.test(c.mobile.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, ""))) return "Enter a valid 10-digit consignee mobile.";
-      if (c.line1.trim().length < 3) return "Enter the delivery address.";
+      if (!c.line1.trim()) { setFe((x) => ({ ...x, line1: "Please enter Address line 1" })); return "Please enter Address line 1"; }
+      if (c.line1.trim().length < 3) { setFe((x) => ({ ...x, line1: "Address line 1 is too short" })); return "Address line 1 is too short"; }
       if (!/^[1-9]\d{5}$/.test(c.pincode)) return "Delivery PIN code must be 6 digits.";
-      if (!c.city || !c.state) return "Enter city and state.";
+      if (!c.city || !c.state) return pinState === "loading" ? "Finding city and state for this PIN — one moment." : "Enter City / District and State.";
     }
     if (i === 1) {
       if (products.some((p) => !p.name.trim() || !(Number(p.qty) > 0))) return "Each product needs a name and quantity.";
@@ -112,7 +189,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.message ?? "Could not fetch rates");
-      setOffers(j.offers);
+      setOffers(j.offers); setNotices(j.notices ?? []);
       if (j.offers[0]) setSelected(j.offers[0].quoteId);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
@@ -120,7 +197,8 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   async function book() {
     if (!chosen) return;
     if (new Date(chosen.expiresAt).getTime() < Date.now()) { setErr("This quote expired. Refreshing rates…"); await fetchQuotes(); return; }
-    if (chosen.total > props.walletPaise) { setErr(`Insufficient wallet balance. You need ${formatINR(chosen.total - props.walletPaise)} more.`); return; }
+    const youPay = chosen.payer?.sender ?? chosen.total;
+    if (youPay > props.walletPaise) { setErr(`Insufficient wallet balance. You need ${formatINR(youPay - props.walletPaise)} more.`); return; }
     setBusy(true); setErr(null);
     try {
       let id = orderId;
@@ -181,13 +259,15 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       <dl className="kv-list">
         <dt>From</dt><dd>{wh.label}, {wh.pincode}</dd>
         <dt>To</dt><dd>{c.pincode ? `${c.city || ""} ${c.pincode}` : "—"}</dd>
-        <dt>Type</dt><dd>{mode} · {payment === "cod" ? `COD ${formatINR(Math.round(Number(cod || 0) * 100))}` : "Prepaid"}</dd>
+        <dt>Type</dt><dd>{mode} · {payment === "cod" ? `COD ${formatINR(Math.round(Number(cod || 0) * 100))}` : payment === "fod" ? "FOD (receiver pays freight)" : "Prepaid"}</dd>
         <dt>Boxes</dt><dd>{weights.boxes}</dd>
         <dt>Actual wt.</dt><dd>{weights.actual.toFixed(2)} kg</dd>
         <dt>Volumetric</dt><dd>{weights.vol.toFixed(2)} kg</dd>
         <dt>Chargeable</dt><dd>{chosen ? `${(chosen.chargeableWeightGrams / 1000).toFixed(2)} kg (quoted)` : "After courier quote"}</dd>
         <dt>Wallet</dt><dd>{formatINR(props.walletPaise)}</dd>
-        {chosen && <><dt>Total</dt><dd style={{ color: "var(--orange)", fontSize: 18 }}>{formatINR(chosen.total)}</dd></>}
+        {chosen && (chosen.payer && chosen.payer.receiver > 0
+          ? <><dt>Receiver pays</dt><dd style={{ color: "var(--orange)", fontSize: 18 }}>{formatINR(chosen.payer.receiver)}</dd><dt>You pay</dt><dd>{formatINR(chosen.payer.sender)}</dd></>
+          : <><dt>Total</dt><dd style={{ color: "var(--orange)", fontSize: 18 }}>{formatINR(chosen.total)}</dd></>)}
       </dl>
       <p className="tiny muted mt8">Carrier re-weigh may revise the chargeable weight after pickup.</p>
     </aside>
@@ -204,16 +284,62 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
             <>
               <section className="card" style={{ padding: 18 }}>
                 <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Pickup</h2>
-                <div className="grid2" style={{ gap: 12 }}>
-                  <div className="field"><label htmlFor="wh">Pickup address</label>
-                    <select id="wh" className="select" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-                      {props.warehouses.map((w) => <option key={w.id} value={w.id}>{w.label} — {w.city} {w.pincode}{w.verified ? "" : " (mobile not verified)"}</option>)}
-                    </select>
+                <div className="grid2 pickup-grid" style={{ gap: 12 }}>
+                  <div>
+                    <div className="field"><label htmlFor="wh">Pickup address</label>
+                      <select id="wh" className="select" value={warehouseId} onChange={(e) => chooseWarehouse(e.target.value)}>
+                        {whs.map((w) => <option key={w.id} value={w.id}>{w.label} — {w.city} {w.pincode}{w.verified ? "" : " (mobile not verified)"}</option>)}
+                      </select>
+                    </div>
+                    <div className="row wrap pickup-actions" style={{ gap: 8, marginTop: 8 }}>
+                      <button type="button" className="btn btn-sm btn-orange" onClick={() => setDialog("add")}><Plus size={14} /> Add New Warehouse</button>
+                      <button type="button" className="btn btn-sm btn-outline" onClick={() => setDialog("change")}><MapPin size={14} /> Change Warehouse</button>
+                    </div>
                   </div>
-                  <div className="field"><label htmlFor="pd">Pickup date</label><input id="pd" className="input" type="date" value={pickupDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setPickupDate(e.target.value)} /></div>
+                  <div className="field"><label htmlFor="pd">Pickup date</label><input id="pd" className="input" type="date" value={pickupDate} min={new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)} onChange={(e) => setPickupDate(e.target.value)} /></div>
                 </div>
-                {!wh.verified && <p className="err small mt8">This pickup mobile isn’t verified yet. <Link className="link" href="/portal/addresses/">Verify with OTP</Link></p>}
+                {whNote && <p className="note small mt8" role="status">{whNote}</p>}
+                {wh && (wh.verified
+                  ? <p className="small mt8 t-credit">✓ Pickup mobile {wh.mobileMasked ?? ""} verified</p>
+                  : <div className="err-box small mt8" role="alert">This pickup mobile{wh.mobileMasked ? ` (${wh.mobileMasked})` : ""} isn’t verified yet.{" "}
+                      {!verifying ? <button type="button" className="linkbtn" onClick={() => setVerifying(true)}>Verify with OTP</button>
+                        : <AddressForm verifyId={wh.id} mobile={wh.mobileMasked} onVerified={(id) => { setWhs((l) => l.map((w) => (w.id === id ? { ...w, verified: true } : w))); setVerifying(false); setWhNote("Pickup mobile verified."); }} />}
+                    </div>)}
               </section>
+              {dialog && (
+                <div className="modal-back" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialog(null); }}>
+                  <div className="modal" role="dialog" aria-modal="true" aria-labelledby="wh-dlg-h" onKeyDown={(e) => { if (e.key === "Escape") setDialog(null); }}>
+                    <div className="row between" style={{ marginBottom: 8 }}>
+                      <h2 id="wh-dlg-h" className="b" style={{ fontSize: 16, margin: 0 }}>{dialog === "add" ? "Add New Warehouse" : "Change Warehouse"}</h2>
+                      <button type="button" className="icon-btn" aria-label="Close" onClick={() => setDialog(null)} autoFocus><X size={18} /></button>
+                    </div>
+                    {dialog === "add" ? (
+                      <AddressForm
+                        onCancel={() => setDialog(null)}
+                        onSaved={(w: SavedWarehouse) => { setWhs((l) => [...l, w]); chooseWarehouse(w.id, `Added ${w.label} and selected it for this shipment. Verify its pickup mobile with the OTP below.`); setDialog("add"); setVerifying(false); }}
+                        onVerified={(id) => { setWhs((l) => l.map((w) => (w.id === id ? { ...w, verified: true } : w))); setDialog(null); setWhNote("New warehouse saved, selected and verified."); }} />
+                    ) : (
+                      whs.length === 0 ? <p className="muted small">No saved warehouses yet. <button type="button" className="linkbtn" onClick={() => setDialog("add")}>Add one</button></p> : (
+                        <ul className="plain-list wh-pick" aria-label="Your warehouses">
+                          {whs.map((w) => (
+                            <li key={w.id} className={w.id === warehouseId ? "on" : ""}>
+                              <div style={{ minWidth: 0 }}>
+                                <b className="small">{w.label}</b>{w.id === warehouseId && <span className="chip c-active" style={{ marginLeft: 6 }}>Selected</span>}{w.isDefault && <span className="chip c-draft" style={{ marginLeft: 6 }}>Default</span>}
+                                <div className="tiny muted">{w.city} {w.pincode} · mobile {w.mobileMasked ?? "—"} · {w.verified ? <span className="t-credit">verified</span> : <span className="t-debit">not verified</span>}</div>
+                              </div>
+                              <span className="row" style={{ gap: 6 }}>
+                                {w.id !== warehouseId && <button type="button" className="btn btn-sm btn-navy" onClick={() => chooseWarehouse(w.id)}>Use for this shipment</button>}
+                                {!w.isDefault && <button type="button" className="btn btn-sm btn-outline" disabled={whBusy === w.id} onClick={() => setDefaultWarehouse(w.id)}>{whBusy === w.id ? "Saving…" : "Set as Default"}</button>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )
+                    )}
+                    <p className="tiny muted mt8">Your shipment draft is kept — closing this window changes nothing.</p>
+                  </div>
+                </div>
+              )}
               <section className="card" style={{ padding: 18 }}>
                 <div className="row between wrap" style={{ gap: 8, marginBottom: 8 }}>
                   <h2 className="b" style={{ fontSize: 15, margin: 0 }}>{props.direction === "reverse" ? "Return from (customer)" : "Deliver to"}</h2>
@@ -225,11 +351,24 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                 </div>
                 <div className="grid2" style={{ gap: 12 }}>
                   <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} autoComplete="off" /></div>
-                  <div className="field"><label htmlFor="cm">Mobile</label><input id="cm" className="input" inputMode="tel" value={c.mobile} onChange={(e) => setC({ ...c, mobile: e.target.value })} /></div>
-                  <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c1">Address line 1</label><input id="c1" className="input" value={c.line1} onChange={(e) => setC({ ...c, line1: e.target.value })} /></div>
-                  <label className="check small" style={{ gridColumn: "1 / -1", order: 99 }}><input type="checkbox" checked={saveBuyer} onChange={(e) => setSaveBuyer(e.target.checked)} /> Save to Customers for next time</label>
+                  <div className="field"><label htmlFor="cm">Mobile</label><input id="cm" className="input" inputMode="tel" autoComplete="off" value={c.mobile} onChange={(e) => setMobile(e.target.value)} onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t) { e.preventDefault(); setMobile(t.trim()); } }} />
+                    {matchState === "loading" && <span className="tiny muted">Looking up saved customers…</span>}
+                    {match && match.addresses.length === 1 && <span className="tiny t-credit">Filled from saved customer {match.name}</span>}
+                    {matchState === "none" && <span className="tiny muted">New customer — enter the details below.</span>}
+                  </div>
+                  {match && match.addresses.length > 1 && (
+                    <fieldset className="addr-pick" style={{ gridColumn: "1 / -1" }}>
+                      <legend className="small b">{match.name} has {match.addresses.length} saved addresses — choose one</legend>
+                      {match.addresses.map((a, i) => <button key={i} type="button" className="btn btn-sm btn-outline" onClick={() => fillFrom(match, a)}>{a.label}: {a.line1}, {a.city} {a.pincode}</button>)}
+                    </fieldset>
+                  )}
+                  <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c1">Address line 1 <span aria-hidden className="t-debit">*</span></label><input id="c1" className={`input${fe.line1 ? " invalid" : ""}`} required aria-required="true" aria-invalid={!!fe.line1} aria-describedby={fe.line1 ? "c1-err" : undefined} value={c.line1} onChange={(e) => { setC({ ...c, line1: e.target.value }); if (fe.line1 && e.target.value.trim()) setFe((x) => ({ ...x, line1: undefined })); }} onBlur={() => { if (!c.line1.trim()) setFe((x) => ({ ...x, line1: "Please enter Address line 1" })); }} />
+                    {fe.line1 && <span id="c1-err" className="field-err" role="alert">{fe.line1}</span>}</div>
+                  <label className="check small" style={{ gridColumn: "1 / -1", order: 99 }}><input type="checkbox" checked={saveBuyer} onChange={(e) => setSaveBuyer(e.target.checked)} /> {match ? "Save these details to this saved customer" : "Save to Customers for next time"}</label>
                   <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c2">Address line 2 (optional)</label><input id="c2" className="input" value={c.line2} onChange={(e) => setC({ ...c, line2: e.target.value })} /></div>
-                  <div className="field"><label htmlFor="cp">PIN code</label><input id="cp" className="input hl" inputMode="numeric" maxLength={6} value={c.pincode} onChange={(e) => setPin(e.target.value)} /></div>
+                  <div className="field"><label htmlFor="cp">PIN code</label><input id="cp" className={`input hl${fe.pin ? " invalid" : ""}`} inputMode="numeric" maxLength={6} aria-invalid={!!fe.pin} aria-describedby={fe.pin ? "cp-err" : undefined} value={c.pincode} onChange={(e) => setPin(e.target.value)} />
+                    {pinState === "loading" && <span className="tiny muted">Finding city and state…</span>}
+                    {fe.pin && <span id="cp-err" className="field-err" role="alert">{fe.pin}{fe.pinRetry && <> <button type="button" className="linkbtn" onClick={() => lookupPin(c.pincode)}><RefreshCw size={12} /> Retry</button></>}</span>}</div>
                   <div className="field"><label htmlFor="cc">City / district</label><input id="cc" className="input" value={c.city} onChange={(e) => setC({ ...c, city: e.target.value })} /></div>
                   <div className="field"><label htmlFor="cs">State</label><input id="cs" className="input" value={c.state} onChange={(e) => setC({ ...c, state: e.target.value })} /></div>
                   <div className="field"><label htmlFor="ce">Email (optional)</label><input id="ce" className="input" type="email" value={c.email} onChange={(e) => setC({ ...c, email: e.target.value })} /></div>
@@ -244,7 +383,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                 <div className="grid2" style={{ gap: 12 }}>
                   <div className="field"><label htmlFor="on">Order ID (optional)</label><input id="on" className="input" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Auto-generated if empty" /></div>
                   {lib.tags.length > 0 && <fieldset style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1" }}><legend className="small b">Tags</legend><div className="row wrap" style={{ gap: 6 }}>{lib.tags.map((t) => { const on = tagIds.includes(t.id); return <button key={t.id} type="button" className="chip" aria-pressed={on} onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])} style={{ background: on ? t.color : "transparent", color: on ? "#fff" : t.color, border: `1px solid ${t.color}`, cursor: "pointer" }}>{t.name}</button>; })}</div></fieldset>}
-                  <div className="field"><label htmlFor="pt">Payment</label><select id="pt" className="select" value={payment} onChange={(e) => setPayment(e.target.value as "prepaid" | "cod")}><option value="prepaid">Prepaid</option><option value="cod">COD</option></select></div>
+                  <div className="field"><label htmlFor="pt">Payment</label><select id="pt" className="select" value={payment} onChange={(e) => setPayment(e.target.value as "prepaid" | "cod" | "fod")}><option value="prepaid">Prepaid — you pay freight</option><option value="cod">COD — receiver pays goods value</option><option value="fod">FOD — receiver pays freight</option></select></div>
                   {payment === "cod" && <div className="field"><label htmlFor="ca">COD amount to collect (₹)</label><input id="ca" className="input" type="number" min="1" value={cod} onChange={(e) => setCod(e.target.value)} /></div>}
                   <div className="field"><label htmlFor="dv">Declared / invoice value (₹)</label><input id="dv" className="input" type="number" min="1" value={declared} onChange={(e) => setDeclared(e.target.value)} placeholder={declaredValue ? String(declaredValue) : ""} /></div>
                   <div className="field"><label htmlFor="inv">Invoice number</label><input id="inv" className="input" value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
@@ -316,7 +455,8 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
             <section className="card" style={{ padding: 18 }} aria-busy={busy}>
               <div className="row between"><h2 className="b" style={{ fontSize: 15, margin: 0 }}>Choose courier</h2><button type="button" className="btn btn-sm btn-outline" onClick={fetchQuotes} disabled={busy}>Refresh rates</button></div>
               {busy && !offers && <p className="muted mt12">Fetching live rates…</p>}
-              {offers && offers.length === 0 && <p className="muted mt12">No courier services this route for these details. Try changing payment type, weight or B2C/B2B.</p>}
+              {offers && offers.length === 0 && <p className="muted mt12">{payment === "fod" ? "FOD (freight paid by the receiver) is not available yet for this route. It is offered only on Delhivery B2B once Vishwaship has activated it — choose Prepaid or COD for now." : "No courier services this route for these details. Try changing payment type, weight or B2C/B2B."}</p>}
+              {offers && notices.length > 0 && <details className="mt8 small"><summary className="muted">{notices.length} service{notices.length === 1 ? "" : "s"} gave no rate — why?</summary><ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{notices.map((n) => <li key={n}>{n}</li>)}</ul><button type="button" className="btn btn-sm btn-outline mt8" onClick={fetchQuotes} disabled={busy}>Retry</button></details>}
               {offers?.some((o) => o.isDemo) && <p className="mt8"><span className="demo-badge">DEMO RATES</span></p>}
               <div className="col mt12" style={{ gap: 10 }} role="radiogroup" aria-label="Courier options">
                 {offers?.map((o) => {
@@ -329,12 +469,18 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                         <span className="b small">{o.carrierName} · {o.serviceName}</span>
                         <span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg · {o.lines.map((l) => `${l.label} ${formatINR(l.sellPreTax)}`).join(" · ")} · GST {formatINR(o.gst)}</span>
                       </span>
-                      <span className="b">{formatINR(o.total)}</span>
+                      <span style={{ textAlign: "right" }}>
+                        {o.payer && o.payer.receiver > 0 ? <>
+                          <span className="b" style={{ display: "block" }}>{formatINR(o.payer.receiver)}</span>
+                          <span className="tiny" style={{ display: "block", color: "var(--orange)" }}>Freight payable by receiver</span>
+                          <span className="tiny muted" style={{ display: "block" }}>{o.payer.sender > 0 ? `+ ${formatINR(o.payer.sender)} charged to you` : "Nothing charged to you"}</span>
+                        </> : <span className="b">{formatINR(o.total)}</span>}
+                      </span>
                     </label>
                   );
                 })}
               </div>
-              {chosen && <p className="tiny muted mt8">Quote valid until {new Date(chosen.expiresAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Amount is held from your wallet and charged only when the courier confirms.</p>}
+              {chosen && <p className="tiny muted mt8">Quote valid until {new Date(chosen.expiresAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. {chosen.payer && chosen.payer.receiver > 0 ? `The courier collects ${formatINR(chosen.payer.receiver)} freight from the receiver at delivery; ${chosen.payer.sender > 0 ? `${formatINR(chosen.payer.sender)} is held from your wallet and charged when the courier confirms.` : "nothing is charged to your wallet."}` : "Amount is held from your wallet and charged only when the courier confirms."}</p>}
             </section>
           )}
           {err && <p className="err" role="alert">{err}</p>}
@@ -342,7 +488,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
             <button type="button" className="btn btn-outline" onClick={() => { setErr(null); setStep((s) => Math.max(0, s - 1)); }} disabled={step === 0 || busy}>Back</button>
             {step < 2
               ? <button type="button" className="btn btn-orange" onClick={next} disabled={busy}>{busy ? "Please wait…" : "Next"}</button>
-              : <button type="button" className="btn btn-orange" onClick={book} disabled={busy || !chosen}>{busy ? "Booking…" : chosen ? `Book Shipment · ${formatINR(chosen.total)}` : "Book Shipment"}</button>}
+              : <button type="button" className="btn btn-orange" onClick={book} disabled={busy || !chosen}>{busy ? "Booking…" : chosen ? `Book Shipment · ${formatINR(chosen.payer?.sender ?? chosen.total)}${chosen.payer && chosen.payer.receiver > 0 ? " (FOD)" : ""}` : "Book Shipment"}</button>}
           </div>
         </div>
         <div className="only-desktop">{summary}</div>

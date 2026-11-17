@@ -36,23 +36,28 @@ export interface PackageInput {
   count: number; lengthMm: number; breadthMm: number; heightMm: number; actualWeightGrams: number;
 }
 
+/** prepaid = sender pays freight; cod = receiver pays the goods value; fod = receiver pays the freight at delivery. */
+export type PaymentMode = "prepaid" | "cod" | "fod";
+
 export interface QuoteRequest {
   mode: "B2C" | "B2B";
   originPincode: string;
   destinationPincode: string;
-  paymentType: "prepaid" | "cod";
+  paymentType: PaymentMode;
   codAmount?: Paise;
   declaredValue?: Paise;
   packages: PackageInput[];
   direction?: "forward" | "reverse";
 }
 
+export interface WarehouseInput { code: string; label: string; contactName: string; mobile: string; email?: string | null; line1: string; line2?: string | null; pincode: string; city: string; state: string }
+
 export interface BookRequest {
   vishwashipOrderId: string;
   orderNumber: string;
   quote: { carrierCode: string; serviceName: string; providerQuoteRef?: string };
   mode: "B2C" | "B2B";
-  paymentType: "prepaid" | "cod";
+  paymentType: PaymentMode;
   codAmount: Paise;
   declaredValue: Paise;
   pickup: Address & { providerWarehouseRef?: string };
@@ -114,8 +119,12 @@ export interface ShippingAdapter {
   quote(ctx: ProviderContext, req: QuoteRequest): Promise<Result<ProviderQuote[]>>;
   book(ctx: ProviderContext, req: BookRequest): Promise<Result<BookResult>>;
   lookupBooking(ctx: ProviderContext, ref: { vishwashipOrderId: string; providerOrderRef?: string }): Promise<Result<BookResult | null>>;
-  label(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string }, format: LabelFormat): Promise<Result<{ url?: string; pdf?: Uint8Array; formatsAvailable: LabelFormat[] }>>;
-  schedulePickup(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string }, date: string): Promise<Result<{ pickupRef?: string; scheduledFor: string }>>;
+  label(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string }, format: LabelFormat): Promise<Result<{ url?: string; pdf?: Uint8Array; images?: string[]; formatsAvailable: LabelFormat[] }>>;
+  schedulePickup(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string; pickupLocation?: string; packageCount?: number }, date: string): Promise<Result<{ pickupRef?: string; scheduledFor: string }>>;
+  /** Register a pickup warehouse with the carrier (once per warehouse+account); returns the carrier reference. */
+  registerWarehouse?(ctx: ProviderContext, w: WarehouseInput): Promise<Result<{ ref: string }>>;
+  /** Payment modes this adapter can book (before Admin / account switches are applied). */
+  paymentModes?: PaymentMode[];
   track(ctx: ProviderContext, awb: string): Promise<Result<TrackResult>>;
   cancel(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string | null }): Promise<Result<{ acknowledged: boolean }>>;
   ndrAction(ctx: ProviderContext, ref: { awb: string }, action: { kind: "reattempt" | "update_address" | "rto"; payload?: Record<string, unknown> }): Promise<Result<{ acknowledged: boolean }>>;

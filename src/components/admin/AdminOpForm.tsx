@@ -9,7 +9,7 @@ export type OpField =
   | { name: string; label: string; type: "hidden"; value: string };
 
 /** One admin action form → POST /api/admin/commercial {op, ...fields}. Shows the server's message and refreshes. */
-export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra }: { op: string; fields: OpField[]; submit: string; confirmText?: string; disabled?: boolean; extra?: Record<string, unknown> }) {
+export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, endpoint = "/api/admin/commercial" }: { op: string; fields: OpField[]; submit: string; confirmText?: string; disabled?: boolean; extra?: Record<string, unknown>; endpoint?: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
@@ -21,7 +21,7 @@ export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra }
       const body: Record<string, unknown> = { op, ...extra };
       for (const f of fields) body[f.name] = f.type === "checkbox" ? fd.get(f.name) === "on" : fd.get(f.name) ?? "";
       setBusy(true); setMsg(null);
-      const r = await fetch("/api/admin/commercial", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       setBusy(false);
       setMsg(r.ok ? { ok: true, text: j.message ?? "Saved" } : { ok: false, text: j.error?.message ?? "Failed" });

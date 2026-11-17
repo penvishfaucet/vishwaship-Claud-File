@@ -24,7 +24,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
   let headers: string[] = [], rows: unknown[][] = [];
 
   if (kind === "orders" || kind === "shipments") {
-    const d = await listOrders(s.orgId, { q: u.searchParams.get("q") ?? undefined, group: u.searchParams.get("group") ?? undefined, payment: u.searchParams.get("payment") ?? undefined, mode: u.searchParams.get("mode") ?? undefined, pageSize: 10_000 });
+    const d = await listOrders(s.orgId, { q: u.searchParams.get("q") ?? undefined, group: u.searchParams.get("group") ?? undefined, payment: u.searchParams.get("payment") ?? undefined, mode: u.searchParams.get("mode") ?? undefined, tag: u.searchParams.get("tag") ?? undefined, bucket: u.searchParams.get("bucket") ?? undefined, from: u.searchParams.get("from") ?? undefined, to: u.searchParams.get("to") ?? undefined, pageSize: 10_000 });
     headers = ["Order ID", "Created (IST)", "Type", "Payment", "COD amount (INR)", "Consignee", "City", "PIN", "Courier", "AWB/LR", "Boxes", "Chargeable kg", "Status", "Charged (INR)"];
     rows = d.rows.filter((r) => r.createdAt >= from && r.createdAt <= to).map((r) => {
       const c = r.consignee as { name: string; city: string; pincode: string };

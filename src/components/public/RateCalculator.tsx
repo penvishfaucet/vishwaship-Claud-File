@@ -16,6 +16,11 @@ export interface OfferView {
   gst: number;
   total: number;
   expiresAt: string;
+  provider?: string;
+  paymentMode?: "prepaid" | "cod" | "fod";
+  /** sender = charged to the seller's wallet; receiver = collected from the receiver at delivery (FOD) */
+  payer?: { sender: number; receiver: number };
+  pricingSource?: string;
   isDemo: boolean;
 }
 
@@ -29,7 +34,7 @@ interface Props {
 
 export interface CalcInput {
   mode: "B2C" | "B2B"; origin: string; destination: string; weightKg: string;
-  payment: "prepaid" | "cod"; codAmount: string; l: string; b: string; h: string;
+  payment: "prepaid" | "cod" | "fod"; codAmount: string; l: string; b: string; h: string;
 }
 
 const DEFAULTS: CalcInput = { mode: "B2C", origin: "110034", destination: "411001", weightKg: "1.2", payment: "prepaid", codAmount: "", l: "20", b: "15", h: "10" };
@@ -61,7 +66,9 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
       if (!r.ok) throw new Error(j.error?.message ?? "Could not fetch rates");
       setOffers(j.offers);
       setState("done");
-      if (!j.offers.length) setMsg("No courier currently services this route with these details.");
+      const why = (j.notices ?? []) as string[];
+      if (!j.offers.length) setMsg(f.payment === "fod" ? "FOD (freight paid by the receiver) is not available yet for this route — it is offered on Delhivery B2B once activated. Choose Prepaid or COD." : `No courier currently services this route with these details.${why.length ? " " + why.join(" · ") : ""}`);
+      else if (why.length) setMsg(`Some services gave no rate: ${why.join(" · ")}`);
     } catch (err) {
       setState("error"); setMsg((err as Error).message);
     }
@@ -79,7 +86,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
         <div className="field"><label htmlFor="c-d">Delivery pincode</label><input id="c-d" className="input hl" inputMode="numeric" maxLength={6} required value={f.destination} onChange={(e) => set("destination", e.target.value.replace(/\D/g, ""))} /></div>
         <div className="field"><label htmlFor="c-w">Weight (kg)</label><input id="c-w" className="input" type="number" step="0.01" min="0.01" required value={f.weightKg} onChange={(e) => set("weightKg", e.target.value)} /></div>
         <div className="field"><label htmlFor="c-p">Payment</label>
-          <select id="c-p" className="select" value={f.payment} onChange={(e) => set("payment", e.target.value as "prepaid" | "cod")}><option value="prepaid">Prepaid</option><option value="cod">COD</option></select>
+          <select id="c-p" className="select" value={f.payment} onChange={(e) => set("payment", e.target.value as "prepaid" | "cod" | "fod")}><option value="prepaid">Prepaid</option><option value="cod">COD</option><option value="fod">FOD — freight paid by receiver</option></select>
         </div>
         {f.payment === "cod" && (
           <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c-cod">COD amount to collect (₹)</label><input id="c-cod" className="input" type="number" min="1" required value={f.codAmount} onChange={(e) => set("codAmount", e.target.value)} /></div>
@@ -119,8 +126,14 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div className="b" style={{ fontSize: 20 }}>{formatINR(o.total)}</div>
-                <div className="tiny muted">incl. GST</div>
+                {o.payer && o.payer.receiver > 0 ? <>
+                  <div className="b" style={{ fontSize: 20 }}>{formatINR(o.payer.receiver)}</div>
+                  <div className="tiny" style={{ color: "var(--orange)" }}>Freight payable by receiver</div>
+                  <div className="tiny muted">{o.payer.sender > 0 ? `+ ${formatINR(o.payer.sender)} charged to sender` : "Nothing charged to sender"}</div>
+                </> : <>
+                  <div className="b" style={{ fontSize: 20 }}>{formatINR(o.total)}</div>
+                  <div className="tiny muted">incl. GST{o.paymentMode === "cod" ? " · freight paid by sender" : ""}</div>
+                </>}
               </div>
             </div>
             <div className="row between mt8" style={{ gap: 8 }}>
@@ -132,6 +145,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
                 {o.lines.map((l) => <tr key={l.code}><td>{l.label}</td><td style={{ textAlign: "right" }}>{formatINR(l.sellPreTax)}</td></tr>)}
                 <tr><td>GST</td><td style={{ textAlign: "right" }}>{formatINR(o.gst)}</td></tr>
                 <tr><td className="b">Total</td><td className="b" style={{ textAlign: "right" }}>{formatINR(o.total)}</td></tr>
+                {o.payer && o.payer.receiver > 0 && <><tr><td>Receiver pays at delivery (FOD)</td><td style={{ textAlign: "right" }}>{formatINR(o.payer.receiver)}</td></tr><tr><td>Sender pays</td><td style={{ textAlign: "right" }}>{formatINR(o.payer.sender)}</td></tr></>}
                 <tr><td colSpan={2} className="tiny muted">Quote valid until {new Date(o.expiresAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}. Final charge is based on carrier-measured weight.</td></tr>
               </tbody></table>
             )}

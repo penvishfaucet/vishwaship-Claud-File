@@ -1,7 +1,7 @@
 import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { Agent } from "undici";
+import { Agent, FormData as UFormData, fetch as undiciFetch } from "undici";
 
 /**
  * Outbound HTTP for provider connectors and customer webhooks.
@@ -51,13 +51,24 @@ export async function safeFetch(raw: string, init: RequestInit & { timeoutMs?: n
   const { url, address, family } = await vetUrl(raw, init.allowedHosts);
   const dispatcher = new Agent({
     connect: {
-      lookup: (_h: string, _o: unknown, cb: (err: Error | null, addr: string, fam: number) => void) => cb(null, address, family),
+      // pin the connection to the vetted address (no DNS rebinding); Node may ask for all addresses
+      lookup: ((_h: string, o: { all?: boolean } | undefined, cb: (err: Error | null, addr: unknown, fam?: number) => void) =>
+        (o && o.all ? cb(null, [{ address, family }]) : cb(null, address, family))) as never,
     },
   });
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 15_000);
+  // Use undici's own fetch with its own Agent: Node's built-in fetch bundles a different undici version and
+  // rejects a dispatcher from the npm package ("invalid onError method").
+  let body = init.body as unknown;
+  if (typeof FormData !== "undefined" && body instanceof FormData) {
+    const fd = new UFormData();
+    for (const [k, v] of body.entries()) fd.append(k, v as string);
+    body = fd;
+  }
   try {
-    return await fetch(url, { ...init, redirect: "manual", signal: ctrl.signal, dispatcher } as RequestInit);
+    const { timeoutMs: _t, allowedHosts: _a, ...rest } = init; void _t; void _a;
+    return (await undiciFetch(url, { ...(rest as object), body: body as never, redirect: "manual", signal: ctrl.signal, dispatcher })) as unknown as Response;
   } finally {
     clearTimeout(t);
   }

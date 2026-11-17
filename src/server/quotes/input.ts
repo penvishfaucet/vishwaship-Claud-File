@@ -8,7 +8,7 @@ export const QuoteInput = z.object({
   mode: z.enum(["B2C", "B2B"]),
   originPincode: pin,
   destinationPincode: pin,
-  paymentType: z.enum(["prepaid", "cod"]),
+  paymentType: z.enum(["prepaid", "cod", "fod"]),
   codAmountRupees: z.number().min(0).max(5_00_000).optional(),
   declaredValueRupees: z.number().min(0).max(50_00_000).optional(),
   packages: z.array(z.object({
@@ -18,7 +18,7 @@ export const QuoteInput = z.object({
     heightCm: z.number().positive().max(500),
     weightKg: z.number().positive().max(5000),
   })).min(1).max(50),
-}).refine((v) => v.paymentType === "prepaid" || (v.codAmountRupees ?? 0) > 0, { message: "COD amount is required for COD", path: ["codAmountRupees"] });
+}).refine((v) => v.paymentType !== "cod" || (v.codAmountRupees ?? 0) > 0, { message: "COD amount is required for COD", path: ["codAmountRupees"] });
 
 export function toQuoteRequest(v: z.infer<typeof QuoteInput>): QuoteRequest {
   return {

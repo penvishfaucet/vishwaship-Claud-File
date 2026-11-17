@@ -1,3 +1,4 @@
+import { SchedulePickup } from "@/components/portal/SchedulePickup";
 import { OrderTagsEditor } from "@/components/portal/OrderTagsEditor";
 import { tagsForOrders } from "@/server/orders/extras";
 import { asc as ascTags, eq as eqTags } from "drizzle-orm";
@@ -46,7 +47,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         <div className="actions">
           {shipment && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label`}><Download size={16} /> Label</a>}
           {shipment && <a className="btn btn-outline" href={`/api/portal/shipments/${shipment.id}/invoice`}><FileText size={16} /> Invoice</a>}
-          {shipment && shipment.pickupStatus === "not_scheduled" && <Link className="btn btn-outline" href={`/portal/orders/${order.id}/?pickup=1`}><Truck size={16} /> Schedule Pickup</Link>}
+          {shipment && shipment.bookingStatus === "confirmed" && shipment.pickupStatus === "not_scheduled" && <SchedulePickup shipmentId={shipment.id} defaultDate={new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)} />}
+          {shipment?.pickupRef && <span className="pill2">Pickup {shipment.pickupDate?.toLocaleDateString("en-IN")} · ref {shipment.pickupRef}</span>}
           {(!shipment ? ["draft", "ready", "cod_hold", "booking_failed"].includes(order.status) : shipment.bookingStatus === "confirmed" && ["booked", "pickup_pending"].includes(shipment.status)) && <CancelOrder orderId={order.id} booked={!!shipment} />}
           <Link className="btn btn-outline" href={`/portal/support/new/?awb=${shipment?.awb ?? ""}&order=${order.orderNumber}`}><Ticket size={16} /> Raise Ticket</Link>
         </div>

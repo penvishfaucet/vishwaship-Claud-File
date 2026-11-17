@@ -1,3 +1,4 @@
+import { presentNotices, presentOffer } from "@/server/quotes/present";
 import { NextResponse } from "next/server";
 import { apiError, parseJson } from "@/server/http";
 import { QuoteInput, toQuoteRequest } from "@/server/quotes/input";
@@ -10,14 +11,10 @@ export async function POST(req: Request) {
   if (!rl.ok) return apiError(429, "rate_limited", "Too many rate checks. Please wait a minute.", { retryAfter: rl.retryAfter });
   const p = await parseJson(req, QuoteInput);
   if (!p.ok) return p.res;
-  const { offers } = await getQuotes(toQuoteRequest(p.data), null);
+  const { offers, errors } = await getQuotes(toQuoteRequest(p.data), null);
   // Public view: no cost, markup or provider internals.
   return NextResponse.json({
-    offers: offers.map((o) => ({
-      quoteId: o.quoteId, carrierCode: o.carrierCode, carrierName: o.carrierName, serviceName: o.serviceName,
-      mode: o.mode, etaDays: o.etaDays, chargeableWeightGrams: o.chargeableWeightGrams,
-      lines: o.lines.map((l) => ({ code: l.code, label: l.label, sellPreTax: l.sellPreTax })),
-      sellingSubtotal: o.sellingSubtotal, gst: o.gst, total: o.total, expiresAt: o.expiresAt, isDemo: o.isDemo,
-    })),
+    offers: offers.map(presentOffer),
+    notices: presentNotices(errors),
   });
 }

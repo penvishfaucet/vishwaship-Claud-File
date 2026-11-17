@@ -36,7 +36,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
         <div className="card empty"><p className="muted">Add a pickup address before creating a shipment.</p><Link className="btn btn-orange btn-sm" href="/portal/addresses/">Add Pickup Address</Link></div>
       ) : (
         <CreateShipment
-          warehouses={warehouses.map((w) => ({ id: w.id, label: w.label, city: w.city, pincode: w.pincode, verified: !!w.mobileVerifiedAt, isDefault: w.isDefault }))}
+          warehouses={warehouses.map((w) => ({ id: w.id, label: w.label, city: w.city, pincode: w.pincode, verified: !!w.mobileVerifiedAt, isDefault: w.isDefault, mobileMasked: `••••••${w.mobile.slice(-4)}` }))}
           walletPaise={ctx.walletAvailable}
           b2bThresholdGrams={threshold.value}
           direction={sp.direction === "reverse" ? "reverse" : "forward"}

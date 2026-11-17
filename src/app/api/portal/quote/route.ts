@@ -1,3 +1,4 @@
+import { presentNotices, presentOffer } from "@/server/quotes/present";
 import { NextResponse } from "next/server";
 import { apiCustomer } from "@/server/auth/session";
 import { apiError, parseJson } from "@/server/http";
@@ -15,12 +16,8 @@ export async function POST(req: Request) {
   if (!p.ok) return p.res;
   const { offers, errors } = await getQuotes(toQuoteRequest(p.data), s.orgId);
   return NextResponse.json({
-    offers: offers.map((o) => ({
-      quoteId: o.quoteId, carrierCode: o.carrierCode, carrierName: o.carrierName, serviceName: o.serviceName, mode: o.mode,
-      etaDays: o.etaDays, chargeableWeightGrams: o.chargeableWeightGrams,
-      lines: o.lines.map((l) => ({ code: l.code, label: l.label, sellPreTax: l.sellPreTax })),
-      sellingSubtotal: o.sellingSubtotal, gst: o.gst, total: o.total, expiresAt: o.expiresAt, isDemo: o.isDemo,
-    })),
+    offers: offers.map(presentOffer),
     unavailable: errors.length,
+    notices: presentNotices(errors),
   });
 }
