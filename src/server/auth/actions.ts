@@ -85,6 +85,7 @@ export async function customerLogout() {
 
 export async function customerLogoutAll() {
   const s = await readSession("customer");
+  if (s?.impersonatorId) { await destroySession("customer"); redirect(`/admin/customers/${s.orgId}/`); }
   if (s) { await revokeAllSessions(s.userId); await audit({ actorUserId: s.userId, actorKind: "customer", orgId: s.orgId, action: "auth.logout_all" }); }
   await destroySession("customer");
   redirect("/login/");

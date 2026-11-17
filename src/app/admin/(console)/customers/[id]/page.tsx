@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { desc, eq } from "drizzle-orm";
+import { LogIn, Wallet } from "lucide-react";
 import { PreviewQuote } from "@/components/admin/PreviewQuote";
+import { loginAsCustomer } from "@/server/admin/impersonate";
 import { formatINR } from "@/lib/money";
 import { StatusChip } from "@/lib/status";
 import { audit } from "@/server/audit";
@@ -79,10 +81,16 @@ export default async function CustomerDetail({ params, searchParams }: { params:
         <div className="actions">
           <span className={`chip ${org.status === "active" ? "c-active" : "c-cancelled"}`}>{org.status}</span>
           {can(s.role, "customers.write") && <form action={setStatus}><input type="hidden" name="status" value={org.status === "active" ? "suspended" : "active"} /><button className="btn btn-sm btn-outline">{org.status === "active" ? "Suspend" : "Activate"}</button></form>}
+          {can(s.role, "customers.impersonate") && <form action={loginAsCustomer}><input type="hidden" name="orgId" value={org.id} /><button className="btn btn-sm btn-orange"><LogIn size={14} /> Login as customer</button></form>}
         </div>
       </div>
+      <Link href={`/admin/customers/${id}/?tab=wallet`} className="stat bl-orange stat-link mb16" style={{ display: "block", maxWidth: 360 }}>
+        <div className="t"><Wallet size={14} /> Wallet balance</div>
+        <div className="v">{formatINR(wallet ? wallet.postedPaise - wallet.reservedPaise : 0)}</div>
+        <div className="s">{wallet && wallet.reservedPaise > 0 ? `${formatINR(wallet.reservedPaise)} on hold for bookings · ` : ""}View passbook</div>
+      </Link>
       <nav className="tabs">{TABS.map((t) => <Link key={t} href={`/admin/customers/${id}/?tab=${t}`} className={tab === t ? "on" : ""}>{t[0].toUpperCase() + t.slice(1)}</Link>)}</nav>
-      {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" ? "small t-credit mb12" : "small err mb12"} role="status">{{ saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
+      {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" ? "small t-credit mb12" : "small err mb12"} role="status">{{ nouser: "This customer has no active login user to open.", saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
 
       {tab === "overview" && (
         <div className="grid2" style={{ gap: 12 }}>

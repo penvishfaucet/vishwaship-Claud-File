@@ -10,6 +10,7 @@ import { createApiKey, revokeApiKey, rotateApiKey } from "@/server/api/keys";
 export async function POST(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (s.impersonatorId) return apiError(403, "forbidden", "API keys can only be managed by the customer, or by the owner in Admin > API Credentials");
   const p = await parseJson(req, z.object({ label: z.string().trim().min(2).max(60), scopes: z.array(z.enum(API_SCOPES)).min(1), expiresInDays: z.number().int().min(1).max(730).optional() }));
   if (!p.ok) return p.res;
   const k = await createApiKey({ orgId: s.orgId, ...p.data, createdBy: s.userId });
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (s.impersonatorId) return apiError(403, "forbidden", "API keys can only be managed by the customer, or by the owner in Admin > API Credentials");
   const p = await parseJson(req, z.object({ id: z.string().min(4) }));
   if (!p.ok) return p.res;
   const k = await rotateApiKey(p.data.id, s.orgId);
@@ -32,6 +34,7 @@ export async function PATCH(req: Request) {
 export async function DELETE(req: Request) {
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
+  if (s.impersonatorId) return apiError(403, "forbidden", "API keys can only be managed by the customer, or by the owner in Admin > API Credentials");
   const id = new URL(req.url).searchParams.get("id") ?? "";
   const r = await revokeApiKey(id, s.orgId);
   if (!r) return apiError(404, "not_found", "Key not found");

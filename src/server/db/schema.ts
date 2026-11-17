@@ -58,6 +58,7 @@ export const sessions = pgTable("sessions", {
   expiresAt: ts("expires_at").notNull(),
   revokedAt: ts("revoked_at"),
   mfaPassed: boolean("mfa_passed").notNull().default(false),
+  impersonatorId: text("impersonator_id"), // staff user id when an admin uses "Login as customer"
   ip: text("ip"),
   userAgent: text("user_agent"),
 });

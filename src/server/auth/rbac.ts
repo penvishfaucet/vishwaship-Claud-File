@@ -13,13 +13,13 @@ export type Permission =
   | "integrations.read" | "integrations.write"
   | "notifications.read" | "notifications.write"
   | "reports.export"
-  | "staff.manage" | "audit.read" | "api_keys.manage";
+  | "staff.manage" | "audit.read" | "api_keys.manage" | "customers.impersonate";
 
 const ALL: Permission[] = [
   "shipments.read", "shipments.write", "shipments.cost.read", "customers.read", "customers.write", "kyc.review",
   "kyc.documents.read", "pricing.read", "pricing.write", "finance.read", "finance.adjust", "cod.remit", "tickets.read",
   "tickets.write", "integrations.read", "integrations.write", "notifications.read", "notifications.write",
-  "reports.export", "staff.manage", "audit.read", "api_keys.manage",
+  "reports.export", "staff.manage", "audit.read", "api_keys.manage", "customers.impersonate",
 ];
 
 export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {

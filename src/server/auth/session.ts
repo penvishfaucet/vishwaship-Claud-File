@@ -22,13 +22,15 @@ export interface SessionUser {
   role: StaffRole | null;
   mfaPassed: boolean;
   mustResetPassword: boolean;
+  /** Set when an admin is viewing this customer account via "Login as customer". */
+  impersonatorId: string | null;
 }
 
-export async function createSession(userId: string, kind: Kind, meta: { ip?: string; ua?: string; mfaPassed?: boolean }) {
+export async function createSession(userId: string, kind: Kind, meta: { ip?: string; ua?: string; mfaPassed?: boolean; impersonatorId?: string; ttlMs?: number }) {
   const token = randomToken();
   const db = await getDb();
-  const expiresAt = new Date(Date.now() + TTL[kind]);
-  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt, ip: meta.ip, userAgent: meta.ua?.slice(0, 200), mfaPassed: !!meta.mfaPassed });
+  const expiresAt = new Date(Date.now() + (meta.ttlMs ?? TTL[kind]));
+  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt, ip: meta.ip, userAgent: meta.ua?.slice(0, 200), mfaPassed: !!meta.mfaPassed, impersonatorId: meta.impersonatorId ?? null });
   (await cookies()).set(COOKIE[kind], token, {
     httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: expiresAt,
   });
@@ -44,7 +46,7 @@ export async function readSession(kind: Kind): Promise<SessionUser | null> {
   if (!row || !row.u.active || row.u.kind !== kind) return null;
   return {
     sessionId: row.s.id, userId: row.u.id, kind, name: row.u.name, email: row.u.email, orgId: row.u.orgId,
-    role: row.u.staffRole, mfaPassed: row.s.mfaPassed, mustResetPassword: row.u.mustResetPassword,
+    role: row.u.staffRole, mfaPassed: row.s.mfaPassed, mustResetPassword: row.u.mustResetPassword, impersonatorId: row.s.impersonatorId ?? null,
   };
 }
 
