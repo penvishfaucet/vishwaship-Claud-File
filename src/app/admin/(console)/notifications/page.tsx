@@ -1,0 +1,63 @@
+import { redirect } from "next/navigation";
+import { desc, eq } from "drizzle-orm";
+import { audit } from "@/server/audit";
+import { can } from "@/server/auth/rbac";
+import { requireStaff } from "@/server/auth/session";
+import { getDb, schema } from "@/server/db/client";
+import { getSetting } from "@/server/quotes/service";
+
+async function saveCod(fd: FormData) {
+  "use server";
+  const s = await requireStaff("notifications.write");
+  const reminderMinutes = Math.max(15, Math.min(1440, Number(fd.get("reminder"))));
+  const expiryMinutes = Math.max(60, Math.min(4320, Number(fd.get("expiry"))));
+  const noReply = ["hold_for_review", "cancel", "release"].includes(String(fd.get("noReply"))) ? String(fd.get("noReply")) : "hold_for_review";
+  const credits = Math.max(0, Math.min(10, Number(fd.get("credits"))));
+  const db = await getDb();
+  const value = { reminderMinutes, expiryMinutes, noReply, credits };
+  await db.insert(schema.pricingSettings).values({ key: "cod_confirmation", value }).onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value, updatedAt: new Date() } });
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "notifications.cod_settings", details: value });
+  redirect("/admin/notifications/?ok=1");
+}
+
+export default async function AdminNotifications({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
+  const sp = await searchParams;
+  const s = await requireStaff("notifications.read");
+  const cfg = await getSetting("cod_confirmation", { reminderMinutes: 120, expiryMinutes: 1440, noReply: "hold_for_review", credits: 2 });
+  const costs = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 2 });
+  const db = await getDb();
+  const packs = await db.select().from(schema.creditPacks);
+  const exceptions = await db.select({ c: schema.codConfirmations, o: schema.orgs }).from(schema.codConfirmations).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId)).orderBy(desc(schema.codConfirmations.createdAt)).limit(50);
+  const subs = await db.select({ n: schema.notificationSettings, o: schema.orgs }).from(schema.notificationSettings).innerJoin(schema.orgs, eq(schema.orgs.id, schema.notificationSettings.orgId)).where(eq(schema.notificationSettings.event, "cod_confirmation"));
+  const write = can(s.role, "notifications.write");
+  return (
+    <>
+      <div className="page-h"><h1>Notifications</h1></div>
+      <div className="split" style={{ gap: 16, alignItems: "start" }}>
+        <section className="card" style={{ padding: 18 }}>
+          <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>COD Confirmation settings</h2>
+          {sp.ok && <p className="small t-credit">Saved.</p>}
+          <form action={saveCod} className="grid2" style={{ gap: 10 }}>
+            <div className="field"><label htmlFor="rem">Reminder after (minutes)</label><input id="rem" name="reminder" type="number" className="input" defaultValue={cfg.value.reminderMinutes} disabled={!write} /></div>
+            <div className="field"><label htmlFor="exp">Expire after (minutes)</label><input id="exp" name="expiry" type="number" className="input" defaultValue={cfg.value.expiryMinutes} disabled={!write} /></div>
+            <div className="field"><label htmlFor="nr">No-reply behaviour</label><select id="nr" name="noReply" className="select" defaultValue={cfg.value.noReply} disabled={!write}><option value="hold_for_review">Hold for review</option><option value="cancel">Cancel order</option><option value="release">Release for shipping</option></select></div>
+            <div className="field"><label htmlFor="cr">Credits per confirmation</label><input id="cr" name="credits" type="number" className="input" defaultValue={cfg.value.credits} disabled={!write} /></div>
+            {write && <button className="btn btn-orange" style={{ alignSelf: "end" }}>Save</button>}
+          </form>
+        </section>
+        <section className="card" style={{ padding: 18 }}>
+          <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Credit costs &amp; packs</h2>
+          <dl className="kv-list">{Object.entries(costs.value).map(([k, v]) => <><dt key={`${k}t`}>{k.replace("_", " ")}</dt><dd key={`${k}v`}>{v} credit{v === 1 ? "" : "s"}</dd></>)}</dl>
+          <p className="small mt8">{packs.map((p) => `${p.credits} × ₹${(p.unitPricePaise / 100).toFixed(2)}`).join(" · ")} (+ GST)</p>
+          <p className="tiny muted">Provider for WhatsApp: WATI (configure in Integrations). Templates must be approved by Meta before sending.</p>
+        </section>
+      </div>
+      <section className="card p0 mt16"><h2 className="b small card-h" style={{ margin: 0 }}>COD subscriptions</h2>
+        <ul className="plain-list">{subs.length === 0 && <li className="small muted">No customer has subscribed yet.</li>}{subs.map(({ n, o }) => <li key={n.id} className="row between"><span className="small">{o.businessName}</span><span className={`chip ${n.enabled ? "c-active" : "c-draft"}`}>{n.enabled ? "Subscribed" : "Off"}</span></li>)}</ul>
+      </section>
+      <section className="card p0 mt16"><h2 className="b small card-h" style={{ margin: 0 }}>COD confirmation queue &amp; exceptions</h2>
+        <ul className="plain-list">{exceptions.length === 0 && <li className="small muted">Empty.</li>}{exceptions.map(({ c, o }) => <li key={c.id} className="row between"><span className="small">{o.businessName} · {c.orderId}</span><span className="chip c-pending">{c.status}</span></li>)}</ul>
+      </section>
+    </>
+  );
+}

@@ -1,0 +1,31 @@
+import {
+  Activity, BadgeIndianRupee, Bell, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+} from "lucide-react";
+import type { Permission } from "@/server/auth/rbac";
+
+export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; label: string; icon: typeof Home; perm: Permission }> }> = [
+  { group: "OPERATIONS", items: [
+    { href: "/admin/", label: "Dashboard", icon: Home, perm: "shipments.read" },
+    { href: "/admin/shipments/", label: "All Shipments", icon: Package, perm: "shipments.read" },
+    { href: "/admin/pickups/", label: "Pickups", icon: Truck, perm: "shipments.read" },
+    { href: "/admin/ndr/", label: "NDR / RTO", icon: CornerUpLeft, perm: "shipments.read" },
+    { href: "/admin/disputes/", label: "Weight Disputes", icon: Scale, perm: "shipments.read" },
+    { href: "/admin/tickets/", label: "Tickets", icon: Ticket, perm: "tickets.read" },
+  ] },
+  { group: "CUSTOMERS", items: [
+    { href: "/admin/customers/", label: "Customers", icon: Users, perm: "customers.read" },
+    { href: "/admin/kyc/", label: "KYC", icon: ShieldCheck, perm: "kyc.review" },
+  ] },
+  { group: "FINANCE", items: [
+    { href: "/admin/pricing/", label: "Pricing", icon: Tags, perm: "pricing.read" },
+    { href: "/admin/finance/", label: "Wallets", icon: Wallet, perm: "finance.read" },
+    { href: "/admin/finance/?tab=cod", label: "COD Remittance", icon: BadgeIndianRupee, perm: "finance.read" },
+    { href: "/admin/reports/", label: "Reports", icon: FileDown, perm: "reports.export" },
+  ] },
+  { group: "SETTINGS", items: [
+    { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
+    { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
+    { href: "/admin/staff/", label: "Staff & Roles", icon: Activity, perm: "staff.manage" },
+    { href: "/admin/audit/", label: "Audit Log", icon: ScrollText, perm: "audit.read" },
+  ] },
+];

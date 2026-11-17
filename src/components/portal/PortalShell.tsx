@@ -2,25 +2,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import {
-  Bell, Calculator, CornerUpLeft, FileDown, Home, LayoutGrid, MapPin, Menu, MessageSquare, Package, Plug,
-  Search, ShieldCheck, Ticket, Truck, Wallet, X,
-} from "lucide-react";
+import { Bell, CornerUpLeft, Home, LayoutGrid, Menu, Package, Search, ShieldCheck, Ticket, Wallet, X } from "lucide-react";
 import { formatINR } from "@/lib/money";
-
-export const CUSTOMER_NAV = [
-  { href: "/portal/", label: "Dashboard", icon: Home },
-  { href: "/portal/orders/", label: "Orders", icon: Package },
-  { href: "/portal/ndr/", label: "NDR & RTO", icon: CornerUpLeft },
-  { href: "/portal/billing/", label: "Wallet & Billing", icon: Wallet },
-  { href: "/portal/rates/", label: "Rate Calculator", icon: Calculator },
-  { href: "/portal/track/", label: "Track Shipment", icon: Truck },
-  { href: "/portal/addresses/", label: "Pickup Addresses", icon: MapPin },
-  { href: "/portal/notifications/", label: "Shipping Notifications", icon: MessageSquare },
-  { href: "/portal/integrations/", label: "Integrations", icon: Plug },
-  { href: "/portal/reports/", label: "Reports", icon: FileDown },
-  { href: "/portal/support/", label: "Support", icon: Ticket },
-];
+import { CUSTOMER_NAV } from "./nav";
 
 interface Props {
   user: { name: string; orgName: string; kycStatus: string };
@@ -50,6 +34,13 @@ export function PortalShell({ user, walletPaise, unreadAlerts, logout, children 
   const close = () => setMenu(null);
   const ref = useClickAway(menu !== null, close);
   const active = (href: string) => (href === "/portal/" ? path === "/portal" || path === "/portal/" : path.startsWith(href.replace(/\/$/, "")));
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem("vs-theme");
+      const dark = m === "dark" || (m === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.classList.toggle("dark", dark);
+    } catch { /* storage blocked: stay light */ }
+  }, []);
   const initials = user.name.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
   return (
