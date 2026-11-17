@@ -8,6 +8,8 @@ const securityHeaders = [
 ];
 
 const config: NextConfig = {
+  // Production build type-checks only app code; tests/tool configs need devDependencies, which hosts skip.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   trailingSlash: true, // keeps existing public paths (/book/, /login/, /track/ …)
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
   async headers() {
