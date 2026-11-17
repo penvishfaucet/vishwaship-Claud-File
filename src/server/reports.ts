@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, lte, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { STATUS_GROUPS, statusLabel } from "@/lib/status";
 
@@ -8,9 +8,9 @@ import { STATUS_GROUPS, statusLabel } from "@/lib/status";
  * function for the screen and the download, so totals always match.
  */
 export const REPORTS = {
-  shipments: { title: "Shipment Report", desc: "Every booked shipment with courier, status and charges." },
-  orders: { title: "Orders Report", desc: "All orders, booked or not, with source and payment details." },
-  ndr: { title: "NDR Report", desc: "Undelivered shipments, reasons, attempts and actions taken." },
+  shipments: { title: "Shipment Report", desc: "Every shipment by AWB / LR with courier, warehouse, status, booked and delivered dates, weights and charges." },
+  orders: { title: "Orders Reports", desc: "All orders — including those awaiting shipment — with sales channel, payment, order value and fulfilment status." },
+  ndr: { title: "NDR Reports", desc: "Failed-delivery reasons, attempt dates, your responses, action status and final outcome." },
   delivery: { title: "Delivery Performance", desc: "Delivered shipments with days taken and ETA met / missed." },
   rto: { title: "RTO Report", desc: "Shipments returned to origin." },
   cod: { title: "COD Remittance", desc: "Cash-on-delivery orders and their collection / remittance state." },
@@ -20,7 +20,7 @@ export const REPORTS = {
 export type ReportKey = keyof typeof REPORTS;
 
 export interface ReportFilters {
-  from?: string; to?: string; status?: string; payment?: string; mode?: string; carrier?: string; q?: string; columns?: string[];
+  from?: string; to?: string; status?: string; payment?: string; mode?: string; carrier?: string; q?: string; tag?: string; columns?: string[];
 }
 
 type Col = { key: string; label: string; get: (r: Row) => unknown };
@@ -53,15 +53,19 @@ export const SHIPMENT_COLUMNS: Col[] = [
   { key: "charged", label: "Charged incl. GST (INR)", get: (r) => rs(r.s?.sellPaise) },
   { key: "eta", label: "ETA", get: (r) => ist(r.s?.etaDate) },
   { key: "last_update", label: "Last update (IST)", get: (r) => ist(r.s?.lastEventAt) },
-  { key: "source", label: "Source", get: (r) => r.o.source },
+  { key: "source", label: "Sales channel", get: (r) => r.o.source },
+  { key: "warehouse", label: "Warehouse", get: (r) => (r.o.pickupSnapshot as { label?: string; pincode?: string } | null)?.label ?? "" },
+  { key: "delivered_at", label: "Delivered (IST)", get: (r) => ist(r.deliveredAt ?? (r.s?.status === "delivered" ? r.s.lastEventAt : null)) },
+  { key: "carrier_kg", label: "Courier-measured kg", get: (r) => (r.s?.carrierWeightGrams ? (r.s.carrierWeightGrams / 1000).toFixed(2) : "") },
+  { key: "order_value", label: "Order value (INR)", get: (r) => rs((r.o.products as Array<{ qty: number; unitPrice: number }>).reduce((t, p) => t + p.qty * p.unitPrice, 0)) },
 ];
 const pick = (keys: string[]) => keys.map((k) => SHIPMENT_COLUMNS.find((c) => c.key === k)!).filter(Boolean);
 
 function columnsFor(key: ReportKey, f: ReportFilters): Col[] {
   switch (key) {
-    case "shipments": return pick(["booked_at", "order", "awb", "carrier", "mode", "payment", "cod", "buyer", "city", "pincode", "status", "chargeable", "charged", "eta"]);
-    case "orders": return [{ key: "created", label: "Created (IST)", get: (r) => ist(r.o.createdAt) }, ...pick(["order", "source", "mode", "payment", "cod", "declared", "buyer", "city", "pincode"]), { key: "ostatus", label: "Order status", get: (r) => r.o.status.replace(/_/g, " ") }, ...pick(["awb", "carrier", "status"])];
-    case "ndr": return [{ key: "raised", label: "Raised (IST)", get: (r) => ist(r.n?.createdAt) }, ...pick(["order", "awb", "carrier", "buyer", "city"]), { key: "reason", label: "Reason", get: (r) => r.n?.reason ?? "" }, { key: "attempt", label: "Attempt", get: (r) => r.n?.attempt ?? "" }, { key: "deadline", label: "Action deadline", get: (r) => ist(r.n?.deadlineAt) }, { key: "case", label: "Case status", get: (r) => r.n?.status ?? "" }, { key: "action", label: "Action requested", get: (r) => r.n?.requestedAction ?? "" }];
+    case "shipments": return pick(["booked_at", "order", "awb", "carrier", "warehouse", "mode", "payment", "cod", "buyer", "city", "pincode", "status", "delivered_at", "chargeable", "carrier_kg", "charged", "eta"]);
+    case "orders": return [{ key: "created", label: "Created (IST)", get: (r) => ist(r.o.createdAt) }, ...pick(["order", "source", "mode", "payment", "order_value", "cod", "declared", "buyer", "city", "pincode"]), { key: "ostatus", label: "Fulfilment status", get: (r) => r.o.status.replace(/_/g, " ") }, ...pick(["awb", "carrier", "status"])];
+    case "ndr": return [{ key: "raised", label: "Raised (IST)", get: (r) => ist(r.n?.createdAt) }, ...pick(["order", "awb", "carrier", "buyer", "city"]), { key: "reason", label: "Reason", get: (r) => r.n?.reason ?? "" }, { key: "attempt", label: "Attempt", get: (r) => r.n?.attempt ?? "" }, { key: "deadline", label: "Action deadline", get: (r) => ist(r.n?.deadlineAt) }, { key: "case", label: "Case status", get: (r) => r.n?.status ?? "" }, { key: "action", label: "Your response", get: (r) => r.n?.requestedAction?.replace(/_/g, " ") ?? "" }, { key: "outcome", label: "Final outcome", get: (r) => (r.s ? (["delivered", "rto_delivered", "rto_in_transit", "rto_initiated", "lost"].includes(r.s.status) ? statusLabel(r.s.status) : "In progress") : "") }];
     case "delivery": return [...pick(["booked_at", "order", "awb", "carrier", "city", "pincode"]), { key: "delivered", label: "Delivered (IST)", get: (r) => ist(r.deliveredAt) }, { key: "days", label: "Days taken", get: (r) => (r.deliveredAt && r.s ? ((r.deliveredAt.getTime() - r.s.createdAt.getTime()) / 86400_000).toFixed(1) : "") }, { key: "eta_met", label: "ETA met", get: (r) => (r.deliveredAt && r.s?.etaDate ? (r.deliveredAt <= r.s.etaDate ? "Yes" : "No") : "") }];
     case "rto": return pick(["booked_at", "order", "awb", "carrier", "payment", "cod", "buyer", "city", "status", "charged", "last_update"]);
     case "cod": return [...pick(["booked_at", "order", "awb", "carrier", "cod", "status"]), { key: "remit", label: "Remittance", get: (r) => (r.s?.status === "delivered" ? "Awaiting carrier remittance" : ["rto_initiated", "rto_in_transit", "rto_delivered", "cancelled"].includes(r.s?.status ?? "") ? "Not collectable (RTO/cancelled)" : "Not yet collected") }];
@@ -86,6 +90,7 @@ export async function runReport(orgId: string, key: ReportKey, f: ReportFilters,
   const conds: SQL[] = [eq(schema.orders.orgId, orgId)];
   if (f.payment === "cod" || f.payment === "prepaid") conds.push(eq(schema.orders.paymentType, f.payment));
   if (f.mode === "B2B" || f.mode === "B2C") conds.push(eq(schema.orders.mode, f.mode));
+  if (f.tag) conds.push(sql`exists (select 1 from ${schema.orderTagLinks} l join ${schema.orderTags} t on t.id = l.tag_id where l.order_id = ${schema.orders.id} and t.id = ${f.tag} and t.org_id = ${orgId})`);
   let raw: Row[] = [];
 
   if (key === "orders") {
@@ -132,5 +137,5 @@ export async function runReport(orgId: string, key: ReportKey, f: ReportFilters,
 export function parseFilters(sp: URLSearchParams | Record<string, string | undefined>): ReportFilters {
   const g = (k: string) => (sp instanceof URLSearchParams ? sp.get(k) ?? undefined : sp[k]) || undefined;
   const cols = g("columns");
-  return { from: g("from"), to: g("to"), status: g("status"), payment: g("payment"), mode: g("mode"), carrier: g("carrier"), q: g("q"), columns: cols ? cols.split(",") : undefined };
+  return { from: g("from"), to: g("to"), status: g("status"), payment: g("payment"), mode: g("mode"), carrier: g("carrier"), q: g("q"), tag: g("tag"), columns: cols ? cols.split(",") : undefined };
 }

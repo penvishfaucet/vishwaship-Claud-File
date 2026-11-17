@@ -1,3 +1,4 @@
+import { orgSetting } from "@/server/couriers";
 import { and, eq } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -17,7 +18,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const s = await apiCustomer();
   if (!s) return apiError(401, "unauthorized", "Please log in");
   const { id } = await params;
-  const format = (new URL(req.url).searchParams.get("format") ?? "thermal_4x6") as LabelFormat;
+  const asked = new URL(req.url).searchParams.get("format");
+  const pref = asked ? null : await orgSetting<{ format?: LabelFormat }>(s.orgId, "label_settings");
+  const format = (asked ?? pref?.format ?? "thermal_4x6") as LabelFormat;
   if (!SIZES[format]) return apiError(422, "validation_error", "Unknown label format");
   const db = await getDb();
   const [row] = await db.select({ s: schema.shipments, o: schema.orders, w: schema.warehouses }).from(schema.shipments)

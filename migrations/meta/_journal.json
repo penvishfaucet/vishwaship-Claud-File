@@ -29,6 +29,13 @@
       "when": 1794913684253,
       "tag": "0003_modules_tracking_whatsapp",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794919488103,
+      "tag": "0004_others_billing_settings",
+      "breakpoints": true
     }
   ]
 }

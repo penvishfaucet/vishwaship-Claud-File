@@ -1,3 +1,4 @@
+import { codOverview } from "@/server/billing";
 import Link from "next/link";
 import { Calculator, CornerUpLeft, MessageSquare, PackagePlus, Plus, Search, ShieldAlert, Ticket, Truck, Wallet, Zap } from "lucide-react";
 import { formatINR } from "@/lib/money";
@@ -10,7 +11,7 @@ const QUICK = [
   { href: "/portal/orders/new/", label: "Add Order", icon: Plus },
   { href: "/portal/orders/new/?quick=1", label: "Quick Add", icon: Zap },
   { href: "/portal/orders/new/?direction=reverse", label: "Return", icon: CornerUpLeft },
-  { href: "/portal/billing/?recharge=1", label: "Recharge", icon: Wallet },
+  { href: "/portal/billing/passbook/?recharge=1", label: "Recharge", icon: Wallet },
   { href: "/portal/rates/", label: "Rate Calculator", icon: Calculator },
   { href: "/portal/track/", label: "Track", icon: Truck },
   { href: "/portal/support/", label: "Tickets", icon: Ticket },
@@ -20,6 +21,7 @@ const QUICK = [
 export default async function Dashboard({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
+  const cod = await codOverview(ctx.org.id);
   const [counts, recent, txns] = await Promise.all([
     statusCounts(ctx.org.id), listOrders(ctx.org.id, { pageSize: 6 }), recentTransactions(ctx.walletId),
   ]);
@@ -45,16 +47,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
       </section>
 
-      <div className="grid2 mb16" style={{ gap: 12 }}>
+      <div className="grid3 mb16" style={{ gap: 12 }}>
+        <Link className="stat bl-green stat-link" href="/portal/billing/cod-remittance/">
+          <div className="t"><Wallet size={14} /> COD remittance</div>
+          <div className="v">{formatINR(cod.totals.unbatched + cod.totals.scheduled)}</div>
+          <div className="s">Pending payout · remitted {formatINR(cod.totals.paid)}{cod.totals.scheduled ? ` · ${formatINR(cod.totals.scheduled)} scheduled` : ""}</div>
+        </Link>
         <div className="stat bl-orange">
           <div className="t"><Wallet size={14} /> Wallet balance</div>
           <div className="v">{formatINR(ctx.walletAvailable)}</div>
-          <div className="s">{ctx.walletReserved > 0 ? `${formatINR(ctx.walletReserved)} on hold for bookings · ` : ""}<Link className="link" href="/portal/billing/?recharge=1">Recharge</Link></div>
+          <div className="s">{ctx.walletReserved > 0 ? `${formatINR(ctx.walletReserved)} on hold for bookings · ` : ""}<Link className="link" href="/portal/billing/passbook/?recharge=1">Recharge</Link></div>
         </div>
         <div className="stat bl-navy">
           <div className="t"><MessageSquare size={14} /> Notification credits</div>
           <div className="v">{ctx.credits.toLocaleString("en-IN")}</div>
-          <div className="s"><Link className="link" href="/portal/billing/?tab=credits">Buy credits</Link> · <Link className="link-navy" href="/portal/notifications/">Preferences</Link></div>
+          <div className="s"><Link className="link" href="/portal/billing/notification-credits/">Buy credits</Link> · <Link className="link-navy" href="/portal/notifications/">Preferences</Link></div>
         </div>
       </div>
 

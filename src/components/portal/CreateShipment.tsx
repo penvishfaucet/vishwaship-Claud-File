@@ -10,6 +10,12 @@ import type { OfferView } from "@/components/public/RateCalculator";
 type WH = { id: string; label: string; city: string; pincode: string; verified: boolean; isDefault: boolean };
 type Pkg = { count: string; l: string; b: string; h: string; w: string };
 type Prod = { name: string; qty: string; price: string; hsn: string };
+export type Library = {
+  buyers: Array<{ id: string; name: string; mobile: string; email: string; addresses: Array<{ label: string; line1: string; line2?: string; pincode: string; city: string; state: string }> }>;
+  products: Array<{ id: string; name: string; sku: string; price: number; hsn: string; weightKg: number; l: number; b: number; h: number }>;
+  presets: Array<{ id: string; name: string; l: number; b: number; h: number; tareKg: number; isDefault: boolean }>;
+  tags: Array<{ id: string; name: string; color: string }>;
+};
 
 const PRESETS: Array<{ label: string; pkg: Pkg }> = [
   { label: "Small box 20×15×10", pkg: { count: "1", l: "20", b: "15", h: "10", w: "0.5" } },
@@ -19,7 +25,13 @@ const PRESETS: Array<{ label: string; pkg: Pkg }> = [
 
 const STEPS = ["Addresses", "Packages", "Courier & Payment"] as const;
 
-export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" } }) {
+export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" }; library?: Library }) {
+  const lib = props.library ?? { buyers: [], products: [], presets: [], tags: [] };
+  const myPresets: Array<{ label: string; pkg: Pkg }> = lib.presets.map((p) => ({ label: `${p.name} ${p.l}×${p.b}×${p.h}`, pkg: { count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(Math.max(p.tareKg, 0.1)) } }));
+  const allPresets = [...myPresets, ...PRESETS];
+  const defBox = myPresets[lib.presets.findIndex((p) => p.isDefault)];
+  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [saveBuyer, setSaveBuyer] = useState(false);
   const def = props.warehouses.find((w) => w.isDefault) ?? props.warehouses[0];
   const [step, setStep] = useState(0);
   const [warehouseId, setWarehouseId] = useState(def.id);
@@ -32,7 +44,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const [invoice, setInvoice] = useState("");
   const [eway, setEway] = useState("");
   const [products, setProducts] = useState<Prod[]>([{ name: "", qty: "1", price: "", hsn: "" }]);
-  const [pkgs, setPkgs] = useState<Pkg[]>([{ count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
+  const [pkgs, setPkgs] = useState<Pkg[]>([defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
   const [modeOverride, setModeOverride] = useState<"B2C" | "B2B" | null>(props.initial.mode ?? null);
   const [offers, setOffers] = useState<OfferView[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -119,7 +131,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
           consignee: { ...c, mobile: c.mobile, email: c.email || undefined, line2: c.line2 || undefined },
           products: products.map((p) => ({ name: p.name, qty: Number(p.qty), unitPriceRupees: Number(p.price) || 0, hsn: p.hsn || undefined })),
           packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
-          invoiceNumber: invoice || undefined, ewayBill: eway || undefined,
+          invoiceNumber: invoice || undefined, ewayBill: eway || undefined, tagIds, saveBuyer,
         }) });
         const j = await r.json();
         if (!r.ok) throw new Error(j.error?.message ?? j.error?.issues?.[0]?.message ?? "Could not create order");
@@ -203,11 +215,19 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                 {!wh.verified && <p className="err small mt8">This pickup mobile isn’t verified yet. <Link className="link" href="/portal/addresses/">Verify with OTP</Link></p>}
               </section>
               <section className="card" style={{ padding: 18 }}>
-                <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>{props.direction === "reverse" ? "Return from (customer)" : "Deliver to"}</h2>
+                <div className="row between wrap" style={{ gap: 8, marginBottom: 8 }}>
+                  <h2 className="b" style={{ fontSize: 15, margin: 0 }}>{props.direction === "reverse" ? "Return from (customer)" : "Deliver to"}</h2>
+                  {lib.buyers.length > 0 && <><label className="sr-only" htmlFor="savedBuyer">Saved customer</label>
+                  <select id="savedBuyer" className="select" style={{ maxWidth: 260 }} value="" onChange={(e) => {
+                    const [bid, ai] = e.target.value.split("|"); const b = lib.buyers.find((x) => x.id === bid); const a = b?.addresses[Number(ai)];
+                    if (b && a) setC({ name: b.name, mobile: b.mobile, email: b.email, line1: a.line1, line2: a.line2 ?? "", pincode: a.pincode, city: a.city, state: a.state });
+                  }}><option value="">Use saved customer…</option>{lib.buyers.flatMap((b) => b.addresses.map((a, i) => <option key={`${b.id}${i}`} value={`${b.id}|${i}`}>{b.name} · {a.label} · {a.city} {a.pincode}</option>))}</select></>}
+                </div>
                 <div className="grid2" style={{ gap: 12 }}>
                   <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} autoComplete="off" /></div>
                   <div className="field"><label htmlFor="cm">Mobile</label><input id="cm" className="input" inputMode="tel" value={c.mobile} onChange={(e) => setC({ ...c, mobile: e.target.value })} /></div>
                   <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c1">Address line 1</label><input id="c1" className="input" value={c.line1} onChange={(e) => setC({ ...c, line1: e.target.value })} /></div>
+                  <label className="check small" style={{ gridColumn: "1 / -1", order: 99 }}><input type="checkbox" checked={saveBuyer} onChange={(e) => setSaveBuyer(e.target.checked)} /> Save to Customers for next time</label>
                   <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c2">Address line 2 (optional)</label><input id="c2" className="input" value={c.line2} onChange={(e) => setC({ ...c, line2: e.target.value })} /></div>
                   <div className="field"><label htmlFor="cp">PIN code</label><input id="cp" className="input hl" inputMode="numeric" maxLength={6} value={c.pincode} onChange={(e) => setPin(e.target.value)} /></div>
                   <div className="field"><label htmlFor="cc">City / district</label><input id="cc" className="input" value={c.city} onChange={(e) => setC({ ...c, city: e.target.value })} /></div>
@@ -223,6 +243,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                 <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Order &amp; payment</h2>
                 <div className="grid2" style={{ gap: 12 }}>
                   <div className="field"><label htmlFor="on">Order ID (optional)</label><input id="on" className="input" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Auto-generated if empty" /></div>
+                  {lib.tags.length > 0 && <fieldset style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1" }}><legend className="small b">Tags</legend><div className="row wrap" style={{ gap: 6 }}>{lib.tags.map((t) => { const on = tagIds.includes(t.id); return <button key={t.id} type="button" className="chip" aria-pressed={on} onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])} style={{ background: on ? t.color : "transparent", color: on ? "#fff" : t.color, border: `1px solid ${t.color}`, cursor: "pointer" }}>{t.name}</button>; })}</div></fieldset>}
                   <div className="field"><label htmlFor="pt">Payment</label><select id="pt" className="select" value={payment} onChange={(e) => setPayment(e.target.value as "prepaid" | "cod")}><option value="prepaid">Prepaid</option><option value="cod">COD</option></select></div>
                   {payment === "cod" && <div className="field"><label htmlFor="ca">COD amount to collect (₹)</label><input id="ca" className="input" type="number" min="1" value={cod} onChange={(e) => setCod(e.target.value)} /></div>}
                   <div className="field"><label htmlFor="dv">Declared / invoice value (₹)</label><input id="dv" className="input" type="number" min="1" value={declared} onChange={(e) => setDeclared(e.target.value)} placeholder={declaredValue ? String(declaredValue) : ""} /></div>
@@ -231,7 +252,14 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                 </div>
               </section>
               <section className="card" style={{ padding: 18 }}>
-                <div className="row between"><h2 className="b" style={{ fontSize: 15, margin: 0 }}>Products</h2><button type="button" className="btn btn-sm btn-outline" onClick={() => setProducts([...products, { name: "", qty: "1", price: "", hsn: "" }])}><Plus size={14} /> Add product</button></div>
+                <div className="row between wrap" style={{ gap: 6 }}><h2 className="b" style={{ fontSize: 15, margin: 0 }}>Products</h2><span className="row wrap" style={{ gap: 6 }}>
+                  {lib.products.length > 0 && <><label className="sr-only" htmlFor="savedProd">Saved product</label><select id="savedProd" className="select" style={{ maxWidth: 220 }} value="" onChange={(e) => {
+                    const p = lib.products.find((x) => x.id === e.target.value); if (!p) return;
+                    const row = { name: `${p.name} (${p.sku})`, qty: "1", price: String(p.price), hsn: p.hsn };
+                    setProducts(products.length === 1 && !products[0].name ? [row] : [...products, row]);
+                    if (p.weightKg > 0 && pkgs.length === 1 && p.l > 0) setPkgs([{ count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(p.weightKg) }]);
+                  }}><option value="">Add saved product…</option>{lib.products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></>}
+                  <button type="button" className="btn btn-sm btn-outline" onClick={() => setProducts([...products, { name: "", qty: "1", price: "", hsn: "" }])}><Plus size={14} /> Add product</button></span></div>
                 {products.map((p, i) => (
                   <div key={i} className="grid4 mt12" style={{ gap: 8, alignItems: "end" }}>
                     <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor={`pn${i}`}>Name</label><input id={`pn${i}`} className="input" value={p.name} onChange={(e) => setProducts(products.map((x, j) => j === i ? { ...x, name: e.target.value } : x))} /></div>
@@ -247,8 +275,8 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
                   <h2 className="b" style={{ fontSize: 15, margin: 0 }}>Packages</h2>
                   <div className="row wrap" style={{ gap: 6 }}>
                     <label className="sr-only" htmlFor="preset">Package preset</label>
-                    <select id="preset" className="select" style={{ maxWidth: 200 }} value="" onChange={(e) => { const p = PRESETS[Number(e.target.value)]; if (p) setPkgs([...pkgs, { ...p.pkg }]); }}>
-                      <option value="">Add from preset…</option>{PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
+                    <select id="preset" className="select" style={{ maxWidth: 200 }} value="" onChange={(e) => { const p = allPresets[Number(e.target.value)]; if (p) setPkgs([...pkgs, { ...p.pkg }]); }}>
+                      <option value="">Add from preset…</option>{allPresets.map((p, i) => <option key={p.label + i} value={i}>{i < myPresets.length ? "★ " : ""}{p.label}</option>)}
                     </select>
                     <button type="button" className="btn btn-sm btn-outline" onClick={() => setPkgs([...pkgs, { count: "1", l: "", b: "", h: "", w: "" }])}><Plus size={14} /> Add package type</button>
                   </div>

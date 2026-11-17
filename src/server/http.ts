@@ -16,6 +16,7 @@ export async function parseJson<S extends ZodTypeAny>(req: Request, schema: S): 
   try { return { ok: true, data: schema.parse(body) }; }
   catch (e) {
     const issues = e instanceof ZodError ? e.issues.map((i) => ({ path: i.path.join("."), message: i.message })) : [];
-    return { ok: false, res: apiError(422, "validation_error", "Invalid request", { issues }) };
+    const first = issues[0] ? `${issues[0].message}${issues.length > 1 ? ` (and ${issues.length - 1} more)` : ""}` : "Invalid request";
+    return { ok: false, res: apiError(422, "validation_error", first, { issues }) };
   }
 }

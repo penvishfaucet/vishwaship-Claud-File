@@ -5,16 +5,23 @@ import { carrierLogo } from "@/lib/site";
 import { STATUS_GROUPS, StatusChip } from "@/lib/status";
 import { portalContext } from "@/server/portal/context";
 import { listOrders, statusCounts } from "@/server/portal/queries";
+import { asc, eq } from "drizzle-orm";
+import { getDb, schema } from "@/server/db/client";
+import { tagsForOrders } from "@/server/orders/extras";
 
-type SP = { q?: string; group?: string; payment?: string; mode?: string; page?: string };
+type SP = { q?: string; group?: string; payment?: string; mode?: string; tag?: string; page?: string };
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const [counts, data] = await Promise.all([
     statusCounts(ctx.org.id),
-    listOrders(ctx.org.id, { q: sp.q, group: sp.group, payment: sp.payment, mode: sp.mode, page: Number(sp.page ?? 1) }),
+    listOrders(ctx.org.id, { q: sp.q, group: sp.group, payment: sp.payment, mode: sp.mode, tag: sp.tag, page: Number(sp.page ?? 1) }),
   ]);
+  const db = await getDb();
+  const tags = await db.select().from(schema.orderTags).where(eq(schema.orderTags.orgId, ctx.org.id)).orderBy(asc(schema.orderTags.name));
+  const rowTags = await tagsForOrders(data.rows.map((r) => r.orderId));
+  const kg = (g: number | null | undefined) => (g ? `${(g / 1000).toFixed(2)} kg` : "—");
   const all = counts.reduce((s, c) => s + c.count, 0);
   const qs = (patch: Partial<SP>) => {
     const p = new URLSearchParams(Object.entries({ ...sp, ...patch }).filter(([, v]) => v) as [string, string][]);
@@ -49,8 +56,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <select id="opay" className="select" name="payment" defaultValue={sp.payment ?? ""} style={{ maxWidth: 150 }}><option value="">All payments</option><option value="prepaid">Prepaid</option><option value="cod">COD</option></select>
         <label className="sr-only" htmlFor="omode">Type</label>
         <select id="omode" className="select" name="mode" defaultValue={sp.mode ?? ""} style={{ maxWidth: 130 }}><option value="">B2C + B2B</option><option value="B2C">B2C</option><option value="B2B">B2B</option></select>
+        {tags.length > 0 && <><label className="sr-only" htmlFor="otag">Tag</label><select id="otag" className="select" name="tag" defaultValue={sp.tag ?? ""} style={{ maxWidth: 150 }}><option value="">All tags</option>{tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></>}
         <button className="btn btn-navy">Apply</button>
-        {(sp.q || sp.payment || sp.mode) && <Link className="btn btn-outline" href={qs({ q: undefined, payment: undefined, mode: undefined })}>Clear</Link>}
+        {(sp.q || sp.payment || sp.mode || sp.tag) && <Link className="btn btn-outline" href={qs({ q: undefined, payment: undefined, mode: undefined, tag: undefined })}>Clear</Link>}
       </form>
 
       {data.rows.length === 0 ? (
@@ -59,19 +67,19 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         <>
           <div className="card p0 tbl-wrap only-desktop">
             <table className="tbl">
-              <thead><tr><th>Order</th><th>Courier</th><th>AWB / LR</th><th>Consignee</th><th>Boxes</th><th>Chargeable</th><th>Payment</th><th>Date</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th>Order</th><th>Courier</th><th>AWB / LR</th><th>Consignee</th><th>Boxes</th><th>Weight (entered / chargeable / courier)</th><th>Payment</th><th>Date</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {data.rows.map((r) => {
                   const c = r.consignee as { name: string; city: string; pincode: string };
                   const logo = r.carrierCode ? carrierLogo(r.carrierCode) : null;
                   return (
                     <tr key={r.orderId}>
-                      <td><Link className="b link-navy" href={`/portal/orders/${r.orderId}/`}>{r.orderNumber}</Link><div className="tiny muted">{r.mode}{r.provider === "demo" ? " · demo" : ""}</div></td>
+                      <td><Link className="b link-navy" href={`/portal/orders/${r.orderId}/`}>{r.orderNumber}</Link><div className="tiny muted">{r.mode}{r.provider === "demo" ? " · demo" : ""}</div>{(rowTags.get(r.orderId) ?? []).map((t) => <span key={t.id} className="chip" style={{ background: t.color, color: "#fff", marginRight: 4, fontSize: 10 }}>{t.name}</span>)}</td>
                       <td>{logo ? <img className="clogo-sm" src={logo} alt={r.carrierName ?? ""} title={r.carrierName ?? ""} /> : <span className="muted">—</span>}</td>
-                      <td className="mono small">{r.awb ?? <span className="muted">—</span>}</td>
+                      <td className="mono small">{r.awb ?? <span className="muted">—</span>}{r.lr && r.lr !== r.awb && <div className="tiny muted">LR {r.lr}</div>}</td>
                       <td><div className="small">{c.name}</div><div className="tiny muted">{c.city} {c.pincode}</div></td>
                       <td>{r.boxes}</td>
-                      <td>{r.chargeable ? `${(r.chargeable / 1000).toFixed(1)} kg` : "—"}</td>
+                      <td className="small">{kg(r.enteredGrams)} / {kg(r.chargeable)} / {kg(r.carrierGrams)}<div className="tiny muted">{r.dims ? `${r.dims} cm` : ""}</div></td>
                       <td><span className={`chip ${r.paymentType === "cod" ? "c-cod" : "c-prepaid"}`}>{r.paymentType === "cod" ? `COD ${formatINR(r.codAmount)}` : "Prepaid"}</span></td>
                       <td className="small">{r.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })}</td>
                       <td>{r.status ? <StatusChip status={r.status} /> : <span className="chip c-draft">{r.orderStatus}</span>}</td>

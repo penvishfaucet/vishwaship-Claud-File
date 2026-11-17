@@ -19,7 +19,7 @@ export default async function NdrPage({ searchParams }: { searchParams: Promise<
   const counts = rows.reduce<Record<string, number>>((m, r) => ({ ...m, [r.c.status]: (m[r.c.status] ?? 0) + 1 }), {});
   return (
     <>
-      <div className="page-h"><h1>NDR &amp; RTO</h1></div>
+      <div className="page-h"><div><h1>NDR</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Failed deliveries and RTO — act before the courier deadline.</p></div></div>
       <nav className="tabs" aria-label="Queue">
         <Link href="/portal/ndr/?tab=ndr" className={tab === "ndr" ? "on" : ""}>NDR</Link>
         <Link href="/portal/ndr/?tab=rto" className={tab === "rto" ? "on" : ""}>RTO</Link>

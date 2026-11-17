@@ -56,7 +56,7 @@ export async function saveContent(fd: FormData) {
   await db.insert(schema.contentBlocks).values({ key, locale, ...set }).onConflictDoUpdate({ target: [schema.contentBlocks.key, schema.contentBlocks.locale], set });
   await audit({ actorUserId: s.userId, actorKind: "staff", action: publish ? "content.publish" : "content.draft", targetType: "content", targetId: `${key}:${locale}` });
   revalidatePath("/", "layout");
-  redirect(`/admin/content/?locale=${locale}&ok=${publish ? "Published" : "Draft+saved"}#${key}`);
+  redirect(`/admin/content/?locale=${locale}&group=${key.startsWith("nav.") ? "nav" : "pages"}&ok=${publish ? "Published" : "Draft+saved"}#${key}`);
 }
 
 export async function revertContent(fd: FormData) {
@@ -67,7 +67,7 @@ export async function revertContent(fd: FormData) {
   await db.delete(schema.contentBlocks).where(and(eq(schema.contentBlocks.key, key), eq(schema.contentBlocks.locale, locale)));
   await audit({ actorUserId: s.userId, actorKind: "staff", action: "content.revert", targetType: "content", targetId: `${key}:${locale}` });
   revalidatePath("/", "layout");
-  redirect(`/admin/content/?locale=${locale}&ok=Reverted+to+default`);
+  redirect(`/admin/content/?locale=${locale}&group=${key.startsWith("nav.") ? "nav" : "pages"}&ok=Reverted+to+default`);
 }
 
 // ---------- branded tracking pages ----------

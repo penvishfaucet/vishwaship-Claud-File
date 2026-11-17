@@ -8,21 +8,23 @@ import { getDb, schema } from "@/server/db/client";
 
 const LOCALES = [{ code: "en", label: "English" }, { code: "hi", label: "हिन्दी (Hindi)" }];
 
-export default async function ContentPage({ searchParams }: { searchParams: Promise<{ locale?: string; ok?: string; err?: string }> }) {
+export default async function ContentPage({ searchParams }: { searchParams: Promise<{ locale?: string; ok?: string; err?: string; group?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("customers.read");
   const write = can(s.role, "content.write");
+  const group = sp.group === "nav" ? "nav" : "pages";
   const locale = LOCALES.some((l) => l.code === sp.locale) ? sp.locale! : "en";
   const db = await getDb();
   const rows = await db.select().from(schema.contentBlocks).where(eq(schema.contentBlocks.locale, locale));
   return (
     <>
       <div className="page-h"><div><h1>Content</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Customer-facing labels, help text and banners. Save a draft, then publish — published text appears in the portal immediately, no deployment needed. Hindi falls back to English, then to the built-in default.</p></div></div>
-      <nav className="tabs">{LOCALES.map((l) => <Link key={l.code} href={`/admin/content/?locale=${l.code}`} className={locale === l.code ? "on" : ""}>{l.label}</Link>)}</nav>
+      <nav className="tabs">{LOCALES.map((l) => <Link key={l.code} href={`/admin/content/?locale=${l.code}&group=${group}`} className={locale === l.code ? "on" : ""}>{l.label}</Link>)}</nav>
+      <nav className="pills mb12" aria-label="Content group"><Link className={group === "pages" ? "pill on" : "pill"} href={`/admin/content/?locale=${locale}&group=pages`}>Page text &amp; support details</Link><Link className={group === "nav" ? "pill on" : "pill"} href={`/admin/content/?locale=${locale}&group=nav`}>Customer sidebar menu (names &amp; order fixed)</Link></nav>
       {sp.ok && <p className="note small mb12">{sp.ok}</p>}
       {sp.err && <p className="note small mb12 t-debit">{sp.err}</p>}
       <div className="col" style={{ gap: 12 }}>
-        {(Object.keys(CONTENT_KEYS) as ContentKey[]).map((key) => {
+        {(Object.keys(CONTENT_KEYS) as ContentKey[]).filter((k) => (group === "nav") === k.startsWith("nav.")).map((key) => {
           const row = rows.find((r) => r.key === key);
           const live = row?.published ?? null;
           const hasDraft = row && row.draft !== row.published;

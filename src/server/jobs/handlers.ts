@@ -136,3 +136,27 @@ export async function scheduleSweeps() {
   for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   await sweepNoResponse();
 }
+
+/** report.export — build a CSV/XLSX for Tools → Report Download (same filters and tenant scope as on screen). */
+registerHandler("report.export", async (p): Promise<JobResult> => {
+  const { exportId } = p as { exportId: string };
+  const db = await getDb();
+  const [x] = await db.select().from(schema.reportExports).where(eq(schema.reportExports.id, exportId));
+  if (!x || x.status === "ready") return { done: true };
+  await db.update(schema.reportExports).set({ status: "running" }).where(eq(schema.reportExports.id, x.id));
+  try {
+    const { REPORTS, parseFilters, runReport } = await import("@/server/reports");
+    const { toCsv } = await import("@/lib/csv");
+    const { toXlsx } = await import("@/server/xlsx");
+    const key = x.reportKey as keyof typeof REPORTS;
+    const r = await runReport(x.orgId, key, parseFilters(x.filters as Record<string, string>), 100_000);
+    const headers = r.columns.map((c) => c.label);
+    const buf = x.format === "xlsx" ? Buffer.from(await toXlsx(REPORTS[key].title, headers, r.rows)) : Buffer.from(toCsv(headers, r.rows), "utf8");
+    if (buf.length > 12 * 1024 * 1024) throw new Error("Export is larger than 12 MB — narrow the date range");
+    await db.update(schema.reportExports).set({ status: "ready", rowCount: r.total, fileB64: buf.toString("base64"), finishedAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), error: null }).where(eq(schema.reportExports.id, x.id));
+    await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: x.orgId, kind: "report", title: `Your ${REPORTS[key].title} export is ready (${r.total} rows)`, href: "/portal/tools/downloads/" });
+  } catch (e) {
+    await db.update(schema.reportExports).set({ status: "failed", error: (e as Error).message.slice(0, 300), finishedAt: new Date() }).where(eq(schema.reportExports.id, x.id));
+  }
+  return { done: true };
+});

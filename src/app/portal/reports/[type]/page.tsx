@@ -1,3 +1,6 @@
+import { asc, eq } from "drizzle-orm";
+import { getDb, schema } from "@/server/db/client";
+import { QueueExport } from "@/components/portal/QueueExport";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download } from "lucide-react";
@@ -22,6 +25,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
   const ctx = await portalContext();
   await requireFeature(ctx.org.id, "reports");
   const f = parseFilters(sp);
+  const tags = await (await getDb()).select({ id: schema.orderTags.id, name: schema.orderTags.name }).from(schema.orderTags).where(eq(schema.orderTags.orgId, ctx.org.id)).orderBy(asc(schema.orderTags.name));
   const r = await runReport(ctx.org.id, key, f);
   const page = Math.max(1, Number(sp.page ?? 1));
   const pages = Math.max(1, Math.ceil(r.total / PAGE));
@@ -34,8 +38,9 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
       <div className="page-h">
         <div><Link className="small link-navy" href="/portal/reports/">← Reports</Link><h1>{REPORTS[key].title}</h1><p className="small muted" style={{ margin: "4px 0 0" }}>{REPORTS[key].desc}</p></div>
         <div className="actions">
-          <a className="btn btn-outline" href={`/api/portal/reports/${key}?${exportQs}&format=csv`}><Download size={16} /> CSV</a>
-          <a className="btn btn-orange" href={`/api/portal/reports/${key}?${exportQs}&format=xlsx`}><Download size={16} /> Excel</a>
+          <a className="btn btn-outline" href={`/api/portal/reports/${key}/?${exportQs}&format=csv`}><Download size={16} /> CSV</a>
+          <a className="btn btn-orange" href={`/api/portal/reports/${key}/?${exportQs}&format=xlsx`}><Download size={16} /> Excel</a>
+          <QueueExport reportKey={key} filters={Object.fromEntries(Object.entries(sp).filter(([k, v]) => v && k !== "page")) as Record<string, string>} />
         </div>
       </div>
       <form className="card row wrap mb12" style={{ padding: 14, gap: 8, alignItems: "end" }}>
@@ -45,6 +50,7 @@ export default async function ReportPage({ params, searchParams }: { params: Pro
         <div className="field"><label htmlFor="rp">Payment</label><select id="rp" name="payment" className="select" defaultValue={sp.payment ?? ""}><option value="">All</option><option value="prepaid">Prepaid</option><option value="cod">COD</option></select></div>
         <div className="field"><label htmlFor="rm">Type</label><select id="rm" name="mode" className="select" defaultValue={sp.mode ?? ""}><option value="">B2C + B2B</option><option>B2C</option><option>B2B</option></select></div>
         {!["orders", "ndr", "weight"].includes(key) && <div className="field"><label htmlFor="rc">Courier</label><select id="rc" name="carrier" className="select" defaultValue={sp.carrier ?? ""}><option value="">All couriers</option>{CARRIERS.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></div>}
+        {tags.length > 0 && <div className="field"><label htmlFor="rtg">Tag</label><select id="rtg" name="tag" className="select" defaultValue={sp.tag ?? ""}><option value="">All tags</option>{tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>}
         {sp.status && <input type="hidden" name="status" value={sp.status} />}
         {key === "custom" && (
           <fieldset style={{ border: 0, padding: 0, flexBasis: "100%" }}>

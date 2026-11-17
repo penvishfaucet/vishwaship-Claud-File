@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeIndianRupee, Bell, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, BadgeIndianRupee, Bell, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -22,11 +22,14 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "FINANCE", items: [
     { href: "/admin/pricing/", label: "Pricing", icon: Tags, perm: "pricing.read" },
     { href: "/admin/finance/", label: "Wallets", icon: Wallet, perm: "finance.read" },
-    { href: "/admin/finance/?tab=cod", label: "COD Remittance", icon: BadgeIndianRupee, perm: "finance.read" },
+    { href: "/admin/cod-remittance/", label: "COD & Early COD", icon: BadgeIndianRupee, perm: "finance.read" },
+    { href: "/admin/billing-documents/", label: "Invoices & Notes", icon: FileSpreadsheet, perm: "finance.read" },
+    { href: "/admin/couriers/", label: "Couriers & Rate Cards", icon: TruckIcon, perm: "pricing.read" },
     { href: "/admin/reports/", label: "Reports", icon: FileDown, perm: "reports.export" },
   ] },
   { group: "SETTINGS", items: [
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
+    { href: "/admin/oms/", label: "OMS Requests", icon: Boxes, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
     { href: "/admin/whatsapp/", label: "WhatsApp Ops", icon: MessageCircle, perm: "notifications.read" },
     { href: "/admin/content/", label: "Content", icon: FileText, perm: "customers.read" },

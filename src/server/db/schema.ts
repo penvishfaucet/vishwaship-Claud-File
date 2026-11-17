@@ -5,7 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
-  bigint, boolean, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex,
+  bigint, boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 const id = () => text("id").primaryKey();
@@ -670,3 +670,152 @@ export const whatsappMessages = pgTable("whatsapp_messages", {
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [index("wa_org_created").on(t.orgId, t.createdAt), index("wa_provider_msg").on(t.providerMessageId)]);
+
+// ---------- Others: buyers, products, packaging, tags ----------
+export const buyers = pgTable("buyers", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  mobile: text("mobile").notNull(), // 10 digits
+  email: text("email"),
+  addresses: jsonb("addresses").notNull().default([]), // [{label,line1,line2,pincode,city,state}]
+  notes: text("notes"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("buyers_org_mobile").on(t.orgId, t.mobile)]);
+
+export const products = pgTable("products", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  sku: text("sku").notNull(),
+  unitPricePaise: paise("unit_price_paise").notNull().default(0), // declared value per unit
+  hsn: text("hsn"),
+  weightGrams: integer("weight_grams").notNull().default(0),
+  lengthMm: integer("length_mm").notNull().default(0),
+  breadthMm: integer("breadth_mm").notNull().default(0),
+  heightMm: integer("height_mm").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("products_org_sku").on(t.orgId, t.sku)]);
+
+export const packagingPresets = pgTable("packaging_presets", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  lengthMm: integer("length_mm").notNull(),
+  breadthMm: integer("breadth_mm").notNull(),
+  heightMm: integer("height_mm").notNull(),
+  tareGrams: integer("tare_grams").notNull().default(0),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: created(),
+}, (t) => [uniqueIndex("packaging_org_name").on(t.orgId, t.name)]);
+
+export const orderTags = pgTable("order_tags", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  color: text("color").notNull().default("#0b1f3a"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("order_tags_org_name").on(t.orgId, t.name)]);
+
+export const orderTagLinks = pgTable("order_tag_links", {
+  orderId: text("order_id").notNull().references(() => orders.id),
+  tagId: text("tag_id").notNull().references(() => orderTags.id),
+}, (t) => [primaryKey({ columns: [t.orderId, t.tagId] })]);
+
+// ---------- per-account settings (label, invoice, courier prefs, EDD widget, OMS) ----------
+export const orgSettings = pgTable("org_settings", {
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  key: text("key").notNull(),
+  value: jsonb("value").notNull(),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [primaryKey({ columns: [t.orgId, t.key] })]);
+
+export const assignRules = pgTable("assign_rules", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  priority: integer("priority").notNull().default(100), // lower runs first
+  active: boolean("active").notNull().default(true),
+  conditions: jsonb("conditions").notNull().default({}), // {mode,payment,warehouseId,pinPrefixes[],minGrams,maxGrams}
+  couriers: jsonb("couriers").notNull().default([]), // carrier codes in preference order
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [index("assign_rules_org").on(t.orgId, t.priority)]);
+
+// ---------- report download centre ----------
+export const reportExports = pgTable("report_exports", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  userId: text("user_id"),
+  reportKey: text("report_key").notNull(),
+  filters: jsonb("filters").notNull().default({}),
+  format: text("format").notNull(), // csv | xlsx
+  status: text("status").notNull().default("queued"), // queued | running | ready | failed
+  rowCount: integer("row_count"),
+  fileB64: text("file_b64"), // small exports kept inline; expires after 7 days
+  error: text("error"),
+  createdAt: created(),
+  finishedAt: ts("finished_at"),
+  expiresAt: ts("expires_at"),
+}, (t) => [index("report_exports_org").on(t.orgId, t.createdAt)]);
+
+// ---------- COD remittance batches ----------
+export const codRemittances = pgTable("cod_remittances", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  reference: text("reference"), // bank UTR / payout reference once paid
+  cycleDate: ts("cycle_date").notNull(),
+  expectedPayoutAt: ts("expected_payout_at").notNull(),
+  grossPaise: paise("gross_paise").notNull(),
+  deductionsPaise: paise("deductions_paise").notNull().default(0), // early-COD fee, adjustments
+  netPaise: paise("net_paise").notNull(),
+  deductionNote: text("deduction_note"),
+  status: text("status").notNull().default("scheduled"), // scheduled | paid | cancelled
+  earlyCod: boolean("early_cod").notNull().default(false),
+  paidAt: ts("paid_at"),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [index("cod_remit_org").on(t.orgId, t.cycleDate)]);
+
+export const codRemittanceItems = pgTable("cod_remittance_items", {
+  remittanceId: text("remittance_id").notNull().references(() => codRemittances.id),
+  shipmentId: text("shipment_id").notNull().unique().references(() => shipments.id), // a shipment is remitted once
+  codPaise: paise("cod_paise").notNull(),
+}, (t) => [primaryKey({ columns: [t.remittanceId, t.shipmentId] })]);
+
+// ---------- Vishwaship billing documents (tax invoices, credit / debit notes) ----------
+export const billingDocuments = pgTable("billing_documents", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  kind: text("kind").notNull(), // invoice | credit_note | debit_note
+  number: text("number").notNull().unique(),
+  docDate: ts("doc_date").notNull(),
+  periodFrom: ts("period_from"),
+  periodTo: ts("period_to"),
+  taxablePaise: paise("taxable_paise").notNull(),
+  gstPaise: paise("gst_paise").notNull(),
+  totalPaise: paise("total_paise").notNull(),
+  reason: text("reason"),
+  refType: text("ref_type"), // shipment | invoice | dispute
+  refId: text("ref_id"),
+  lines: jsonb("lines").notNull().default([]), // [{description, ref, taxablePaise, gstPaise}]
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [index("billing_docs_org").on(t.orgId, t.kind, t.docDate)]);
+
+// ---------- Early COD (faster remittance) — separate from WhatsApp COD Confirmation ----------
+export const earlyCodSubscriptions = pgTable("early_cod_subscriptions", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  status: text("status").notNull(), // active | cancelled
+  feeBps: integer("fee_bps").notNull(), // snapshot of terms at subscription time
+  cycleDays: integer("cycle_days").notNull(), // payout D+N after delivery
+  termsVersion: integer("terms_version").notNull(),
+  startedAt: ts("started_at").notNull().default(sql`now()`),
+  cancelledAt: ts("cancelled_at"),
+  createdAt: created(),
+}, (t) => [index("early_cod_org").on(t.orgId)]);

@@ -6,8 +6,9 @@ import { carrierLogo } from "@/lib/site";
 
 type Offer = { quoteId: string; carrierCode: string; carrierName: string; serviceName: string; mode: string; etaDays?: number; chargeableWeightGrams: number; total: number; isDemo: boolean };
 
-export function BookExisting({ orderId, held }: { orderId: string; held: boolean }) {
+export function BookExisting({ orderId, held, autoAssign = false }: { orderId: string; held: boolean; autoAssign?: boolean }) {
   const router = useRouter();
+  const [auto, setAuto] = useState<{ quoteId: string; carrierName: string; serviceName: string; total: number; reason: string } | null>(null);
   const [offers, setOffers] = useState<Offer[] | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,16 +21,30 @@ export function BookExisting({ orderId, held }: { orderId: string; held: boolean
     if (!r.ok) { setErr(j.error?.message ?? "Could not get rates"); return; }
     setOffers(j.offers); setSel(j.offers[0]?.quoteId ?? null);
   }
-  async function book() {
+  async function runAuto() {
     setBusy(true); setErr(null);
-    const r = await fetch(`/api/portal/orders/${orderId}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId: sel }) });
+    const r = await fetch(`/api/portal/orders/${orderId}/auto-assign`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ book: false }) });
+    const j = await r.json(); setBusy(false);
+    if (!r.ok) { setErr(j.error?.message ?? "Could not auto-assign"); return; }
+    setAuto(j); setSel(j.quoteId);
+  }
+  async function book(quoteId = sel) {
+    setBusy(true); setErr(null);
+    const r = await fetch(`/api/portal/orders/${orderId}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId }) });
     const j = await r.json(); setBusy(false);
     if (!r.ok && r.status !== 202) { setErr(j.error?.message ?? "Booking failed"); return; }
     router.refresh();
   }
   return (
     <section className="card mb16" style={{ padding: 16 }}>
-      <div className="row between"><b>Not booked yet</b>{!offers && <button className="btn btn-orange btn-sm" onClick={quote} disabled={busy}>{busy ? "Getting rates…" : "Choose courier"}</button>}</div>
+      <div className="row between wrap" style={{ gap: 8 }}><b>Not booked yet</b>{!offers && !auto && <span className="row" style={{ gap: 8 }}>{autoAssign && <button className="btn btn-navy btn-sm" onClick={runAuto} disabled={busy}>Auto-assign</button>}<button className="btn btn-orange btn-sm" onClick={quote} disabled={busy}>{busy ? "Getting rates…" : "Choose courier"}</button></span>}</div>
+      {auto && !offers && (
+        <div className="note small mt8">
+          <b>{auto.carrierName} · {auto.serviceName}</b> — ₹{(auto.total / 100).toFixed(2)} incl. GST
+          <div className="tiny muted" style={{ margin: "4px 0 8px" }}>Why: {auto.reason}</div>
+          <span className="row" style={{ gap: 8 }}><button className="btn btn-orange btn-sm" disabled={busy} onClick={() => book(auto.quoteId)}>{busy ? "Booking…" : `Book with ${auto.carrierName}`}</button><button className="btn btn-outline btn-sm" disabled={busy} onClick={() => { setAuto(null); quote(); }}>Choose another courier</button></span>
+        </div>
+      )}
       {offers && offers.length === 0 && <p className="small muted">No courier services this route.</p>}
       {offers && offers.length > 0 && (
         <>
@@ -43,7 +58,7 @@ export function BookExisting({ orderId, held }: { orderId: string; held: boolean
               </label>
             ))}
           </div>
-          <button className="btn btn-orange mt12" onClick={book} disabled={busy || !sel}>{busy ? "Booking…" : "Book Shipment"}</button>
+          <button className="btn btn-orange mt12" onClick={() => book()} disabled={busy || !sel}>{busy ? "Booking…" : "Book Shipment"}</button>
         </>
       )}
       {err && <p className="err small" role="alert">{err}</p>}

@@ -84,15 +84,60 @@ ol.stepper li+li::before{content:"";width:28px;height:1px;background:var(--line)
 
 :root{--font-roboto:"Roboto"}
 
-/* grouped customer sidebar */
-.side details.grp{margin-bottom:2px}
-.side details.grp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font-size:13px;color:#d6dbe8;cursor:pointer;user-select:none}
-.side details.grp>summary::-webkit-details-marker{display:none}
-.side details.grp>summary:hover{background:rgba(255,255,255,.06)}
-.side details.grp>summary:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
-.side details.grp>summary svg{width:15px;height:15px;opacity:.9;flex-shrink:0}
-.side details.grp>summary .chev{margin-left:auto;transition:transform .15s}
-.side details.grp[open]>summary .chev{transform:rotate(180deg)}
-.side details.grp .sub{padding-left:14px}
-.side-support{display:flex;gap:8px;align-items:center;margin:14px 12px 18px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.06);color:#fff;font-size:13px;font-weight:600;text-decoration:none}
-.side-support small{display:block;font-size:11px;font-weight:500;color:#aab3c8}
+/* customer sidebar: groups, locked items, quick search, support, collapse */
+.side nav{padding:0 10px}
+.side .grp-h{width:100%;background:none;border:0;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font:inherit;font-size:13px;color:#d6dbe8;margin-bottom:2px}
+.side .grp-h:hover{background:rgba(255,255,255,.06)}
+.side .grp-h svg{width:15px;height:15px;opacity:.9;flex-shrink:0}
+.side .grp-h .chev{margin-left:auto;transition:transform .15s}
+.side .grp-h[aria-expanded=true] .chev{transform:rotate(180deg)}
+.side .grp.has-on>.grp-h{color:#fff;font-weight:700;box-shadow:inset 3px 0 0 var(--orange)}
+.side .grp .sub{padding-left:12px;margin-left:12px;border-left:1px solid rgba(255,255,255,.1)}
+.side .grp .sub a.item{font-size:12.5px;padding:7px 10px}
+.side a.item.locked{color:#8a93a8}
+.side a.item .lock{width:13px!important;height:13px!important;margin-left:auto;opacity:.8}
+.side .qs-btn{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;font:inherit;font-size:13px;color:#d6dbe8;margin:10px 0 2px}
+.side .qs-btn:hover{background:rgba(255,255,255,.1)}
+.side .qs-btn svg{width:15px;height:15px}
+.side .qs-btn kbd{margin-left:auto;font:600 10.5px/1 inherit;background:rgba(255,255,255,.1);border-radius:4px;padding:3px 5px;color:#c9cfdf}
+.side :is(.grp-h,.qs-btn,a.item,.side-collapse):focus-visible{outline:2px solid var(--orange);outline-offset:1px}
+.side-support{display:flex;gap:10px;align-items:flex-start;margin:12px 10px 8px;padding:10px 12px;border-radius:10px;background:rgba(240,113,44,.12);border:1px solid rgba(240,113,44,.3);color:#fff;font-size:13px;text-decoration:none}
+.side-support svg{color:var(--orange);margin-top:2px;flex-shrink:0}
+.side-support .lbl{display:flex;flex-direction:column;gap:2px}
+.side-support small{font-size:11px;font-weight:500;color:#aab3c8}
+.side-collapse{margin:0 10px 14px;background:none;border:0;color:#aab3c8;display:flex;align-items:center;gap:6px;font:inherit;font-size:12px;cursor:pointer;padding:6px 8px;border-radius:6px}
+.side-collapse:hover{background:rgba(255,255,255,.06);color:#fff}
+@media (min-width:901px){
+  .side-collapsed .side{width:64px}
+  .side-collapsed .main{margin-left:64px}
+  .side-collapsed .side .lbl,.side-collapsed .side .chev,.side-collapsed .side .lock,.side-collapsed .side .brand .wm,.side-collapsed .side .brand .portal{display:none}
+  .side-collapsed .side nav{padding:0 8px}
+  .side-collapsed .side :is(a.item,.grp-h,.qs-btn){justify-content:center;padding:9px 0}
+  .side-collapsed .side-support{justify-content:center;margin:12px 8px 8px;padding:10px 0}
+  .side-collapsed .side-collapse{justify-content:center;margin:0 8px 14px}
+  .side-collapsed .side .brand{margin:0 8px}
+}
+@media (max-width:900px){.hide-sm{display:none!important}}
+/* quick search */
+.qs-backdrop{position:fixed;inset:0;background:rgba(8,14,28,.55);z-index:100;display:flex;justify-content:center;align-items:flex-start;padding:10vh 16px 16px}
+.qs{width:100%;max-width:560px;background:var(--card,#fff);color:var(--text,#111);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}
+.qs-in{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line,#e5e7eb)}
+.qs-in input{flex:1;border:0;outline:0;font:inherit;font-size:15px;background:transparent;color:inherit;min-width:0}
+.qs-list{list-style:none;margin:0;padding:6px;max-height:50vh;overflow:auto}
+.qs-list li{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:13.5px}
+.qs-list li span{display:flex;flex-direction:column;min-width:0}
+.qs-list li small{color:var(--muted,#6b7280);font-size:12px}
+.qs-list li em{margin-left:auto;font-style:normal;font-size:11px;color:var(--muted,#6b7280)}
+.qs-list li.on{background:var(--orange-soft,#fff1e8)}
+.qs-list li.qs-note{cursor:default;color:var(--muted,#6b7280)}
+.qs-foot{margin:0;padding:8px 14px;border-top:1px solid var(--line,#e5e7eb)}
+@media print{.side,.top,.bnav,.no-print,.impersonation-bar,.qs-backdrop{display:none!important}.main{margin-left:0!important}.content{padding:0!important}.doc{box-shadow:none!important;border:0!important}}
+/* `.lbl` is also the site's form-label class — inside the sidebar it is just the item text */
+.side .lbl{color:inherit;font-size:inherit;font-weight:inherit;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side .side-support .lbl{white-space:normal}
+.side .grp .sub a.item{white-space:nowrap}
+/* `.sub` is also a global caption class — reset it inside the sidebar; long names wrap instead of truncating */
+.side .grp .sub{letter-spacing:normal;text-transform:none;font-weight:400;font-size:inherit;color:inherit;margin-top:0}
+.side .lbl{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25}
+.side .grp .sub a.item{white-space:normal;align-items:flex-start}
+.side .grp .sub a.item svg{margin-top:1px}

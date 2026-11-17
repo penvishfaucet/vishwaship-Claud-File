@@ -1,3 +1,9 @@
+import { OrderTagsEditor } from "@/components/portal/OrderTagsEditor";
+import { tagsForOrders } from "@/server/orders/extras";
+import { asc as ascTags, eq as eqTags } from "drizzle-orm";
+import { getDb as getDbTags, schema as schemaTags } from "@/server/db/client";
+import { hasFeature } from "@/server/features";
+import { CancelOrder } from "@/components/portal/CancelOrder";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, FileText, Ticket, Truck } from "lucide-react";
@@ -13,6 +19,7 @@ const fmt = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", d
 export default async function OrderDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await portalContext();
+  const tagList = await (await getDbTags()).select({ id: schemaTags.orderTags.id, name: schemaTags.orderTags.name, color: schemaTags.orderTags.color }).from(schemaTags.orderTags).where(eqTags(schemaTags.orderTags.orgId, ctx.org.id)).orderBy(ascTags(schemaTags.orderTags.name));
   const d = await getOrderDetail(ctx.org.id, id); // tenant-scoped: other orgs' ids 404
   if (!d) notFound();
   const { order, pkgs, shipment, events, warehouse, quote } = d;
@@ -37,14 +44,16 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           {shipment?.provider === "demo" && <span className="demo-badge">DEMO</span>}
         </div>
         <div className="actions">
-          {shipment && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label?format=thermal_4x6`}><Download size={16} /> Label</a>}
+          {shipment && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label`}><Download size={16} /> Label</a>}
           {shipment && <a className="btn btn-outline" href={`/api/portal/shipments/${shipment.id}/invoice`}><FileText size={16} /> Invoice</a>}
           {shipment && shipment.pickupStatus === "not_scheduled" && <Link className="btn btn-outline" href={`/portal/orders/${order.id}/?pickup=1`}><Truck size={16} /> Schedule Pickup</Link>}
+          {(!shipment ? ["draft", "ready", "cod_hold", "booking_failed"].includes(order.status) : shipment.bookingStatus === "confirmed" && ["booked", "pickup_pending"].includes(shipment.status)) && <CancelOrder orderId={order.id} booked={!!shipment} />}
           <Link className="btn btn-outline" href={`/portal/support/new/?awb=${shipment?.awb ?? ""}&order=${order.orderNumber}`}><Ticket size={16} /> Raise Ticket</Link>
         </div>
       </div>
 
-      {!shipment && ["ready", "booking_failed", "cod_hold"].includes(order.status) && <BookExisting orderId={order.id} held={order.status === "cod_hold"} />}
+      {!shipment && ["ready", "booking_failed", "cod_hold"].includes(order.status) && <BookExisting orderId={order.id} held={order.status === "cod_hold"} autoAssign={await hasFeature(ctx.org.id, "auto_assign")} />}
+      <div className="mb12"><span className="small b" style={{ marginRight: 8 }}>Tags</span><OrderTagsEditor orderId={order.id} all={tagList} initial={(await tagsForOrders([order.id])).get(order.id)?.map((t) => t.id) ?? []} /></div>
       {order.source !== "manual" && <p className="tiny muted mb8">Source: {order.source}{order.externalOrderId ? ` · store order ${order.externalOrderId}` : ""}</p>}
       <div className="row wrap mb16" style={{ gap: 8 }}>
         <span className="pill2">Order: {order.status.replace(/_/g, " ")}</span>

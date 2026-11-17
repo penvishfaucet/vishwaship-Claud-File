@@ -13,7 +13,7 @@ export async function statusCounts(orgId: string) {
   return STATUS_GROUPS.map((g) => ({ ...g, count: g.statuses.reduce((s, st) => s + (by[st] ?? 0), 0) }));
 }
 
-export async function listOrders(orgId: string, opts: { q?: string; group?: string; payment?: string; mode?: string; page?: number; pageSize?: number }) {
+export async function listOrders(orgId: string, opts: { q?: string; group?: string; payment?: string; mode?: string; tag?: string; page?: number; pageSize?: number }) {
   const db = await getDb();
   const pageSize = opts.pageSize ?? 20;
   const page = Math.max(1, opts.page ?? 1);
@@ -22,6 +22,7 @@ export async function listOrders(orgId: string, opts: { q?: string; group?: stri
   if (grp) conds.push(inArray(schema.shipments.status, grp.statuses));
   if (opts.payment === "cod" || opts.payment === "prepaid") conds.push(eq(schema.orders.paymentType, opts.payment));
   if (opts.mode === "B2B" || opts.mode === "B2C") conds.push(eq(schema.orders.mode, opts.mode));
+  if (opts.tag) conds.push(sql`exists (select 1 from ${schema.orderTagLinks} l join ${schema.orderTags} t on t.id = l.tag_id where l.order_id = ${schema.orders.id} and t.id = ${opts.tag} and t.org_id = ${orgId})`);
   if (opts.q) {
     const q = `%${opts.q.trim().replace(/[%_]/g, "")}%`;
     conds.push(or(ilike(schema.orders.orderNumber, q), ilike(schema.shipments.awb, q), ilike(schema.shipments.lrNumber, q),
@@ -36,6 +37,9 @@ export async function listOrders(orgId: string, opts: { q?: string; group?: stri
     carrierName: schema.shipments.carrierName, status: schema.shipments.status, chargeable: schema.shipments.chargeableWeightGrams,
     sell: schema.shipments.sellPaise, provider: schema.shipments.provider,
     boxes: sql<number>`(select coalesce(sum(${schema.packages.count}),0) from ${schema.packages} where ${schema.packages.orderId} = ${schema.orders.id})`,
+    enteredGrams: sql<number>`(select coalesce(sum(${schema.packages.count} * ${schema.packages.actualWeightGrams}),0) from ${schema.packages} where ${schema.packages.orderId} = ${schema.orders.id})`,
+    dims: sql<string | null>`(select string_agg(round(${schema.packages.lengthMm}/10.0,1)::text || '×' || round(${schema.packages.breadthMm}/10.0,1)::text || '×' || round(${schema.packages.heightMm}/10.0,1)::text, ', ') from ${schema.packages} where ${schema.packages.orderId} = ${schema.orders.id})`,
+    carrierGrams: schema.shipments.carrierWeightGrams,
   }).from(schema.orders).leftJoin(schema.shipments, eq(schema.shipments.orderId, schema.orders.id))
     .where(where).orderBy(desc(schema.orders.createdAt)).limit(pageSize).offset((page - 1) * pageSize);
   const [{ total }] = await db.select({ total: count() }).from(schema.orders).leftJoin(schema.shipments, eq(schema.shipments.orderId, schema.orders.id)).where(where);

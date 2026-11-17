@@ -12,6 +12,10 @@ export const MODULES = [
   { key: "store_channels", label: "Store channels (Shopify / WooCommerce)", default: true, needsPlan: false },
   { key: "api_integration", label: "API integration", default: true, needsPlan: false },
   { key: "whatsapp_notifications", label: "WhatsApp notifications", default: false, needsPlan: true },
+  { key: "early_cod", label: "Early COD remittance", default: true, needsPlan: false },
+  { key: "auto_assign", label: "Courier auto-assign rules", default: true, needsPlan: false },
+  { key: "oms", label: "OMS connections", default: true, needsPlan: false },
+  { key: "edd_widget", label: "EDD widget", default: true, needsPlan: false },
 ] as const;
 
 export type ModuleKey = (typeof MODULES)[number]["key"];

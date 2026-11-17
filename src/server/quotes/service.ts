@@ -37,7 +37,9 @@ export interface QuoteOffer extends PricedQuote {
  * Get priced offers from every enabled shipping account. `orgId` MUST come from the authenticated
  * session/API key (null for the public calculator). One markup is applied per offer.
  */
-export async function getQuotes(req: QuoteRequest, orgId: string | null): Promise<{ offers: QuoteOffer[]; errors: string[] }> {
+export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean } = {}): Promise<{ offers: QuoteOffer[]; errors: string[] }> {
+  const persist = opts.persist ?? true;
+  const allowed = await (await import("@/server/couriers")).courierFilter(orgId);
   const db = await getDb();
   const accounts = await db.select().from(schema.providerAccounts)
     .where(and(eq(schema.providerAccounts.category, "shipping"), eq(schema.providerAccounts.status, "enabled")));
@@ -62,11 +64,12 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null): Promis
     const markup = resolveMarkup(settings, orgId, now);
 
     for (const q of res.value) {
+      if (!allowed(q.carrierCode)) continue; // switched off by Admin or by this customer (Manage Courier)
       const priced = priceQuote(q, markup, { gstBps: gst.value, componentRules: rules.value, componentRulesVersion: rules.version });
       const quoteId = newId("qt");
       const expiresAt = new Date(now.getTime() + QUOTE_TTL_MS);
       offers.push({ ...priced, quoteId, expiresAt: expiresAt.toISOString(), isDemo: acct.adapter === "demo" });
-      await db.insert(schema.quotes).values({
+      if (persist) await db.insert(schema.quotes).values({
         id: quoteId, orgId, providerAccountId: acct.id, provider: acct.adapter, carrierCode: q.carrierCode,
         serviceName: q.serviceName, mode: q.mode, request: req, priced: { ...priced, providerQuoteRef: q.providerQuoteRef },
         totalPaise: priced.total, expiresAt,

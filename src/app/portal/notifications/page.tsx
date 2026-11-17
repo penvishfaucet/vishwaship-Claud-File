@@ -35,10 +35,10 @@ export default async function NotificationsPage({ searchParams }: { searchParams
   return (
     <>
       <div className="page-h">
-        <h1>Shipping Notifications</h1>
+        <div><h1>Shipping Notification</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Messages sent to your buyer’s delivery number for each shipment event.</p></div>
         <div className="actions">
           <span className="pill2">Credit balance: <b>{ctx.credits.toLocaleString("en-IN")}</b></span>
-          <Link className="btn btn-orange" href="/portal/billing/?tab=credits">Buy Credits</Link>
+          <Link className="btn btn-orange" href="/portal/billing/notification-credits/">Buy Credits</Link>
         </div>
       </div>
       <nav className="tabs" aria-label="Channels">
