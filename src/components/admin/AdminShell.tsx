@@ -18,7 +18,7 @@ export function AdminShell({ user, allowed, logout, children }: { user: { name: 
   return (
     <div className="shell admin-shell">
       <aside className={drawer ? "side open" : "side"} aria-label="Admin navigation">
-        <SidebarBrand href="/admin/" label="ADMIN WORKSPACE" onClick={() => setDrawer(false)} />
+        <SidebarBrand href="/admin/" label="ADMIN PORTAL" onClick={() => setDrawer(false)} />
         <nav>
           {ADMIN_NAV.map((g) => {
             const items = g.items.filter((i) => allowed.includes(i.perm));
