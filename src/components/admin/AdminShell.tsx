@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Menu, Search, X } from "lucide-react";
 import { ADMIN_NAV } from "./nav";
-import { SidebarBrand, TopbarBrand } from "@/components/BrandLogo";
+import { SidebarBrand } from "@/components/BrandLogo";
 
 export function AdminShell({ user, allowed, logout, children }: { user: { name: string; role: string }; allowed: string[]; logout: () => Promise<void>; children: React.ReactNode }) {
   const path = usePathname();
@@ -36,7 +36,6 @@ export function AdminShell({ user, allowed, logout, children }: { user: { name: 
       <div className="main">
         <header className="top">
           <button className="icon-btn show-sm-flex" aria-label={drawer ? "Close menu" : "Open menu"} onClick={() => setDrawer((d) => !d)}>{drawer ? <X size={20} /> : <Menu size={20} />}</button>
-          <TopbarBrand href="/admin/" label="Admin dashboard" />
           <form className="search" role="search" style={{ display: "flex" }} onSubmit={(e) => { e.preventDefault(); const q = new FormData(e.currentTarget).get("q"); if (q) router.push(`/admin/shipments/?q=${encodeURIComponent(String(q))}`); }}>
             <Search size={16} aria-hidden /><label htmlFor="aq" className="sr-only">Search</label><input id="aq" name="q" placeholder="Customer, order, AWB / LR" />
           </form>

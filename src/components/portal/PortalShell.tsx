@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, CornerUpLeft, Home, LayoutGrid, Menu, Package, Search, ShieldCheck, Ticket, Wallet, X } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { CUSTOMER_NAV } from "./nav";
-import { SidebarBrand, TopbarBrand } from "@/components/BrandLogo";
+import { SidebarBrand } from "@/components/BrandLogo";
 
 interface Props {
   user: { name: string; orgName: string; kycStatus: string };
@@ -60,7 +60,7 @@ export function PortalShell({ user, walletPaise, unreadAlerts, logout, children 
       <div className="main">
         <header className="top" ref={ref}>
           <button className="icon-btn show-sm-flex" aria-label={drawer ? "Close menu" : "Open menu"} onClick={() => setDrawer((d) => !d)}>{drawer ? <X size={20} /> : <Menu size={20} />}</button>
-          <TopbarBrand href="/portal/" label="Dashboard" />
+          <Link href="/portal/" className="show-sm" aria-label="Dashboard"><img src="/brand/logo-full.png" alt="vishwaship.com" style={{ height: 24 }} /></Link>
           <form className="search" role="search" onSubmit={(e) => { e.preventDefault(); const q = new FormData(e.currentTarget).get("q"); if (q) router.push(`/portal/orders/?q=${encodeURIComponent(String(q))}`); }}>
             <Search size={16} aria-hidden /><label htmlFor="gq" className="sr-only">Search orders</label>
             <input id="gq" name="q" placeholder="Order ID, AWB / LR or phone" />

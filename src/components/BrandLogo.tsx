@@ -21,12 +21,3 @@ export function SidebarBrand({ href, label, onClick }: { href: string; label: st
   );
 }
 
-/** Compact logo for the mobile top bar: full logo, icon-only below 380 px. */
-export function TopbarBrand({ href, label }: { href: string; label: string }) {
-  return (
-    <Link href={href} className="show-sm topbar-brand" aria-label={label}>
-      <img className="tb-full" src="/brand/logo-full.png" alt="vishwaship.com" width={640} height={124} />
-      <img className="tb-icon" src="/brand/logo-icon.png" alt="vishwaship.com" width={157} height={160} />
-    </Link>
-  );
-}
