@@ -114,7 +114,7 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "booking.reconcile", payload: { orderId: order.id, quoteId: quote.id, reservationId, shipmentId }, dedupeKey: `reconcile:${order.id}:${quote.id}` }).onConflictDoNothing();
   }
   await db.update(schema.orders).set({ status: "booked" }).where(eq(schema.orders.id, order.id));
-  if (order.externalStoreId && b.awb) {
+  if (order.externalStoreId && b.awb && acct.adapter !== "demo") {
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "store.push_tracking", payload: { orderId: order.id }, dedupeKey: `push:${order.id}` }).onConflictDoNothing();
   }
   await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `booked:${shipmentId}`, status: "booked", rawStatus: "BOOKED", occurredAt: new Date(), source: "manual" });

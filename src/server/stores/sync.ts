@@ -64,6 +64,8 @@ export async function pushTrackingForOrder(orderId: string) {
     .innerJoin(schema.storeConnections, eq(schema.storeConnections.id, schema.orders.externalStoreId))
     .where(eq(schema.orders.id, orderId));
   if (!row || !row.c.pushTracking || !row.s.awb || !row.o.externalOrderId) return "nothing to push";
+  // Never send demo/sandbox AWBs to a real store: it would mark the order fulfilled and notify the buyer.
+  if (row.s.provider === "demo" || row.s.awb.startsWith("DEMO")) return "skipped: demo shipment";
   const creds = decryptJson<StoreCreds>(row.c.credentialsEnc);
   const t = { number: row.s.awb, company: row.s.carrierName, url: `${process.env.APP_URL ?? "https://vishwaship.com"}/track/?awb=${encodeURIComponent(row.s.awb)}` };
   return row.c.platform === "shopify" ? shopify.pushTracking(row.c.storeUrl, creds, row.o.externalOrderId, t) : woo.pushTracking(row.c.storeUrl, creds, row.o.externalOrderId, t);

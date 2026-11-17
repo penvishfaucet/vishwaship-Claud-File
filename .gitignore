@@ -10,3 +10,5 @@ _trash_*/
 desktop.ini
 next-env.d.ts
 *.tsbuildinfo
+.env.*
+!.env.example

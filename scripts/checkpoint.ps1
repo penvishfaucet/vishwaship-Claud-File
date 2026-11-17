@@ -9,5 +9,6 @@ if (-not (Test-Path .git)) {
 & $git add -A
 & $git commit -q -m $Message
 & $git log --oneline -n 3
+if (& $git remote) { & $git push origin main; if ($LASTEXITCODE -ne 0) { Write-Output "GitHub push failed (sign in and run: git push origin main)" } }
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup-to-drive.ps1
 Write-Output "CHECKPOINT-DONE"
