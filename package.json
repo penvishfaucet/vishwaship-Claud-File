@@ -1,0 +1,42 @@
+{
+  "name": "vishwaship-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vishwaship courier aggregator: public site, customer portal, admin portal, provider adapters.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.mts",
+    "db:seed": "tsx scripts/seed.mts",
+    "owner:bootstrap": "tsx scripts/bootstrap-owner.mts",
+    "worker": "tsx src/server/jobs/worker.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.2.17",
+    "drizzle-orm": "0.38.4",
+    "lucide-react": "0.469.0",
+    "next": "^15.5.7",
+    "pg": "8.13.1",
+    "react": "^19.1.2",
+    "react-dom": "^19.1.2",
+    "server-only": "0.0.1",
+    "undici": "6.21.1",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.7",
+    "@types/pg": "8.11.10",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "drizzle-kit": "0.30.2",
+    "pdfjs-dist": "4.10.38",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3",
+    "vitest": "2.1.8"
+  }
+}
