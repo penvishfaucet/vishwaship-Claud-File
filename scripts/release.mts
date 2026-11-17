@@ -5,8 +5,9 @@
 import { connect } from "./db.mts";
 
 if (process.env.DATABASE_URL) {
-  const { runRelease } = await import("../src/server/db/release.ts");
-  await runRelease();
+  // release.ts is compiled as CommonJS here (package has no "type": "module"), so its exports sit under "default".
+  const mod = (await import("../src/server/db/release.ts")) as { runRelease?: () => Promise<void>; default?: { runRelease: () => Promise<void> } };
+  await (mod.runRelease ?? mod.default!.runRelease)();
 } else {
   const c = await connect();
   await c.migrate();

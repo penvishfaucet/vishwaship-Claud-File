@@ -7,6 +7,10 @@
  * Migrations are embedded in the build (migrations.generated.ts, made by scripts/embed-migrations.mjs) because
  * such hosts ship only the build output, not the /migrations folder. Same bookkeeping table as drizzle-kit.
  * Safe to repeat: migrations are idempotent and a PostgreSQL advisory lock stops two instances racing.
+ * Owner recovery (forgotten password / lost authenticator): set OWNER_RESET_CODE to any new text (8+ chars) in the
+ * host's environment variables and redeploy. On the next start the OWNER_EMAIL owner's password and two-step
+ * verification are cleared, their sessions are signed out and a fresh setup link is printed. Each code works once;
+ * remove the variable afterwards.
  * No alias ("@/…") or "server-only" imports so tsx scripts can import it too.
  */
 import { createHash, randomBytes } from "node:crypto";
@@ -22,7 +26,8 @@ const LOCK_ID = 7_310_442_901; // arbitrary, constant advisory-lock key for "vis
 
 export async function runRelease(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("runRelease needs DATABASE_URL");
-  const { Pool } = await import("pg");
+  const pgMod = (await import("pg")) as typeof import("pg") & { default?: typeof import("pg") };
+  const Pool = pgMod.Pool ?? pgMod.default!.Pool; // tsx/CommonJS puts pg's exports under "default"
   const pool = new Pool({ connectionString: url, max: 1 });
   const client = await pool.connect();
   try {
@@ -32,6 +37,7 @@ export async function runRelease(url = process.env.DATABASE_URL) {
     const internal = db as unknown as { dialect: { migrate: (m: unknown, session: unknown, cfg: object) => Promise<void> }; session: unknown };
     await internal.dialect.migrate(EMBEDDED_MIGRATIONS, internal.session, {});
     console.log(`[release] migrations applied (${EMBEDDED_MIGRATIONS.length} known)`);
+    await resetOwnerIfRequested(db);
     await bootstrapOwner(db);
   } finally {
     await client.query("select pg_advisory_unlock($1)", [LOCK_ID]).catch(() => {});
@@ -40,7 +46,34 @@ export async function runRelease(url = process.env.DATABASE_URL) {
   }
 }
 
-type Db = Pick<ReturnType<typeof drizzle<typeof schema>>, "select" | "insert">;
+type Db = Pick<ReturnType<typeof drizzle<typeof schema>>, "select" | "insert" | "update" | "delete">;
+
+async function resetOwnerIfRequested(db: Db) {
+  const code = process.env.OWNER_RESET_CODE?.trim();
+  const email = process.env.OWNER_EMAIL?.trim().toLowerCase();
+  if (!code || !email) return;
+  if (code.length < 8) {
+    console.log("[release] OWNER_RESET_CODE ignored: use at least 8 characters");
+    return;
+  }
+  const marker = createHash("sha256").update(`owner-reset:${code}`).digest("hex");
+  const [used] = await db.select({ id: schema.auditLog.id }).from(schema.auditLog)
+    .where(and(eq(schema.auditLog.action, "owner.reset"), eq(schema.auditLog.targetType, "reset_code"), eq(schema.auditLog.targetId, marker)));
+  if (used) {
+    console.log("[release] OWNER_RESET_CODE was already used — remove it from the environment variables");
+    return;
+  }
+  const [owner] = await db.select().from(schema.users)
+    .where(and(eq(schema.users.kind, "staff"), eq(schema.users.staffRole, "owner"), eq(schema.users.email, email)));
+  if (!owner) {
+    console.log(`[release] OWNER_RESET_CODE: no owner account with email ${email}`);
+    return;
+  }
+  await db.update(schema.users).set({ passwordHash: null, mustResetPassword: true, mfaEnabled: false, mfaSecretEnc: null, active: true }).where(eq(schema.users.id, owner.id));
+  await db.delete(schema.sessions).where(eq(schema.sessions.userId, owner.id));
+  await db.insert(schema.auditLog).values({ id: `aud_${randomBytes(9).toString("hex")}`, actorKind: "system", action: "owner.reset", targetType: "reset_code", targetId: marker, details: { userId: owner.id } });
+  console.log(`[release] owner ${email} reset: password and two-step verification cleared — set them again with the link below`);
+}
 
 async function bootstrapOwner(db: Db) {
   const email = process.env.OWNER_EMAIL?.trim().toLowerCase();
