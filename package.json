@@ -28,6 +28,7 @@
     "@types/pg": "8.11.10",
     "@types/react": "19.0.7",
     "@types/react-dom": "19.0.3",
+    "aws4fetch": "1.0.20",
     "drizzle-orm": "0.38.4",
     "exceljs": "^4.4.0",
     "lucide-react": "0.469.0",

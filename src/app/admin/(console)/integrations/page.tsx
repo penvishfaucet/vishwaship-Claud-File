@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
+import { StorageTest } from "@/components/admin/StorageTest";
+import { storageDriver } from "@/server/storage";
 import { getDb, schema } from "@/server/db/client";
 import { PROVIDER_CATALOG, getAdapter, providerContext } from "@/server/providers/registry";
 import { encryptJson, maskSecret } from "@/server/security/crypto";
@@ -70,6 +72,7 @@ export default async function Integrations({ searchParams }: { searchParams: Pro
   return (
     <>
       <div className="page-h"><h1>Integrations</h1></div>
+      <StorageTest driver={storageDriver()} bucket={process.env.S3_BUCKET ?? null} canTest={write} />
       <nav className="tabs">{CATS.map(([k, l]) => <Link key={k} href={`/admin/integrations/?cat=${k}`} className={cat === k ? "on" : ""}>{l}</Link>)}</nav>
       <div className="card p0 tbl-wrap mb16"><table className="tbl"><thead><tr><th>Account</th><th>Adapter</th><th>Mode</th><th>Status</th><th>Last test</th><th /></tr></thead>
         <tbody>{accounts.filter((a) => a.category === cat).map((a) => <tr key={a.id}><td className="b">{a.label}</td><td className="small">{a.adapter}{!getAdapter(a.adapter) && ["shipping"].includes(a.category) ? <span className="chip c-pending" style={{ marginLeft: 6 }}>Adapter required</span> : null}</td><td>{a.mode}</td><td><span className={`chip ${a.status === "enabled" ? "c-active" : "c-draft"}`}>{a.status}</span></td><td className="small">{a.lastTestAt ? `${a.lastTestOk ? "✓" : "✗"} ${a.lastTestAt.toLocaleString("en-IN")}` : "Never"}</td><td><Link className="btn btn-sm btn-outline" href={`/admin/integrations/?cat=${cat}&id=${a.id}`}>Manage</Link></td></tr>)}</tbody></table></div>

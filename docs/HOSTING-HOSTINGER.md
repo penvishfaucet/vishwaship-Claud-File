@@ -5,7 +5,8 @@ Live: https://vishwaship.in · Repo: `penvishfaucet/vishwaship-Claud-File` (bran
 ## Settings
 - Framework preset **Next.js** (not Vite) · Node 20.x · root `./` · build `npm run build` · output `.next`.
 - Environment variables (only these): `NODE_ENV=production`, `APP_URL=https://vishwaship.in`, `DATABASE_URL` (Neon pooled string, without `&channel_binding=require`), `APP_ENCRYPTION_KEY` (from local `.env.production` — back it up; losing it makes stored credentials/KYC unreadable), `OWNER_EMAIL`, `OWNER_NAME`, `SHOPIFY_API_VERSION=2025-10`, `NEXT_TELEMETRY_DISABLED=1`.
-- Do not set `WORKER_MODE` (jobs run inside the web app), `REDIS_URL`, `S3_*`, `PGUSER`/`PGPASSWORD`, or any `ALLOW_DEMO_*`.
+- File storage (KYC and other uploads): `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, optional `S3_REGION` (`auto` for Cloudflare R2). Check with Admin → Integrations → **Test file storage**.
+- Do not set `WORKER_MODE` (jobs run inside the web app), `REDIS_URL`, `PGUSER`/`PGPASSWORD`, or any `ALLOW_DEMO_*`.
 
 ## How it starts
 Hostinger installs without devDependencies, ships only `.next` + `node_modules`, and does not run `prestart`. So:
@@ -18,5 +19,5 @@ Hostinger installs without devDependencies, ships only `.next` + `node_modules`,
 - Forgot password / lost phone: add `OWNER_RESET_CODE` = any new text (8+ chars) → **Save and redeploy** → new setup link appears in Runtime logs. Each code works once; remove the variable afterwards.
 
 ## Known limits
-- Uploaded documents (KYC etc.) are stored on the server disk under `.data/private`, inside the per-deploy folder (`hbuilds/versions/<id>/`), so every redeploy loses them. Move to S3-compatible storage before relying on uploads.
+- Without the `S3_*` variables, uploads go to the server disk inside the per-deploy folder and are lost on every redeploy.
 - Emails (password reset for customers) need an email provider in Admin → Integrations.
