@@ -6,6 +6,7 @@ import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { hasFeature } from "@/server/features";
 import { apiError, parseJson } from "@/server/http";
+import { enqueue } from "@/server/jobs/runner";
 import { WarehouseInput, getOwnWarehouse, pickupOtpRequired, setDefaultWarehouse } from "@/server/warehouses";
 
 /** Edit. Changing the pickup mobile resets OTP verification. Past orders keep their own address snapshot. */
@@ -26,6 +27,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   // Courier-side registrations must be re-synced after an address change.
   await db.update(schema.warehouseProviderSync).set({ status: "pending", updatedAt: new Date() }).where(eq(schema.warehouseProviderSync.warehouseId, w.id));
   await audit({ actorUserId: s.userId, actorKind: s.impersonatorId ? "staff" : "customer", orgId: s.orgId, action: "warehouse.update", targetType: "warehouse", targetId: w.id, details: { mobileChanged } });
+  await enqueue("warehouse.sync", { warehouseId: w.id }, { dedupeKey: `warehouse.sync:${w.id}:${Date.now()}` }); // re-register the edited address
   return NextResponse.json({ ok: true, mobileChanged, otpRequired: await pickupOtpRequired() });
 }
 

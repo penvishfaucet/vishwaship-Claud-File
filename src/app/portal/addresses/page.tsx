@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { asc, desc, eq } from "drizzle-orm";
+import { partnerCodeFor } from "@/server/carriers/specs";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import { Download, MapPin } from "lucide-react";
 import { AddressForm } from "@/components/portal/AddressForm";
 import { WarehouseTable } from "@/components/portal/WarehouseTable";
@@ -20,7 +21,9 @@ export default async function WarehousesPage({ searchParams }: { searchParams: P
   if (sp.code) rows = rows.filter((w) => (w.code ?? w.id).toLowerCase().includes(sp.code!.toLowerCase()));
   if (sp.status === "active") rows = rows.filter((w) => w.active);
   if (sp.status === "inactive") rows = rows.filter((w) => !w.active);
-  const syncs = await db.select().from(schema.warehouseProviderSync);
+  const syncs = rows.length ? await db.select({ warehouseId: schema.warehouseProviderSync.warehouseId, status: schema.warehouseProviderSync.status, adapter: schema.providerAccounts.adapter, cfg: schema.providerAccounts.configPublic, label: schema.providerAccounts.label })
+    .from(schema.warehouseProviderSync).innerJoin(schema.providerAccounts, eq(schema.providerAccounts.id, schema.warehouseProviderSync.providerAccountId))
+    .where(inArray(schema.warehouseProviderSync.warehouseId, rows.map((w) => w.id))) : [];
   const qs = new URLSearchParams(Object.entries(sp).filter(([k, v]) => v && k !== "add") as [string, string][]).toString();
   return (
     <>
@@ -49,7 +52,7 @@ export default async function WarehousesPage({ searchParams }: { searchParams: P
             id: w.id, code: w.code ?? w.id.slice(-6), label: w.label, contactName: w.contactName, email: w.email, mobile: w.mobile,
             line1: w.line1, line2: w.line2, city: w.city, state: w.state, pincode: w.pincode, active: w.active, isDefault: w.isDefault,
             verified: !!w.mobileVerifiedAt, createdBy: w.createdBy, createdAt: w.createdAt.toISOString(),
-            courierSync: syncs.filter((x) => x.warehouseId === w.id).map((x) => `${x.providerAccountId.replace("pa_", "")}: ${x.status}${x.lastError ? ` (${x.lastError})` : ""}`),
+            courierSync: syncs.filter((x) => x.warehouseId === w.id).map((x) => `${partnerCodeFor(x.adapter, x.cfg as Record<string, unknown>) ?? x.label} ${x.status === "registered" ? "✓ ready for pickup" : x.status === "failed" ? "✗ retrying" : "… syncing"}`),
           }))} />}
     </>
   );

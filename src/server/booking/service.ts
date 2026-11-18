@@ -10,6 +10,7 @@ import { adapterFor, providerContext } from "@/server/providers/registry";
 import type { BookRequest, QuoteRequest } from "@/server/providers/types";
 import { getQuotes, quotesByIds, sameService } from "@/server/quotes/service";
 import { canTakeBookings, noteCapability } from "@/server/carriers/verification";
+import { registerWarehouseAt } from "@/server/carriers/automation";
 
 /** Comparable view of a quote request (field order and optional defaults normalised). */
 function normReq(r: QuoteRequest) {
@@ -92,15 +93,9 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   // Carrier pickup location (registered once per warehouse + carrier account).
   let providerWarehouseRef: string | undefined;
   if (adapter.registerWarehouse) {
-    const [sync] = await db.select().from(schema.warehouseProviderSync).where(and(eq(schema.warehouseProviderSync.warehouseId, wh.id), eq(schema.warehouseProviderSync.providerAccountId, acct.id)));
-    if (sync?.status === "registered" && sync.providerWarehouseRef) providerWarehouseRef = sync.providerWarehouseRef;
-    else {
-      const reg = await adapter.registerWarehouse(await providerContext(acct), { code: wh.code ?? wh.id, label: wh.label, contactName: wh.contactName, mobile: wh.mobile, email: wh.email, line1: wh.line1, line2: wh.line2, pincode: wh.pincode, city: wh.city, state: wh.state });
-      const row = { status: reg.ok ? "registered" : "failed", providerWarehouseRef: reg.ok ? reg.value.ref : null, lastError: reg.ok ? null : reg.error.message, updatedAt: new Date() };
-      await db.insert(schema.warehouseProviderSync).values({ id: newId("wps"), warehouseId: wh.id, providerAccountId: acct.id, ...row }).onConflictDoUpdate({ target: [schema.warehouseProviderSync.warehouseId, schema.warehouseProviderSync.providerAccountId], set: row });
-      if (!reg.ok) return { ok: false, code: "provider_failed", message: `Could not register this pickup address with ${acct.label}: ${reg.error.message}` };
-      providerWarehouseRef = reg.value.ref;
-    }
+    const reg = await registerWarehouseAt(wh, acct);
+    if (!reg.ok) return { ok: false, code: "provider_failed", message: `Could not register this pickup address with ${acct.label}: ${reg.error.message}` };
+    providerWarehouseRef = reg.value.ref ?? undefined;
   }
 
   // Claim the order (prevents double-submit races).
@@ -175,6 +170,10 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   }
   await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `booked:${shipmentId}`, status: "booked", rawStatus: "BOOKED", occurredAt: new Date(), source: "manual" });
   if (b.pickupRef || b.pickupScheduled) await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `pickup_req:${shipmentId}`, status: "pickup_pending", rawStatus: b.pickupRef ? `Pickup scheduled (ref ${b.pickupRef})` : "Pickup scheduled automatically by the courier", occurredAt: new Date(), source: "manual" });
+  // Couriers that need a pickup request (PR) get one automatically right after booking.
+  if (!b.pickupRef && !b.pickupScheduled && adapter.implemented.includes("pickup") && acct.adapter !== "demo") {
+    await db.insert(schema.jobs).values({ id: newId("job"), queue: "pickup.auto", payload: { shipmentId }, dedupeKey: `pickup.auto:${shipmentId}` }).onConflictDoNothing();
+  }
   await noteCapability(acct.id, "book", true, { evidence: `shipment ${shipmentId}${b.awb ? ` · AWB ${b.awb}` : ""}` });
   if (b.pickupRef) await noteCapability(acct.id, "pickup", true, { evidence: `pickup ${b.pickupRef}` });
   await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.created", targetType: "shipment", targetId: shipmentId, details: { quoteId: quote.id, totalPaise: quote.totalPaise, senderPays, receiverPays, paymentMode: order.paymentType, provider: acct.adapter, providerRef: b.providerOrderRef } });

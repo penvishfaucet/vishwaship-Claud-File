@@ -14,6 +14,7 @@ import type { QuoteRequest } from "@/server/providers/types";
 import { shipmozoRaw } from "@/server/providers/shipmozo";
 import { refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
+import { enqueue } from "@/server/jobs/runner";
 
 const id = z.string().min(3).max(64);
 const env = z.enum(["test", "live"]);
@@ -43,6 +44,14 @@ const Ops = z.discriminatedUnion("op", [
 ]);
 
 const PERM: Record<string, Permission> = { refresh_shipment: "shipments.read", retry_job: "integrations.write" };
+
+/** A courier went live: register every active customer pickup address with it in the background. */
+async function syncAllWarehouses() {
+  const db = await getDb();
+  const whs = await db.select({ id: schema.warehouses.id }).from(schema.warehouses).where(eq(schema.warehouses.active, true)).limit(5000);
+  const stamp = Date.now();
+  for (const w of whs) await enqueue("warehouse.sync", { warehouseId: w.id }, { dedupeKey: `warehouse.sync:${w.id}:${stamp}` });
+}
 
 /** Admin → Settings → Courier Integrations. Every op is staff-only, audited, and never echoes a secret. */
 export async function POST(req: Request) {
@@ -255,6 +264,7 @@ export async function POST(req: Request) {
         if (!isVerified(a, "authenticate")) return apiError(409, "conflict", "Run Test authentication first — the saved keys must work before rates can be shown");
         await db.update(schema.providerAccounts).set({ status: "enabled", configPublic: { ...cfg, activatedEarly: { at: new Date().toISOString(), by: s.userId } } }).where(eq(schema.providerAccounts.id, acct.id));
         await log("status_activate_now", acct.id, { pending: missingRequired(a) });
+        await syncAllWarehouses();
         return ok("Active — customers now see live rates and can book. Rates, booking, label and tracking keep verifying from real bookings.");
       }
       const next = { activate: "enabled", resume: "enabled", pause: "paused", disable: "disabled", archive: "archived" }[b.action];
@@ -268,6 +278,7 @@ export async function POST(req: Request) {
       if (b.action === "archive" && acct.status === "enabled") return apiError(409, "conflict", "Pause the integration before archiving");
       await db.update(schema.providerAccounts).set({ status: next }).where(eq(schema.providerAccounts.id, acct.id));
       await log(`status_${b.action}`, acct.id);
+      if (next === "enabled") await syncAllWarehouses();
       const msg = { activate: "Active — customers now get quotes and bookings from this service", resume: "Resumed — taking new quotes and bookings again", pause: "Paused — no new quotes or bookings; existing shipments keep tracking", disable: "Moved back to setup — no quotes or bookings (pilot customers excepted)", archive: "Archived" }[b.action];
       return ok(msg);
     }

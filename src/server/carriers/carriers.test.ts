@@ -271,3 +271,34 @@ describe("verification states", () => {
     expect(setupState(a)).toBe("documentation_required");
   });
 });
+
+describe("automatic warehouse sync and pickup request", () => {
+  it("next pickup slot: today before 2 pm IST, else tomorrow; Sunday moves to Monday", async () => {
+    const { nextPickupDate } = await import("./automation");
+    expect(nextPickupDate(new Date("2026-11-18T04:30:00Z"))).toBe("2026-11-18"); // 10:00 IST Wed
+    expect(nextPickupDate(new Date("2026-11-18T09:30:00Z"))).toBe("2026-11-19"); // 15:00 IST Wed
+    expect(nextPickupDate(new Date("2026-11-21T09:30:00Z"))).toBe("2026-11-23"); // 15:00 IST Sat → Mon
+  });
+  it("a new pickup address is registered with every courier the customer can book", async () => {
+    const { syncWarehouseEverywhere } = await import("./automation");
+    await db.insert(schema.warehouses).values({ id: "wh_new", orgId: ORG, label: "Second", contactName: "Ravi", mobile: "9876543210", line1: "Plot 2", pincode: "122002", city: "Gurgaon", state: "Haryana", code: "W1002" });
+    const r = await syncWarehouseEverywhere("wh_new");
+    expect(r.failed).toEqual([]);
+    const rows = await db.select().from(schema.warehouseProviderSync).where(eq(schema.warehouseProviderSync.warehouseId, "wh_new"));
+    expect(rows.map((x) => x.providerAccountId).sort()).toEqual([SM_B2B, SM_B2C].sort()); // active B2C + B2B pilot for this customer
+    expect(rows.every((x) => x.status === "registered" && x.providerWarehouseRef === "9001")).toBe(true);
+    expect(calls.filter((c) => c.url.endsWith("/create-warehouse")).length).toBe(2);
+  });
+  it("a booking whose courier needs a pickup request queues one automatically", async () => {
+    const saved = (await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, SM_B2C)))[0];
+    await db.update(schema.providerAccounts).set({ configPublic: { ...(saved.configPublic as object), skipManualPickup: true } }).where(eq(schema.providerAccounts.id, SM_B2C));
+    script = (url) => (url.endsWith("/rate-calculator") ? { result: "1", data: [{ ...RATE_ROW, pickups_automatically_scheduled: "NO" }] } : shipmozoHappy(url));
+    const quoteId = await newOrder("ord_5");
+    const r = await bookOrder({ orgId: ORG, orderId: "ord_5", quoteId, actorUserId: "usr_c" });
+    expect(r).toMatchObject({ ok: true });
+    const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_5"));
+    const [job] = await db.select().from(schema.jobs).where(eq(schema.jobs.dedupeKey, `pickup.auto:${sh.id}`));
+    expect(job?.queue).toBe("pickup.auto");
+    await db.update(schema.providerAccounts).set({ configPublic: saved.configPublic }).where(eq(schema.providerAccounts.id, SM_B2C));
+  });
+});

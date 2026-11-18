@@ -165,6 +165,28 @@ registerHandler("report.export", async (p): Promise<JobResult> => {
   return { done: true };
 });
 
+/** warehouse.sync — register a new / edited pickup address with every courier account the customer can book. */
+registerHandler("warehouse.sync", async (p, attempt): Promise<JobResult> => {
+  const { syncWarehouseEverywhere } = await import("@/server/carriers/automation");
+  const r = await syncWarehouseEverywhere(String(p.warehouseId));
+  if (r.failed.length && attempt < 5) return { retryInSec: 300 * 2 ** attempt, error: r.failed.join("; ").slice(0, 300) };
+  return { done: true };
+});
+
+/** pickup.auto — raise the courier pickup request right after booking (next slot: today before 2 pm IST, else tomorrow). */
+registerHandler("pickup.auto", async (p, attempt): Promise<JobResult> => {
+  const { nextPickupDate, requestPickup } = await import("@/server/carriers/automation");
+  const r = await requestPickup(String(p.shipmentId), nextPickupDate(), { kind: "system" });
+  if (r.ok) return { done: true };
+  if (r.retry && attempt < 8) return { retryInSec: Math.min(3600, 120 * 2 ** attempt), error: r.message };
+  if (r.retry) {
+    const db = await getDb();
+    const [sh] = await db.select({ orgId: schema.shipments.orgId, orderId: schema.shipments.orderId }).from(schema.shipments).where(eq(schema.shipments.id, String(p.shipmentId)));
+    if (sh) await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: sh.orgId, kind: "tracking", title: `Automatic pickup request failed — please schedule pickup: ${r.message}`.slice(0, 200), href: `/portal/orders/${sh.orderId}/` });
+  }
+  return { done: true };
+});
+
 /**
  * tracking.poll — refresh every live-courier shipment that is still moving, every 30 minutes (≤500 per slot keeps us
  * inside provider rate limits). Paused accounts keep syncing: pausing only stops new quotes and bookings.

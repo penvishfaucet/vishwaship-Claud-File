@@ -6,6 +6,7 @@ import { getDb, schema } from "@/server/db/client";
 import { hasFeature } from "@/server/features";
 import { apiError, parseJson } from "@/server/http";
 import { newId } from "@/server/util/ids";
+import { enqueue } from "@/server/jobs/runner";
 import { WarehouseInput, nextWarehouseCode, pickupOtpRequired } from "@/server/warehouses";
 
 export async function POST(req: Request) {
@@ -22,5 +23,7 @@ export async function POST(req: Request) {
     isDefault: existing.length === 0, code: await nextWarehouseCode(), createdBy: s.name,
   });
   await audit({ actorUserId: s.userId, actorKind: s.impersonatorId ? "staff" : "customer", orgId: s.orgId, action: "warehouse.create", targetType: "warehouse", targetId: id, details: s.impersonatorId ? { viaAdmin: s.impersonatorId } : undefined });
+  // Register the new pickup address with every courier the customer can book (Shipmozo, Delhivery, Shipora X …).
+  await enqueue("warehouse.sync", { warehouseId: id }, { dedupeKey: `warehouse.sync:${id}:0` });
   return NextResponse.json({ id, otpRequired: await pickupOtpRequired() }, { status: 201 });
 }
