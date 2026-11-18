@@ -173,7 +173,7 @@ export const DEFAULTS: SiteContent = {
     trackHeading: "Track a shipment",
     heroVideoUrl: "",
     heroPosterUrl: "/brand/hero-courier-desktop.webp",
-    heroMobileUrl: "/brand/hero-courier-mobile.webp",
+    heroMobileUrl: "/brand/hero-courier-phone.webp",
     offerLine: "COD Available • Parcels from ₹28 • Cargo from ₹8/kg",
     highlights: [{ big: "From ₹28", small: "Parcel shipping" }, { big: "COD", small: "Available" }, { big: "From ₹8/kg", small: "Cargo shipping" }],
     highlightNote: "Final rates depend on shipment details.",
