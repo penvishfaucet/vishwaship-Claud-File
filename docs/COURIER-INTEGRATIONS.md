@@ -50,7 +50,7 @@ Base URL `https://shipping-api.com/app/api/v1` (editable only to the approved ho
 | Shipmozo B2B | Public key, Private key (same or separate B2B keys — confirm with Shipmozo) | Production only |
 | Delhivery Direct B2C | API token | Sandbox + production |
 | Delhivery Direct B2B | B2B API username, password | Sandbox + production |
-| Shipora X B2C | API key, API secret / private key, token (if issued), account code + base URLs | Sandbox + production |
+| Shipora X B2C | API key (`X-Api-Key`), webhook token (your own random text) | Production (https://shiporax.com) |
 | Ekart B2C | Client ID, client secret / password, merchant code | Sandbox + production |
 | TCI Express B2B | API username, password, customer code | Sandbox + production |
 | Blue Dart B2C | Login ID, licence key, customer code, area code | Sandbox + production |
@@ -62,7 +62,7 @@ Base URL `https://shipping-api.com/app/api/v1` (editable only to the approved ho
 | **Shipmozo B2B** | No sandbox exists | Not tested | Shipmozo's B2B details for your account: `type_of_package` code, which courier_ids are B2B, B2B rate card, and the multi-carton push-order fields (per-box dimensions, invoice / e-way bill). Then rate check + pilot booking. **Not activated.** |
 | **Delhivery Direct B2C** | Adapter built earlier; not run (no token) | Not run | B2C API token (staging + production) from Delhivery ONE; confirm Shipping Cost API vs contract rate card. Then rate check + pilot booking. |
 | **Delhivery Direct B2B** | Adapter built earlier; not run (no credentials) | Not run | B2B API username/password (dev + production); confirm Freight Estimator access or supply the rate card; billing address (GST/PAN). Then rate check + pilot booking. |
-| **Shipora X B2C** | Documentation required | — | API document for your account: base URLs, auth headers, live rate endpoint + response fields (GST / COD treatment), order + courier assignment, duplicate behaviour, AWB, pickup, label format, tracking codes, webhook signing. |
+| **Shipora X B2C** | No sandbox | ✅ API key accepted (40 couriers). ✅ calc-rate returned 39 live rates (122001 → 110001, 0.5 kg); request fields confirmed (`weight` kg, `pickup_pincode`, `delivery_pincode`, `length`/`breadth`/`height` cm). ✅ Tracking webhook parsed and token-checked locally. | GST basis of `total` (set in Service settings — no rates until chosen); how COD charges are quoted (COD off until then); full body + response of `POST /api/orders/webhook/import`, `PATCH /api/orders/:id/ship` response (AWB field), label response, track-by-awb response and full status list, correct cancel route, webhook signing. Customers see Shipora X rates only after booking is built. |
 | **Ekart B2C** | Documentation required | — | Ekart merchant API guide, sandbox + production URLs and auth, rate API or contracted rate card, shipment creation, label, tracking codes, pickup/manifest. |
 | **TCI Express B2B** | Documentation required | — | TCI API document for your customer code, rate API or contracted B2B rate card, docket/LR creation with package IDs, label, tracking, pickup. |
 | **Blue Dart B2C** | Documentation required | — | API gateway access for your customer code + area, contracted rate card, waybill API version + product codes, label, tracking, pickup registration. |

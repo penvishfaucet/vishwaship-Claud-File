@@ -56,10 +56,10 @@ const asNum = (v: unknown) => { const n = typeof v === "number" ? v : typeof v =
 
 /** Map a Shipmozo courier name to a Vishwaship carrier code (logo + Admin courier switches). */
 export function carrierFromName(name: string): { code: string; name: string } {
-  const n = name.toLowerCase();
+  const n = name.toLowerCase().replace(/[-_]/g, ""); // "Blue-Dart", "E-KART" → bluedart, ekart
   const table: Array<[RegExp, string, string]> = [
     [/delhivery/, "delhivery", "Delhivery"], [/blue ?dart/, "blue-dart", "Blue Dart"], [/xpress ?bees/, "xpressbees", "Xpressbees"], [/ekart/, "ekart", "Ekart"],
-    [/dtdc/, "dtdc", "DTDC"], [/ecom/, "ecom-express", "Ecom Express"], [/shadowfax/, "shadowfax", "Shadowfax"], [/amazon/, "amazon-shipping", "Amazon Shipping"],
+    [/dtdc/, "dtdc", "DTDC"], [/ecom/, "ecom-express", "Ecom Express"], [/shadowfax/, "shadowfax", "Shadowfax"], [/amazon|\bats\b/, "amazon-shipping", "Amazon Shipping"],
     [/professional/, "the-professional-couriers", "The Professional Couriers"], [/trackon/, "trackon", "Trackon"], [/maruti/, "shree-maruti", "Shree Maruti"],
     [/gati/, "allcargo-gati", "Allcargo Gati"], [/tci/, "tci-express", "TCI Express"], [/india ?post|speed ?post/, "india-post", "India Post"], [/dhl/, "dhl", "DHL"],
     [/fedex/, "fedex-express", "FedEx Express"], [/aramex/, "aramex", "Aramex"], [/smartr/, "smartr", "Smartr"], [/bluedart/, "blue-dart", "Blue Dart"],

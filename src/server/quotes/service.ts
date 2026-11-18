@@ -70,6 +70,7 @@ async function quotingAccounts(orgId: string | null, only?: string) {
   const rows = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.category, "shipping"), ne(schema.providerAccounts.status, "archived")));
   return rows.filter((a) => {
     if (only && a.id !== only) return false;
+    if (!adapterFor(a)?.implemented.includes("book")) return false; // never show a rate the customer cannot book (e.g. Shipora X until order-create is documented)
     if (a.status === "enabled") return canTakeBookings(a); // never quote an unverified service, even if switched on
     if (a.status !== "disabled" || !orgId || !a.secretsEnc) return false; // paused accounts never quote
     const pilots = ((a.configPublic as Record<string, unknown>)?.pilotOrgIds as string[] | undefined) ?? [];

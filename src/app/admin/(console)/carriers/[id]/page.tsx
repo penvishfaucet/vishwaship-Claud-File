@@ -10,6 +10,7 @@ import { CAP_LABEL, CARRIER_SPECS, REQUIRED_CAPS, SHOWN_CAPS } from "@/server/ca
 import { SETUP_LABEL, capRecords, isVerified, missingRequired, setupState } from "@/server/carriers/verification";
 import { getDb, schema } from "@/server/db/client";
 import { pickMarkup } from "@/server/pricing/engine";
+import { adapterFor } from "@/server/providers/registry";
 import { loadMarkupRows } from "@/server/quotes/service";
 
 const EP = "/api/admin/carriers/accounts";
@@ -157,12 +158,16 @@ export default async function CourierAccount({ params }: { params: Promise<{ id:
           <dl className="kv-list">
             <dt>Service</dt><dd>{service}{spec?.serviceNotes?.[service] ? <span className="tiny muted"><br />{spec.serviceNotes[service]}</span> : null}</dd>
             <dt>Base URL</dt><dd className="mono tiny">{baseUrl[a.mode] ?? spec?.defaultBaseUrl?.[a.mode as "test" | "live"] ?? "—"}<br /><span className="muted">Approved hosts: {spec?.hosts[a.mode as "test" | "live"].join(", ") || "none yet"}</span></dd>
-            <dt>Webhooks</dt><dd className="small">{spec?.webhooks ?? "—"}</dd>
+            <dt>Webhooks</dt><dd className="small">{spec?.webhooks ?? "—"}{adapterFor(a)?.parseTrackingWebhook && <><br /><span className="mono tiny" style={{ wordBreak: "break-all" }}>{(process.env.APP_URL ?? "https://vishwaship.in").replace(/\/+$/, "")}/api/webhooks/tracking/{a.id}/?token=&lt;your webhook token&gt;</span></>}</dd>
             <dt>Documents</dt><dd className="small">{spec?.docs ?? "—"}</dd>
           </dl>
           {write && <AdminOpForm endpoint={EP} op="config" submit="Save settings" extra={{ id: a.id }} fields={[
             { name: "brandName", label: "Name", value: brand }, { name: "logoCode", label: "Logo code", value: String(cfg.logoCode ?? "") },
             ...(spec?.baseUrlEditable ? [{ name: "baseUrlTest", label: "Sandbox base URL", value: baseUrl.test ?? "", wide: true }, { name: "baseUrlLive", label: "Production base URL", value: baseUrl.live ?? "", wide: true }] : []),
+            ...(a.adapter === "shiporax" ? [
+              { name: "gstTreatment", label: "Shipora X rates (total) are", type: "select" as const, value: String(cfg.gstTreatment ?? "auto"), options: [["auto", "Not set — no rates until chosen"], ["exclusive", "Excluding GST (Vishwaship adds 18%)"], ["inclusive", "Including GST"]] as Array<[string, string]> },
+              { name: "courierIds", label: "Offer only these courierIds (blank = all)", value: ((cfg.courierIds as string[] | undefined) ?? []).join(", "), wide: true },
+            ] : []),
             ...(a.adapter === "shipmozo" ? [
               { name: "typeOfPackage", label: "type_of_package", value: String(cfg.typeOfPackage ?? (service === "B2B" ? "MPS" : "SPS")) },
               { name: "rovType", label: "rov_type", value: String(cfg.rovType ?? "ROV_OWNER") },

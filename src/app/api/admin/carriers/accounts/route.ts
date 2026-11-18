@@ -143,6 +143,10 @@ export async function POST(req: Request) {
         }
         patch.baseUrl = urls;
       }
+      if (acct.adapter === "shiporax") {
+        patch.gstTreatment = b.gstTreatment === "auto" ? null : b.gstTreatment;
+        patch.courierIds = b.courierIds.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x));
+      }
       if (acct.adapter === "shipmozo") {
         if (b.typeOfPackage && !/^[A-Z_]{2,20}$/.test(b.typeOfPackage)) return apiError(422, "validation_error", "type_of_package must be a code like SPS or MPS");
         patch.typeOfPackage = b.typeOfPackage || null; patch.rovType = b.rovType || null; patch.gstTreatment = b.gstTreatment; patch.skipManualPickup = b.skipManualPickup;

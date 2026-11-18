@@ -44,7 +44,9 @@ export async function vetUrl(raw: string, allowedHosts: string[] = []): Promise<
   }
   const addrs = isIP(host) ? [{ address: host, family: isIP(host) as 4 | 6 }] : await lookup(host, { all: true, verbatim: true });
   if (!addrs.length || addrs.some((a) => isBlockedIp(a.address))) throw new BlockedUrlError("Destination resolves to a blocked address");
-  return { url, address: addrs[0].address, family: addrs[0].family as 4 | 6 };
+  // Every address was vetted above; pin to IPv4 when there is one (many hosts — this PC, some servers — have no IPv6 route).
+  const pick = addrs.find((a) => a.family === 4) ?? addrs[0];
+  return { url, address: pick.address, family: pick.family as 4 | 6 };
 }
 
 export async function safeFetch(raw: string, init: RequestInit & { timeoutMs?: number; allowedHosts?: string[] } = {}) {
