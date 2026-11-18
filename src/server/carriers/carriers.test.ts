@@ -47,7 +47,7 @@ const shipmozoHappy = (url: string) => {
   if (url.endsWith("/create-warehouse")) return { result: "1", data: { warehouse_id: "9001" } };
   if (url.endsWith("/push-order")) return { result: "1", data: { order_id: "x", reference_id: "x" } };
   if (url.endsWith("/assign-courier")) return { result: "1", data: { courier: "Delhivery" } };
-  if (url.includes("/get-order-detail/")) { const id = url.split("/").pop()!; return { result: "1", data: { order_id: id, awb_number: id === "ord_1" ? "SMAWB123" : `SM${id}`, courier: "Delhivery" } }; }
+  if (url.includes("/get-order-detail/")) { const id = url.split("/").pop()!; return { result: "1", data: { order_id: id, awb_number: id === "ord1" ? "SMAWB123" : `SM${id}`, courier: "Delhivery" } }; }
   return { result: "1", data: {} };
 };
 
@@ -205,11 +205,11 @@ describe("booking through Shipmozo", () => {
     const r = await bookOrder({ orgId: ORG, orderId: "ord_1", quoteId, actorUserId: "usr_c" });
     expect(r).toMatchObject({ ok: true, awb: "SMAWB123", state: "confirmed" });
     const push = calls.find((c) => c.url.endsWith("/push-order"))!.body as Record<string, unknown>;
-    expect(push).toMatchObject({ order_id: "ord_1", payment_type: "PREPAID", weight: 500, length: 22, warehouse_id: "9001", consignee_pin_code: 110001 });
-    expect(calls.find((c) => c.url.endsWith("/assign-courier"))!.body).toEqual({ order_id: "ord_1", courier_id: 12 });
+    expect(push).toMatchObject({ order_id: "ord1", payment_type: "PREPAID", weight: 500, length: 22, warehouse_id: "9001", consignee_pin_code: 110001 });
+    expect(calls.find((c) => c.url.endsWith("/assign-courier"))!.body).toEqual({ order_id: "ord1", courier_id: 12 });
     expect(calls.some((c) => c.url.endsWith("/schedule-pickup"))).toBe(false); // pickups_automatically_scheduled = YES
     const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_1"));
-    expect(sh).toMatchObject({ provider: "shipmozo", providerAccountId: SM_B2C, providerOrderRef: "ord_1", awb: "SMAWB123", pickupStatus: "scheduled" });
+    expect(sh).toMatchObject({ provider: "shipmozo", providerAccountId: SM_B2C, providerOrderRef: "ord1", awb: "SMAWB123", pickupStatus: "scheduled" });
     expect(await debits("ord_1")).toBe(1);
   });
   it("a repeated click never makes a second provider booking or wallet charge", async () => {

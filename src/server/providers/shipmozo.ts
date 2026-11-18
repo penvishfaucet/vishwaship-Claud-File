@@ -52,6 +52,8 @@ const smError = (j: Envelope) => (firstString(j, ["data.error", "data.message", 
 const rupees = (paise: number) => Math.round(paise) / 100;
 const digits10 = (s: string) => s.replace(/\D/g, "").slice(-10);
 /** Shipmozo rejects special characters in names and addresses ("Special characters are not allowed in address line one"): keep letters, digits, spaces and commas; "&" becomes "and". */
+/** Shipmozo order_id must be letters and digits only ("Order id is not valid" for ord_…): ord_ab12 → ordab12. Same mapping for lookups. */
+export const smOrderId = (id: string) => id.replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
 export const smText = (s: string | null | undefined, max = 200) => String(s ?? "").replace(/&/g, " and ").replace(/[^A-Za-z0-9 ,]/g, " ").replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").replace(/^[ ,]+|[ ,]+$/g, "").slice(0, max);
 const istDate = (d = new Date()) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 const asNum = (v: unknown) => { const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[,₹\s]/g, "")) : NaN; return Number.isFinite(n) ? n : NaN; };
@@ -262,7 +264,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     if (boxes > 1 && service === "B2C") return { ok: false, error: { category: "validation", message: "Courier partner B2C books one package per order — use B2B for multiple cartons", retryable: false } };
     if (boxes > 1 && !ctx.config.mpsBookingVerified) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
     const big = [...req.packages].sort((a, b) => b.lengthMm * b.breadthMm * b.heightMm - a.lengthMm * a.breadthMm * a.heightMm)[0];
-    const orderId = req.vishwashipOrderId; // stable and globally unique → Shipmozo's duplicate check makes retries safe
+    const orderId = smOrderId(req.vishwashipOrderId); // stable and globally unique → Shipmozo's duplicate check makes retries safe
 
     const push = await call(ctx, "/push-order", {
       method: "POST", timeoutMs: 25_000,
@@ -307,7 +309,7 @@ export const shipmozoAdapter: ShippingAdapter = {
   },
 
   async lookupBooking(ctx, ref) {
-    const orderId = ref.vishwashipOrderId;
+    const orderId = smOrderId(ref.vishwashipOrderId);
     const r = await call(ctx, `/get-order-detail/${encodeURIComponent(orderId)}`);
     if (!r.ok) return r.error.category === "not_found" ? { ok: true, value: null } : r;
     return { ok: true, value: parseOrderDetail(r.value, orderId) };
