@@ -93,12 +93,32 @@ async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf?: Uint
     const sc = Math.min(pw / w, ph / h);
     return { x: (pw - w * sc) / 2, y: (ph - h * sc) / 2, width: w * sc, height: h * sc };
   };
+  // Carriers send labels as PNG, JPEG, PDF, or any of those base64-encoded as text (Delhivery B2B) — detect by content.
+  const place = async (raw: Uint8Array, depth = 0): Promise<void> => {
+    const b = raw;
+    const isPng = b[0] === 0x89 && b[1] === 0x50, isJpg = b[0] === 0xff && b[1] === 0xd8, isPdf = b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+    if (isPng || isJpg) {
+      const img = isPng ? await doc.embedPng(b) : await doc.embedJpg(b);
+      const page = pageMm ? doc.addPage([pageMm[0] * PT, pageMm[1] * PT]) : doc.addPage([img.width * 0.75, img.height * 0.75]);
+      page.drawImage(img, fit(page, img.width, img.height));
+      added++;
+      return;
+    }
+    if (isPdf) {
+      const srcDoc = await PDFDocument.load(b);
+      if (!pageMm) { for (const p of await doc.copyPages(srcDoc, srcDoc.getPageIndices())) { doc.addPage(p); added++; } }
+      else for (const e of await doc.embedPages(srcDoc.getPages())) { const page = doc.addPage([pageMm[0] * PT, pageMm[1] * PT]); page.drawPage(e, fit(page, e.width, e.height)); added++; }
+      return;
+    }
+    const text = Buffer.from(b).toString("utf8").trim().replace(/^"|"$/g, "");
+    if (depth < 2 && /^data:[a-z/]+;base64,/i.test(text)) return place(Buffer.from(text.slice(text.indexOf(",") + 1), "base64"), depth + 1);
+    if (depth < 2 && /^[A-Za-z0-9+/=\s]{100,}$/.test(text)) return place(Buffer.from(text.replace(/\s/g, ""), "base64"), depth + 1);
+    if (depth < 2 && /^https:\/\//.test(text)) return place(await fetchBytes(text), depth + 1);
+    throw new Error(`unrecognised label file (starts with ${Buffer.from(b.slice(0, 8)).toString("hex")})`);
+  };
   for (const src of v.images ?? []) {
-    const bytes = src.startsWith("data:image/") ? Buffer.from(src.slice(src.indexOf(",") + 1), "base64") : await fetchBytes(src);
-    const img = bytes[0] === 0x89 ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-    const page = pageMm ? doc.addPage([pageMm[0] * PT, pageMm[1] * PT]) : doc.addPage([img.width * 0.75, img.height * 0.75]);
-    page.drawImage(img, fit(page, img.width, img.height));
-    added++;
+    const m = src.match(/^data:[^,]*,(.*)$/s);
+    await place(m ? Buffer.from(m[1], "base64") : await fetchBytes(src));
   }
   const pdfBytes = v.pdf ?? (v.url ? await fetchBytes(v.url) : null);
   if (pdfBytes) {
