@@ -7,9 +7,9 @@ import { requireStaff } from "@/server/auth/session";
 import { ensureDelhiveryAccount } from "@/server/carriers/delhivery";
 import { getDb, schema } from "@/server/db/client";
 import { paymentConfig } from "@/server/payment-modes";
-import { DELHIVERY_B2B_COMPONENT_RULES, priceQuote, resolveMarkup } from "@/server/pricing/engine";
-import { getAdapter } from "@/server/providers/registry";
-import { getSetting, loadMarkupSettings } from "@/server/quotes/service";
+import { DELHIVERY_B2B_COMPONENT_RULES, priceQuote } from "@/server/pricing/engine";
+import { adapterFor } from "@/server/providers/registry";
+import { effectiveMarkup, getSetting } from "@/server/quotes/service";
 
 const EP = "/api/admin/carriers/delhivery";
 const FOD_LABEL: Record<string, [string, string]> = { pending_activation: ["Pending Delhivery Activation", "c-pending"], active: ["Active", "c-active"], not_supported: ["Not supported (B2C API)", "c-draft"] };
@@ -21,9 +21,9 @@ export default async function DelhiveryAdmin({ searchParams }: { searchParams: P
   const writeInt = can(st.role, "integrations.write"), writePrice = can(st.role, "pricing.write"), fin = can(st.role, "finance.adjust");
   const acct = await ensureDelhiveryAccount(service);
   const cfg = (acct.configPublic ?? {}) as Record<string, unknown>;
-  const pay = paymentConfig(acct, getAdapter(acct.adapter));
+  const pay = paymentConfig(acct, adapterFor(acct));
   const hints = (acct.secretsHint ?? {}) as Record<string, string>;
-  const markup = resolveMarkup(await loadMarkupSettings(acct.adapter), null);
+  const markup = await effectiveMarkup(acct.adapter, service === "b2b" ? "B2B" : "B2C", null);
   const gst = (await getSetting<number>("gst_bps", 1800)).value;
   const example = priceQuote({ provider: acct.adapter, carrierCode: "delhivery", carrierName: "Delhivery", serviceName: "example", mode: service === "b2b" ? "B2B" : "B2C", components: [{ code: "freight", label: "Base freight", amount: 100_000 }], taxInclusive: false, taxRateBps: 1800, chargeableWeightGrams: 20_000 }, markup, { gstBps: gst, componentRules: service === "b2b" ? DELHIVERY_B2B_COMPONENT_RULES : undefined });
   const rc = (cfg.rateCard ?? {}) as Record<string, number>;
@@ -37,7 +37,7 @@ export default async function DelhiveryAdmin({ searchParams }: { searchParams: P
   return (
     <>
       <div className="page-h">
-        <div><p className="small muted" style={{ margin: 0 }}><Link className="link-navy" href="/admin/integrations/">Carrier Integrations</Link> / Delhivery Direct</p><h1>Delhivery Direct {service.toUpperCase()}</h1>
+        <div><p className="small muted" style={{ margin: 0 }}><Link className="link-navy" href="/admin/carriers/">Courier Integrations</Link> / Delhivery Direct</p><h1>Delhivery Direct {service.toUpperCase()}</h1>
           <p className="small muted" style={{ margin: "4px 0 0" }}>B2B and B2C are separate Delhivery accounts with separate credentials, payment modes and pricing.</p></div>
       </div>
       <nav className="tabs"><Link href="/admin/carriers/delhivery/?svc=b2b" className={service === "b2b" ? "on" : ""}>B2B (LTL / freight)</Link><Link href="/admin/carriers/delhivery/?svc=b2c" className={service === "b2c" ? "on" : ""}>B2C (parcel)</Link></nav>

@@ -4,7 +4,7 @@ import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { withLedger } from "@/server/ledger/db-store";
 import { credit } from "@/server/ledger/wallet";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 
 const PRE_PICKUP = ["booked", "pickup_pending"];
 export type CancelResult = { ok: true; state: "cancelled"; refundedPaise: number; message: string } | { ok: false; state: "not_found" | "not_allowed" | "failed"; message: string };
@@ -32,7 +32,7 @@ export async function cancelOrder(a: { orgId: string; orderId: string; actorUser
     return { ok: false, state: "not_allowed", message: `Shipment is ${ship.status.replace(/_/g, " ")} — the courier no longer accepts cancellation. Raise an RTO from NDR or contact support.` };
   }
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, ship.providerAccountId));
-  const ad = acct ? getAdapter(acct.adapter) : null;
+  const ad = acct ? adapterFor(acct) : null;
   if (!acct || !ad || !ad.implemented.includes("cancel")) return { ok: false, state: "failed", message: "This courier does not support cancellation through Vishwaship. Contact support." };
   const r = await ad.cancel(await providerContext(acct), { providerOrderRef: ship.providerOrderRef ?? ship.orderId, awb: ship.awb });
   await audit({ actorUserId: a.actorUserId, actorKind: a.actorKind, orgId: a.orgId, action: r.ok && r.value.acknowledged ? "shipment.cancel" : "shipment.cancel_failed", targetType: "order", targetId: order.id, details: { awb: ship.awb, reason: a.reason, error: r.ok ? undefined : r.error.message } });

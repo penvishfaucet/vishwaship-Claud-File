@@ -4,7 +4,7 @@ import { useState } from "react";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 
-type Offer = { quoteId: string; carrierCode: string; carrierName: string; serviceName: string; mode: string; etaDays?: number; chargeableWeightGrams: number; total: number; isDemo: boolean };
+type Offer = { quoteId: string; carrierCode: string; carrierName: string; serviceName: string; mode: string; etaDays?: number; chargeableWeightGrams: number; total: number; isDemo: boolean; isPilot?: boolean };
 
 export function BookExisting({ orderId, held, autoAssign = false }: { orderId: string; held: boolean; autoAssign?: boolean }) {
   const router = useRouter();
@@ -32,6 +32,12 @@ export function BookExisting({ orderId, held, autoAssign = false }: { orderId: s
     setBusy(true); setErr(null);
     const r = await fetch(`/api/portal/orders/${orderId}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId }) });
     const j = await r.json(); setBusy(false);
+    if (j.error?.code === "price_changed") {
+      if (confirm(`${j.error.message}
+
+Book at ${formatINR(j.error.newTotal)}?`)) return book(j.error.newQuoteId);
+      setErr("Not booked — the courier's price changed. Confirm the new price or choose another courier."); return;
+    }
     if (!r.ok && r.status !== 202) { setErr(j.error?.message ?? "Booking failed"); return; }
     router.refresh();
   }
@@ -53,7 +59,7 @@ export function BookExisting({ orderId, held, autoAssign = false }: { orderId: s
               <label key={o.quoteId} className={`ropt${sel === o.quoteId ? " on" : ""}`} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 0 }}>
                 <input type="radio" name="q" checked={sel === o.quoteId} onChange={() => setSel(o.quoteId)} />
                 {carrierLogo(o.carrierCode) && <img className="clogo-sm" src={carrierLogo(o.carrierCode)!} alt="" />}
-                <span style={{ flex: 1 }}><b className="small">{o.carrierName} · {o.serviceName}</b><span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{o.isDemo ? " · demo" : ""}</span></span>
+                <span style={{ flex: 1 }}><b className="small">{o.carrierName} · {o.serviceName}</b><span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{o.isDemo ? " · demo" : ""}{o.isPilot ? " · verification" : ""}</span></span>
                 <b>{formatINR(o.total)}</b>
               </label>
             ))}

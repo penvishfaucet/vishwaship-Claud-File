@@ -2,11 +2,12 @@ import "server-only";
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, degrees, rgb } from "pdf-lib";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { code128Bars } from "@/lib/code128";
 import { type PrintFormat, PRINT_FORMATS } from "@/lib/order-view";
 import { labelSource } from "./formats";
+import { noteCapability } from "@/server/carriers/verification";
 
 const PT = 72 / 25.4;
 const ORIGINAL_GENERATED: [number, number] = [101.6, 152.4]; // demo "original" = 4×6 in
@@ -68,12 +69,13 @@ export async function renderLabels(orgId: string, shipmentIds: string[], format:
 
     // live carrier label
     const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, s.providerAccountId));
-    const ad = acct && getAdapter(acct.adapter);
+    const ad = acct && adapterFor(acct);
     if (!ad) { skipped.push({ orderNumber: o.orderNumber, reason: "Courier account unavailable" }); continue; }
     const r = await ad.label(await providerContext(acct), { providerOrderRef: s.providerOrderRef ?? s.id, awb: s.awb }, src.carrierFormat);
     if (!r.ok) { skipped.push({ orderNumber: o.orderNumber, reason: r.error.message }); continue; }
     try {
       const added = await placeCarrierLabel(doc, r.value, format === "original" ? null : pageMm);
+      if (added) await noteCapability(acct.id, "label", true, { evidence: `AWB ${s.awb}` });
       if (!added) skipped.push({ orderNumber: o.orderNumber, reason: "The courier returned no label" });
     } catch (e) {
       skipped.push({ orderNumber: o.orderNumber, reason: `Could not read the courier's label: ${(e as Error).message}`.slice(0, 200) });

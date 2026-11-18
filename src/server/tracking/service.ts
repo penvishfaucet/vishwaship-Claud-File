@@ -3,9 +3,10 @@ import { randomBytes } from "node:crypto";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import type { Address, NormalizedStatus, TrackingEvent } from "@/server/providers/types";
 import { enqueue } from "@/server/jobs/runner";
+import { noteCapability } from "@/server/carriers/verification";
 import { newId } from "@/server/util/ids";
 
 /** Forward progress order. Terminal/exception states are handled separately so they always apply. */
@@ -111,7 +112,7 @@ export async function refreshFromCarrier(shipmentId: string) {
   const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, shipmentId));
   if (!sh?.awb) return { ok: false as const, message: "No AWB yet" };
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, sh.providerAccountId));
-  const ad = acct && getAdapter(acct.adapter);
+  const ad = acct && adapterFor(acct);
   if (!ad) return syncFailed(shipmentId, "Carrier adapter not available");
   if (!ad.implemented.includes("track")) return syncFailed(shipmentId, `${acct.label} tracking is not available through Vishwaship yet`);
   let r;
@@ -119,6 +120,7 @@ export async function refreshFromCarrier(shipmentId: string) {
   if (!r.ok) return syncFailed(shipmentId, r.error.message);
   const res = await ingestEvents(shipmentId, r.value.events, "poll", r.value.etaDate);
   await markSynced(shipmentId);
+  if (r.value.events.length) await noteCapability(acct.id, "track", true, { evidence: `AWB ${sh.awb}` });
   return { ok: true as const, ...res };
 }
 

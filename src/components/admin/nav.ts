@@ -32,7 +32,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "SETTINGS", items: [
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
     { href: "/admin/payments/", label: "Payment Settings", icon: CreditCard, perm: "integrations.read" },
-    { href: "/admin/carriers/delhivery/", label: "Delhivery Direct", icon: TruckIcon, perm: "integrations.read" },
+    { href: "/admin/carriers/", label: "Courier Integrations", icon: TruckIcon, perm: "integrations.read" },
     { href: "/admin/oms/", label: "OMS Requests", icon: Boxes, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
     { href: "/admin/whatsapp/", label: "WhatsApp Ops", icon: MessageCircle, perm: "notifications.read" },

@@ -37,3 +37,10 @@ export async function clearOverride(provider: string, orgId: string, actorUserId
   await clearActive(provider, orgId);
   await audit({ actorUserId, actorKind: "staff", orgId, action: "pricing.override_cleared", details: { provider } });
 }
+
+/** Remove a provider / service default so that provider falls back to the global default. */
+export async function clearProviderDefault(provider: string, actorUserId: string) {
+  if (provider === "*") throw new Error("The global default cannot be cleared");
+  await clearActive(provider, null);
+  await audit({ actorUserId, actorKind: "staff", action: "pricing.provider_default_cleared", details: { provider } });
+}

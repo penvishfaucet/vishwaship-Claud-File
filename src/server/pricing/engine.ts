@@ -59,7 +59,7 @@ export const DEFAULT_COMPONENT_RULES: Record<ComponentCode, ComponentRule> = {
   other: { markupEligible: false },
 };
 
-export type MarkupSource = "global" | "customer_override";
+export type MarkupSource = "global" | "provider_default" | "customer_override";
 
 export interface MarkupRule {
   bps: Bps;
@@ -191,6 +191,42 @@ export function resolveMarkup(settings: MarkupSettings, orgId: string | null, no
   }
   return { bps: settings.global.bps, source: "global", ruleId: settings.global.ruleId, ruleVersion: settings.global.version };
 }
+
+/** Versioned rule rows as stored (provider key "*" = all providers; orgId null = not customer-specific). */
+export interface MarkupRow { id: string; provider: string; orgId: string | null; bps: Bps; version: number; effectiveFrom: Date; clearedAt?: Date | null }
+
+export const GLOBAL_MARKUP_KEY = "*";
+export const DEFAULT_GLOBAL_BPS = 2500;
+/** Provider + service default key, e.g. "shipmozo:B2C". */
+export const serviceMarkupKey = (adapter: string, mode: "B2C" | "B2B") => `${adapter}:${mode}`;
+
+/**
+ * Pick exactly one markup, in this priority:
+ *   1. the customer's own active percentage (an explicitly saved 0% counts);
+ *   2. the provider + service default ("shipmozo:B2C"), or the provider-wide default ("delhivery_b2b");
+ *   3. the Vishwaship global default ("*"), initially 25%.
+ * orgId must come from the authenticated session (null for the public calculator → never a customer rule).
+ */
+export function pickMarkup(rows: MarkupRow[], adapter: string, mode: "B2C" | "B2B", orgId: string | null, now = new Date()): MarkupRule {
+  const live = rows.filter((r) => !r.clearedAt && r.effectiveFrom <= now);
+  const newest = (xs: MarkupRow[]) => xs.sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime() || b.version - a.version)[0];
+  if (orgId) {
+    const c = newest(live.filter((r) => r.orgId === orgId && r.provider === GLOBAL_MARKUP_KEY));
+    if (c) return { bps: c.bps, source: "customer_override", ruleId: c.id, ruleVersion: c.version };
+  }
+  for (const key of [serviceMarkupKey(adapter, mode), adapter]) {
+    const d = newest(live.filter((r) => r.orgId === null && r.provider === key));
+    if (d) return { bps: d.bps, source: "provider_default", ruleId: d.id, ruleVersion: d.version };
+  }
+  const g = newest(live.filter((r) => r.orgId === null && r.provider === GLOBAL_MARKUP_KEY));
+  return g ? { bps: g.bps, source: "global", ruleId: g.id, ruleVersion: g.version } : { bps: DEFAULT_GLOBAL_BPS, source: "global", ruleId: "default-25", ruleVersion: 0 };
+}
+
+/** Shipmozo: customer price = provider rate × (1 + markup) — the whole comparable (pre-tax) rate is marked up once. */
+export const ALL_ELIGIBLE_COMPONENT_RULES: Record<ComponentCode, ComponentRule> = {
+  freight: { markupEligible: true }, fuel: { markupEligible: true }, fov: { markupEligible: true }, oda: { markupEligible: true }, handling: { markupEligible: true },
+  cod_fee: { markupEligible: true }, rto: { markupEligible: true }, reverse: { markupEligible: true }, docket: { markupEligible: true }, other: { markupEligible: true },
+};
 
 /**
  * Delhivery Direct B2B: "Customer B2B freight = Delhivery base freight × (1 + markup / 100)".

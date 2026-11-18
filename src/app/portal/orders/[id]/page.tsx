@@ -9,6 +9,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Download, FileText, Ticket, Truck } from "lucide-react";
 import { BookExisting } from "@/components/portal/BookExisting";
+import { AutoRefresh } from "@/components/portal/AutoRefresh";
+import { labelFormatsFor } from "@/server/labels/formats";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 import { StatusChip, statusLabel } from "@/lib/status";
@@ -45,7 +47,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           {shipment?.provider === "demo" && <span className="demo-badge">DEMO</span>}
         </div>
         <div className="actions">
-          {shipment && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label`}><Download size={16} /> Label</a>}
+          {shipment?.awb && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label`}><Download size={16} /> Download Label</a>}
           {shipment && <a className="btn btn-outline" href={`/api/portal/shipments/${shipment.id}/invoice`}><FileText size={16} /> Invoice</a>}
           {shipment && shipment.bookingStatus === "confirmed" && shipment.pickupStatus === "not_scheduled" && <SchedulePickup shipmentId={shipment.id} defaultDate={new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)} />}
           {shipment?.pickupRef && <span className="pill2">Pickup {shipment.pickupDate?.toLocaleDateString("en-IN")} · ref {shipment.pickupRef}</span>}
@@ -54,6 +56,23 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {(order.status === "booking" || order.status === "needs_reconcile" || (shipment && !["delivered", "rto_delivered", "cancelled", "lost"].includes(shipment.status))) && <AutoRefresh active everyMs={60_000} />}
+      {shipment && (
+        <section className="card mb16" style={{ padding: 16 }}>
+          <div className="grid2" style={{ gap: 12 }}>
+            <dl className="kv-list" style={{ margin: 0 }}>
+              <dt>Courier</dt><dd>{shipment.carrierName} · {shipment.serviceName}</dd>
+              <dt>{order.mode === "B2B" ? "LR / AWB" : "AWB"}</dt><dd className="mono">{shipment.awb ?? (shipment.bookingStatus === "pending" ? "Pending — the courier is assigning it; this page updates automatically" : "—")}{shipment.lrNumber && shipment.lrNumber !== shipment.awb ? ` · LR ${shipment.lrNumber}` : ""}</dd>
+              {Array.isArray(shipment.pieceIds) && (shipment.pieceIds as string[]).length > 0 && <><dt>Package IDs</dt><dd className="mono tiny">{(shipment.pieceIds as string[]).join(", ")}</dd></>}
+            </dl>
+            <dl className="kv-list" style={{ margin: 0 }}>
+              <dt>Pickup</dt><dd>{shipment.status === "picked_up" || ["in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr"].includes(shipment.status) ? "Picked up (confirmed by courier scan)" : shipment.pickupStatus === "scheduled" ? `Scheduled${shipment.pickupRef ? ` · ref ${shipment.pickupRef}` : ""}` : "Not scheduled yet"}</dd>
+              <dt>Estimated delivery</dt><dd>{shipment.etaDate ? shipment.etaDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" }) : "Not provided by the courier"}</dd>
+              <dt>Tracking updated</dt><dd className="small">{shipment.lastSyncAt ? fmt(shipment.lastSyncAt) : shipment.lastEventAt ? fmt(shipment.lastEventAt) : "Waiting for first scan"}{shipment.lastLocation ? ` · ${shipment.lastLocation}` : ""}</dd>
+            </dl>
+          </div>
+        </section>
+      )}
       {!shipment && ["ready", "booking_failed", "cod_hold"].includes(order.status) && <BookExisting orderId={order.id} held={order.status === "cod_hold"} autoAssign={await hasFeature(ctx.org.id, "auto_assign")} />}
       <div className="mb12"><span className="small b" style={{ marginRight: 8 }}>Tags</span><OrderTagsEditor orderId={order.id} all={tagList} initial={(await tagsForOrders([order.id])).get(order.id)?.map((t) => t.id) ?? []} /></div>
       {order.source !== "manual" && <p className="tiny muted mb8">Source: {order.source}{order.externalOrderId ? ` · store order ${order.externalOrderId}` : ""}</p>}
@@ -112,7 +131,12 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
             <h2 className="b small" style={{ marginTop: 0 }}>Documents</h2>
             {shipment ? (
               <ul className="plain-list" style={{ margin: "0 -16px" }}>
-                {[["thermal_4x6", "Label · thermal 4×6 in"], ["a4", "Label · A4"], ["thermal_3x4", "Label · thermal 3×4 in"], ["thermal_4x4", "Label · thermal 4×4 in"], ["thermal_2x4", "Label · thermal 2×4 in"], ["thermal_38x100", "Label · 38×100 mm"]].map(([f, l]) => (
+                {!shipment.awb ? <li><span className="small muted">Label — available once the courier assigns the AWB</span></li> : shipment.provider !== "demo" ? (
+                  <>
+                    <li><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=original`}>Courier label · original format (one page per package)</a></li>
+                    {labelFormatsFor(shipment.provider).filter((f) => f.ok && f.key !== "original").map((f) => <li key={f.key}><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=${f.key}`}>Label · {f.name}{f.reason ? <span className="tiny muted"> ({f.reason})</span> : null}</a></li>)}
+                  </>
+                ) : [["thermal_4x6", "Label · thermal 4×6 in"], ["a4", "Label · A4"], ["thermal_3x4", "Label · thermal 3×4 in"], ["thermal_4x4", "Label · thermal 4×4 in"], ["thermal_2x4", "Label · thermal 2×4 in"], ["thermal_38x100", "Label · 38×100 mm"]].map(([f, l]) => (
                   <li key={f}><a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/label?format=${f}`}>{l}</a></li>
                 ))}
                 <li><a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/invoice`}>Invoice</a></li>

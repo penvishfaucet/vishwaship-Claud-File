@@ -1,10 +1,10 @@
-import { and, eq, inArray, lte, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte, lt, ne } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { hasFeature } from "@/server/features";
 import { withLedger } from "@/server/ledger/db-store";
 import { release, settle } from "@/server/ledger/wallet";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import { decrypt, hmacSha256Hex } from "@/server/security/crypto";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { newId } from "@/server/util/ids";
@@ -24,7 +24,7 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
   if (!order || !quote) return { dead: "order or quote missing" };
   const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, order.orgId));
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
-  const ad = acct && getAdapter(acct.adapter);
+  const ad = acct && adapterFor(acct);
   if (!ad) return { dead: "adapter unavailable" };
   const [existing] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, orderId));
   // async carriers (Delhivery B2B) need the job / LR reference returned at booking
@@ -165,7 +165,11 @@ registerHandler("report.export", async (p): Promise<JobResult> => {
   return { done: true };
 });
 
-/** tracking.poll — refresh live-courier shipments (Delhivery etc.). Demo shipments are refreshed on demand only. */
+/**
+ * tracking.poll — refresh every live-courier shipment that is still moving, every 30 minutes (≤500 per slot keeps us
+ * inside provider rate limits). Paused accounts keep syncing: pausing only stops new quotes and bookings.
+ * Demo shipments are refreshed on demand only.
+ */
 registerHandler("tracking.poll", async (p): Promise<JobResult> => {
   const { refreshFromCarrier } = await import("@/server/tracking/service");
   await refreshFromCarrier(String(p.shipmentId)).catch(() => null);
@@ -179,7 +183,7 @@ export async function scheduleTrackingPolls() {
   lastPollSlot = slot;
   const db = await getDb();
   const live = await db.select({ id: schema.shipments.id }).from(schema.shipments)
-    .where(and(eq(schema.shipments.bookingStatus, "confirmed"), inArray(schema.shipments.provider, ["delhivery_b2b", "delhivery_b2c", "shipmozo"]),
+    .where(and(eq(schema.shipments.bookingStatus, "confirmed"), ne(schema.shipments.provider, "demo"), isNotNull(schema.shipments.awb),
       inArray(schema.shipments.status, ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "ndr", "rto_initiated", "rto_in_transit"])))
     .limit(500);
   for (const s of live) await enqueue("tracking.poll", { shipmentId: s.id }, { dedupeKey: `track:${s.id}:${slot}` });

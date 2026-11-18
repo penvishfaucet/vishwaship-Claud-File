@@ -5,7 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { eventIncluded } from "@/server/features";
 import { credit as walletCredit } from "@/server/ledger/wallet";
 import { withLedger } from "@/server/ledger/db-store";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import { getSetting } from "@/server/quotes/service";
 import { ensurePublicRef, refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
@@ -274,7 +274,7 @@ export async function runCarrierCancellation(confirmationId: string, shipmentId:
     return { done: true };
   }
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, ship.providerAccountId));
-  const adapter = acct ? getAdapter(acct.adapter) : null;
+  const adapter = acct ? adapterFor(acct) : null;
   if (!acct || !adapter) { await setCancellation(c.id, "failed", "Courier account unavailable"); return { done: true }; }
   const r = await adapter.cancel(await providerContext(acct), { providerOrderRef: ship.providerOrderRef ?? ship.orderId, awb: ship.awb });
   if (!r.ok) {

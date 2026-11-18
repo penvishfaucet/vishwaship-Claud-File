@@ -31,18 +31,18 @@ export default async function CustomerDetail({ params, searchParams }: { params:
   const [org] = await db.select().from(schema.orgs).where(eq(schema.orgs.id, id));
   if (!org) notFound();
   const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, id));
-  const settings = await loadMarkupSettings("shipmozo");
+  const settings = await loadMarkupSettings();
   const ov = settings.overrides.filter((o) => o.orgId === id && !o.clearedAt).sort((a, b) => b.version - a.version)[0];
 
   async function saveOverride(fd: FormData) {
     "use server";
     const st = await requireStaff("pricing.write");
     const mode = String(fd.get("mode"));
-    if (mode === "global") await clearOverride("shipmozo", id, st.userId);
+    if (mode === "global") await clearOverride("*", id, st.userId);
     else {
       const pct = Number(fd.get("pct"));
       if (!(pct >= 0 && pct <= 500)) redirect(`/admin/customers/${id}/?tab=pricing&msg=range`);
-      await setMarkup("shipmozo", id, Math.round(pct * 100), st.userId);
+      await setMarkup("*", id, Math.round(pct * 100), st.userId);
     }
     revalidatePath(`/admin/customers/${id}/`);
     redirect(`/admin/customers/${id}/?tab=pricing&msg=saved`);

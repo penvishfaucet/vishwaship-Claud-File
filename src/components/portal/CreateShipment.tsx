@@ -219,8 +219,16 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
         setOrderId(id);
         if (j.codHold) { setDone({ awb: null, shipmentId: "", state: "cod_hold" }); return; }
       }
-      const r = await fetch(`/api/portal/orders/${id}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId: chosen.quoteId }) });
-      const j = await r.json();
+      let r = await fetch(`/api/portal/orders/${id}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId: chosen.quoteId }) });
+      let j = await r.json();
+      if (j.error?.code === "price_changed") {
+        // the courier's live rate moved since quoting: charge only after the customer accepts the new price
+        if (!confirm(`${j.error.message}
+
+Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitted — the price changed. Choose a courier again or confirm the new price.");
+        r = await fetch(`/api/portal/orders/${id}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId: j.error.newQuoteId }) });
+        j = await r.json();
+      }
       if (r.status === 202) { setDone({ awb: null, shipmentId: "", state: "ambiguous" }); return; }
       if (!r.ok) throw new Error(j.error?.message ?? "Booking failed");
       setDone({ awb: j.awb, shipmentId: j.shipmentId, state: j.state });

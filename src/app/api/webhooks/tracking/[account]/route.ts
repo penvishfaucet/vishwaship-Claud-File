@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import { clientIp, rateLimit } from "@/server/security/rate-limit";
 import { safeEqual } from "@/server/security/crypto";
 import { ingestPushed } from "@/server/tracking/service";
@@ -21,7 +21,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ account
   const { account } = await params;
   const db = await getDb();
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, account.slice(0, 64)));
-  const ad = acct && acct.category === "shipping" ? getAdapter(acct.adapter) : null;
+  const ad = acct && acct.category === "shipping" ? adapterFor(acct) : null;
   if (!acct || !ad || acct.status === "archived") return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (!ad.parseTrackingWebhook) return NextResponse.json({ error: "push_not_supported", message: `${acct.label} updates are fetched by polling` }, { status: 422 });
   const expected = String((await providerContext(acct)).secrets.webhookToken ?? "");

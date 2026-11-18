@@ -16,6 +16,7 @@ const MM: Partial<Record<LabelFormat, [number, number]>> = { thermal_4x6: [101.6
 const CARRIER_NATIVE: Record<string, LabelFormat[]> = {
   delhivery_b2b: ["thermal_3x4", "thermal_4x4", "thermal_2x4", "a4"],
   delhivery_b2c: ["thermal_4x6", "a4"],
+  shipmozo: ["thermal_4x6"], // get-order-label returns the courier's PNG label (placed as-is, scaled only within the readability limit)
 };
 
 export function labelSource(provider: string, f: PrintFormat): Source {

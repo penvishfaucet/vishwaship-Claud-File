@@ -75,6 +75,10 @@ export interface BookResult {
   pieceIds?: string[];
   state: "confirmed" | "pending_async";
   labelAvailable: boolean;
+  /** Pickup reference when the booking call also scheduled the pickup. */
+  pickupRef?: string;
+  /** True when the provider schedules pickup itself (e.g. Shipmozo pickups_automatically_scheduled = YES). */
+  pickupScheduled?: boolean;
 }
 
 export type NormalizedStatus =

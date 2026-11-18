@@ -50,7 +50,7 @@ export async function priceList(orgId: string, refresh = false): Promise<PriceLi
       if (r) r.codFee = o.lines.filter((l) => l.code === "cod_fee").reduce((t, l) => t + l.sellPreTax, 0) || null;
     }
   }
-  const settings = await loadMarkupSettings("shipmozo");
+  const settings = await loadMarkupSettings();
   const m = resolveMarkup(settings, orgId);
   const ov = settings.overrides.filter((o) => o.orgId === orgId && !o.clearedAt).sort((a, b) => b.version - a.version)[0];
   const gst = await getSetting<number>("gst_bps", 1800);

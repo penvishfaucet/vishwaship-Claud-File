@@ -25,7 +25,7 @@ export default async function AdminShipments({ searchParams }: { searchParams: P
   if (sp.exception === "booking") conds.push(inArray(schema.shipments.bookingStatus, ["pending", "ambiguous"]));
   if (sp.q) {
     const q = `%${sp.q.trim().replace(/[%_]/g, "")}%`;
-    conds.push(or(ilike(schema.shipments.awb, q), ilike(schema.shipments.lrNumber, q), ilike(schema.orders.orderNumber, q), ilike(schema.orgs.businessName, q), ilike(schema.shipments.carrierName, q), ilike(schema.shipments.provider, q))!);
+    conds.push(or(ilike(schema.shipments.awb, q), ilike(schema.shipments.lrNumber, q), ilike(schema.orders.orderNumber, q), ilike(schema.shipments.id, q), ilike(schema.shipments.orderId, q), ilike(schema.shipments.providerOrderRef, q), ilike(schema.orders.externalOrderId, q), ilike(schema.orgs.businessName, q), ilike(schema.shipments.carrierName, q), ilike(schema.shipments.provider, q))!);
   }
   const page = Math.max(1, Number(sp.page ?? 1));
   const rows = await db.select({ s: schema.shipments, o: schema.orders, org: schema.orgs }).from(schema.shipments)
@@ -37,7 +37,7 @@ export default async function AdminShipments({ searchParams }: { searchParams: P
       <div className="page-h"><h1>All Shipments</h1><div className="actions"><a className="btn btn-outline" href={`/api/admin/export/shipments?${new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][])}`}><Download size={16} /> Export</a></div></div>
       <form className="row wrap mb12" style={{ gap: 8 }} role="search">
         <label htmlFor="sq" className="sr-only">Search</label>
-        <input id="sq" name="q" className="input" defaultValue={sp.q} placeholder="Customer, order, AWB/LR, carrier, provider" style={{ maxWidth: 320 }} />
+        <input id="sq" name="q" className="input" defaultValue={sp.q} placeholder="Vishwaship ID, order, external order ID, AWB / LR, customer" style={{ maxWidth: 320 }} />
         <select aria-label="Type" name="mode" className="select" defaultValue={sp.mode ?? ""} style={{ maxWidth: 130 }}><option value="">B2B + B2C</option><option>B2C</option><option>B2B</option></select>
         <select aria-label="Payment" name="payment" className="select" defaultValue={sp.payment ?? ""} style={{ maxWidth: 140 }}><option value="">Paid + COD</option><option value="prepaid">Prepaid</option><option value="cod">COD</option></select>
         <select aria-label="Exceptions" name="exception" className="select" defaultValue={sp.exception ?? ""} style={{ maxWidth: 190 }}><option value="">All</option><option value="booking">Pending booking</option><option value="stale">Tracking gaps</option></select>
@@ -50,18 +50,19 @@ export default async function AdminShipments({ searchParams }: { searchParams: P
       </nav>
       <div className="card p0 tbl-wrap">
         <table className="tbl">
-          <thead><tr><th>Customer</th><th>Order / AWB</th><th>Carrier</th><th>Provider</th><th>Boxes / wt</th><th>Type</th><th>Status</th>{showCost && <th className="r">Cost</th>}<th className="r">Selling</th></tr></thead>
+          <thead><tr><th>Customer</th><th>Order / AWB</th><th>Carrier</th><th>Provider</th><th>Boxes / wt</th><th>Type</th><th>Status</th><th>Tracking synced</th>{showCost && <th className="r">Cost</th>}<th className="r">Selling</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={9} className="center muted small">No shipments match.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={10} className="center muted small">No shipments match.</td></tr>}
             {rows.map(({ s: x, o, org }) => (
               <tr key={x.id}>
                 <td><Link className="link-navy small" href={`/admin/customers/${org.id}/`}>{org.businessName}</Link></td>
-                <td><Link className="b link-navy" href={`/admin/shipments/${x.id}/`}>{o.orderNumber}</Link><div className="mono tiny muted">{x.awb}</div></td>
+                <td><Link className="b link-navy" href={`/admin/shipments/${x.id}/`}>{o.orderNumber}</Link><div className="mono tiny muted">{x.awb}{x.lrNumber && x.lrNumber !== x.awb ? ` · LR ${x.lrNumber}` : ""}</div><div className="mono tiny muted">{x.id}{x.providerOrderRef && x.providerOrderRef !== x.orderId ? ` · ext ${x.providerOrderRef}` : ""}</div></td>
                 <td>{carrierLogo(x.carrierCode) ? <img className="clogo-sm" src={carrierLogo(x.carrierCode)!} alt={x.carrierName} title={x.carrierName} /> : x.carrierName}</td>
                 <td className="small">{x.provider}{x.provider === "demo" && <span className="demo-badge" style={{ marginLeft: 4 }}>DEMO</span>}</td>
                 <td className="small">{(x.chargeableWeightGrams / 1000).toFixed(1)} kg{x.carrierWeightGrams ? ` / ${(x.carrierWeightGrams / 1000).toFixed(1)}` : ""}</td>
                 <td className="small">{o.mode} · {o.paymentType}</td>
                 <td><StatusChip status={x.status} /></td>
+                <td className="small">{x.lastSyncAt ? x.lastSyncAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}{x.lastSyncError ? <div className="tiny t-debit" title={x.lastSyncError}>sync error</div> : null}</td>
                 {showCost && <td className="r small">{formatINR(x.costPaise)}</td>}
                 <td className="r small">{formatINR(x.sellPaise)}</td>
               </tr>

@@ -5,7 +5,7 @@ import { apiCustomer } from "@/server/auth/session";
 import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { apiError, parseJson } from "@/server/http";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 
 const Body = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reattempt") }),
@@ -27,7 +27,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!row) return apiError(404, "not_found", "NDR case not found");
   if (row.c.status !== "open") return apiError(409, "conflict", "An action was already requested for this attempt");
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, row.sh.providerAccountId));
-  const adapter = acct && getAdapter(acct.adapter);
+  const adapter = acct && adapterFor(acct);
   if (!adapter) return apiError(422, "provider_error", "This courier does not support NDR actions via API. Raise a ticket.");
   const payload = p.data.action === "update_address" ? { line1: p.data.line1, mobile: p.data.mobile } : undefined;
   await db.update(schema.ndrCases).set({ status: "action_requested", requestedAction: p.data.action, requestPayload: payload ?? null }).where(eq(schema.ndrCases.id, id));

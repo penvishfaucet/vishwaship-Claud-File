@@ -272,7 +272,8 @@ describe("label formats", () => {
     expect(labelSource("delhivery_b2b", "thermal_38x100").kind).toBe("scaled");
   });
   it("providers without a label integration are unavailable, not faked", () => {
-    expect(labelFormatsFor("shipmozo").every((x) => !x.ok)).toBe(true);
+    expect(labelFormatsFor("bluedart").every((x) => !x.ok)).toBe(true);
+    expect(labelFormatsFor("shipmozo").find((x) => x.key === "original")?.ok).toBe(true); // Shipmozo get-order-label (PNG)
   });
   it("fitScale", () => {
     expect(fitScale([101.6, 152.4], [101.6, 101.6])).toBeCloseTo(0.667, 2);

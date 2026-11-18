@@ -1,9 +1,10 @@
 import { orgSetting } from "@/server/couriers";
+import { noteCapability } from "@/server/carriers/verification";
 import { and, eq } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { apiError } from "@/server/http";
-import { getAdapter, providerContext } from "@/server/providers/registry";
+import { adapterFor, providerContext } from "@/server/providers/registry";
 import type { LabelFormat } from "@/server/providers/types";
 import { code128Svg } from "@/lib/code128";
 import { formatINR } from "@/lib/money";
@@ -31,7 +32,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // Live carriers: return the carrier-approved label document from the provider.
   if (row.s.provider !== "demo") {
     const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, row.s.providerAccountId));
-    const ad = acct && getAdapter(acct.adapter);
+    const ad = acct && adapterFor(acct);
     if (!ad) return apiError(422, "provider_error", "Adapter required");
     const pctx = await providerContext(acct);
     let r = await ad.label(pctx, { providerOrderRef: row.s.providerOrderRef!, awb: row.s.awb }, format);
@@ -42,6 +43,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       r = await ad.label(pctx, { providerOrderRef: row.s.providerOrderRef!, awb: row.s.awb }, r.value.formatsAvailable[0]);
       if (!r.ok) return apiError(422, "provider_error", r.error.message);
     }
+    await noteCapability(acct.id, "label", true, { evidence: `AWB ${row.s.awb}` });
     if (r.value.images?.length) {
       const imgs = r.value.images.filter((u) => /^(https:|data:image\/png;base64,)/.test(u)).map((u) => `<img src="${u.replace(/"/g, "")}" alt="Label" style="display:block;max-width:100%;page-break-after:always">`).join("");
       return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Labels ${row.s.lrNumber ?? row.s.awb}</title><style>@page{margin:0}body{margin:0}</style></head><body onload="window.print()">${imgs}</body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" } });

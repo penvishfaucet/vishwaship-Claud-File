@@ -270,5 +270,18 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1794989365617,
   "hash": "223353fa12587012d142218b6ee84cd11e42aac6d0c24b542349fdca99b66693"
+ },
+ {
+  "tag": "0009_courier_integrations",
+  "sql": [
+   "CREATE INDEX \"shipments_provider_ref\" ON \"shipments\" USING btree (\"provider_order_ref\");",
+   "\nCREATE INDEX \"shipments_lr\" ON \"shipments\" USING btree (\"lr_number\");",
+   "\n-- Markup priority: customer → provider/service default → global. The old Shipmozo-wide rows were the global\n-- default and the customer overrides; they move to the \"*\" key with the same percentages.\nINSERT INTO \"markup_rules\" (\"id\", \"provider\", \"org_id\", \"bps\", \"version\", \"effective_from\", \"created_by\")\n  SELECT 'mkm_' || \"id\", '*', \"org_id\", \"bps\", 1, \"effective_from\", \"created_by\" FROM \"markup_rules\"\n  WHERE \"provider\" = 'shipmozo' AND \"cleared_at\" IS NULL;",
+   "\nUPDATE \"markup_rules\" SET \"cleared_at\" = now() WHERE \"provider\" = 'shipmozo' AND \"cleared_at\" IS NULL;",
+   "\n-- Shipmozo accounts created before the adapter existed were never verified: back to setup as the B2C service.\nUPDATE \"provider_accounts\" SET \"status\" = 'disabled', \"config_public\" = \"config_public\" || '{\"service\":\"B2C\"}'::jsonb\n  WHERE \"adapter\" = 'shipmozo' AND NOT (\"config_public\" ? 'service');\n"
+  ],
+  "bps": true,
+  "folderMillis": 1794999415143,
+  "hash": "bcf152c50d4d19077f770b958d18e0744a9c29377fa1b5d2c01636ba2034e0dc"
  }
 ];

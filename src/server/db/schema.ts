@@ -161,7 +161,7 @@ export const providerAccounts = pgTable("provider_accounts", {
   category: text("category").notNull(), // shipping | payments | messaging | email
   label: text("label").notNull(),
   mode: text("mode").notNull().default("test"), // test | live
-  status: text("status").notNull().default("disabled"), // enabled | disabled | archived
+  status: text("status").notNull().default("disabled"), // enabled (Active) | disabled (setup / verification) | paused (no new quotes or bookings; tracking continues) | archived
   priority: integer("priority").notNull().default(100),
   configPublic: jsonb("config_public").notNull().default({}), // non-secret settings
   secretsEnc: text("secrets_enc"), // AES-GCM blob; write-only from the UI
@@ -307,6 +307,8 @@ export const shipments = pgTable("shipments", {
   createdAt: created(),
 }, (t) => [
   uniqueIndex("shipments_awb").on(t.provider, t.awb),
+  index("shipments_provider_ref").on(t.providerOrderRef),
+  index("shipments_lr").on(t.lrNumber),
   index("shipments_org_status").on(t.orgId, t.status),
 ]);
 

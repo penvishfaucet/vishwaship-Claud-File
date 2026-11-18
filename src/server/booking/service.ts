@@ -6,13 +6,22 @@ import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { InsufficientBalanceError, release, reserve, settle } from "@/server/ledger/wallet";
 import { withLedger } from "@/server/ledger/db-store";
-import { getAdapter, providerContext } from "@/server/providers/registry";
-import type { BookRequest } from "@/server/providers/types";
+import { adapterFor, providerContext } from "@/server/providers/registry";
+import type { BookRequest, QuoteRequest } from "@/server/providers/types";
+import { getQuotes, quotesByIds, sameService } from "@/server/quotes/service";
+import { canTakeBookings, noteCapability } from "@/server/carriers/verification";
+
+/** Comparable view of a quote request (field order and optional defaults normalised). */
+function normReq(r: QuoteRequest) {
+  return { m: r.mode, o: r.originPincode, d: r.destinationPincode, p: r.paymentType, c: r.codAmount ?? 0, v: r.declaredValue ?? 0, r: r.direction ?? "forward",
+    k: r.packages.map((x) => [x.count, x.lengthMm, x.breadthMm, x.heightMm, x.actualWeightGrams]) };
+}
 import { newId } from "@/server/util/ids";
 
 export type BookOutcome =
   | { ok: true; shipmentId: string; awb: string | null; state: "confirmed" | "pending_async" }
-  | { ok: false; code: "not_found" | "quote_expired" | "quote_mismatch" | "insufficient_balance" | "cod_hold" | "already_booked" | "provider_failed" | "ambiguous" | "unsupported"; message: string };
+  | { ok: false; code: "not_found" | "quote_expired" | "quote_mismatch" | "insufficient_balance" | "cod_hold" | "already_booked" | "provider_failed" | "ambiguous" | "unsupported"; message: string }
+  | { ok: false; code: "price_changed"; message: string; newQuoteId: string; oldTotal: number; newTotal: number };
 
 /**
  * Book one order against a saved quote.
@@ -35,16 +44,36 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
 
   const [quote] = await db.select().from(schema.quotes).where(and(eq(schema.quotes.id, args.quoteId), eq(schema.quotes.orgId, args.orgId)));
   if (!quote) return { ok: false, code: "not_found", message: "Quote not found" };
-  if (quote.expiresAt.getTime() < Date.now()) return { ok: false, code: "quote_expired", message: "This quote has expired. Refresh rates before booking." };
-  const qreq = quote.request as { originPincode: string; destinationPincode: string; paymentType: string; mode: string };
   const consignee = order.consignee as BookRequest["consignee"];
-  if (qreq.destinationPincode !== consignee.pincode || qreq.paymentType !== order.paymentType || qreq.mode !== order.mode) {
-    return { ok: false, code: "quote_mismatch", message: "Order details changed since the quote. Refresh rates." };
-  }
 
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
-  if (!acct || acct.status !== "enabled") return { ok: false, code: "unsupported", message: "This courier account is not accepting new bookings." };
-  const adapter = getAdapter(acct.adapter);
+  const pilots = ((acct?.configPublic as Record<string, unknown> | undefined)?.pilotOrgIds as string[] | undefined) ?? [];
+  if (!acct || !((acct.status === "enabled" && canTakeBookings(acct)) || (acct.status === "disabled" && pilots.includes(args.orgId)))) {
+    return { ok: false, code: "unsupported", message: acct?.status === "paused" ? "This courier service is paused for new bookings. Choose another courier." : "This courier account is not accepting new bookings." };
+  }
+
+  // Expired quote, or order details changed since quoting: re-check the same provider service before charging.
+  const [whNow] = order.warehouseId ? await db.select().from(schema.warehouses).where(eq(schema.warehouses.id, order.warehouseId)) : [];
+  const qreq = quote.request as QuoteRequest;
+  const pkgNow = await db.select().from(schema.packages).where(eq(schema.packages.orderId, order.id));
+  const reqNow: QuoteRequest = {
+    mode: order.mode as "B2C" | "B2B", originPincode: whNow?.pincode ?? qreq.originPincode, destinationPincode: consignee.pincode, paymentType: order.paymentType as PaymentMode,
+    codAmount: order.codAmountPaise, declaredValue: order.declaredValuePaise, direction: order.direction as "forward" | "reverse",
+    packages: pkgNow.map((p) => ({ count: p.count, lengthMm: p.lengthMm, breadthMm: p.breadthMm, heightMm: p.heightMm, actualWeightGrams: p.actualWeightGrams })),
+  };
+  const changed = JSON.stringify(normReq(qreq)) !== JSON.stringify(normReq(reqNow));
+  if (quote.expiresAt.getTime() < Date.now() || changed) {
+    const fresh = await getQuotes(reqNow, args.orgId, { onlyAccountId: acct.id });
+    const prev = { carrierCode: quote.carrierCode, serviceName: quote.serviceName, providerQuoteRef: (quote.priced as { providerQuoteRef?: string }).providerQuoteRef };
+    const rows = await quotesByIds(fresh.offers.map((o) => o.quoteId));
+    const matchRow = rows.find((r) => sameService(prev, { carrierCode: r.carrierCode, serviceName: r.serviceName, providerQuoteRef: (r.priced as { providerQuoteRef?: string }).providerQuoteRef }));
+    if (!matchRow) return { ok: false, code: "quote_expired", message: `${quote.serviceName} is no longer available for this shipment — refresh rates and choose again.` };
+    if (matchRow.totalPaise !== quote.totalPaise) {
+      return { ok: false, code: "price_changed", message: `The rate for ${quote.serviceName} changed from ₹${(quote.totalPaise / 100).toFixed(2)} to ₹${(matchRow.totalPaise / 100).toFixed(2)}. Confirm the new price to book.`, newQuoteId: matchRow.id, oldTotal: quote.totalPaise, newTotal: matchRow.totalPaise };
+    }
+    return bookOrder({ ...args, quoteId: matchRow.id }); // same price: continue with the fresh quote
+  }
+  const adapter = adapterFor(acct);
   if (!adapter) return { ok: false, code: "unsupported", message: "Adapter required" };
 
   const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, args.orgId));
@@ -129,6 +158,7 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
     carrierCode: quote.carrierCode, carrierName: priced.carrierName, serviceName: quote.serviceName,
     providerOrderRef: b.providerOrderRef, awb: b.awb, lrNumber: b.lrNumber ?? null, pieceIds: b.pieceIds ?? null,
     bookingStatus: b.state === "confirmed" ? "confirmed" : "pending", labelStatus: b.labelAvailable ? "available" : "not_generated",
+    pickupStatus: b.pickupRef || b.pickupScheduled ? "scheduled" : "not_scheduled", pickupRef: b.pickupRef ?? null,
     status: "booked", quoteId: quote.id, sellPaise: senderPays, costPaise: priced.costPreTax, reservationId,
     freightPayer: order.paymentType === "fod" ? "receiver" : "sender", receiverFreightPaise: receiverPays, fodStatus: order.paymentType === "fod" ? "pending_collection" : null,
     chargeableWeightGrams: priced.chargeableWeightGrams, etaDate: priced.etaDays ? new Date(Date.now() + priced.etaDays * 86400_000) : null,
@@ -144,6 +174,9 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
     await db.insert(schema.jobs).values({ id: newId("job"), queue: "store.push_tracking", payload: { orderId: order.id }, dedupeKey: `push:${order.id}` }).onConflictDoNothing();
   }
   await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `booked:${shipmentId}`, status: "booked", rawStatus: "BOOKED", occurredAt: new Date(), source: "manual" });
+  if (b.pickupRef || b.pickupScheduled) await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId, dedupeKey: `pickup_req:${shipmentId}`, status: "pickup_pending", rawStatus: b.pickupRef ? `Pickup scheduled (ref ${b.pickupRef})` : "Pickup scheduled automatically by the courier", occurredAt: new Date(), source: "manual" });
+  await noteCapability(acct.id, "book", true, { evidence: `shipment ${shipmentId}${b.awb ? ` · AWB ${b.awb}` : ""}` });
+  if (b.pickupRef) await noteCapability(acct.id, "pickup", true, { evidence: `pickup ${b.pickupRef}` });
   await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.created", targetType: "shipment", targetId: shipmentId, details: { quoteId: quote.id, totalPaise: quote.totalPaise, senderPays, receiverPays, paymentMode: order.paymentType, provider: acct.adapter, providerRef: b.providerOrderRef } });
   return { ok: true, shipmentId, awb: b.awb, state: b.state };
 }
