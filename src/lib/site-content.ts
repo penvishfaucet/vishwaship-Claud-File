@@ -29,6 +29,9 @@ export const HomeSchema = z.object({
   heroText: text(300),
   primaryCta: text(60),
   secondaryCta: text(60),
+  loginCta: text(40),
+  dashboardCta: text(40),
+  trackHeading: text(80),
   heroVideoUrl: url,
   heroPosterUrl: url,
   partnersHeading: text(80),
@@ -94,9 +97,31 @@ export const PartnerSchema = z.object({
 });
 export const PartnersSchema = z.object({ items: z.array(PartnerSchema).max(200) });
 
+/** Starting-price offer strip (Home, Rate Calculator, Customer Dashboard). Starting prices only; quotes stay live. */
+export const OffersSchema = z.object({
+  visible: z.boolean(),
+  showOnHome: z.boolean(),
+  showOnCalculator: z.boolean(),
+  showOnDashboard: z.boolean(),
+  codText: text(60),
+  parcelLabel: text(80),
+  parcelPrice: text(20),
+  cargoLabel: text(80),
+  cargoPrice: text(20),
+  note: text(200),
+});
+
+/** Public feature switches (Admin → Website Content → Features). */
+export const FeaturesSchema = z.object({
+  calculator: z.boolean(),
+  tracking: z.boolean(),
+  unavailableText: text(200),
+});
+
 export const SECTION_SCHEMAS = {
   links: LinksSchema, footer: FooterSchema, home: HomeSchema, about: AboutSchema,
   care: CareSchema, team: TeamSchema, office: OfficeSchema, partners: PartnersSchema,
+  offers: OffersSchema, features: FeaturesSchema,
 } as const;
 export type SectionKey = keyof typeof SECTION_SCHEMAS;
 export const SECTION_KEYS = Object.keys(SECTION_SCHEMAS) as SectionKey[];
@@ -111,16 +136,18 @@ export type Team = z.infer<typeof TeamSchema>;
 export type Office = z.infer<typeof OfficeSchema>;
 export type Partner = z.infer<typeof PartnerSchema>;
 export type Partners = z.infer<typeof PartnersSchema>;
-export type SiteContent = { links: Links; footer: Footer; home: Home; about: About; care: Care; team: Team; office: Office; partners: Partners };
+export type Offers = z.infer<typeof OffersSchema>;
+export type Features = z.infer<typeof FeaturesSchema>;
+export type SiteContent = { links: Links; footer: Footer; home: Home; about: About; care: Care; team: Team; office: Office; partners: Partners; offers: Offers; features: Features };
 
 /** The carousel's original records (the logos already on the Home page). New records are only ever added. */
 export const DEFAULT_PARTNERS: Partner[] = CARRIERS.map((c) => ({ id: c.code, name: c.name, logoUrl: `/couriers/${c.code}.webp`, link: "", visible: true }));
 
 export const DEFAULTS: SiteContent = {
   links: {
-    customerLogin: "https://customer.vishwaship.com/login",
-    signUp: "https://customer.vishwaship.com/register",
-    franchiseLogin: "https://admin.vishwaship.com",
+    customerLogin: "https://vishwaship.in/login/",
+    signUp: "https://vishwaship.in/signup/",
+    franchiseLogin: "https://vishwaship.in/admin/login/",
   },
   footer: {
     tagline: "Parcels and cargo across India, managed from one account.",
@@ -131,9 +158,12 @@ export const DEFAULTS: SiteContent = {
   home: {
     heroLine1: "Big & Small,",
     heroLine2: "We Ship It All.",
-    heroText: "From everyday parcels to business cargo, manage your shipping with Vishwaship.",
-    primaryCta: "Calculate Shipping Rates",
-    secondaryCta: "Create an Account",
+    heroText: "Compare courier rates, book parcels and cargo, and manage your shipments with Vishwaship.",
+    primaryCta: "Calculate Rates",
+    secondaryCta: "Create Account",
+    loginCta: "Login",
+    dashboardCta: "Go to Dashboard",
+    trackHeading: "Track a shipment",
     heroVideoUrl: "",
     heroPosterUrl: "/brand/hero.jpg",
     partnersHeading: "Our Courier Partners",
@@ -185,7 +215,39 @@ export const DEFAULTS: SiteContent = {
     mapUrl: "",
   },
   partners: { items: DEFAULT_PARTNERS },
+  offers: {
+    visible: true, showOnHome: true, showOnCalculator: true, showOnDashboard: true,
+    codText: "COD Available",
+    parcelLabel: "Parcel Shipping Starting from", parcelPrice: "₹28",
+    cargoLabel: "Cargo Shipping Starting from", cargoPrice: "₹8/kg",
+    note: "Final charges depend on route, weight, dimensions, service, and applicable taxes.",
+  },
+  features: { calculator: true, tracking: true, unavailableText: "This service is temporarily unavailable. Please contact Customer Care." },
 };
+
+/** Old account links from the previous site (replaced by the confirmed vishwaship.in pages). */
+const LEGACY_LINKS: Record<string, string> = {
+  "https://customer.vishwaship.com/login": "https://vishwaship.in/login/",
+  "https://customer.vishwaship.com/register": "https://vishwaship.in/signup/",
+  "https://admin.vishwaship.com": "https://vishwaship.in/admin/login/",
+};
+export function upgradeLinks(l: Links): Links {
+  const up = (v: string) => LEGACY_LINKS[v.trim().replace(/\/$/, "")] ?? v;
+  return { customerLogin: up(l.customerLogin), signUp: up(l.signUp), franchiseLogin: up(l.franchiseLogin) };
+}
+
+/**
+ * Account links point at pages of this same site (https://vishwaship.in/login/ etc.). They are rendered as
+ * site-relative paths so the session cookie, the ?next= return path and local testing all keep working;
+ * on vishwaship.in the result is the identical URL. Other https links are kept as they are.
+ */
+export function accountHref(v: string, fallback: string, next?: string) {
+  const s = safeHref(v, fallback);
+  const m = /^https:\/\/(www\.)?vishwaship\.in(\/[^?#]*)?(\?[^#]*)?/i.exec(s);
+  const path = m ? (m[2] || "/") + (m[3] ?? "") : s;
+  if (!next || !path.startsWith("/")) return path;
+  return `${path}${path.includes("?") ? "&" : "?"}next=${encodeURIComponent(next)}`;
+}
 
 /** 10-digit Indian mobile (6–9 start) after removing +91/0 and separators, else null. */
 export function completeMobile(v: string): string | null {

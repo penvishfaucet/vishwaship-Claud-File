@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
+import { asc, desc, eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 
 export const STATUS_LABEL: Record<string, string> = {
@@ -9,26 +9,43 @@ export const STATUS_LABEL: Record<string, string> = {
   rto_delivered: "Returned to origin", lost: "Under investigation", reverse_in_transit: "Return pickup in transit", reverse_delivered: "Return delivered",
 };
 
+export type PublicTrack =
+  | { kind: "invalid" }
+  | { kind: "not_found" }
+  | { kind: "awb_pending"; carrierName: string; serviceName: string }
+  | {
+    kind: "found"; awb: string; lr: string | null; carrierName: string; carrierCode: string; serviceName: string;
+    status: string; statusLabel: string; etaDate: string | null; deliveredAt: string | null;
+    lastLocation: string | null; lastAt: string | null; stale: boolean; isDemo: boolean;
+    events: Array<{ status: string; location: string | null; at: string }>;
+  };
+
 /**
- * Public tracking: carrier, status, ETA and a scan timeline (status + city + time) only.
- * Never returns recipient/sender details, phone numbers, documents, charges or account data.
+ * Public tracking by AWB or LR/LRN. Reads the same shipment record the portals use (kept current by carrier
+ * webhooks and the background poll). Returns buyer-facing facts only: carrier, service, status, ETA and a scan
+ * timeline (status, city, time) — never names, phone numbers, addresses, documents, charges or account data.
  */
-export async function publicTrack(awbRaw: string) {
-  const awb = awbRaw.trim().toUpperCase();
-  if (!/^[A-Z0-9-]{6,40}$/.test(awb)) return null;
+export async function publicTrack(raw: string): Promise<PublicTrack> {
+  const q = raw.trim().toUpperCase().replace(/\s+/g, "");
+  if (!/^[A-Z0-9-]{6,40}$/.test(q)) return { kind: "invalid" };
   const db = await getDb();
-  const [s] = await db.select({
-    id: schema.shipments.id, awb: schema.shipments.awb, carrierName: schema.shipments.carrierName,
-    carrierCode: schema.shipments.carrierCode, status: schema.shipments.status, etaDate: schema.shipments.etaDate,
-    provider: schema.shipments.provider,
-  }).from(schema.shipments).where(and(eq(schema.shipments.awb, awb)));
-  if (!s) return null;
-  const events = await db.select({
-    status: schema.shipmentEvents.status, location: schema.shipmentEvents.location, occurredAt: schema.shipmentEvents.occurredAt,
-  }).from(schema.shipmentEvents).where(eq(schema.shipmentEvents.shipmentId, s.id)).orderBy(asc(schema.shipmentEvents.occurredAt));
+  const rows = await db.select().from(schema.shipments).where(or(eq(schema.shipments.awb, q), eq(schema.shipments.lrNumber, q), eq(schema.shipments.providerOrderRef, q)))
+    .orderBy(desc(schema.shipments.createdAt)).limit(1);
+  const s = rows[0];
+  if (!s || s.bookingStatus === "failed") return { kind: "not_found" };
+  if (!s.awb) return { kind: "awb_pending", carrierName: s.carrierName, serviceName: s.serviceName };
+  const events = await db.select({ status: schema.shipmentEvents.status, location: schema.shipmentEvents.location, occurredAt: schema.shipmentEvents.occurredAt })
+    .from(schema.shipmentEvents).where(eq(schema.shipmentEvents.shipmentId, s.id)).orderBy(asc(schema.shipmentEvents.occurredAt));
+  const last = events[events.length - 1];
+  const lastWithPlace = [...events].reverse().find((e) => e.location);
+  const delivered = [...events].reverse().find((e) => e.status === "delivered" || e.status === "reverse_delivered");
+  const active = !["delivered", "rto_delivered", "cancelled", "lost", "reverse_delivered"].includes(s.status);
+  // No courier scan for 3 days on an active shipment → tell the buyer updates may be delayed.
+  const stale = active && s.provider !== "demo" && Date.now() - (last?.occurredAt ?? s.createdAt).getTime() > 3 * 86400_000;
   return {
-    awb: s.awb!, carrierName: s.carrierName, carrierCode: s.carrierCode, status: s.status,
-    statusLabel: STATUS_LABEL[s.status] ?? s.status, etaDate: s.etaDate?.toISOString() ?? null, isDemo: s.provider === "demo",
+    kind: "found", awb: s.awb, lr: s.lrNumber && s.lrNumber !== s.awb ? s.lrNumber : null, carrierName: s.carrierName, carrierCode: s.carrierCode, serviceName: s.serviceName,
+    status: s.status, statusLabel: STATUS_LABEL[s.status] ?? s.status, etaDate: s.etaDate?.toISOString() ?? null, deliveredAt: delivered?.occurredAt.toISOString() ?? null,
+    lastLocation: lastWithPlace?.location ?? null, lastAt: last?.occurredAt.toISOString() ?? null, stale, isDemo: s.provider === "demo",
     events: events.map((e) => ({ status: STATUS_LABEL[e.status] ?? e.status, location: e.location ?? null, at: e.occurredAt.toISOString() })),
   };
 }

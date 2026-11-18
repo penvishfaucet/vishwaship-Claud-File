@@ -4,11 +4,14 @@ import { apiError, parseJson } from "@/server/http";
 import { QuoteInput, toQuoteRequest } from "@/server/quotes/input";
 import { getQuotes } from "@/server/quotes/service";
 import { clientIp, rateLimit } from "@/server/security/rate-limit";
+import { getSiteContent } from "@/server/site/content";
 
 /** Public calculator: always priced with the global markup (orgId = null). */
 export async function POST(req: Request) {
   const rl = await rateLimit(`pubquote:${clientIp(req)}`, 30, 60);
   if (!rl.ok) return apiError(429, "rate_limited", "Too many rate checks. Please wait a minute.", { retryAfter: rl.retryAfter });
+  const site = await getSiteContent().catch(() => null);
+  if (site && !site.features.calculator) return apiError(503, "provider_error", site.features.unavailableText);
   const p = await parseJson(req, QuoteInput);
   if (!p.ok) return p.res;
   const { offers, errors } = await getQuotes(toQuoteRequest(p.data), null);

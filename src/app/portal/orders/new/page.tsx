@@ -13,7 +13,7 @@ function parsePk(v?: string) {
   return out.length ? out : undefined;
 }
 
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string; pay?: string; cod?: string; pk?: string }> }) {
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string; pay?: string; cod?: string; pk?: string; qc?: string; qs?: string; qt?: string }> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const db = await getDb();
@@ -50,7 +50,8 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           direction={sp.direction === "reverse" ? "reverse" : "forward"}
           initial={{ destination: sp.dest, weightKg: sp.weight, mode: sp.mode === "B2B" ? "B2B" : sp.mode === "B2C" ? "B2C" : undefined,
             payment: sp.pay === "cod" || sp.pay === "fod" || sp.pay === "prepaid" ? sp.pay : undefined, codAmount: sp.cod && /^\d{1,7}(\.\d{1,2})?$/.test(sp.cod) ? sp.cod : undefined,
-            packages: parsePk(sp.pk) }}
+            packages: parsePk(sp.pk),
+            calc: sp.qc && sp.qs && /^[0-9]{1,9}$/.test(sp.qt ?? "") ? { carrierCode: sp.qc.slice(0, 60), serviceName: sp.qs.slice(0, 120), totalPaise: Number(sp.qt) } : undefined }}
           library={library}
         />
       )}

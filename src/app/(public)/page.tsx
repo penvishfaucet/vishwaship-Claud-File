@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
 import { HeroMedia } from "@/components/site/HeroMedia";
+import { HeroCtas, HeroTrack } from "@/components/site/HeroCtas";
+import { OfferStrip } from "@/components/site/OfferStrip";
+import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
-import { completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
+import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
 import { b2bThresholdGrams, getSiteContent } from "@/server/site/content";
 
 export const dynamic = "force-dynamic";
@@ -18,23 +21,22 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const partners = visiblePartners(c.partners);
   const kg = (await b2bThresholdGrams()) / 1000;
   const regions = c.team.members.filter((m) => m.visible && m.name.trim());
-  const signup = safeHref(c.links.signUp, "/signup/");
+  const signup = accountHref(c.links.signUp, "/signup/");
+  const auth = await siteAuth();
   return (
     <>
-      <section className="w-hero" aria-labelledby="hero-h">
-        <HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} />
+      <section className="w-hero w-hero2" aria-labelledby="hero-h">
         <div className="w-wrap in">
-          <span className="w-eyebrow">Parcels &amp; cargo across India</span>
-          <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
-          <p className="w-lead">{h.heroText}</p>
-          <div className="w-btns">
-            <Link className="w-btn pri" href="/shipping-rate-calculator/">{h.primaryCta} <ArrowRight size={18} aria-hidden="true" /></Link>
-            <a className="w-btn sec" href={signup}>{h.secondaryCta}</a>
+          <div className="txt">
+            <span className="w-eyebrow">Parcels &amp; cargo across India</span>
+            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
+            <p className="w-lead">{h.heroText}</p>
+            <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta }} />
+            <div className="w-hero-offers"><OfferStrip offers={c.offers} where="home" variant="dark" /></div>
           </div>
-          <div className="w-hero-checks">
-            <span><Check size={16} aria-hidden="true" />B2C parcels &amp; B2B cargo</span>
-            <span><Check size={16} aria-hidden="true" />Compare courier rates</span>
-            <span><Check size={16} aria-hidden="true" />Pickup &amp; tracking</span>
+          <div className="media">
+            <div className="frame"><HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} /></div>
+            {c.features.tracking && <div className="w-hero-track"><HeroTrack heading={h.trackHeading} /></div>}
           </div>
         </div>
       </section>
@@ -152,7 +154,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           <div className="w-cta">
             <div><h2 className="w-h2" style={{ margin: 0 }}>{h.ctaTitle}</h2><p>{h.ctaText}</p></div>
             <div className="w-btns" style={{ marginTop: 0 }}>
-              <a className="w-btn pri" href={signup}>{h.secondaryCta}</a>
+              {auth.customer ? <Link className="w-btn pri" href="/portal/orders/new/">Create Shipment</Link> : <a className="w-btn pri" href={signup}>{h.secondaryCta}</a>}
               <Link className="w-btn sec" href="/shipping-rate-calculator/"><Boxes size={18} aria-hidden="true" />Calculate rates</Link>
             </div>
           </div>

@@ -26,7 +26,7 @@ const PRESETS: Array<{ label: string; pkg: Pkg }> = [
 
 const STEPS = ["Addresses", "Packages", "Courier & Payment"] as const;
 
-export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" | "B2C"; payment?: "prepaid" | "cod" | "fod"; codAmount?: string; packages?: Pkg[] }; library?: Library }) {
+export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" | "B2C"; payment?: "prepaid" | "cod" | "fod"; codAmount?: string; packages?: Pkg[]; calc?: { carrierCode: string; serviceName: string; totalPaise: number } }; library?: Library }) {
   const lib = props.library ?? { buyers: [], products: [], presets: [], tags: [] };
   const myPresets: Array<{ label: string; pkg: Pkg }> = lib.presets.map((p) => ({ label: `${p.name} ${p.l}×${p.b}×${p.h}`, pkg: { count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(Math.max(p.tareKg, 0.1)) } }));
   const allPresets = [...myPresets, ...PRESETS];
@@ -190,7 +190,9 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.message ?? "Could not fetch rates");
       setOffers(j.offers); setNotices(j.notices ?? []);
-      if (j.offers[0]) setSelected(j.offers[0].quoteId);
+      // Coming from the public Rate Calculator: preselect the same service so any price change is visible.
+      const same = props.initial.calc ? (j.offers as OfferView[]).find((o) => o.carrierCode === props.initial.calc!.carrierCode && o.serviceName === props.initial.calc!.serviceName) : undefined;
+      if (same) setSelected(same.quoteId); else if (j.offers[0]) setSelected(j.offers[0].quoteId);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
@@ -458,6 +460,13 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
               {offers && offers.length === 0 && <p className="muted mt12">{payment === "fod" ? "FOD (freight paid by the receiver) is not available yet for this route. It is offered only on Delhivery B2B once Vishwaship has activated it — choose Prepaid or COD for now." : "No courier services this route for these details. Try changing payment type, weight or B2C/B2B."}</p>}
               {offers && notices.length > 0 && <details className="mt8 small"><summary className="muted">{notices.length} service{notices.length === 1 ? "" : "s"} gave no rate — why?</summary><ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{notices.map((n) => <li key={n}>{n}</li>)}</ul><button type="button" className="btn btn-sm btn-outline mt8" onClick={fetchQuotes} disabled={busy}>Retry</button></details>}
               {offers?.some((o) => o.isDemo) && <p className="mt8"><span className="demo-badge">DEMO RATES</span></p>}
+              {offers && props.initial.calc && (() => {
+                const k = props.initial.calc;
+                const same = offers.find((o) => o.carrierCode === k.carrierCode && o.serviceName === k.serviceName);
+                if (!same) return <p className="note small mt8" role="status">The service you picked in the Rate Calculator ({k.serviceName}) is not available for these details now. Choose one of the live rates below.</p>;
+                if (same.total === k.totalPaise) return <p className="note small mt8" role="status">Same price as in the Rate Calculator: <b>{formatINR(same.total)}</b> for {same.carrierName} · {same.serviceName}.</p>;
+                return <p className="note small mt8" role="alert"><b>Price updated:</b> {same.carrierName} · {same.serviceName} was {formatINR(k.totalPaise)} in the Rate Calculator and is now <b>{formatINR(same.total)}</b> for your account and pickup address. Check before booking.</p>;
+              })()}
               <div className="col mt12" style={{ gap: 10 }} role="radiogroup" aria-label="Courier options">
                 {offers?.map((o) => {
                   const logo = carrierLogo(o.carrierCode);

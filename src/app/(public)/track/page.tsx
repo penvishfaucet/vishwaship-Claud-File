@@ -1,56 +1,93 @@
 import { headers } from "next/headers";
-import { TrackForm } from "@/components/public/TrackForm";
+import Link from "next/link";
+import { CheckCircle2, Clock, MapPin, PackageSearch, Search, Truck } from "lucide-react";
 import { carrierLogo } from "@/lib/site";
 import { rateLimit } from "@/server/security/rate-limit";
-import { publicTrack } from "@/server/tracking/public";
+import { type PublicTrack, publicTrack } from "@/server/tracking/public";
+import { getSiteContent } from "@/server/site/content";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Track Shipment — Vishwaship.com" };
+export const metadata = { title: "Track Shipment — Vishwaship", description: "Track your Vishwaship shipment by AWB or LR number." };
 
-const fmt = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+const fmt = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });
 
 export default async function TrackPage({ searchParams }: { searchParams: Promise<{ awb?: string }> }) {
   const { awb } = await searchParams;
-  let result: Awaited<ReturnType<typeof publicTrack>> = null;
-  let limited = false;
-  if (awb) {
+  const c = await getSiteContent();
+  const q = (awb ?? "").trim().slice(0, 60);
+  let result: PublicTrack | null = null;
+  let limited = false, failed = false;
+  if (q && c.features.tracking) {
     const h = await headers();
     const ip = (h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
-    // Anti-enumeration: 20 lookups / 10 min per IP; identical "not found" for invalid and unknown AWBs.
+    // Anti-enumeration: 20 lookups / 10 min per IP; the same "not found" for every unknown number.
     const rl = await rateLimit(`track:${ip}`, 20, 600);
     limited = !rl.ok;
-    if (!limited) result = await publicTrack(awb);
+    if (!limited) { try { result = await publicTrack(q); } catch { failed = true; } }
   }
-  const logo = result ? carrierLogo(result.carrierCode) : null;
+  const r = result?.kind === "found" ? result : null;
+  const logo = r ? carrierLogo(r.carrierCode) : null;
   return (
-    <section className="vs-sec">
-      <div className="vs-wrap" style={{ maxWidth: 820 }}>
-        <span className="vs-eyebrow">TRACK SHIPMENT</span>
-        <h1 className="vs-h2">Where’s your shipment?</h1>
-        <div className="vs-trackcard mt16"><TrackForm initial={awb ?? ""} /></div>
-        {limited && <p className="err mt16" role="alert">Too many lookups. Please try again in a few minutes.</p>}
-        {awb && !limited && !result && <p className="card trk-card" role="status">We couldn’t find a shipment with that AWB. Check the number and try again, or log in to see all your shipments.</p>}
-        {result && (
-          <div className="card trk-card" aria-live="polite">
-            <div className="row between wrap" style={{ gap: 16 }}>
-              <div className="row" style={{ gap: 12, alignItems: "center" }}>
-                {logo && <img src={logo} alt={result.carrierName} style={{ height: 30 }} />}
-                <div><div className="tiny muted">AWB</div><div className="b mono">{result.awb}</div></div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div className="b" style={{ fontSize: 20 }}>{result.statusLabel}</div>
-                {result.etaDate && <div className="tiny muted">Expected by {new Date(result.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })}</div>}
-              </div>
+    <section className="w-sec" style={{ paddingTop: 48 }} aria-labelledby="trk-h">
+      <div className="w-wrap" style={{ maxWidth: 880 }}>
+        <span className="w-eyebrow">Track shipment</span>
+        <h1 id="trk-h" className="w-h2" style={{ fontSize: "clamp(30px,4vw,46px)" }}>Where is my shipment?</h1>
+        <p className="w-lead">Enter the AWB number from your label or SMS. Business (B2B) consignments can also be tracked by LR / LRN.</p>
+        {!c.features.tracking ? (
+          <p className="w-card" role="status" style={{ marginTop: 24, padding: 24 }}>{c.features.unavailableText}</p>
+        ) : (
+          <form className="w-card w-trkform" action="/track/" method="get" role="search">
+            <label htmlFor="trk-awb">AWB or LR number</label>
+            <div className="f">
+              <input id="trk-awb" name="awb" className="w-in" defaultValue={q} placeholder="e.g. 22784714346650" autoComplete="off" maxLength={40} required />
+              <button className="w-btn pri" type="submit"><Search size={18} aria-hidden="true" />Track</button>
             </div>
-            {result.isDemo && <p className="mt8"><span className="demo-badge">DEMO SHIPMENT</span></p>}
-            <ol className="trk-tl">
-              {[...result.events].reverse().map((e, i) => (
-                <li key={i} className={i === 0 ? "cur" : ""}><span className="b small">{e.status}{e.location ? <span className="muted"> · {e.location}</span> : null}</span><span className="tiny muted">{fmt(e.at)}</span></li>
-              ))}
-            </ol>
-          </div>
+          </form>
         )}
+
+        <div aria-live="polite">
+          {limited && <Msg tone="bad" title="Too many lookups">Please wait a few minutes and try again.</Msg>}
+          {failed && <Msg tone="bad" title="Tracking is temporarily unavailable">We could not reach the tracking service just now. Please try again shortly.</Msg>}
+          {result?.kind === "invalid" && <Msg tone="bad" title="That doesn’t look like a tracking number">AWB and LR numbers have 6–40 letters or digits. Check the number on your label and try again.</Msg>}
+          {result?.kind === "not_found" && <Msg tone="bad" title="Shipment not found">We couldn’t find a shipment with “{q}”. Check the number, or contact the seller. If you booked it, <Link href={`/login/?next=${encodeURIComponent("/portal/track/")}`}>log in</Link> to see all your shipments.</Msg>}
+          {result?.kind === "awb_pending" && <Msg tone="info" title="Booking received — AWB pending">{result.carrierName} ({result.serviceName}) has accepted the booking and is assigning the AWB. Tracking starts once the courier confirms it.</Msg>}
+        </div>
+
+        {r && (
+          <article className="w-card w-trk" aria-labelledby="trk-res">
+            <header>
+              <div className="who">
+                {logo ? <img src={logo} alt="" /> : <span className="ph"><Truck size={22} aria-hidden="true" /></span>}
+                <div><b id="trk-res">{r.carrierName}</b><span>{r.serviceName}</span></div>
+              </div>
+              <div className="st"><span className={`pill s-${r.status}`}>{r.statusLabel}</span>{r.isDemo && <span className="demo">Demo shipment</span>}</div>
+            </header>
+            <dl>
+              <div><dt>AWB</dt><dd className="mono">{r.awb}</dd></div>
+              {r.lr && <div><dt>LR / LRN</dt><dd className="mono">{r.lr}</dd></div>}
+              <div><dt><MapPin size={14} aria-hidden="true" /> Latest scan</dt><dd>{r.lastLocation ?? "—"}{r.lastAt ? <span>{fmt(r.lastAt)}</span> : null}</dd></div>
+              {r.deliveredAt
+                ? <div><dt><CheckCircle2 size={14} aria-hidden="true" /> Delivered</dt><dd>{fmt(r.deliveredAt)}</dd></div>
+                : r.etaDate ? <div><dt><Clock size={14} aria-hidden="true" /> Estimated delivery</dt><dd>{day(r.etaDate)}</dd></div> : null}
+            </dl>
+            {r.stale && <p className="note">No new scan from the courier for a few days. Updates may be delayed — check again later or contact the seller.</p>}
+            <h2>Tracking history</h2>
+            {r.events.length === 0 ? <p className="muted">No courier scans yet.</p> : (
+              <ol className="w-tl">
+                {[...r.events].reverse().map((e, i) => (
+                  <li key={i} className={i === 0 ? "cur" : undefined}><b>{e.status}</b><span>{fmt(e.at)}{e.location ? ` · ${e.location}` : ""}</span></li>
+                ))}
+              </ol>
+            )}
+          </article>
+        )}
+        {!q && c.features.tracking && <p className="w-trk-hint"><PackageSearch size={18} aria-hidden="true" />Sellers: log in to the dashboard to track every shipment with full details.</p>}
       </div>
     </section>
   );
+}
+
+function Msg({ tone, title, children }: { tone: "bad" | "info"; title: string; children: React.ReactNode }) {
+  return <div className={`w-card w-msg ${tone}`} role={tone === "bad" ? "alert" : "status"}><b>{title}</b><p>{children}</p></div>;
 }

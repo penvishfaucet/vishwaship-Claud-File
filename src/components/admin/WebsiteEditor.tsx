@@ -4,10 +4,10 @@ import { PhotoCropper } from "@/components/admin/PhotoCropper";
 import { completeMobile, type SectionKey, type SiteContent, type TeamMember } from "@/lib/site-content";
 
 type SecState = { value: unknown; published: boolean; unpublished: boolean; publishedAt: string | null };
-type Tab = "home" | "about" | "care" | "office" | "partners" | "links" | "calc";
-const TABS: Array<[Tab, string]> = [["home", "Home"], ["partners", "Courier carousel"], ["care", "Customer Care & team"], ["office", "Head office & map"], ["about", "About Us"], ["links", "Navigation, links & footer"], ["calc", "Calculator"]];
-const TAB_SECTIONS: Record<Tab, SectionKey[]> = { home: ["home"], about: ["about"], care: ["care", "team"], office: ["office"], partners: ["partners"], links: ["links", "footer"], calc: [] };
-const PREVIEW: Record<Tab, string> = { home: "/", about: "/about-us/", care: "/customer-care/", office: "/customer-care/", partners: "/", links: "/", calc: "/shipping-rate-calculator/" };
+type Tab = "home" | "about" | "care" | "office" | "partners" | "links" | "offers" | "calc";
+const TABS: Array<[Tab, string]> = [["home", "Home"], ["partners", "Courier carousel"], ["care", "Customer Care & team"], ["office", "Head office & map"], ["about", "About Us"], ["links", "Navigation, links & footer"], ["offers", "Offers & features"], ["calc", "Calculator"]];
+const TAB_SECTIONS: Record<Tab, SectionKey[]> = { home: ["home"], about: ["about"], care: ["care", "team"], office: ["office"], partners: ["partners"], links: ["links", "footer"], offers: ["offers", "features"], calc: [] };
+const PREVIEW: Record<Tab, string> = { home: "/", about: "/about-us/", care: "/customer-care/", office: "/customer-care/", partners: "/", links: "/", offers: "/shipping-rate-calculator/", calc: "/shipping-rate-calculator/" };
 
 async function upload(file: Blob, name: string): Promise<string> {
   const fd = new FormData();
@@ -126,9 +126,11 @@ export function WebsiteEditor({ initial, thresholdGrams }: { initial: Record<Sec
           <section className="card" style={{ padding: 16 }}><h2 className="small b">Hero</h2>
             <div className="split" style={{ gap: 12 }}><Field label="Slogan line 1" value={h.heroLine1} onChange={(v) => upd("home", { heroLine1: v })} /><Field label="Slogan line 2 (orange)" value={h.heroLine2} onChange={(v) => upd("home", { heroLine2: v })} /></div>
             <Field label="Supporting text" area value={h.heroText} onChange={(v) => upd("home", { heroText: v })} />
-            <div className="split" style={{ gap: 12 }}><Field label="Primary button (→ Rate Calculator)" value={h.primaryCta} onChange={(v) => upd("home", { primaryCta: v })} /><Field label="Secondary button (→ Sign Up)" value={h.secondaryCta} onChange={(v) => upd("home", { secondaryCta: v })} /></div>
-            <MediaField label="Hero background video (MP4/WebM, muted, max 20 MB)" accept="video/mp4,video/webm" value={h.heroVideoUrl} onChange={(v) => upd("home", { heroVideoUrl: v })} hint="Keep it short (10–20 s) and compressed. Visitors with reduced motion or data saver see the poster." />
-            <MediaField label="Poster image (shown before/instead of the video)" accept="image/png,image/jpeg,image/webp" value={h.heroPosterUrl} onChange={(v) => upd("home", { heroPosterUrl: v })} hint="1920×1080 JPG or WebP under 400 KB recommended." />
+            <div className="split" style={{ gap: 12 }}><Field label="Primary button (→ Rate Calculator)" value={h.primaryCta} onChange={(v) => upd("home", { primaryCta: v })} /><Field label="Create Account button" value={h.secondaryCta} onChange={(v) => upd("home", { secondaryCta: v })} /></div>
+            <div className="split" style={{ gap: 12 }}><Field label="Login button (returning visitors)" value={h.loginCta} onChange={(v) => upd("home", { loginCta: v })} /><Field label="Dashboard button (signed-in customers)" value={h.dashboardCta} onChange={(v) => upd("home", { dashboardCta: v })} /></div>
+            <Field label="Track box heading (hero)" value={h.trackHeading} onChange={(v) => upd("home", { trackHeading: v })} />
+            <MediaField label="Hero video (right side; MP4/WebM, muted, max 20 MB)" accept="video/mp4,video/webm" value={h.heroVideoUrl} onChange={(v) => upd("home", { heroVideoUrl: v })} hint="Keep it short (10–20 s) and compressed. Visitors with reduced motion or data saver see the poster." />
+            <MediaField label="Hero image / video fallback (right side)" accept="image/png,image/jpeg,image/webp" value={h.heroPosterUrl} onChange={(v) => upd("home", { heroPosterUrl: v })} hint="1920×1080 JPG or WebP under 400 KB recommended." />
           </section>
           <section className="card" style={{ padding: 16 }}><h2 className="small b">Sections</h2>
             <Field label="Courier carousel heading" value={h.partnersHeading} onChange={(v) => upd("home", { partnersHeading: v })} />
@@ -247,14 +249,37 @@ export function WebsiteEditor({ initial, thresholdGrams }: { initial: Record<Sec
       {tab === "links" && (
         <div className="col" style={{ gap: 14 }}>
           <section className="card" style={{ padding: 16 }}><h2 className="small b">Account links (header &amp; footer)</h2>
-            <Field label="Customer Login" value={data.links.customerLogin} onChange={(v) => upd("links", { customerLogin: v })} hint="https:// address or a site path like /login/" />
-            <Field label="Sign Up" value={data.links.signUp} onChange={(v) => upd("links", { signUp: v })} />
-            <Field label="Franchise Login (footer)" value={data.links.franchiseLogin} onChange={(v) => upd("links", { franchiseLogin: v })} />
+            <Field label="Customer Login / Login" value={data.links.customerLogin} onChange={(v) => upd("links", { customerLogin: v })} hint="Confirmed: https://vishwaship.in/login/" />
+            <Field label="Sign Up / Create Account" value={data.links.signUp} onChange={(v) => upd("links", { signUp: v })} hint="Confirmed: https://vishwaship.in/signup/" />
+            <Field label="Admin / Franchise Login" value={data.links.franchiseLogin} onChange={(v) => upd("links", { franchiseLogin: v })} hint="Confirmed: https://vishwaship.in/admin/login/" />
           </section>
           <section className="card" style={{ padding: 16 }}><h2 className="small b">Footer &amp; support details</h2>
             <Field label="Tagline" value={data.footer.tagline} onChange={(v) => upd("footer", { tagline: v })} />
             <div className="split" style={{ gap: 10 }}><Field label="Phone" value={data.footer.phone} onChange={(v) => upd("footer", { phone: v })} /><Field label="Email" value={data.footer.email} onChange={(v) => upd("footer", { email: v })} /></div>
             <Field label="Support hours" value={data.footer.hours} onChange={(v) => upd("footer", { hours: v })} />
+          </section>
+        </div>
+      )}
+
+      {tab === "offers" && (
+        <div className="col" style={{ gap: 14 }}>
+          <section className="card" style={{ padding: 16 }}><h2 className="small b">Starting-price offers</h2>
+            <p className="small muted">Shown as highlights only. Rate cards always show the live calculated price for the entered shipment.</p>
+            <label className="check"><input type="checkbox" checked={data.offers.visible} onChange={(e) => upd("offers", { visible: e.target.checked })} /> Show offers</label>
+            <div className="row wrap" style={{ gap: 16, margin: "8px 0" }}>
+              <label className="check"><input type="checkbox" checked={data.offers.showOnHome} onChange={(e) => upd("offers", { showOnHome: e.target.checked })} /> Home page</label>
+              <label className="check"><input type="checkbox" checked={data.offers.showOnCalculator} onChange={(e) => upd("offers", { showOnCalculator: e.target.checked })} /> Rate Calculator</label>
+              <label className="check"><input type="checkbox" checked={data.offers.showOnDashboard} onChange={(e) => upd("offers", { showOnDashboard: e.target.checked })} /> Customer Dashboard</label>
+            </div>
+            <Field label="COD message" value={data.offers.codText} onChange={(v) => upd("offers", { codText: v })} hint="Leave empty to hide this item." />
+            <div className="split" style={{ gap: 12 }}><Field label="Parcel text" value={data.offers.parcelLabel} onChange={(v) => upd("offers", { parcelLabel: v })} /><Field label="Parcel starting price" value={data.offers.parcelPrice} onChange={(v) => upd("offers", { parcelPrice: v })} /></div>
+            <div className="split" style={{ gap: 12 }}><Field label="Cargo text" value={data.offers.cargoLabel} onChange={(v) => upd("offers", { cargoLabel: v })} /><Field label="Cargo starting price" value={data.offers.cargoPrice} onChange={(v) => upd("offers", { cargoPrice: v })} /></div>
+            <Field label="Supporting text" area value={data.offers.note} onChange={(v) => upd("offers", { note: v })} />
+          </section>
+          <section className="card" style={{ padding: 16 }}><h2 className="small b">Public features</h2>
+            <label className="check"><input type="checkbox" checked={data.features.calculator} onChange={(e) => upd("features", { calculator: e.target.checked })} /> Rate Calculator available to visitors</label>
+            <label className="check"><input type="checkbox" checked={data.features.tracking} onChange={(e) => upd("features", { tracking: e.target.checked })} /> Public Track Shipment available</label>
+            <Field label="Message when a feature is switched off" value={data.features.unavailableText} onChange={(v) => upd("features", { unavailableText: v })} />
           </section>
         </div>
       )}

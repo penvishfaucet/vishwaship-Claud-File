@@ -4,11 +4,14 @@ import { useActionState } from "react";
 import { Info } from "lucide-react";
 import { type FormState, customerLogin, customerSignup, staffLogin } from "@/server/auth/actions";
 
-function Seg({ active }: { active: "signup" | "login" }) {
+/** Keep the return path (e.g. a booking started in the Rate Calculator) when switching between Login and Sign up. */
+const withNext = (path: string, next?: string) => (next && next.startsWith("/") && !next.startsWith("//") ? `${path}?next=${encodeURIComponent(next)}` : path);
+
+function Seg({ active, next }: { active: "signup" | "login"; next?: string }) {
   return (
     <div className="seg mb16" style={{ width: "fit-content" }}>
-      <Link href="/signup/" className={active === "signup" ? "on" : ""} style={{ width: 110, textAlign: "center" }}>Sign up</Link>
-      <Link href="/login/" className={active === "login" ? "on" : ""} style={{ width: 110, textAlign: "center" }}>Login</Link>
+      <Link href={withNext("/signup/", next)} className={active === "signup" ? "on" : ""} style={{ width: 110, textAlign: "center" }}>Sign up</Link>
+      <Link href={withNext("/login/", next)} className={active === "login" ? "on" : ""} style={{ width: 110, textAlign: "center" }}>Login</Link>
     </div>
   );
 }
@@ -19,7 +22,7 @@ export function LoginForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState(customerLogin, undefined);
   return (
     <>
-      <Seg active="login" />
+      <Seg active="login" next={next} />
       <h1 style={{ fontSize: 24 }}>Welcome back</h1>
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Login with your email or mobile number</p>
       <form className="col" style={{ gap: 14 }} action={action}>
@@ -28,20 +31,21 @@ export function LoginForm({ next }: { next?: string }) {
         <div className="field"><label htmlFor="password">Password</label><input id="password" name="password" className="input" type="password" required autoComplete="current-password" /></div>
         <Err s={state} />
         <button className="btn btn-orange btn-lg btn-block" disabled={pending}>{pending ? "Logging in…" : "Login"}</button>
-        <div className="center small muted">New here? <Link className="link" href="/signup/">Create account</Link> · <Link className="link-navy" href="/forgot-password/">Forgot password</Link> · <Link className="link-navy" href="/admin/login/">Admin login</Link></div>
+        <div className="center small muted">New here? <Link className="link" href={withNext("/signup/", next)}>Create account</Link> · <Link className="link-navy" href="/forgot-password/">Forgot password</Link> · <Link className="link-navy" href="/admin/login/">Admin login</Link></div>
       </form>
     </>
   );
 }
 
-export function SignupForm() {
+export function SignupForm({ next }: { next?: string }) {
   const [state, action, pending] = useActionState(customerSignup, undefined);
   return (
     <>
-      <Seg active="signup" />
+      <Seg active="signup" next={next} />
       <h1 style={{ fontSize: 24 }}>Create your account</h1>
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Start shipping in 2 minutes</p>
       <form className="col" style={{ gap: 14 }} action={action}>
+        <input type="hidden" name="next" value={next ?? ""} />
         <div className="grid2">
           <div className="field"><label htmlFor="name">Full name</label><input id="name" name="name" className="input" placeholder="Rahul Kumar" required autoComplete="name" /></div>
           <div className="field"><label htmlFor="business">Business name</label><input id="business" name="business" className="input" placeholder="Kumar Traders" required autoComplete="organization" /></div>
@@ -56,7 +60,7 @@ export function SignupForm() {
         <label className="check"><input type="checkbox" name="terms" required /> I agree to the <Link className="link" target="_blank" href="/terms/">Terms &amp; shipping policy</Link></label>
         <Err s={state} />
         <button className="btn btn-orange btn-lg btn-block" disabled={pending}>{pending ? "Creating account…" : "Create account"}</button>
-        <div className="center small muted">Already have an account? <Link className="link" href="/login/">Login</Link></div>
+        <div className="center small muted">Already have an account? <Link className="link" href={withNext("/login/", next)}>Login</Link></div>
         <div className="note row" style={{ gap: 6 }}><Info size={16} /> After sign-up: KYC (PAN / GST / Aadhaar) → add pickup address → recharge wallet → book</div>
       </form>
     </>

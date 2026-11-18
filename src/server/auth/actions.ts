@@ -75,7 +75,7 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   await audit({ actorUserId: userId, actorKind: "customer", orgId, action: "auth.signup" });
   // Email/mobile verification is sent by the notification worker once a provider is configured.
   await createSession(userId, "customer", m);
-  redirect("/portal/?welcome=1");
+  redirect(safeNext(fd.get("next"), "/portal/?welcome=1"));
 }
 
 export async function customerLogout() {

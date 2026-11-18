@@ -9,6 +9,7 @@ import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
 import { QuickSearch } from "./QuickSearch";
 import { SidebarBrand } from "@/components/BrandLogo";
+import { rememberBrowser } from "@/components/site/nav";
 
 interface Props {
   user: { name: string; orgName: string; kycStatus: string; email?: string | null };
@@ -70,6 +71,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
       const dark = m === "dark" || (m === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
       document.documentElement.classList.toggle("dark", dark);
       setPinned(localStorage.getItem("vs-side-pinned") === "1");
+      rememberBrowser(); // signed-in on this browser → public site shows Login first next time
     } catch { /* storage blocked: defaults */ }
     const k = (e: KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") { e.preventDefault(); setQs(true); } };
     document.addEventListener("keydown", k);

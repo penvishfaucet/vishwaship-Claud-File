@@ -10,6 +10,9 @@ import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
 import { BUCKETS, type BucketKey, bucketCounts, dashRange, isBucket } from "@/server/portal/buckets";
 import { portalContext } from "@/server/portal/context";
+import { OfferStrip } from "@/components/site/OfferStrip";
+import { DEFAULTS } from "@/lib/site-content";
+import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
 
 const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
@@ -36,9 +39,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const href = (b: BucketKey) => `/portal/orders/?bucket=${b}&${rq}`;
   const counts = await bucketCounts(ctx.org.id, r, [...new Set<BucketKey>([...CARDS.map((c) => c.key), ...DONUT.map((d) => d.key), ...PIPE])]);
   const announcement = await t("portal.dashboard.announcement");
+  const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
   return (
     <>
       {announcement && <p className="note small mb12">{announcement}</p>}
+      <div className="mb12"><OfferStrip offers={offers} where="dashboard" variant="compact" /></div>
       {ctx.org.kycStatus !== "approved" && (
         <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
           <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>

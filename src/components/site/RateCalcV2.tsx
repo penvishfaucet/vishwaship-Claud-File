@@ -24,7 +24,11 @@ export function autoService(totalGrams: number, thresholdGrams: number): "B2C" |
 
 const PAY_LABEL: Record<Pay, string> = { prepaid: "Prepaid", cod: "COD", fod: "FOD (receiver pays freight)" };
 
-export function RateCalcV2({ thresholdGrams, logos, compact = false }: { thresholdGrams: number; logos: Record<string, string>; compact?: boolean }) {
+/**
+ * signedIn: Continue to Book goes straight to Create Shipment (account pricing is re-quoted there).
+ * Signed out: it goes to the Customer Login page (Sign up tab keeps the same return path) and resumes after login.
+ */
+export function RateCalcV2({ thresholdGrams, logos, compact = false, signedIn = false, loginHref = "/login/" }: { thresholdGrams: number; logos: Record<string, string>; compact?: boolean; signedIn?: boolean; loginHref?: string }) {
   const [origin, setOrigin] = useState("");
   const [dest, setDest] = useState("");
   const [oPin, setOPin] = useState<PinInfo>({ state: "idle" });
@@ -146,13 +150,13 @@ export function RateCalcV2({ thresholdGrams, logos, compact = false }: { thresho
 
   function bookHref(o: OfferView) {
     const pk = cartons.map((c) => [Math.floor(num(c.count)), num(c.l), num(c.b), num(c.h), num(c.w)].join("*")).join("~");
-    const q = new URLSearchParams({ dest, weight: String(totalG / 1000), mode: o.mode, pay, pk, ...(pay === "cod" ? { cod } : {}) });
+    const q = new URLSearchParams({ dest, weight: String(totalG / 1000), mode: o.mode, pay, pk, ...(pay === "cod" ? { cod } : {}), qc: o.carrierCode, qs: o.serviceName, qt: String(o.total) });
     return `/portal/orders/new/?${q.toString()}`;
   }
   function continueToBook(o: OfferView) {
     try { localStorage.setItem(STORE_KEY, JSON.stringify({ origin, dest, cartons, pay, cod, override } satisfies Saved)); } catch { /* ignore */ }
     const next = bookHref(o);
-    window.location.href = `/login/?next=${encodeURIComponent(next)}`;
+    window.location.href = signedIn ? next : `${loginHref}${loginHref.includes("?") ? "&" : "?"}next=${encodeURIComponent(next)}`;
   }
 
   const pinNote = (p: PinInfo) => p.state === "loading" ? <span className="hint">Finding city…</span>

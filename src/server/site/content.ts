@@ -5,7 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { can } from "@/server/auth/rbac";
 import { getSetting } from "@/server/quotes/service";
-import { DEFAULTS, SECTION_KEYS, SECTION_SCHEMAS, mergePartners, type SectionKey, type SiteContent } from "@/lib/site-content";
+import { DEFAULTS, SECTION_KEYS, SECTION_SCHEMAS, mergePartners, upgradeLinks, type SectionKey, type SiteContent } from "@/lib/site-content";
 
 /**
  * Website content lives in content_blocks under keys "site.<section>" (locale "en") as JSON text:
@@ -47,6 +47,7 @@ export async function getSiteContent(opts: { preview?: boolean } = {}): Promise<
   }
   const c = out as SiteContent;
   c.partners = { items: mergePartners(c.partners.items) };
+  c.links = upgradeLinks(c.links);
   return c;
 }
 
@@ -57,6 +58,7 @@ export async function getEditorState() {
     const row = rows.get(keyOf(s));
     const value = parseSection(s, row?.draft ?? row?.published);
     if (s === "partners") (value as SiteContent["partners"]).items = mergePartners((value as SiteContent["partners"]).items);
+    if (s === "links") Object.assign(value as object, upgradeLinks(value as SiteContent["links"]));
     return [s, { value, published: row?.published != null, unpublished: !!row && row.draft !== row.published, publishedAt: row?.publishedAt?.toISOString() ?? null }];
   })) as Record<SectionKey, { value: unknown; published: boolean; unpublished: boolean; publishedAt: string | null }>;
 }
