@@ -88,7 +88,12 @@ export interface TrackingEvent {
   location?: string;
   occurredAt: string;
   remark?: string;
+  /** Only when the carrier confirms the delivery address itself was changed (never from scan locations). */
+  destinationAmendment?: Partial<Address>;
 }
+
+/** One shipment's update parsed from a provider push (webhook). */
+export interface PushedUpdate { awb: string; events: TrackingEvent[]; etaDate?: string }
 
 export interface TrackResult {
   awb: string;
@@ -127,6 +132,8 @@ export interface ShippingAdapter {
   paymentModes?: PaymentMode[];
   track(ctx: ProviderContext, awb: string): Promise<Result<TrackResult>>;
   cancel(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string | null }): Promise<Result<{ acknowledged: boolean }>>;
+  /** Parse a verified tracking webhook body. Absent = provider has no documented push; we poll instead. */
+  parseTrackingWebhook?(body: unknown): Result<PushedUpdate[]>;
   ndrAction(ctx: ProviderContext, ref: { awb: string }, action: { kind: "reattempt" | "update_address" | "rto"; payload?: Record<string, unknown> }): Promise<Result<{ acknowledged: boolean }>>;
 }
 

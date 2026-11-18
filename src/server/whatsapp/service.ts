@@ -7,7 +7,7 @@ import { credit as walletCredit } from "@/server/ledger/wallet";
 import { withLedger } from "@/server/ledger/db-store";
 import { getAdapter, providerContext } from "@/server/providers/registry";
 import { getSetting } from "@/server/quotes/service";
-import { ensurePublicRef } from "@/server/tracking/service";
+import { ensurePublicRef, refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
 import { enqueue } from "@/server/jobs/runner";
 import { decisionFromReply, parseWatiWebhook, watiSendTemplate } from "./wati";
@@ -238,12 +238,36 @@ async function alert(orgId: string, orderId: string, title: string) {
   await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId, kind: "cod", title, href: `/portal/orders/${orderId}/` });
 }
 
+/**
+ * Pickup release gate for COD confirmation. A shipment whose buyer has not confirmed (pending /
+ * needs review / send failed / no response held for review) or who rejected the order must not be
+ * handed to the courier. Returns the reason, or null when pickup may be requested.
+ */
+export async function pickupBlockedByCod(orderId: string): Promise<string | null> {
+  const db = await getDb();
+  const [c] = await db.select().from(schema.codConfirmations).where(eq(schema.codConfirmations.orderId, orderId));
+  if (!c) return null;
+  if (c.cancellationStatus === "requested") return "Buyer cancelled this COD order on WhatsApp — cancellation with the courier is in progress";
+  if (c.cancellationStatus === "cancelled") return "This order was cancelled after the buyer's WhatsApp reply";
+  if (c.status === "rejected") return "Buyer selected Cancel Order on WhatsApp — cancel the shipment instead of scheduling pickup";
+  if (["pending", "needs_review", "send_failed"].includes(c.status)) return "Waiting for the buyer's WhatsApp COD confirmation — pickup is held until the buyer confirms";
+  if (c.status === "no_response" && (await codSettings()).noReply !== "release") return "Buyer did not reply to the COD confirmation — review the order before pickup";
+  return null;
+}
+
 /** Job cod.cancel — ask the carrier to cancel; refund the shipping charge once on acknowledgement. */
 export async function runCarrierCancellation(confirmationId: string, shipmentId: string, attempt: number): Promise<{ done: true } | { retryInSec: number; error?: string }> {
   const db = await getDb();
-  const [c] = await db.select().from(schema.codConfirmations).where(eq(schema.codConfirmations.id, confirmationId));
+  const [c0] = await db.select().from(schema.codConfirmations).where(eq(schema.codConfirmations.id, confirmationId));
+  if (!c0 || c0.cancellationStatus !== "requested") return { done: true };
+  // Pickup/cancellation race: ask the carrier for its latest status before cancelling (best effort —
+  // a failed lookup falls back to the stored status; the carrier's cancel answer is final either way).
+  // (Demo courier scans are simulated on request only, so they are not pulled here.)
+  const [pre] = await db.select({ provider: schema.shipments.provider }).from(schema.shipments).where(eq(schema.shipments.id, shipmentId));
+  if (pre && pre.provider !== "demo") await refreshFromCarrier(shipmentId).catch(() => null);
+  const c = c0;
   const [ship] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, shipmentId));
-  if (!c || !ship || c.cancellationStatus !== "requested") return { done: true };
+  if (!ship) return { done: true };
   if (!PRE_PICKUP.includes(ship.status)) {
     await setCancellation(c.id, "action_required", `Shipment moved to ${ship.status.replaceAll("_", " ")} before the courier cancelled it.`);
     await alert(c.orgId, c.orderId, "COD cancellation could not be completed — the shipment was already picked up. Action required.");

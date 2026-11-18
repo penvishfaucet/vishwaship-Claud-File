@@ -210,5 +210,23 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1794955266401,
   "hash": "36847f6a44e9f385e97c97d15214dd55e975e70fc5723dc87808b68a38ac6319"
+ },
+ {
+  "tag": "0007_orders_view",
+  "sql": [
+   "CREATE TABLE \"destination_amendments\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"order_id\" text NOT NULL,\n\t\"shipment_id\" text NOT NULL,\n\t\"previous\" jsonb NOT NULL,\n\t\"next\" jsonb NOT NULL,\n\t\"source\" text NOT NULL,\n\t\"dedupe_key\" text NOT NULL,\n\t\"occurred_at\" timestamp with time zone NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"destination_amendments_dedupe_key_unique\" UNIQUE(\"dedupe_key\")\n);\n",
+   "\nALTER TABLE \"orders\" ADD COLUMN \"archived_at\" timestamp with time zone;",
+   "\nALTER TABLE \"shipment_events\" ADD COLUMN \"remark\" text;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"last_location\" text;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"delivered_at\" timestamp with time zone;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"last_sync_at\" timestamp with time zone;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"last_sync_error\" text;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"sync_failures\" integer DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"users\" ADD COLUMN \"prefs\" jsonb DEFAULT '{}'::jsonb NOT NULL;",
+   "\nALTER TABLE \"destination_amendments\" ADD CONSTRAINT \"destination_amendments_order_id_orders_id_fk\" FOREIGN KEY (\"order_id\") REFERENCES \"public\".\"orders\"(\"id\") ON DELETE no action ON UPDATE no action;"
+  ],
+  "bps": true,
+  "folderMillis": 1794970223762,
+  "hash": "04c01b0284685b7e15263f07ef4b8c1db0f2e26d0028ef7ac82d5483a3fd8478"
  }
 ];

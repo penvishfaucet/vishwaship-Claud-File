@@ -4,6 +4,7 @@ import { cache } from "react";
 import { getDb, schema } from "@/server/db/client";
 import { NAV_LABEL_DEFAULTS } from "@/components/portal/nav";
 import { SITE } from "@/lib/site";
+import { TAB_GROUPS } from "@/lib/order-view";
 
 /**
  * Admin-editable customer-facing copy. Every key has a code default; Admin can save a draft and
@@ -30,11 +31,19 @@ const STATIC_KEYS = {
   "portal.edd.help": { label: "EDD widget — help text", default: "Show buyers an estimated delivery date on your product page. The widget only reveals the PIN code check and date, never your rates." },
 } as const;
 
+/** Orders page: status tab names and the COD line (names editable; order and mapping fixed). */
+const ORDER_KEYS: Record<string, { label: string; default: string }> = {
+  ...Object.fromEntries(TAB_GROUPS.flatMap((g) => g.tabs).map((tb) => [`portal.orders.tab.${tb.key}`, { label: `Orders - tab "${tb.label}"`, default: tb.label }])),
+  ...Object.fromEntries(TAB_GROUPS.filter((g) => g.title).map((g, i) => [`portal.orders.group.${i}`, { label: `Orders - tab group "${g.title}"`, default: g.title }])),
+  "portal.orders.cod_line": { label: "Orders - WhatsApp COD line label", default: "WhatsApp COD order confirmation" },
+  "portal.orders.international": { label: "Orders - International not available message", default: "International shipping is not enabled for your account yet. Contact Vishwaship support to activate it." },
+};
+
 const NAV_KEYS = Object.fromEntries(Object.entries(NAV_LABEL_DEFAULTS).map(([id, label]) => [`nav.${id}`, { label: `Sidebar — ${label}`, default: label }]));
 
-export const CONTENT_KEYS: Record<string, { label: string; default: string }> = { ...STATIC_KEYS, ...NAV_KEYS };
+export const CONTENT_KEYS: Record<string, { label: string; default: string }> = { ...STATIC_KEYS, ...ORDER_KEYS, ...NAV_KEYS };
 
-export type ContentKey = keyof typeof STATIC_KEYS | `nav.${string}`;
+export type ContentKey = keyof typeof STATIC_KEYS | `nav.${string}` | `portal.orders.${string}`;
 
 const loadPublished = cache(async (locale: string) => {
   const db = await getDb();

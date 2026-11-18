@@ -1,0 +1,177 @@
+"use client";
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { statusLabel } from "@/lib/status";
+import { COD_DISPLAY, codDisplay } from "@/lib/order-view";
+import type { OrderRow } from "@/server/orders/view";
+import { CodStatusText, CopyBtn, Dialog, ago, inr, istFull } from "./ui";
+
+type Timeline = {
+  orderNumber: string; carrier: string; service: string; awb: string | null; lr: string | null; status: string; etaDate: string | null; deliveredAt: string | null;
+  lastLocation: string | null; lastEventAt: string | null; lastSyncAt: string | null; lastSyncError: string | null; syncFailures: number; demo: boolean;
+  destination: { city?: string; state?: string; pincode?: string };
+  events: Array<{ status: string; raw: string | null; location: string | null; at: string; remark: string | null; source: string }>;
+  amendments: Array<{ at: string; previous: string; next: string }>;
+};
+
+/** Track: provider events, timestamps, locations, current status, ETA and sync health with Retry. */
+export function TrackDialog({ shipmentId, onClose, onChanged }: { shipmentId: string; onClose: () => void; onChanged: () => void }) {
+  const [d, setD] = useState<Timeline | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/portal/shipments/${shipmentId}/timeline`, { cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { setD(j); setErr(null); } else setErr(j.error?.message ?? "Could not load tracking");
+  }, [shipmentId]);
+  useEffect(() => { void load(); }, [load]);
+  async function retry() {
+    setBusy(true); setNote(null);
+    const r = await fetch(`/api/portal/shipments/${shipmentId}/refresh`, { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    setNote(r.ok ? (j.inserted ? `${j.inserted} new update(s) from the courier.` : "Already up to date.") : (j.error?.message ?? "Sync failed"));
+    await load(); onChanged();
+  }
+  return (
+    <Dialog title={d ? `Track ${d.awb ?? d.orderNumber}` : "Track shipment"} sub={d ? `${d.carrier} · ${d.service} · Order ${d.orderNumber}` : undefined} onClose={onClose}>
+      {err && <p className="t-bad small" role="alert">{err}</p>}
+      {!d && !err && <p className="small muted" role="status">Loading tracking…</p>}
+      {d && (
+        <>
+          <dl className="ov-kv">
+            <dt>Current status</dt><dd><span className="ov-badge navy">{statusLabel(d.status)}</span></dd>
+            {d.awb && <><dt>AWB</dt><dd className="ov-awb"><span className="mono">{d.awb}</span><CopyBtn value={d.awb} label="AWB" /></dd></>}
+            {d.lr && <><dt>LR / LRN</dt><dd className="ov-awb"><span className="mono">{d.lr}</span><CopyBtn value={d.lr} label="LR number" /></dd></>}
+            <dt>Latest scan</dt><dd>{d.lastLocation ?? "—"}{d.lastEventAt ? ` · ${istFull(d.lastEventAt)}` : ""}</dd>
+            <dt>Destination</dt><dd>{[d.destination.city, d.destination.state, d.destination.pincode].filter(Boolean).join(", ") || "—"}</dd>
+            {d.deliveredAt ? <><dt>Delivered</dt><dd className="t-ok">{istFull(d.deliveredAt)}</dd></> : d.etaDate ? <><dt>Estimated delivery</dt><dd>{new Date(d.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" })}</dd></> : null}
+            <dt>Last sync</dt><dd className={d.lastSyncError ? "t-bad" : undefined}>{d.lastSyncAt ? `${ago(d.lastSyncAt)} (${istFull(d.lastSyncAt)})` : "Not synced yet"}{d.lastSyncError ? ` · Failed: ${d.lastSyncError}` : ""}</dd>
+          </dl>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button type="button" className="ov-btn ghost sm" onClick={retry} disabled={busy || !d.awb}><RefreshCw size={14} aria-hidden /> {busy ? "Checking courier…" : d.lastSyncError ? "Retry sync" : "Refresh from courier"}</button>
+            {note && <span className="small muted" role="status">{note}</span>}
+          </div>
+          {d.demo && <p className="tiny muted">Demo courier: scans are simulated for testing.</p>}
+          {d.amendments.length > 0 && (
+            <section>
+              <h3 className="small b" style={{ marginBottom: 6 }}>Delivery address changes (confirmed by courier)</h3>
+              <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{d.amendments.map((a, i) => <li key={i}>{istFull(a.at)}: {a.previous} → <b>{a.next}</b></li>)}</ul>
+            </section>
+          )}
+          <section aria-label="Tracking history">
+            <h3 className="small b" style={{ marginBottom: 10 }}>Tracking history</h3>
+            {d.events.length === 0 ? <p className="small muted">No courier scans yet.</p> : (
+              <ol className="ov-tl">
+                {d.events.map((e, i) => (
+                  <li key={i} className={i === 0 ? "now" : undefined}>
+                    <div className="b small">{statusLabel(e.status)}{e.raw && e.raw.toLowerCase() !== e.status.replace(/_/g, " ") ? <span className="muted" style={{ fontWeight: 400 }}> · {e.raw}</span> : null}</div>
+                    <div className="tiny muted">{istFull(e.at)}{e.location ? ` · ${e.location}` : ""}</div>
+                    {e.remark && <div className="tiny">{e.remark}</div>}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+type CodHistory = {
+  orderNumber: string; paymentType: string; codPaise: number;
+  confirmation: null | { status: string; sentAt: string | null; expiresAt: string | null; decidedAt: string | null; buyerResponse: string | null; buttonLabel: string | null; cancellationStatus: string | null; cancellationReason: string | null; cancellationAt: string | null };
+  messages: Array<{ at: string; updatedAt: string; status: string; to: string; template: string | null; error: string | null; response: string | null; respondedAt: string | null; demo: boolean }>;
+  activity: Array<{ action: string; at: string }>;
+  refund: null | { amountPaise: number; at: string; memo: string | null };
+};
+const ACTIVITY: Record<string, string> = {
+  "cod.confirmed": "Buyer confirmed", "cod.rejected": "Buyer rejected", "cod.no_response": "No response before the deadline", "cod.send_failed": "Message could not be sent",
+  "cod.cancelled_with_carrier": "Courier confirmed cancellation", "cod.cancellation_failed": "Courier did not cancel", "shipment.cancel": "Shipment cancelled", "shipment.cancel_failed": "Cancellation failed", "order.cancel": "Order cancelled",
+};
+
+/** WhatsApp COD confirmation: buyer status, message history, cancellation and refund. */
+export function CodDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+  const [d, setD] = useState<CodHistory | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`/api/portal/orders/${row.id}/cod`, { cache: "no-store" }).then(async (r) => { const j = await r.json().catch(() => ({})); if (r.ok) setD(j); else setErr(j.error?.message ?? "Could not load"); });
+  }, [row.id]);
+  const st = codDisplay(row.cod);
+  return (
+    <Dialog title="WhatsApp COD confirmation" sub={`Order ${row.orderNumber} · COD ${inr(row.codPaise)}`} onClose={onClose}>
+      <dl className="ov-kv">
+        <dt>Buyer confirmation</dt><dd><CodStatusText s={st.buyer} />{st.reason ? <span className="small muted" style={{ fontWeight: 400 }}> · {st.reason}</span> : null}</dd>
+        {st.cancellation && <><dt>Shipment cancellation</dt><dd><CodStatusText s={st.cancellation} /></dd></>}
+        {d?.confirmation?.buttonLabel && <><dt>Buyer reply</dt><dd>“{d.confirmation.buttonLabel}” · {istFull(d.confirmation.decidedAt)}</dd></>}
+        {d?.confirmation?.sentAt && <><dt>Sent</dt><dd>{istFull(d.confirmation.sentAt)}</dd></>}
+        {d?.confirmation?.expiresAt && d.confirmation.status === "pending" && <><dt>Response window ends</dt><dd>{istFull(d.confirmation.expiresAt)}</dd></>}
+        {d?.confirmation?.cancellationReason && <><dt>Cancellation detail</dt><dd style={{ fontWeight: 400 }}>{d.confirmation.cancellationReason}</dd></>}
+        {d?.refund && <><dt>Wallet refund</dt><dd className="t-ok">{inr(d.refund.amountPaise)} · {istFull(d.refund.at)}</dd></>}
+      </dl>
+      {(st.buyer === "setup_required" || st.buyer === "disabled") && <p className="small"><Link className="ov-link" href="/portal/notifications/cod/">Open COD Confirmation settings →</Link></p>}
+      {err && <p className="t-bad small" role="alert">{err}</p>}
+      {d && d.messages.length > 0 && (
+        <section>
+          <h3 className="small b" style={{ marginBottom: 6 }}>Messages (to the delivery recipient)</h3>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+            {d.messages.map((m, i) => (
+              <li key={i}>{istFull(m.at)} · to {m.to} · <b>{m.status === "read" ? "Read" : m.status[0].toUpperCase() + m.status.slice(1)}</b>{m.demo ? " (demo — not delivered)" : ""}
+                {m.error ? <span className="t-bad"> · {m.error}</span> : null}{m.response ? <> · reply “{m.response === "confirm" ? "Confirm Order" : "Cancel Order"}” {istFull(m.respondedAt)}</> : null}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {d && d.activity.length > 0 && (
+        <section>
+          <h3 className="small b" style={{ marginBottom: 6 }}>Activity</h3>
+          <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{d.activity.map((a, i) => <li key={i}>{istFull(a.at)} · {ACTIVITY[a.action] ?? a.action}</li>)}</ul>
+        </section>
+      )}
+      {!d && !err && <p className="small muted" role="status">Loading…</p>}
+      <p className="tiny muted">Statuses: {Object.values(COD_DISPLAY).map((x) => x.label).join(" · ")}</p>
+    </Dialog>
+  );
+}
+
+/** Shipping charge breakdown: quote lines, GST, booked amount, later adjustments, final total. */
+export function BreakdownDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+  const b = row.breakdown!;
+  const pre = b.lines.reduce((t, l) => t + l.amount, 0);
+  return (
+    <Dialog title="Shipping charge breakdown" sub={`Order ${row.orderNumber}${row.shipment?.awb ? ` · AWB ${row.shipment.awb}` : ""}`} onClose={onClose}>
+      <table className="ov-break">
+        <tbody>
+          {b.lines.map((l, i) => <tr key={i}><td>{l.label}</td><td>{inr(l.amount)}</td></tr>)}
+          {b.lines.length > 0 && <tr><td>Subtotal (before GST)</td><td>{inr(pre)}</td></tr>}
+          {b.gst != null && <tr><td>GST</td><td>{inr(b.gst)}</td></tr>}
+          <tr><td><b>Booked amount</b> <span className="tiny muted">(debited from wallet at booking)</span></td><td><b>{inr(b.booked)}</b></td></tr>
+          {b.adjustment && <tr><td>{b.adjustment.label} <span className="tiny muted">· {istFull(b.adjustment.at)}</span></td><td>{b.adjustment.amount >= 0 ? "+" : ""}{inr(b.adjustment.amount)}</td></tr>}
+          <tr className="tot"><td>Total charged</td><td>{inr(b.total)}</td></tr>
+        </tbody>
+      </table>
+      {row.payment === "fod" && <p className="small">Freight payable by the receiver at delivery (FOD): <b>{inr(row.receiverFreightPaise)}</b></p>}
+      {b.quoteTotal != null && b.quoteTotal !== b.booked && row.payment !== "fod" && <p className="tiny muted">Quoted total was {inr(b.quoteTotal)}; the booked amount above is what was actually charged.</p>}
+      <p className="small"><Link className="ov-link" href="/portal/billing/">View in Billing →</Link></p>
+    </Dialog>
+  );
+}
+
+export function PickupDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+  const p = row.pickup;
+  return (
+    <Dialog title={p?.label ?? "Pickup address"} sub="Pickup warehouse" onClose={onClose}>
+      {p ? (
+        <dl className="ov-kv">
+          <dt>Address</dt><dd style={{ fontWeight: 400 }}>{[p.line1, p.line2, p.city, p.state, p.pincode].filter(Boolean).join(", ")}</dd>
+          {p.contactName && <><dt>Contact</dt><dd>{p.contactName}</dd></>}
+          {p.mobile && <><dt>Mobile</dt><dd><a className="ov-link" href={`tel:${p.mobile}`}>{p.mobile}</a></dd></>}
+        </dl>
+      ) : <p className="small muted">No pickup address on this order.</p>}
+      <p className="small"><Link className="ov-link" href="/portal/addresses/">Manage pickup addresses →</Link></p>
+    </Dialog>
+  );
+}

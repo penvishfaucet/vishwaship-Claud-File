@@ -46,6 +46,8 @@ export const users = pgTable("users", {
   mfaSecretEnc: text("mfa_secret_enc"),
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),
   active: boolean("active").notNull().default(true),
+  /** Per-user UI preferences (e.g. Orders table columns). Never security-relevant. */
+  prefs: jsonb("prefs").notNull().default({}),
   createdAt: created(),
 }, (t) => [
   uniqueIndex("users_email_kind").on(t.kind, t.email),
@@ -242,6 +244,8 @@ export const orders = pgTable("orders", {
   invoiceNumber: text("invoice_number"),
   ewayBill: text("eway_bill"),
   buyerGstin: text("buyer_gstin"),
+  /** Hidden from active Orders tabs (Archive tab). Never deletes anything. */
+  archivedAt: ts("archived_at"),
   createdAt: created(),
 }, (t) => [
   uniqueIndex("orders_org_number").on(t.orgId, t.orderNumber),
@@ -293,6 +297,13 @@ export const shipments = pgTable("shipments", {
   carrierWeightGrams: integer("carrier_weight_grams"),
   etaDate: ts("eta_date"),
   lastEventAt: ts("last_event_at"),
+  /** Latest carrier scan location (separate from the delivery address). */
+  lastLocation: text("last_location"),
+  deliveredAt: ts("delivered_at"),
+  /** Tracking sync health: last successful pull/push, last error, consecutive failures. */
+  lastSyncAt: ts("last_sync_at"),
+  lastSyncError: text("last_sync_error"),
+  syncFailures: integer("sync_failures").notNull().default(0),
   createdAt: created(),
 }, (t) => [
   uniqueIndex("shipments_awb").on(t.provider, t.awb),
@@ -308,8 +319,22 @@ export const shipmentEvents = pgTable("shipment_events", {
   location: text("location"),
   occurredAt: ts("occurred_at").notNull(),
   source: text("source").notNull(), // webhook | poll | manual
+  remark: text("remark"),
   createdAt: created(),
 }, (t) => [uniqueIndex("shipment_events_dedupe").on(t.dedupeKey)]);
+
+/** Destination changes confirmed by the carrier (never inferred from scan locations). */
+export const destinationAmendments = pgTable("destination_amendments", {
+  id: id(),
+  orderId: text("order_id").notNull().references(() => orders.id),
+  shipmentId: text("shipment_id").notNull(),
+  previous: jsonb("previous").notNull(),
+  next: jsonb("next").notNull(),
+  source: text("source").notNull(), // webhook | poll
+  dedupeKey: text("dedupe_key").notNull().unique(),
+  occurredAt: ts("occurred_at").notNull(),
+  createdAt: created(),
+});
 
 export const ndrCases = pgTable("ndr_cases", {
   id: id(),

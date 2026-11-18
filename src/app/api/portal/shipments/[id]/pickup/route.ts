@@ -6,6 +6,7 @@ import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { apiError, parseJson } from "@/server/http";
 import { getAdapter, providerContext } from "@/server/providers/registry";
+import { pickupBlockedByCod } from "@/server/whatsapp/service";
 
 /** Request a courier pickup for a booked shipment. One request per shipment + date (retries return the same reference). */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +23,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const sh = row.s;
   if (sh.bookingStatus !== "confirmed") return apiError(409, "conflict", "The courier has not confirmed this booking yet");
   if (!["booked", "pickup_pending"].includes(sh.status)) return apiError(409, "conflict", `Shipment is already ${sh.status.replace(/_/g, " ")}`);
+  const codHold = await pickupBlockedByCod(row.o.id);
+  if (codHold) return apiError(409, "conflict", codHold);
   if (sh.pickupRef && sh.pickupDate && sh.pickupDate.toISOString().slice(0, 10) === p.data.date) return NextResponse.json({ ok: true, pickupRef: sh.pickupRef, date: p.data.date, duplicate: true });
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, sh.providerAccountId));
   const ad = acct && getAdapter(acct.adapter);

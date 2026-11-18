@@ -5,7 +5,7 @@
  */
 import type { ProviderQuote } from "@/server/pricing/engine";
 import {
-  type BookResult, type ShippingAdapter, type TrackingEvent, type NormalizedStatus,
+  type Address, type BookResult, type PushedUpdate, type ShippingAdapter, type TrackingEvent, type NormalizedStatus,
   chargeableWeight,
 } from "./types";
 
@@ -45,7 +45,7 @@ const DEMO_TIMELINE: NormalizedStatus[] = ["booked", "pickup_pending", "picked_u
 export const demoAdapter: ShippingAdapter = {
   key: "demo",
   displayName: "Demo carrier network",
-  implemented: ["health", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "ndr"],
+  implemented: ["health", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "ndr", "inbound_events"],
 
   async health() {
     return { ok: true, value: { message: "Demo adapter: fixtures only, no carrier is contacted." } };
@@ -152,4 +152,26 @@ export const demoAdapter: ShippingAdapter = {
   async ndrAction() {
     return { ok: true, value: { acknowledged: true } };
   },
+
+  /**
+   * Demo push format (used to exercise the webhook path locally):
+   * { "updates": [{ "awb", "status", "rawStatus"?, "location"?, "occurredAt", "remark"?, "etaDate"?, "destination"? }] }
+   */
+  parseTrackingWebhook(body) {
+    const list = (body as { updates?: unknown })?.updates;
+    if (!Array.isArray(list) || !list.length) return { ok: false, error: { category: "validation", message: "updates[] required", retryable: false } };
+    const out: PushedUpdate[] = [];
+    for (const u of list.slice(0, 500) as Array<Record<string, unknown>>) {
+      const status = String(u.status ?? "") as NormalizedStatus;
+      if (!DEMO_STATUSES.includes(status) || typeof u.awb !== "string" || typeof u.occurredAt !== "string") return { ok: false, error: { category: "validation", message: "Each update needs awb, a known status and occurredAt", retryable: false } };
+      out.push({ awb: u.awb, etaDate: typeof u.etaDate === "string" ? u.etaDate : undefined, events: [{
+        status, rawStatus: String(u.rawStatus ?? status.toUpperCase()).slice(0, 80), location: typeof u.location === "string" ? u.location.slice(0, 120) : undefined,
+        occurredAt: u.occurredAt, remark: typeof u.remark === "string" ? u.remark.slice(0, 200) : undefined,
+        destinationAmendment: u.destination && typeof u.destination === "object" ? (u.destination as Partial<Address>) : undefined,
+      }] });
+    }
+    return { ok: true, value: out };
+  },
 };
+
+const DEMO_STATUSES: NormalizedStatus[] = ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr", "cancelled", "rto_initiated", "rto_in_transit", "rto_delivered", "lost"];

@@ -1,9 +1,10 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { getAdapter, providerContext } from "@/server/providers/registry";
-import type { NormalizedStatus, TrackingEvent } from "@/server/providers/types";
+import type { Address, NormalizedStatus, TrackingEvent } from "@/server/providers/types";
 import { enqueue } from "@/server/jobs/runner";
 import { newId } from "@/server/util/ids";
 
@@ -42,23 +43,56 @@ export async function ingestEvents(shipmentId: string, events: TrackingEvent[], 
   const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, shipmentId));
   if (!sh) return { inserted: 0, status: null as string | null };
   let inserted = 0;
-  for (const e of [...events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))) {
+  // Duplicate and out-of-order updates are safe: every event is kept in history (deduped), but the
+  // shipment's status / latest location / time only move to an event at least as new as the stored one.
+  const valid = events.filter((e) => e && e.status && !Number.isNaN(new Date(e.occurredAt).getTime()));
+  const time = (e: TrackingEvent) => new Date(e.occurredAt).getTime();
+  for (const e of [...valid].sort((a, b) => time(a) - time(b))) {
+    const at = new Date(e.occurredAt);
     const r = await db.insert(schema.shipmentEvents).values({
-      id: newId("ev"), shipmentId, dedupeKey: `${shipmentId}:${e.status}:${e.rawStatus}:${e.occurredAt}`,
-      status: e.status, rawStatus: e.rawStatus, location: e.location ?? null, occurredAt: new Date(e.occurredAt), source,
+      id: newId("ev"), shipmentId, dedupeKey: `${shipmentId}:${e.status}:${e.rawStatus}:${at.toISOString()}`,
+      status: e.status, rawStatus: e.rawStatus, location: e.location ?? null, occurredAt: at, source, remark: e.remark?.slice(0, 300) ?? null,
     }).onConflictDoNothing().returning({ id: schema.shipmentEvents.id });
     inserted += r.length;
+    if (r.length && e.destinationAmendment) await amendDestination(sh.orderId, shipmentId, e.destinationAmendment, source, at);
   }
-  const latest = [...events].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0];
+  const latest = [...valid].sort((a, b) => time(b) - time(a))[0];
+  const latestAt = latest ? new Date(latest.occurredAt) : null;
+  const newer = !!latestAt && (!sh.lastEventAt || latestAt >= sh.lastEventAt);
   let status = sh.status;
-  if (latest && isProgress(sh.status, latest.status)) {
-    status = latest.status;
-    await db.update(schema.shipments).set({ status, lastEventAt: new Date(latest.occurredAt), ...(etaDate ? { etaDate: new Date(etaDate) } : {}) }).where(eq(schema.shipments.id, shipmentId));
-    await onStatusChange(sh.orgId, sh.orderId, shipmentId, status as NormalizedStatus);
-  } else if (etaDate) {
-    await db.update(schema.shipments).set({ etaDate: new Date(etaDate) }).where(eq(schema.shipments.id, shipmentId));
+  const patch: Partial<typeof schema.shipments.$inferInsert> = {};
+  if (etaDate && !Number.isNaN(new Date(etaDate).getTime())) patch.etaDate = new Date(etaDate);
+  if (latest && newer) {
+    patch.lastEventAt = latestAt!;
+    if (latest.location) patch.lastLocation = latest.location.slice(0, 200);
+    if (isProgress(sh.status, latest.status)) {
+      status = latest.status;
+      patch.status = status;
+      if (status === "delivered" || status === "rto_delivered") patch.deliveredAt = latestAt!;
+      if (["picked_up", "in_transit", "at_delivery_center"].includes(status)) patch.pickupStatus = "picked_up";
+    }
   }
+  if (Object.keys(patch).length) await db.update(schema.shipments).set(patch).where(eq(schema.shipments.id, shipmentId));
+  if (status !== sh.status) await onStatusChange(sh.orgId, sh.orderId, shipmentId, status as NormalizedStatus);
   return { inserted, status };
+}
+
+/** Carrier-confirmed change of the delivery address: update the order and keep the history. Never inferred from scans. */
+async function amendDestination(orderId: string, shipmentId: string, next: Partial<Address>, source: "webhook" | "poll" | "manual", at: Date) {
+  const db = await getDb();
+  const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
+  if (!o) return;
+  const prev = o.consignee as Record<string, unknown>;
+  const allowed = ["name", "mobile", "line1", "line2", "pincode", "city", "state"] as const;
+  const changes = Object.fromEntries(allowed.filter((k) => typeof next[k] === "string" && next[k] !== prev[k]).map((k) => [k, String(next[k]).slice(0, 200)]));
+  if (!Object.keys(changes).length) return;
+  const ins = await db.insert(schema.destinationAmendments).values({
+    id: newId("dam"), orderId, shipmentId, previous: prev, next: { ...prev, ...changes }, source: source === "webhook" ? "webhook" : "poll",
+    dedupeKey: `${shipmentId}:${at.toISOString()}:${JSON.stringify(changes)}`.slice(0, 500), occurredAt: at,
+  }).onConflictDoNothing().returning({ id: schema.destinationAmendments.id });
+  if (!ins.length) return;
+  await db.update(schema.orders).set({ consignee: { ...prev, ...changes } }).where(eq(schema.orders.id, orderId));
+  await audit({ actorKind: "system", orgId: o.orgId, action: "shipment.destination_amended", targetType: "order", targetId: orderId, details: { fields: Object.keys(changes) } });
 }
 
 async function onStatusChange(orgId: string, orderId: string, shipmentId: string, status: NormalizedStatus) {
@@ -71,18 +105,49 @@ async function onStatusChange(orgId: string, orderId: string, shipmentId: string
   await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId, kind: "tracking", title: `Shipment ${status.replace(/_/g, " ")}`, href: `/portal/orders/${orderId}/` }).onConflictDoNothing();
 }
 
-/** Ask the carrier for the latest scans (used by "Refresh" and the scheduled poll). */
+/** Ask the carrier for the latest scans ("Refresh", "Retry sync" and the scheduled poll). Records sync health. */
 export async function refreshFromCarrier(shipmentId: string) {
   const db = await getDb();
   const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, shipmentId));
   if (!sh?.awb) return { ok: false as const, message: "No AWB yet" };
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, sh.providerAccountId));
   const ad = acct && getAdapter(acct.adapter);
-  if (!ad) return { ok: false as const, message: "Carrier adapter not available" };
-  const r = await ad.track(await providerContext(acct), sh.awb);
-  if (!r.ok) return { ok: false as const, message: r.error.message };
+  if (!ad) return syncFailed(shipmentId, "Carrier adapter not available");
+  if (!ad.implemented.includes("track")) return syncFailed(shipmentId, `${acct.label} tracking is not available through Vishwaship yet`);
+  let r;
+  try { r = await ad.track(await providerContext(acct), sh.awb); } catch (e) { return syncFailed(shipmentId, (e as Error).message); }
+  if (!r.ok) return syncFailed(shipmentId, r.error.message);
   const res = await ingestEvents(shipmentId, r.value.events, "poll", r.value.etaDate);
+  await markSynced(shipmentId);
   return { ok: true as const, ...res };
+}
+
+export async function markSynced(shipmentId: string) {
+  const db = await getDb();
+  await db.update(schema.shipments).set({ lastSyncAt: new Date(), lastSyncError: null, syncFailures: 0 }).where(eq(schema.shipments.id, shipmentId));
+}
+
+async function syncFailed(shipmentId: string, message: string) {
+  const db = await getDb();
+  await db.update(schema.shipments).set({ lastSyncError: message.slice(0, 300), syncFailures: sql`${schema.shipments.syncFailures} + 1` }).where(eq(schema.shipments.id, shipmentId));
+  return { ok: false as const, message };
+}
+
+/** Verified provider push: route each AWB/LR to its shipment (same provider only) and ingest. Unknown AWBs are counted, never created. */
+export async function ingestPushed(provider: string, updates: Array<{ awb: string; events: TrackingEvent[]; etaDate?: string }>) {
+  const db = await getDb();
+  const out = { matched: 0, unknown: 0, inserted: 0 };
+  for (const u of updates.slice(0, 500)) {
+    const awb = String(u.awb ?? "").trim();
+    if (!awb) { out.unknown++; continue; }
+    const [sh] = await db.select({ id: schema.shipments.id }).from(schema.shipments)
+      .where(and(eq(schema.shipments.provider, provider), or(eq(schema.shipments.awb, awb), eq(schema.shipments.lrNumber, awb))));
+    if (!sh) { out.unknown++; continue; }
+    const r = await ingestEvents(sh.id, u.events ?? [], "webhook", u.etaDate);
+    await markSynced(sh.id);
+    out.matched++; out.inserted += r.inserted;
+  }
+  return out;
 }
 
 export async function timeline(shipmentId: string) {

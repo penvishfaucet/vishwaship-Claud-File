@@ -26,3 +26,24 @@ export function code128Svg(text: string, opts: { height?: number; module?: numbe
   const width = x + 10 * m;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${h}" preserveAspectRatio="none" role="img" aria-label="Barcode ${text}"><rect width="${width}" height="${h}" fill="#fff"/><g fill="#000">${bars.join("")}</g></svg>`;
 }
+
+/**
+ * Code 128-B as bar runs in module units: { bars: [startModule, widthModules][], modules } where
+ * `modules` includes a 10-module quiet zone on each side. Used to draw barcodes into PDFs.
+ */
+export function code128Bars(text: string): { bars: Array<[number, number]>; modules: number } {
+  const codes = [104];
+  for (const ch of text) {
+    const c = ch.charCodeAt(0);
+    if (c < 32 || c > 126) throw new Error("Code128-B supports printable ASCII only");
+    codes.push(c - 32);
+  }
+  codes.push(codes.reduce((s, c, i) => s + c * (i === 0 ? 1 : i), 0) % 103, 106);
+  let x = 10;
+  const bars: Array<[number, number]> = [];
+  for (const c of codes) {
+    const p = PATTERNS[c];
+    for (let i = 0; i < p.length; i++) { const w = Number(p[i]); if (i % 2 === 0) bars.push([x, w]); x += w; }
+  }
+  return { bars, modules: x + 10 };
+}

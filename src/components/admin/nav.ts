@@ -1,5 +1,5 @@
 import {
-  Activity, BadgeIndianRupee, Bell, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, AlertTriangle, BadgeIndianRupee, Bell, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -10,6 +10,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/pickups/", label: "Pickups", icon: Truck, perm: "shipments.read" },
     { href: "/admin/ndr/", label: "NDR / RTO", icon: CornerUpLeft, perm: "shipments.read" },
     { href: "/admin/disputes/", label: "Weight Disputes", icon: Scale, perm: "shipments.read" },
+    { href: "/admin/order-exceptions/", label: "Order Exceptions", icon: AlertTriangle, perm: "shipments.read" },
     { href: "/admin/tickets/", label: "Tickets", icon: Ticket, perm: "tickets.read" },
   ] },
   { group: "CUSTOMERS", items: [
