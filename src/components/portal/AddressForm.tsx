@@ -29,7 +29,14 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
     if (!r.ok) { setErr(j.error?.issues?.[0]?.message ?? j.error?.message ?? "Could not save"); return; }
     if (editing && !j.mobileChanged) { onDone ? onDone() : router.refresh(); return; }
     const id = editing ? editing.id : j.id;
-    if (!editing && onSaved) onSaved({ id, label: f.label, city: f.city, pincode: f.pincode, verified: false, isDefault: false, mobileMasked: `••••••${f.mobile.replace(/D/g, "").slice(-4)}` });
+    if (j.otpRequired === false) {
+      // OTP verification is switched off by Admin: the address is usable for orders straight away.
+      if (!editing && onSaved) onSaved({ id, label: f.label, city: f.city, pincode: f.pincode, verified: true, isDefault: false, mobileMasked: `••••••${f.mobile.replace(/\D/g, "").slice(-4)}` });
+      if (onVerified) { onVerified(id); return; }
+      if (onDone) { onDone(); return; }
+      router.push("/portal/addresses/"); router.refresh(); return;
+    }
+    if (!editing && onSaved) onSaved({ id, label: f.label, city: f.city, pincode: f.pincode, verified: false, isDefault: false, mobileMasked: `••••••${f.mobile.replace(/\D/g, "").slice(-4)}` });
     setOtpFor(id); await send(id);
   }
   async function send(id = otpFor!) {

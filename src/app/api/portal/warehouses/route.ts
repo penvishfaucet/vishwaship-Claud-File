@@ -6,7 +6,7 @@ import { getDb, schema } from "@/server/db/client";
 import { hasFeature } from "@/server/features";
 import { apiError, parseJson } from "@/server/http";
 import { newId } from "@/server/util/ids";
-import { WarehouseInput, nextWarehouseCode } from "@/server/warehouses";
+import { WarehouseInput, nextWarehouseCode, pickupOtpRequired } from "@/server/warehouses";
 
 export async function POST(req: Request) {
   const s = await apiCustomer();
@@ -22,5 +22,5 @@ export async function POST(req: Request) {
     isDefault: existing.length === 0, code: await nextWarehouseCode(), createdBy: s.name,
   });
   await audit({ actorUserId: s.userId, actorKind: s.impersonatorId ? "staff" : "customer", orgId: s.orgId, action: "warehouse.create", targetType: "warehouse", targetId: id, details: s.impersonatorId ? { viaAdmin: s.impersonatorId } : undefined });
-  return NextResponse.json({ id }, { status: 201 });
+  return NextResponse.json({ id, otpRequired: await pickupOtpRequired() }, { status: 201 });
 }

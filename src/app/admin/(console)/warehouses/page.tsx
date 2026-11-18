@@ -1,11 +1,25 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { desc, eq, ilike, or } from "drizzle-orm";
+import { audit } from "@/server/audit";
+import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { pickupOtpRequired, setPickupOtpRequired } from "@/server/warehouses";
+
+async function toggleOtp(fd: FormData) {
+  "use server";
+  const s = await requireStaff("customers.write");
+  const on = fd.get("on") === "1";
+  await setPickupOtpRequired(on);
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: on ? "warehouse.otp_required_on" : "warehouse.otp_required_off" });
+  revalidatePath("/admin/warehouses/");
+}
 
 export default async function AdminWarehouses({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const sp = await searchParams;
-  await requireStaff("customers.read");
+  const st = await requireStaff("customers.read");
+  const otpOn = await pickupOtpRequired();
   const db = await getDb();
   const q = sp.q?.trim();
   const rows = await db.select({ w: schema.warehouses, org: schema.orgs }).from(schema.warehouses).innerJoin(schema.orgs, eq(schema.orgs.id, schema.warehouses.orgId))
@@ -14,6 +28,10 @@ export default async function AdminWarehouses({ searchParams }: { searchParams: 
   return (
     <>
       <div className="page-h"><div><h1>Warehouses</h1><p className="small muted" style={{ margin: "4px 0 0" }}>All customers’ pickup addresses, verification and courier sync state. Deactivated addresses stay here for history.</p></div></div>
+      <section className="card row between wrap mb12" style={{ padding: 12, gap: 8 }}>
+        <span className="small"><b>Pickup mobile OTP verification:</b> {otpOn ? <span className="chip c-active">Required before booking</span> : <span className="chip c-draft">Off — customers can book without OTP</span>}</span>
+        {can(st.role, "customers.write") && <form action={toggleOtp}><input type="hidden" name="on" value={otpOn ? "0" : "1"} /><button className="btn btn-sm btn-outline">{otpOn ? "Turn off" : "Require OTP again"}</button></form>}
+      </section>
       <form className="card row wrap mb12" style={{ padding: 12, gap: 8 }}>
         <input name="q" className="input" defaultValue={q} placeholder="Customer, title, ID, city or PIN" style={{ flex: 1, minWidth: 220 }} aria-label="Search warehouses" />
         <button className="btn btn-navy">Search</button>

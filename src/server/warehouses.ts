@@ -40,3 +40,20 @@ export function pickupSnapshot(w: typeof schema.warehouses.$inferSelect) {
   return { warehouseId: w.id, code: w.code, label: w.label, contactName: w.contactName, mobile: w.mobile, email: w.email, line1: w.line1, line2: w.line2, pincode: w.pincode, city: w.city, state: w.state };
 }
 export type PickupSnapshot = ReturnType<typeof pickupSnapshot>;
+
+/**
+ * Is OTP verification of the pickup mobile required before booking? Admin → Warehouses switch
+ * (pricing_settings "pickup_otp_required"). Off by default since 2026-11-18 at the owner's request; the
+ * mobile stays marked "not verified" either way, it simply no longer blocks orders.
+ */
+export async function pickupOtpRequired(): Promise<boolean> {
+  const db = await getDb();
+  const [row] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "pickup_otp_required"));
+  return row ? row.value === true : false;
+}
+
+export async function setPickupOtpRequired(on: boolean) {
+  const db = await getDb();
+  await db.insert(schema.pricingSettings).values({ key: "pickup_otp_required", value: on })
+    .onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value: on, updatedAt: new Date() } });
+}

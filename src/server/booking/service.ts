@@ -79,7 +79,7 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, args.orgId));
   const [wh] = order.warehouseId ? await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.id, order.warehouseId), eq(schema.warehouses.orgId, args.orgId))) : [];
   if (!wh || !wh.active) return { ok: false, code: "not_found", message: "Select an active pickup address" };
-  if (!wh.mobileVerifiedAt) return { ok: false, code: "not_found", message: "Verify the pickup mobile number with OTP before booking" };
+  if (!wh.mobileVerifiedAt && (await (await import("@/server/warehouses")).pickupOtpRequired())) return { ok: false, code: "not_found", message: "Verify the pickup mobile number with OTP before booking" };
 
   // Payment mode must be enabled for this carrier account (Admin → Carrier Integrations) — enforced here, not only in the UI.
   const pay = paymentConfig(acct, adapter);

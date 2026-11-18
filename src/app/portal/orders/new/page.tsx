@@ -4,6 +4,7 @@ import { CreateShipment, type Library } from "@/components/portal/CreateShipment
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
 import { getSetting } from "@/server/quotes/service";
+import { pickupOtpRequired } from "@/server/warehouses";
 
 /** Cartons carried over from the public Rate Calculator: "count*l*b*h*kg" items joined by "~". */
 function parsePk(v?: string) {
@@ -19,6 +20,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
   const db = await getDb();
   const warehouses = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, ctx.org.id), eq(schema.warehouses.active, true)));
   const threshold = await getSetting<number>("b2b_threshold_grams", 10_000);
+  const otpRequired = await pickupOtpRequired(); // Admin → Warehouses switch; off = pickup addresses usable without OTP
   const [buyers, products, presets, tags] = await Promise.all([
     db.select().from(schema.buyers).where(eq(schema.buyers.orgId, ctx.org.id)).orderBy(asc(schema.buyers.name)).limit(500),
     db.select().from(schema.products).where(and(eq(schema.products.orgId, ctx.org.id), eq(schema.products.active, true))).orderBy(asc(schema.products.name)).limit(500),
@@ -44,7 +46,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
         <div className="card empty"><p className="muted">Add a pickup address before creating a shipment.</p><Link className="btn btn-orange btn-sm" href="/portal/addresses/">Add Pickup Address</Link></div>
       ) : (
         <CreateShipment
-          warehouses={warehouses.map((w) => ({ id: w.id, label: w.label, city: w.city, pincode: w.pincode, verified: !!w.mobileVerifiedAt, isDefault: w.isDefault, mobileMasked: `••••••${w.mobile.slice(-4)}` }))}
+          warehouses={warehouses.map((w) => ({ id: w.id, label: w.label, city: w.city, pincode: w.pincode, verified: !!w.mobileVerifiedAt || !otpRequired, isDefault: w.isDefault, mobileMasked: `••••••${w.mobile.slice(-4)}` }))}
           walletPaise={ctx.walletAvailable}
           b2bThresholdGrams={threshold.value}
           direction={sp.direction === "reverse" ? "reverse" : "forward"}
