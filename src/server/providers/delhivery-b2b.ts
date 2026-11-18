@@ -148,7 +148,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     if (req.paymentType === "cod") fd.set("cod_amount", String(rupees(req.codAmount)));
     fd.set("weight", String(totalG));
     fd.set("dropoff_location", JSON.stringify({ consignee_name: req.consignee.name, address: [req.consignee.line1, req.consignee.line2].filter(Boolean).join(", "), city: req.consignee.city, state: req.consignee.state, zip: req.consignee.pincode, phone: req.consignee.mobile, email: req.consignee.email ?? "" }));
-    const shipments = req.packages.map((p, i) => ({ order_id: `${req.vishwashipOrderId.replace(/[^A-Za-z0-9]/g, "")}${i + 1}`, box_count: p.count, description: req.products.map((x) => x.name).join(", ").replace(/[^A-Za-z0-9 ,]/g, " ").slice(0, 100) || "Goods", weight: p.actualWeightGrams * p.count, waybills: [], master: false }));
+    const shipments = req.packages.map((p, i) => ({ order_id: `${req.vishwashipOrderId.replace(/[^A-Za-z0-9]/g, "")}${i + 1}`, box_count: p.count, description: req.products.map((x) => x.name).join(", ").replace(/[^A-Za-z0-9 ,]/g, " ").slice(0, 100) || "Goods", weight: p.actualWeightGrams * p.count }));
+    // No JSON booleans or empty lists in shipment_details: the form parser rejected the field as "not a valid list" with them; dimensions (numbers only) parsed fine. Delhivery assigns waybills itself.
     fd.set("shipment_details", JSON.stringify(shipments));
     // Live B2B validation (2026-11-18): dimensions need length / width / height (cm) per box group.
     fd.set("dimensions", JSON.stringify(req.packages.map((p) => ({ box_count: p.count, length: p.lengthMm / 10, width: p.breadthMm / 10, height: p.heightMm / 10 }))));
