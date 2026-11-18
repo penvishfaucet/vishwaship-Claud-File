@@ -99,3 +99,11 @@ export function b2cCharges(j: unknown): ProviderQuoteComponent[] | null {
   }
   return components.some((c) => c.code === "freight" && c.amount > 0) ? components : null;
 }
+
+/** Pickup executive details, when the courier returns them with a pickup request (field names vary by API). */
+export function pickupAgent(j: unknown): { agentName?: string; agentPhone?: string } {
+  const name = firstString(j, ["pickup_executive_name", "executive_name", "fe_name", "rider_name", "agent_name", "data.pickup_executive_name", "data.executive_name", "data.fe_name", "data.rider_name", "data.agent_name"]);
+  const phone = firstString(j, ["pickup_executive_phone", "executive_phone", "executive_mobile", "fe_phone", "fe_mobile", "rider_phone", "agent_phone", "data.pickup_executive_phone", "data.executive_phone", "data.executive_mobile", "data.fe_phone", "data.rider_phone", "data.agent_phone"]);
+  const digits = phone?.replace(/\D/g, "").slice(-10);
+  return { ...(name ? { agentName: name.slice(0, 80) } : {}), ...(digits && digits.length === 10 ? { agentPhone: digits } : {}) };
+}

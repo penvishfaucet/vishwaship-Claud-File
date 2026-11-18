@@ -129,7 +129,9 @@ export interface ShippingAdapter {
   book(ctx: ProviderContext, req: BookRequest): Promise<Result<BookResult>>;
   lookupBooking(ctx: ProviderContext, ref: { vishwashipOrderId: string; providerOrderRef?: string }): Promise<Result<BookResult | null>>;
   label(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string }, format: LabelFormat): Promise<Result<{ url?: string; pdf?: Uint8Array; images?: string[]; /** carrier label as an HTML page (served sandboxed) */ html?: string; formatsAvailable: LabelFormat[] }>>;
-  schedulePickup(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string; pickupLocation?: string; packageCount?: number }, date: string): Promise<Result<{ pickupRef?: string; scheduledFor: string }>>;
+  schedulePickup(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string; pickupLocation?: string; packageCount?: number }, date: string): Promise<Result<{ pickupRef?: string; scheduledFor: string; agentName?: string; agentPhone?: string }>>;
+  /** "warehouse": one pickup request per pickup address + date covers every shipment (Delhivery); "shipment": one per order (Shipmozo). */
+  pickupScope?: "warehouse" | "shipment";
   /** Register a pickup warehouse with the carrier (once per warehouse+account); returns the carrier reference. */
   registerWarehouse?(ctx: ProviderContext, w: WarehouseInput): Promise<Result<{ ref: string }>>;
   /** Payment modes this adapter can book (before Admin / account switches are applied). */

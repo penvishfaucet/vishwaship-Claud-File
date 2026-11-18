@@ -203,6 +203,7 @@ export const shipmozoAdapter: ShippingAdapter = {
   displayName: "Shipmozo",
   implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "reconciliation"],
   paymentModes: ["prepaid", "cod"],
+  pickupScope: "shipment",
 
   async health(ctx) {
     const info = await call(ctx, "/info", { timeoutMs: 10_000 });

@@ -301,5 +301,20 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795011021374,
   "hash": "09fe1e9c79803d8957101b56057133d2ca7515cd215ad4d98939c0a8854d837d"
+ },
+ {
+  "tag": "0012_pickup_requests",
+  "sql": [
+   "CREATE TABLE \"pickup_requests\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"warehouse_id\" text NOT NULL,\n\t\"provider_account_id\" text NOT NULL,\n\t\"pickup_date\" text NOT NULL,\n\t\"provider_ref\" text,\n\t\"status\" text NOT NULL,\n\t\"shipment_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"package_count\" integer DEFAULT 0 NOT NULL,\n\t\"agent_name\" text,\n\t\"agent_phone\" text,\n\t\"last_error\" text,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"pickup_request_id\" text;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"pickup_agent_name\" text;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"pickup_agent_phone\" text;",
+   "\nALTER TABLE \"pickup_requests\" ADD CONSTRAINT \"pickup_requests_org_id_orgs_id_fk\" FOREIGN KEY (\"org_id\") REFERENCES \"public\".\"orgs\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"pickup_requests\" ADD CONSTRAINT \"pickup_requests_warehouse_id_warehouses_id_fk\" FOREIGN KEY (\"warehouse_id\") REFERENCES \"public\".\"warehouses\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"pickup_requests_org\" ON \"pickup_requests\" USING btree (\"org_id\",\"pickup_date\");\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795027828319,
+  "hash": "a77573c0ec647bf26d1b5f5cd46cf82b272640e113110fe4939d083f5b8e2569"
  }
 ];

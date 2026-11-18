@@ -38,7 +38,16 @@ export async function cancelOrder(a: { orgId: string; orderId: string; actorUser
   await audit({ actorUserId: a.actorUserId, actorKind: a.actorKind, orgId: a.orgId, action: r.ok && r.value.acknowledged ? "shipment.cancel" : "shipment.cancel_failed", targetType: "order", targetId: order.id, details: { awb: ship.awb, reason: a.reason, error: r.ok ? undefined : r.error.message } });
   if (!r.ok) return { ok: false, state: "failed", message: `Courier did not cancel: ${r.error.message}` };
   if (!r.value.acknowledged) return { ok: false, state: "failed", message: "Courier did not acknowledge the cancellation. Contact support." };
-  await db.update(schema.shipments).set({ bookingStatus: "cancelled", status: "cancelled" }).where(eq(schema.shipments.id, ship.id));
+  await db.update(schema.shipments).set({ bookingStatus: "cancelled", status: "cancelled", pickupStatus: "cancelled" }).where(eq(schema.shipments.id, ship.id));
+  // Take it out of its pickup request; a request with nothing left is closed so no pickup is expected for it.
+  if (ship.pickupRequestId) {
+    const [pr] = await db.select().from(schema.pickupRequests).where(eq(schema.pickupRequests.id, ship.pickupRequestId));
+    if (pr) {
+      const left = (pr.shipmentIds as string[]).filter((x) => x !== ship.id);
+      await db.update(schema.pickupRequests).set({ shipmentIds: left, ...(left.length ? {} : { status: "cancelled" }) }).where(eq(schema.pickupRequests.id, pr.id));
+    }
+  }
+  await db.update(schema.jobs).set({ status: "done", lastError: "shipment cancelled" }).where(and(eq(schema.jobs.dedupeKey, `pickup.auto:${ship.id}`), inArray(schema.jobs.status, ["queued", "failed"])));
   await db.update(schema.orders).set({ status: "cancelled" }).where(eq(schema.orders.id, order.id));
   const [wallet] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, a.orgId));
   if (wallet && ship.sellPaise > 0) {

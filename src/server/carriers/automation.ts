@@ -1,6 +1,6 @@
 import "server-only";
 import type { InferSelectModel } from "drizzle-orm";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { canTakeBookings, noteCapability } from "@/server/carriers/verification";
 import { getDb, schema } from "@/server/db/client";
@@ -72,13 +72,15 @@ export function nextPickupDate(now = new Date()) {
   return ist.toISOString().slice(0, 10);
 }
 
-export type PickupOutcome = { ok: true; pickupRef: string | null; date: string; duplicate?: boolean } | { ok: false; retry: boolean; message: string };
+export type PickupOutcome = { ok: true; pickupRef: string | null; date: string; duplicate?: boolean; requestId?: string } | { ok: false; retry: boolean; message: string };
 
 /**
- * Raise a courier pickup request (PR) for a booked shipment. Used by the automatic job right after booking
- * and by the customer's "Schedule pickup" button. One request per shipment + date.
+ * Raise a courier pickup request (PR) for a booked shipment — used by the automatic job after booking, the
+ * per-order "Schedule pickup" button and the bulk "Generate pickup request". Couriers with a warehouse-level PR
+ * (Delhivery) get ONE request per pickup address + date + account; later shipments attach to it instead of
+ * creating another. Every PR is recorded in pickup_requests with the courier's PR ID and pickup agent, if given.
  */
-export async function requestPickup(shipmentId: string, date: string, actor: { userId?: string; kind: "customer" | "staff" | "system" }): Promise<PickupOutcome> {
+export async function requestPickup(shipmentId: string, date: string, actor: { userId?: string; kind: "customer" | "staff" | "system" }, opts: { packageCount?: number } = {}): Promise<PickupOutcome> {
   const db = await getDb();
   const [row] = await db.select({ s: schema.shipments, o: schema.orders }).from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId)).where(eq(schema.shipments.id, shipmentId));
   if (!row) return { ok: false, retry: false, message: "Shipment not found" };
@@ -88,19 +90,67 @@ export async function requestPickup(shipmentId: string, date: string, actor: { u
   const { pickupBlockedByCod } = await import("@/server/whatsapp/service");
   const codHold = await pickupBlockedByCod(row.o.id);
   if (codHold) return { ok: false, retry: true, message: codHold };
-  if (sh.pickupRef && sh.pickupDate && sh.pickupDate.toISOString().slice(0, 10) === date) return { ok: true, pickupRef: sh.pickupRef, date, duplicate: true };
+  if (sh.pickupRef && sh.pickupDate && sh.pickupDate.toISOString().slice(0, 10) === date) return { ok: true, pickupRef: sh.pickupRef, date, duplicate: true, requestId: sh.pickupRequestId ?? undefined };
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, sh.providerAccountId));
   const ad = acct && adapterFor(acct);
   if (!ad || !ad.implemented.includes("pickup")) return { ok: false, retry: false, message: "This courier schedules pickup itself — no pickup request is needed" };
-  const [sync] = row.o.warehouseId ? await db.select().from(schema.warehouseProviderSync).where(and(eq(schema.warehouseProviderSync.warehouseId, row.o.warehouseId), eq(schema.warehouseProviderSync.providerAccountId, acct.id))) : [];
-  const boxes = (await db.select().from(schema.packages).where(eq(schema.packages.orderId, row.o.id))).reduce((t, x) => t + x.count, 0);
+  const whId = row.o.warehouseId;
+  if (!whId) return { ok: false, retry: false, message: "Order has no pickup address" };
+  // Warehouse-level couriers: reuse this date's PR for the same address + account instead of raising another.
+  if (ad.pickupScope === "warehouse") {
+    const [pr] = await db.select().from(schema.pickupRequests).where(and(eq(schema.pickupRequests.orgId, sh.orgId), eq(schema.pickupRequests.warehouseId, whId), eq(schema.pickupRequests.providerAccountId, acct.id), eq(schema.pickupRequests.pickupDate, date), eq(schema.pickupRequests.status, "requested")));
+    if (pr) {
+      await db.update(schema.pickupRequests).set({ shipmentIds: Array.from(new Set([...(pr.shipmentIds as string[]), sh.id])) }).where(eq(schema.pickupRequests.id, pr.id));
+      await markShipment(sh, date, pr.providerRef, pr.id, pr.agentName, pr.agentPhone);
+      return { ok: true, pickupRef: pr.providerRef, date, requestId: pr.id };
+    }
+  }
+  const [sync] = await db.select().from(schema.warehouseProviderSync).where(and(eq(schema.warehouseProviderSync.warehouseId, whId), eq(schema.warehouseProviderSync.providerAccountId, acct.id)));
+  const boxes = opts.packageCount ?? (await db.select().from(schema.packages).where(eq(schema.packages.orderId, row.o.id))).reduce((t, x) => t + x.count, 0);
   let r;
   try { r = await ad.schedulePickup(await providerContext(acct), { providerOrderRef: sh.providerOrderRef ?? sh.id, awb: sh.awb ?? "", pickupLocation: sync?.providerWarehouseRef ?? undefined, packageCount: boxes || 1 }, date); }
   catch (e) { r = { ok: false as const, error: { category: "upstream" as const, message: (e as Error).message, retryable: true } }; }
   await audit({ actorUserId: actor.userId, actorKind: actor.kind, orgId: sh.orgId, action: r.ok ? "pickup.requested" : "pickup.failed", targetType: "order", targetId: row.o.id, details: { date, auto: actor.kind === "system", error: r.ok ? undefined : r.error.message } });
   if (!r.ok) return { ok: false, retry: r.error.retryable, message: r.error.message };
   await noteCapability(acct.id, "pickup", true, { evidence: `pickup ${r.value.pickupRef ?? date}` });
-  await db.update(schema.shipments).set({ pickupStatus: "scheduled", pickupRef: r.value.pickupRef ?? null, pickupDate: new Date(`${date}T12:00:00+05:30`), status: sh.status === "booked" ? "pickup_pending" : sh.status }).where(eq(schema.shipments.id, sh.id));
-  await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId: sh.id, dedupeKey: `pickup_req:${sh.id}:${date}`, status: "pickup_pending", rawStatus: `Pickup requested for ${date}${r.value.pickupRef ? ` (ref ${r.value.pickupRef})` : ""}`, occurredAt: new Date(), source: "manual" }).onConflictDoNothing();
-  return { ok: true, pickupRef: r.value.pickupRef ?? null, date };
+  const prId = newId("pr");
+  await db.insert(schema.pickupRequests).values({ id: prId, orgId: sh.orgId, warehouseId: whId, providerAccountId: acct.id, pickupDate: date, providerRef: r.value.pickupRef ?? null, status: "requested", shipmentIds: [sh.id], packageCount: boxes || 1, agentName: r.value.agentName ?? null, agentPhone: r.value.agentPhone ?? null, createdBy: actor.userId ?? actor.kind });
+  await markShipment(sh, date, r.value.pickupRef ?? null, prId, r.value.agentName ?? null, r.value.agentPhone ?? null);
+  return { ok: true, pickupRef: r.value.pickupRef ?? null, date, requestId: prId };
+}
+
+async function markShipment(sh: InferSelectModel<typeof schema.shipments>, date: string, ref: string | null, prId: string, agentName: string | null, agentPhone: string | null) {
+  const db = await getDb();
+  await db.update(schema.shipments).set({ pickupStatus: "scheduled", pickupRef: ref, pickupRequestId: prId, pickupAgentName: agentName, pickupAgentPhone: agentPhone, pickupDate: new Date(`${date}T12:00:00+05:30`), status: sh.status === "booked" ? "pickup_pending" : sh.status }).where(eq(schema.shipments.id, sh.id));
+  await db.insert(schema.shipmentEvents).values({ id: newId("ev"), shipmentId: sh.id, dedupeKey: `pickup_req:${sh.id}:${date}`, status: "pickup_pending", rawStatus: `Pickup requested for ${date}${ref ? ` (PR ${ref})` : ""}`, occurredAt: new Date(), source: "manual" }).onConflictDoNothing();
+}
+
+/** Shipments that still need a courier pickup (booked, not picked up, not cancelled), optionally at one pickup address. */
+export async function pickupEligible(orgId: string, warehouseId?: string) {
+  const db = await getDb();
+  return db.select({ s: schema.shipments, o: schema.orders }).from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
+    .where(and(eq(schema.shipments.orgId, orgId), eq(schema.shipments.bookingStatus, "confirmed"), inArray(schema.shipments.status, ["booked", "pickup_pending"]), ...(warehouseId ? [eq(schema.orders.warehouseId, warehouseId)] : [])));
+}
+
+/**
+ * Generate pickup request(s) for selected shipments of one pickup address and date, grouped per courier account;
+ * warehouse-level couriers get one PR carrying the total box count.
+ */
+export async function generatePickupRequest(a: { orgId: string; warehouseId: string; date: string; shipmentIds: string[]; actor: { userId?: string; kind: "customer" | "staff" } }) {
+  const rows = (await pickupEligible(a.orgId, a.warehouseId)).filter((r) => a.shipmentIds.includes(r.s.id));
+  const db = await getDb();
+  const results: Array<{ shipmentId: string; orderNumber: string; ok: boolean; message: string; pickupRef?: string | null }> = [];
+  const byAcct = new Map<string, typeof rows>();
+  for (const r of rows) byAcct.set(r.s.providerAccountId, [...(byAcct.get(r.s.providerAccountId) ?? []), r]);
+  for (const [acctId, list] of byAcct) {
+    const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, acctId));
+    const ad = acct && adapterFor(acct);
+    const total = (await db.select().from(schema.packages).where(inArray(schema.packages.orderId, list.map((x) => x.o.id)))).reduce((t, x) => t + x.count, 0);
+    for (const [i, r] of list.entries()) {
+      if (!ad || !ad.implemented.includes("pickup")) { results.push({ shipmentId: r.s.id, orderNumber: r.o.orderNumber, ok: true, message: "Courier schedules this pickup automatically" }); continue; }
+      const out = await requestPickup(r.s.id, a.date, a.actor, ad.pickupScope === "warehouse" && i === 0 ? { packageCount: total } : {});
+      results.push(out.ok ? { shipmentId: r.s.id, orderNumber: r.o.orderNumber, ok: true, message: out.duplicate ? "Already in this pickup request" : "Pickup requested", pickupRef: out.pickupRef } : { shipmentId: r.s.id, orderNumber: r.o.orderNumber, ok: false, message: out.message });
+    }
+  }
+  return results;
 }

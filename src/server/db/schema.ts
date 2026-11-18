@@ -292,6 +292,9 @@ export const shipments = pgTable("shipments", {
   receiverFreightPaise: paise("receiver_freight_paise").notNull().default(0),
   fodStatus: text("fod_status"), // pending_collection | collected | settled | disputed
   pickupRef: text("pickup_ref"),
+  pickupRequestId: text("pickup_request_id"),
+  pickupAgentName: text("pickup_agent_name"),
+  pickupAgentPhone: text("pickup_agent_phone"),
   pickupDate: ts("pickup_date"),
   chargeableWeightGrams: integer("chargeable_weight_grams").notNull(),
   carrierWeightGrams: integer("carrier_weight_grams"),
@@ -311,6 +314,24 @@ export const shipments = pgTable("shipments", {
   index("shipments_lr").on(t.lrNumber),
   index("shipments_org_status").on(t.orgId, t.status),
 ]);
+
+/** Courier pickup request (PR): one per pickup address + date + courier account; covers one or more shipments. */
+export const pickupRequests = pgTable("pickup_requests", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  warehouseId: text("warehouse_id").notNull().references(() => warehouses.id),
+  providerAccountId: text("provider_account_id").notNull(),
+  pickupDate: text("pickup_date").notNull(), // YYYY-MM-DD (IST)
+  providerRef: text("provider_ref"), // the courier's PR / pickup ID
+  status: text("status").notNull(), // requested | auto | failed | cancelled
+  shipmentIds: jsonb("shipment_ids").notNull().default([]),
+  packageCount: integer("package_count").notNull().default(0),
+  agentName: text("agent_name"),
+  agentPhone: text("agent_phone"),
+  lastError: text("last_error"),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [index("pickup_requests_org").on(t.orgId, t.pickupDate)]);
 
 export const shipmentEvents = pgTable("shipment_events", {
   id: id(),

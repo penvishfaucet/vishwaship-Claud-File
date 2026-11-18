@@ -18,6 +18,7 @@ export type NavEntry = NavLink | NavGroup;
 export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
   { id: "dashboard", href: "/portal/", label: "Dashboard", icon: Home },
   { id: "orders", href: "/portal/orders/", label: "Orders", icon: Package },
+  { id: "pickups", href: "/portal/pickups/", label: "Pickups", icon: CalendarClock },
   { id: "ndr", href: "/portal/ndr/", label: "NDR", icon: CornerUpLeft },
   { id: "billing", group: "Billing", icon: CreditCard, items: [
     { id: "billing.passbook", href: "/portal/billing/passbook/", label: "Passbook", icon: BookOpen },

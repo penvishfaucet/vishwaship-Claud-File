@@ -1,7 +1,7 @@
 import "server-only";
 import type { ProviderQuote } from "@/server/pricing/engine";
 import { type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
-import { b2cCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
+import { b2cCharges, firstString, jsonOrNull, pickupAgent, providerError, rupees } from "./delhivery-common";
 
 /**
  * Delhivery Direct B2C (Express). Endpoints from the Delhivery developer portal (docs/DELHIVERY-API-NOTES.md).
@@ -45,6 +45,7 @@ export const delhiveryB2cAdapter: ShippingAdapter = {
   displayName: "Delhivery Direct B2C",
   implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel"],
   paymentModes: ["prepaid", "cod"],
+  pickupScope: "warehouse",
 
   async health(ctx) {
     const r = await call(ctx, "/c/api/pin-codes/json/?filter_codes=110001");
@@ -156,7 +157,7 @@ export const delhiveryB2cAdapter: ShippingAdapter = {
     if (!ref.pickupLocation) return { ok: false, error: { category: "validation", message: "Pickup warehouse is not registered with Delhivery", retryable: false } };
     const r = await call(ctx, "/fm/request/new/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pickup_time: String(ctx.config.pickupStartTime ?? "11:00:00"), pickup_date: date, pickup_location: ref.pickupLocation, expected_package_count: ref.packageCount ?? 1 }) });
     if (!r.ok) return r;
-    return { ok: true, value: { pickupRef: firstString(r.value.json, ["pickup_id", "data.pickup_id", "id"]) ?? undefined, scheduledFor: date } };
+    return { ok: true, value: { pickupRef: firstString(r.value.json, ["pickup_id", "data.pickup_id", "id"]) ?? undefined, scheduledFor: date, ...pickupAgent(r.value.json) } };
   },
 
   async track(ctx, awb) {

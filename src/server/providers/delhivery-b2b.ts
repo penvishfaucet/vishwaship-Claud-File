@@ -3,7 +3,7 @@ import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/eng
 import {
   type BookResult, type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type WarehouseInput, unsupported,
 } from "./types";
-import { amountToPaise, b2bCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
+import { pickupAgent, amountToPaise, b2bCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
 
 /**
  * Delhivery Direct B2B (LTL). Endpoints from the Delhivery developer portal (docs/DELHIVERY-API-NOTES.md).
@@ -76,6 +76,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
   displayName: "Delhivery Direct B2B",
   implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "reconciliation"],
   paymentModes: ["prepaid", "cod", "fod"],
+  pickupScope: "warehouse",
 
   async health(ctx) {
     const r = await call(ctx, "/pincode-service/110001?weight=1000");
@@ -236,7 +237,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       body: JSON.stringify({ client_warehouse: ref.pickupLocation, pickup_date: date, start_time: String(ctx.config.pickupStartTime ?? "11:00:00"), expected_package_count: ref.packageCount ?? 1 }),
     });
     if (!r.ok) return r;
-    return { ok: true, value: { pickupRef: firstString(r.value.json, ["pickup_id", "data.pickup_id", "pr_id", "data.pr_id", "id", "data.id"]) ?? undefined, scheduledFor: date } };
+    return { ok: true, value: { pickupRef: firstString(r.value.json, ["pickup_id", "data.pickup_id", "pr_id", "data.pr_id", "id", "data.id"]) ?? undefined, scheduledFor: date, ...pickupAgent(r.value.json) } };
   },
 
   async track(ctx, awb) {
@@ -244,7 +245,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     if (!r.ok) return r;
     const raw = firstString(r.value.json, ["status", "data.status", "data.0.status", "current_status", "data.current_status"]) ?? "";
     if (!raw) return { ok: false, error: { category: "not_found", message: "No tracking status yet", retryable: true } };
-    const at = firstString(r.value.json, ["status_time", "data.status_time", "updated_at", "data.updated_at", "data.0.status_time"]) ?? new Date().toISOString();
+    const at = firstString(r.value.json, ["timestamp", "data.timestamp", "data.0.timestamp", "status_time", "data.status_time", "updated_at", "data.updated_at", "data.0.status_time"]) ?? new Date().toISOString();
     const loc = firstString(r.value.json, ["location", "data.location", "data.0.location"]) ?? undefined;
     const status = mapB2bStatus(raw);
     return { ok: true, value: { awb, carrierName: "Delhivery", status, events: [{ status, rawStatus: raw, location: loc, occurredAt: new Date(at).toISOString() }] } };

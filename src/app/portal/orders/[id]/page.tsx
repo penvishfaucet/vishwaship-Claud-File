@@ -66,7 +66,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
               {Array.isArray(shipment.pieceIds) && (shipment.pieceIds as string[]).length > 0 && <><dt>Package IDs</dt><dd className="mono tiny">{(shipment.pieceIds as string[]).join(", ")}</dd></>}
             </dl>
             <dl className="kv-list" style={{ margin: 0 }}>
-              <dt>Pickup</dt><dd>{shipment.status === "picked_up" || ["in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr"].includes(shipment.status) ? "Picked up (confirmed by courier scan)" : shipment.pickupStatus === "scheduled" ? `Scheduled${shipment.pickupRef ? ` · ref ${shipment.pickupRef}` : ""}` : "Not scheduled yet"}</dd>
+              <dt>Pickup</dt><dd>{shipment.status === "picked_up" || ["in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr"].includes(shipment.status) ? "Picked up (confirmed by courier scan)" : shipment.status === "cancelled" ? "Cancelled — no pickup" : shipment.pickupStatus === "scheduled" ? `Requested${shipment.pickupDate ? ` for ${shipment.pickupDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })}` : ""}${shipment.pickupRef ? ` · PR ${shipment.pickupRef}` : ""}` : <>Not requested yet · <Link className="link-navy" href="/portal/pickups/">Generate pickup request</Link></>}</dd>
+              <dt>Pickup agent</dt><dd>{shipment.pickupAgentName || shipment.pickupAgentPhone ? <>{shipment.pickupAgentName ?? "Pickup agent"}{shipment.pickupAgentPhone && <> · <a className="link-navy b" href={`tel:+91${shipment.pickupAgentPhone}`}>Call {shipment.pickupAgentPhone}</a></>}</> : <span className="muted small">Shared by the courier when an agent is assigned</span>}</dd>
               <dt>Estimated delivery</dt><dd>{shipment.etaDate ? shipment.etaDate.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" }) : "Not provided by the courier"}</dd>
               <dt>Tracking updated</dt><dd className="small">{shipment.lastSyncAt ? fmt(shipment.lastSyncAt) : shipment.lastEventAt ? fmt(shipment.lastEventAt) : "Waiting for first scan"}{shipment.lastLocation ? ` · ${shipment.lastLocation}` : ""}</dd>
             </dl>
@@ -150,11 +151,21 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
 
       <section className="card mt16" style={{ padding: 16 }}>
         <h2 className="b small" style={{ marginTop: 0 }}>Tracking</h2>
+        {shipment?.lastLocation && <p className="small" style={{ marginTop: 0 }}>Last scanned at <b>{shipment.lastLocation}</b>{shipment.lastEventAt ? ` · ${fmt(shipment.lastEventAt)}` : ""}</p>}
         {events.length === 0 ? <p className="small muted">No scans yet.</p> : (
-          <ol className="trk-tl">
-            {events.map((e, i) => <li key={e.id} className={i === 0 ? "cur" : ""}><span className="b small">{statusLabel(e.status)}{e.location ? <span className="muted"> · {e.location}</span> : null}</span><span className="tiny muted">{fmt(e.occurredAt)}</span></li>)}
-          </ol>
+          <div className="tbl-wrap"><table className="tbl trk-table">
+            <thead><tr><th>Date &amp; time</th><th>Status</th><th>Location</th><th>Courier update</th></tr></thead>
+            <tbody>{events.map((e, i) => (
+              <tr key={e.id} className={i === 0 ? "cur" : ""}>
+                <td className="small" style={{ whiteSpace: "nowrap" }}>{fmt(e.occurredAt)}</td>
+                <td className="small">{statusLabel(e.status)}</td>
+                <td className="small">{e.location ?? "—"}</td>
+                <td className="tiny muted">{e.rawStatus ?? ""}{e.remark && e.remark !== e.rawStatus ? ` · ${e.remark}` : ""}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
         )}
+        <p className="tiny muted mt8">Scans update automatically from the courier (every 30 minutes, or instantly when the courier pushes them).</p>
       </section>
     </>
   );
