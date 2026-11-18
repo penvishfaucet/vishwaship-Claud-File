@@ -158,6 +158,7 @@ export async function POST(req: Request) {
     }
     case "test_auth": {
       const na = needAdapter(); if (na) return na;
+      if (spec && !spec.sandbox && acct.mode !== "live") { await db.update(schema.providerAccounts).set({ mode: "live" }).where(eq(schema.providerAccounts.id, acct.id)); acct.mode = "live"; } // no sandbox: always production
       if (!Object.keys(secretsFor(acct.secretsEnc, acct.mode as "test" | "live")).length) return apiError(409, "conflict", `Save the ${acct.mode === "live" ? "production" : "sandbox"} credentials first`);
       let r;
       try { r = await adapter!.health(await providerContext(acct)); } catch (e) { r = { ok: false as const, error: { category: "upstream" as const, message: (e as Error).message, retryable: true } }; }

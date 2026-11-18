@@ -49,9 +49,10 @@ export function adapterFor(acct: InferSelectModel<typeof schema.providerAccounts
 
 export async function providerContext(acct: InferSelectModel<typeof schema.providerAccounts>): Promise<ProviderContext> {
   const cfg = (acct.configPublic as Record<string, unknown>) ?? {};
-  const mode = acct.mode as "test" | "live";
   // Shipping hosts come from code (carriers/specs.ts), never from Admin-editable config.
   const spec = CARRIER_SPECS[typeof cfg.protocol === "string" && cfg.protocol ? cfg.protocol : acct.adapter];
+  // Providers without a sandbox (Shipmozo, Shipora X) always run on production keys, whatever an old row says.
+  const mode = (spec && !spec.sandbox ? "live" : acct.mode) as "test" | "live";
   const allowedHosts = spec ? spec.hosts[mode] : ((cfg.allowedHosts as string[] | undefined) ?? []);
   if (spec && !allowedHosts.length) throw new Error(`${spec.name} has no approved ${mode === "live" ? "production" : "sandbox"} API host yet`);
   return {

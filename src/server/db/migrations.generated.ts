@@ -292,5 +292,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795005998981,
   "hash": "0663079f651acb73794141cc3764f44774bbaa135541a0f39e3a843604c3de07"
+ },
+ {
+  "tag": "0011_no_sandbox_live",
+  "sql": [
+   "-- Shipmozo and Shipora X have no sandbox: their accounts always use production keys. Older Shipmozo rows were\n-- created in \"test\" mode, so keys saved under Production were never read and Test authentication failed.\nUPDATE \"provider_accounts\" SET \"mode\" = 'live' WHERE \"adapter\" IN ('shipmozo', 'shiporax') AND \"mode\" <> 'live';\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795011021374,
+  "hash": "09fe1e9c79803d8957101b56057133d2ca7515cd215ad4d98939c0a8854d837d"
  }
 ];
