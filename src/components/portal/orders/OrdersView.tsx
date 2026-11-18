@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive, ArchiveRestore, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileText, Filter,
   MessageCircle, PlusCircle, RefreshCw, Settings, Settings2, Tag, Truck, Upload, XCircle,
+  CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, SlidersHorizontal, Undo2, UserRound,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
@@ -62,6 +63,7 @@ export function OrdersView(p: Props) {
   const [toast, setToast] = useState<Toast>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState(() => new Date());
+  const [tools, setTools] = useState(false);
   const menuOpen = useRef(false);
   const L = (k: string, d: string) => p.labels[k] || d;
 
@@ -120,6 +122,14 @@ export function OrdersView(p: Props) {
     setToast(res.ok ? { text: j.message ?? "Cancelled" } : { text: j.error?.message ?? "Cancellation failed", bad: true });
     refresh();
   }
+  async function clone(r: OrderRow) {
+    setBusy("clone");
+    const res = await fetch(`/api/portal/orders/${r.id}/clone`, { method: "POST" });
+    const j = await res.json().catch(() => ({}));
+    setBusy(null);
+    if (!res.ok) { setToast({ text: j.error?.message ?? "Could not clone the order", bad: true }); return; }
+    router.push(j.editUrl);
+  }
   async function archive(ids: string[], on: boolean) {
     setBusy("archive");
     const res = await fetch("/api/portal/orders/archive", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ids, archive: on }) });
@@ -149,10 +159,26 @@ export function OrdersView(p: Props) {
 
   return (
     <div className="ov">
-      {/* title + Add Order (reference layout) */}
-      <div className="ov-head"><h1>Orders</h1><AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} /></div>
-      {/* row 1: direction · domestic/international · actions */}
-      <div className="ov-top">
+      {/* compact top: region switch · Add Order · options icon */}
+      <div className="oc-head">
+        <div className="oc-seg" role="group" aria-label="Shipment region">
+          <span className="on" aria-current="true">Domestic</span>
+          <button type="button" onClick={() => setToast({ text: L("portal.orders.international", "International shipping is not enabled for your account."), bad: true })}>International</button>
+        </div>
+        <div className="oc-head-r">
+          <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />
+          <button type="button" className={`oc-opt${tools ? " on" : ""}`} aria-label="Filters and options" aria-expanded={tools} onClick={() => setTools((t) => !t)}><SlidersHorizontal size={22} aria-hidden /></button>
+        </div>
+      </div>
+      {/* status tabs: one scrollable row with counts */}
+      <nav className="oc-tabs" aria-label="Order status">
+        {TAB_GROUPS.flatMap((g) => g.tabs).map((t) => {
+          const on = f.tab === t.key;
+          return <Link key={t.key} href={href({ tab: t.key === "all" ? undefined : t.key })} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>{L(`portal.orders.tab.${t.key}`, t.label)}<i>{p.counts[t.key]}</i></Link>;
+        })}
+      </nav>
+      {f.direction === "reverse" && <p className="oc-note small">Showing <b>return orders</b>. <Link href={href({ direction: undefined, tab: undefined })}>Back to forward orders</Link></p>}
+      <div className="ov-top" hidden={!tools}>
         <nav className="ov-dir" aria-label="Shipment direction">
           <Link href={href({ direction: undefined, tab: undefined })} className={f.direction === "forward" ? "on" : ""} aria-current={f.direction === "forward" ? "page" : undefined}>Forward</Link>
           <Link href={href({ direction: "reverse", tab: undefined })} className={f.direction === "reverse" ? "on" : ""} aria-current={f.direction === "reverse" ? "page" : undefined}>Reverse</Link>
@@ -169,7 +195,7 @@ export function OrdersView(p: Props) {
       </div>
 
       {/* row 2: status navigation */}
-      <nav className="ov-status" aria-label="Order status">
+      <nav className="ov-status" aria-label="Order status groups" hidden>
         {TAB_GROUPS.map((g, gi) => (
           <div className="ov-sgroup" key={gi}>
             <span>{g.title ? L(`portal.orders.group.${gi}`, g.title) : " "}</span>
@@ -190,7 +216,7 @@ export function OrdersView(p: Props) {
 
       {/* row 3: filters + table */}
       <section className="ov-card" aria-label="Orders list">
-        <FilterBar p={p} go={go} exportHref={exportHref} onRefresh={refresh} lastRefresh={lastRefresh} hidden={hidden} setHidden={setHidden} setToast={setToast} onMenu={(o) => { menuOpen.current = o; }} />
+        {tools && <FilterBar p={p} go={go} exportHref={exportHref} onRefresh={refresh} lastRefresh={lastRefresh} hidden={hidden} setHidden={setHidden} setToast={setToast} onMenu={(o) => { menuOpen.current = o; }} />}
 
         {selected.size > 0 && (
           <div className="ov-bulk" role="region" aria-label="Bulk actions" style={{ margin: "0 12px 12px" }}>
@@ -216,18 +242,12 @@ export function OrdersView(p: Props) {
         ) : (
           <>
             {/* One simple card per order: ID, payment, status and three actions. Everything else is inside the order. */}
-            <div className="ov-simple" style={{ padding: 12 }}>
-              <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
+            <label className="row small oc-selall"><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
+            <div className="oc-grid">
               {p.rows.map((r) => (
-                <SimpleCard key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => toggle(r.id)} onCancel={() => cancel(r)}
-                  onClone={async () => {
-                    setBusy("clone");
-                    const res = await fetch(`/api/portal/orders/${r.id}/clone`, { method: "POST" });
-                    const j = await res.json().catch(() => ({}));
-                    setBusy(null);
-                    if (!res.ok) { setToast({ text: j.error?.message ?? "Could not clone the order", bad: true }); return; }
-                    router.push(j.editUrl);
-                  }} busy={busy} />
+                <ShipCard key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => toggle(r.id)} open={setDialog} defaultLabel={p.defaultLabel}
+                  onLabel={(fmt) => r.shipment && downloadLabels([r.shipment.id], fmt)} onCancel={() => cancel(r)} onArchive={(on) => archive([r.id], on)}
+                  onClone={() => clone(r)} busy={busy} onMenu={(o) => { menuOpen.current = o; }} />
               ))}
             </div>
             <div className="ov-tablewrap" hidden>
@@ -273,6 +293,9 @@ export function OrdersView(p: Props) {
         go({ size: String(n) });
       }} />
 
+      <Link className="oc-returns" href={f.direction === "reverse" ? href({ direction: undefined, tab: undefined }) : href({ direction: "reverse", tab: undefined })}>
+        <Undo2 size={18} aria-hidden /> {f.direction === "reverse" ? "Forward" : "Returns"}
+      </Link>
       {dialog?.kind === "track" && <TrackDialog shipmentId={dialog.shipmentId} onClose={() => setDialog(null)} onChanged={refresh} />}
       {dialog?.kind === "cod" && <CodDialog row={dialog.row} onClose={() => setDialog(null)} />}
       {dialog?.kind === "breakdown" && <BreakdownDialog row={dialog.row} onClose={() => setDialog(null)} />}
@@ -696,6 +719,97 @@ function SimpleCard({ r, selected, onToggle, onCancel, onClone, busy }: { r: Ord
         <Link className="ov-btn ghost sm" href={ticket}>Raise ticket</Link>
       </div>
     </article>
+  );
+}
+
+// ---------------------------------------------------------------- order card (mobile + desktop)
+
+const STATUS_TONE: Record<string, string> = {
+  booked: "amber", pickup_pending: "amber", picked_up: "blue", in_transit: "blue", at_delivery_center: "blue", out_for_delivery: "orange",
+  delivered: "green", ndr: "red", rto_initiated: "red", rto_in_transit: "red", rto_delivered: "red", cancelled: "gray", lost: "red",
+};
+
+function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel, onClone, onArchive, busy, onMenu }: {
+  r: OrderRow; selected: boolean; onToggle: () => void; open: (d: DialogState) => void; defaultLabel: PrintFormat;
+  onLabel: (f: PrintFormat) => void; onCancel: () => void; onClone: () => void; onArchive: (on: boolean) => void; busy: string | null; onMenu: (o: boolean) => void;
+}) {
+  const s = r.shipment;
+  const b = bookingBadge(r);
+  const fmt = s?.labelFormats.find((x) => x.key === defaultLabel && x.ok) ?? s?.labelFormats.find((x) => x.ok);
+  const kind = r.isMps ? "MPS" : r.mode;
+  const status = s && s.bookingStatus === "confirmed" && s.status !== "booked" ? { text: statusLabel(s.status), tone: STATUS_TONE[s.status] ?? "gray" } : { text: b.text, tone: b.cls === "red" ? "red" : b.cls === "green" ? "green" : "amber" };
+  const amount = r.payment === "cod" ? r.codPaise : r.payment === "fod" ? r.receiverFreightPaise : r.invoicePaise;
+  const detail = !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
+  return (
+    <article className="oc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
+      <header className="oc-top">
+        <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} />
+        <Package size={20} aria-hidden className="oc-ico" />
+        <Link className="oc-id" href={detail}>#{r.orderNumber}</Link>
+        <CopyBtn value={r.orderNumber} label="Order ID" />
+        <span className="oc-kind">({kind})</span>
+        <ActionMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onClone={onClone} onArchive={onArchive} onMenu={onMenu} />
+      </header>
+      <div className="oc-mid">
+        <div className="oc-svc">{s ? (s.serviceName && s.serviceName !== s.carrierName ? `${s.carrierName} ${s.serviceName}` : s.carrierName) : "Courier not assigned"}</div>
+        {s && (
+          <div className="oc-awb">AWB:{" "}
+            {s.awb ? <><button type="button" className="oc-link" onClick={() => open({ kind: "track", shipmentId: s.id })} aria-label={`Track AWB ${s.awb}`}>{s.awb}</button><CopyBtn value={s.awb} label="AWB" /></> : <span className="muted">Pending</span>}
+          </div>
+        )}
+        <div>Status: <span className={`oc-st ${status.tone}`}>{status.text}</span></div>
+        {s?.lastLocation && <div className="tiny muted">{s.lastLocation}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
+      </div>
+      <div className="oc-row">
+        <UserRound size={30} aria-hidden className="oc-ico" />
+        <div className="oc-who"><b>{r.consignee.name || "—"}</b><span>{r.consignee.mobile ?? ""}</span></div>
+        <span className={`oc-pay ${r.payment}`}>{r.payment === "cod" ? "COD" : r.payment === "fod" ? "FOD" : "Prepaid"}</span>
+        <b className="oc-amt">{inr(amount)}</b>
+      </div>
+      <footer className="oc-foot">
+        <div className="small">Order Date: {istDate(r.createdAt)} | {istTime(r.createdAt)}<br />Channel: <span className="oc-chan">{SOURCE[r.source] ?? r.source}</span></div>
+        {s?.awb && fmt
+          ? <button type="button" className="oc-btn" onClick={() => onLabel(fmt.key)} disabled={busy === "labels"}>Label</button>
+          : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
+          : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
+      </footer>
+      {busy === `cancel:${r.id}` && <div className="tiny muted" role="status">Cancelling…</div>}
+    </article>
+  );
+}
+
+function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: { r: OrderRow; open: (d: DialogState) => void; onLabel: (f: PrintFormat) => void; onCancel: () => void; onClone: () => void; onArchive: (on: boolean) => void; onMenu: (o: boolean) => void }) {
+  const m = useFixedMenu(onMenu);
+  const s = r.shipment;
+  const canCancel = s ? s.cancellable : r.cancellableOrder;
+  const editable = !s && ["draft", "ready", "booking_failed"].includes(r.orderStatus);
+  const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
+  const go = (fn: () => void) => () => { m.close(); fn(); };
+  return (
+    <div ref={m.ref} className="oc-more">
+      <button ref={m.btn} type="button" className="oc-dots" aria-label={`Actions for ${r.orderNumber}`} aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle}><MoreHorizontal size={22} aria-hidden /></button>
+      {m.pos && (
+        <div className="ov-menu" role="menu" style={m.pos}>
+          {s?.awb && <>
+            <span className="hd">Download label</span>
+            {s.labelFormats.map((x) => <button key={x.key} role="menuitem" type="button" disabled={!x.ok} onClick={go(() => onLabel(x.key))}><Download size={14} aria-hidden /><span>{x.name}{x.reason && <span className="why">{x.reason}</span>}</span></button>)}
+            <div className="sep" />
+          </>}
+          {s?.awb && <button role="menuitem" type="button" onClick={go(() => open({ kind: "track", shipmentId: s.id }))}><Truck size={14} aria-hidden /> Track shipment</button>}
+          {s && <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener" onClick={() => m.close()}><FileText size={14} aria-hidden /> Check invoice</a>}
+          {editable
+            ? <Link role="menuitem" href={`/portal/orders/new/?draft=${r.id}`}><Pencil size={14} aria-hidden /> Edit order</Link>
+            : <button role="menuitem" type="button" disabled><Pencil size={14} aria-hidden /><span>Edit order<span className="why">Not possible after the courier is assigned</span></span></button>}
+          <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone order</button>
+          <Link role="menuitem" href={`/portal/orders/${r.id}/`}><Eye size={14} aria-hidden /> View details</Link>
+          <Link role="menuitem" href={ticket}><LifeBuoy size={14} aria-hidden /> Raise ticket</Link>
+          {r.archived
+            ? <button role="menuitem" type="button" onClick={go(() => onArchive(false))}><ArchiveRestore size={14} aria-hidden /> Restore from archive</button>
+            : <button role="menuitem" type="button" onClick={go(() => onArchive(true))}><Archive size={14} aria-hidden /> Move to archive</button>}
+          {canCancel && <><div className="sep" /><button role="menuitem" type="button" className="danger" onClick={go(onCancel)}><XCircle size={14} aria-hidden /> {s ? "Cancel shipment" : "Cancel order"}</button></>}
+        </div>
+      )}
+    </div>
   );
 }
 

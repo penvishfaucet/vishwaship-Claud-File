@@ -228,3 +228,67 @@ select.ov-field{padding-right:28px}
 .shell .ov-sgroup{width:100%;min-width:0;display:block}
 .shell .ov-stabs{grid-template-columns:repeat(3,minmax(0,1fr))!important;width:100%}
 @media (min-width:900px){.shell .ov-stabs{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))!important}.shell .ov-sgroup{width:auto}}
+
+/* ---------- Orders v4: card list like the reference (mobile + desktop) ---------- */
+.shell .ov-status[hidden],.shell .ov-top[hidden]{display:none!important}
+.shell .ov-top .ov-seg{display:none}
+.oc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.oc-head-r{display:flex;align-items:center;gap:8px}
+.oc-seg{display:inline-flex;padding:4px;border:1px solid var(--line,#f0e4dc);border-radius:999px;background:#fff}
+.oc-seg>*{border:0;background:none;border-radius:999px;padding:7px 16px;font:inherit;font-size:13px;color:var(--navy,#1b2232);cursor:pointer}
+.oc-seg .on{background:var(--orange,#e8590c);color:#fff}
+.oc-opt{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;border:1px solid var(--line,#f0e4dc);background:#fff;color:var(--navy,#1b2232);cursor:pointer}
+.oc-opt.on{background:var(--peach,#ffe6d5);border-color:var(--orange,#e8590c);color:var(--orange,#e8590c)}
+.oc-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;background:#fff;border:1px solid var(--line,#f0e4dc);border-radius:16px;padding:4px 6px;box-shadow:0 2px 8px rgba(27,34,50,.05)}
+.oc-tabs::-webkit-scrollbar{display:none}
+.oc-tabs a{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:12px 14px 10px;font-size:14px;color:var(--navy,#1b2232);border-bottom:3px solid transparent;white-space:nowrap}
+.oc-tabs a i{font-style:normal;font-size:11px;min-width:20px;text-align:center;padding:1px 6px;border-radius:999px;background:var(--bg,#fffaf7);border:1px solid var(--line,#f0e4dc)}
+.oc-tabs a.on{color:var(--orange,#e8590c);border-bottom-color:var(--orange,#e8590c);font-weight:500}
+.oc-tabs a.on i{background:var(--orange,#e8590c);border-color:var(--orange,#e8590c);color:#fff}
+.oc-note{margin:0;padding:8px 12px;border-radius:10px;background:var(--peach,#ffe6d5)}
+.oc-note a{color:var(--orange,#e8590c);font-weight:500}
+.shell .ov-card:has(.oc-grid){background:transparent;border:0;box-shadow:none;padding:0}
+.oc-selall{gap:8px;padding:2px 4px 8px}
+.oc-grid{display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:900px){.oc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1400px){.oc-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.oc{background:#fff;border:1px solid var(--line,#f0e4dc);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 2px 10px rgba(27,34,50,.05);color:var(--navy,#1b2232)}
+.oc[data-selected]{border-color:var(--orange,#e8590c);box-shadow:0 0 0 2px var(--peach,#ffe6d5)}
+.oc-top{display:flex;align-items:center;gap:6px;min-width:0}
+.oc-top input{accent-color:var(--orange,#e8590c)}
+.oc-ico{color:var(--navy,#1b2232);flex:none}
+.oc-id{color:var(--orange,#e8590c);font-size:15.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.oc-kind{margin-left:auto;color:var(--orange,#e8590c);font-size:13px}
+.oc-more{display:inline-flex}
+.oc-dots{border:0;background:none;padding:4px 6px;border-radius:10px;color:var(--navy,#1b2232);cursor:pointer}
+.oc-dots:hover{background:var(--peach,#ffe6d5)}
+.oc-mid{text-align:center;display:flex;flex-direction:column;gap:4px;font-size:14px;padding-bottom:10px;border-bottom:1px solid var(--line,#f0e4dc)}
+.oc-awb{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.oc-link{border:0;background:none;padding:0;font:inherit;color:var(--orange,#e8590c);font-weight:500;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.oc-st{font-weight:500}.oc-st.amber{color:#d98a00}.oc-st.blue{color:#2453d6}.oc-st.orange{color:var(--orange,#e8590c)}.oc-st.green{color:#1e7b3a}.oc-st.red{color:#c62828}.oc-st.gray{color:#6b7280}
+.oc-row{display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line,#f0e4dc)}
+.oc-who{display:flex;flex-direction:column;min-width:0;flex:1}
+.oc-who b{font-weight:500;text-transform:uppercase;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.oc-who span{font-size:13px;color:#5b6272}
+.oc-pay{font-size:12.5px;padding:4px 12px;border-radius:999px;background:#e3f6ee;color:#16784f}
+.oc-pay.cod{background:var(--peach,#ffe6d5);color:var(--orange,#e8590c)}
+.oc-pay.fod{background:#e8edfb;color:#2453d6}
+.oc-amt{font-size:17px;font-weight:600;white-space:nowrap}
+.oc-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.oc-chan{color:var(--orange,#e8590c)}
+.oc-btn{display:inline-flex;align-items:center;justify-content:center;min-width:86px;padding:10px 18px;border-radius:999px;border:0;background:var(--orange,#e8590c);color:#fff!important;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.oc-btn.ghost{background:#fff;color:var(--orange,#e8590c)!important;border:1px solid var(--orange,#e8590c)}
+.oc-btn:disabled{opacity:.6}
+.oc-returns{position:fixed;left:16px;bottom:84px;z-index:40;display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:999px;background:var(--navy,#1b2232);color:#fff!important;font-size:14px;box-shadow:0 6px 18px rgba(27,34,50,.25)}
+@media (min-width:900px){.oc-returns{bottom:24px;left:auto;right:24px}}
+/* tracking window */
+.tk-hero{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--peach,#ffe6d5);border-radius:14px;padding:12px}
+.tk-hero>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.tk-hero .wide{grid-column:1/-1}
+.tk-hero b{font-weight:500;color:var(--navy,#1b2232)}
+.tk-hero .tiny{color:#6b5a4e}
+.tk-people{display:grid;grid-template-columns:1fr;gap:8px}
+@media (min-width:560px){.tk-people{grid-template-columns:1fr 1fr}}
+.tk-person{border:1px solid var(--line,#f0e4dc);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.tk-person b{font-weight:500}
+.tk-loc{color:var(--navy,#1b2232)}

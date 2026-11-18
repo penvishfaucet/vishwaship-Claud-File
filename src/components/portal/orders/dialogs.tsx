@@ -11,6 +11,8 @@ type Timeline = {
   orderNumber: string; carrier: string; service: string; awb: string | null; lr: string | null; status: string; etaDate: string | null; deliveredAt: string | null;
   lastLocation: string | null; lastEventAt: string | null; lastSyncAt: string | null; lastSyncError: string | null; syncFailures: number; demo: boolean;
   destination: { city?: string; state?: string; pincode?: string };
+  pickup?: { status: string; date: string | null; requestId: string | null; agentName: string | null; agentPhone: string | null };
+  delivery?: { name: string | null; phone: string | null } | null;
   events: Array<{ status: string; raw: string | null; location: string | null; at: string; remark: string | null; source: string }>;
   amendments: Array<{ at: string; previous: string; next: string }>;
 };
@@ -41,13 +43,30 @@ export function TrackDialog({ shipmentId, onClose, onChanged }: { shipmentId: st
       {!d && !err && <p className="small muted" role="status">Loading tracking…</p>}
       {d && (
         <>
+          <div className="tk-hero">
+            <div><span className="tiny">Current status</span><b>{statusLabel(d.status)}</b></div>
+            <div><span className="tiny">{d.deliveredAt ? "Delivered on" : "Estimated delivery"}</span>
+              <b>{d.deliveredAt ? istFull(d.deliveredAt) : d.etaDate ? new Date(d.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" }) : "Not shared yet"}</b></div>
+            <div className="wide"><span className="tiny">Last scanned at</span><b>{d.lastLocation ?? "No scan yet"}</b>{d.lastEventAt && <span className="tiny">{istFull(d.lastEventAt)}</span>}</div>
+          </div>
+          <div className="tk-people">
+            <div className="tk-person">
+              <span className="tiny">Pickup executive{d.pickup?.requestId ? ` · PR ${d.pickup.requestId}` : ""}</span>
+              {d.pickup?.agentName || d.pickup?.agentPhone
+                ? <><b>{d.pickup.agentName ?? "Courier executive"}</b>{d.pickup.agentPhone && <a className="ov-btn orange sm" href={`tel:${d.pickup.agentPhone}`}>Call {d.pickup.agentPhone}</a>}</>
+                : <span className="small muted">{d.pickup?.date ? `Pickup on ${new Date(d.pickup.date).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })} · details appear when the courier assigns someone` : "Shown once the courier assigns a pickup executive"}</span>}
+            </div>
+            <div className="tk-person">
+              <span className="tiny">Delivery executive</span>
+              {d.delivery?.name || d.delivery?.phone
+                ? <><b>{d.delivery.name ?? "Courier executive"}</b>{d.delivery.phone && <a className="ov-btn orange sm" href={`tel:${d.delivery.phone}`}>Call {d.delivery.phone}</a>}</>
+                : <span className="small muted">Shown when the courier shares it on the delivery day</span>}
+            </div>
+          </div>
           <dl className="ov-kv">
-            <dt>Current status</dt><dd><span className="ov-badge navy">{statusLabel(d.status)}</span></dd>
             {d.awb && <><dt>AWB</dt><dd className="ov-awb"><span className="mono">{d.awb}</span><CopyBtn value={d.awb} label="AWB" /></dd></>}
             {d.lr && <><dt>LR / LRN</dt><dd className="ov-awb"><span className="mono">{d.lr}</span><CopyBtn value={d.lr} label="LR number" /></dd></>}
-            <dt>Latest scan</dt><dd>{d.lastLocation ?? "—"}{d.lastEventAt ? ` · ${istFull(d.lastEventAt)}` : ""}</dd>
             <dt>Destination</dt><dd>{[d.destination.city, d.destination.state, d.destination.pincode].filter(Boolean).join(", ") || "—"}</dd>
-            {d.deliveredAt ? <><dt>Delivered</dt><dd className="t-ok">{istFull(d.deliveredAt)}</dd></> : d.etaDate ? <><dt>Estimated delivery</dt><dd>{new Date(d.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" })}</dd></> : null}
             <dt>Last sync</dt><dd className={d.lastSyncError ? "t-bad" : undefined}>{d.lastSyncAt ? `${ago(d.lastSyncAt)} (${istFull(d.lastSyncAt)})` : "Not synced yet"}{d.lastSyncError ? ` · Failed: ${d.lastSyncError}` : ""}</dd>
           </dl>
           <div className="row wrap" style={{ gap: 8 }}>
@@ -68,7 +87,8 @@ export function TrackDialog({ shipmentId, onClose, onChanged }: { shipmentId: st
                 {d.events.map((e, i) => (
                   <li key={i} className={i === 0 ? "now" : undefined}>
                     <div className="b small">{statusLabel(e.status)}{e.raw && e.raw.toLowerCase() !== e.status.replace(/_/g, " ") ? <span className="muted" style={{ fontWeight: 400 }}> · {e.raw}</span> : null}</div>
-                    <div className="tiny muted">{istFull(e.at)}{e.location ? ` · ${e.location}` : ""}</div>
+                    {e.location && <div className="small tk-loc">📍 {e.location}</div>}
+                    <div className="tiny muted">{istFull(e.at)}</div>
                     {e.remark && <div className="tiny">{e.remark}</div>}
                   </li>
                 ))}
