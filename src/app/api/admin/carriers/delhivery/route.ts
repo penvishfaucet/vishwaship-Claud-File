@@ -89,6 +89,10 @@ export async function POST(req: Request) {
     case "billing": {
       const { op: _o, service: _s, ...addr } = b; void _o; void _s;
       if (!addr.gst_number && !addr.pan_number) return apiError(422, "validation_error", "Enter a GST number or PAN (Delhivery requires one)");
+      addr.gst_number = addr.gst_number.toUpperCase(); addr.pan_number = addr.pan_number.toUpperCase();
+      // Delhivery validates pan_number as AAAAA9999A; a GSTIN carries the PAN in characters 3–12.
+      if (!addr.pan_number && /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/.test(addr.gst_number)) addr.pan_number = addr.gst_number.slice(2, 12);
+      if (addr.pan_number && !/^[A-Z]{5}\d{4}[A-Z]$/.test(addr.pan_number)) return apiError(422, "validation_error", "PAN must look like ABCDE1234F");
       await saveCfg({ billingAddress: { ...addr, consignor: addr.company } });
       return done("Billing address saved — sent with every B2B manifest");
     }

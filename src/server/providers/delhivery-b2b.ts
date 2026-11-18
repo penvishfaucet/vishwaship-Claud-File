@@ -48,6 +48,15 @@ async function call(ctx: ProviderContext, path: string, init: RequestInit & { ti
  * freight_mode is a retail (B2BR) field: a regular B2B client gets "Freight mode FoP not allowed for B2B" (seen on the live
  * account 2026-11-18). Send it only for FOD, or "fop" when Admin marks the account as retail (config.retailClient).
  */
+/** Billing address for FOD / retail manifests: empty fields are left out (Delhivery regex-checks e.g. pan_number); PAN comes from the GSTIN when missing. */
+function billingFor(ctx: ProviderContext): Record<string, string> | null {
+  const b = ctx.config.billingAddress as Record<string, string> | undefined;
+  if (!b) return null;
+  const out = Object.fromEntries(Object.entries(b).filter(([, v]) => typeof v === "string" && v.trim()));
+  if (!out.pan_number && /^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(out.gst_number ?? "")) out.pan_number = out.gst_number.slice(2, 12);
+  return out;
+}
+
 function freightMode(ctx: ProviderContext, pay: string): { freight_mode?: string } {
   if (pay === "fod") return { freight_mode: "fod" };
   return ctx.config.retailClient ? { freight_mode: "fop" } : {};
@@ -158,7 +167,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const fm = freightMode(ctx, req.paymentType).freight_mode;
     if (fm) fd.set("freight_mode", fm);
     fd.set("fm_pickup", "True");
-    if (ctx.config.billingAddress) fd.set("billing_address", JSON.stringify(ctx.config.billingAddress));
+    const billing = billingFor(ctx);
+    if (billing) fd.set("billing_address", JSON.stringify(billing));
     let r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
     // "shipment_details: value is not a valid list" (live): send each shipment as its own form value instead.
     // A validation failure creates nothing at Delhivery, so this second attempt cannot duplicate a manifest.
@@ -177,7 +187,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
         dimensions: req.packages.map((p) => ({ box_count: p.count, length: p.lengthMm / 10, width: p.breadthMm / 10, height: p.heightMm / 10 })),
         invoices: [{ ewaybill: req.ewayBill ?? "", inv_num: req.invoiceNumber ?? req.orderNumber, inv_amt: rupees(req.declaredValue), inv_qr_code: "" }],
         rov_insurance: !!ctx.config.rovInsurance, fm_pickup: true, ...(fm ? { freight_mode: fm } : {}),
-        ...(ctx.config.billingAddress ? { billing_address: ctx.config.billingAddress } : {}),
+        ...(billing ? { billing_address: billing } : {}),
       };
       const rj = await call(ctx, "/manifest", { method: "POST", body: JSON.stringify(json), timeoutMs: 30_000 });
       if (rj.ok || !/field required|value is not a valid/i.test(rj.error.message) || !/shipment_details/i.test(rj.error.message)) r = rj;
