@@ -579,9 +579,14 @@ export const tickets = pgTable("tickets", {
   subject: text("subject").notNull(),
   shipmentId: text("shipment_id"),
   awb: text("awb"),
+  orderId: text("order_id"),
+  orderNumber: text("order_number"),
   status: text("status").notNull().default("open"),
+  /** Client submission key: a retried / double-clicked "Save" returns the same ticket. */
+  idemKey: text("idem_key"),
   createdAt: created(),
-});
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("tickets_org_idem").on(t.orgId, t.idemKey), index("tickets_org_status").on(t.orgId, t.status)]);
 
 export const ticketMessages = pgTable("ticket_messages", {
   id: id(),
@@ -590,8 +595,10 @@ export const ticketMessages = pgTable("ticket_messages", {
   authorKind: text("author_kind").notNull(),
   body: text("body").notNull(),
   attachments: jsonb("attachments").notNull().default([]),
+  /** Client message key: a retried send never creates a second message. */
+  clientId: text("client_id"),
   createdAt: created(),
-});
+}, (t) => [uniqueIndex("ticket_messages_client").on(t.ticketId, t.clientId)]);
 
 export const inAppAlerts = pgTable("in_app_alerts", {
   id: id(),

@@ -218,7 +218,7 @@ export async function provideInfo(a: { id: string; orgId: string; userId: string
   await db.update(schema.recharges).set({ status: "pending_verification", ...(a.proof ? { proofKey: a.proof.key, proofName: a.proof.name.slice(0, 120), proofMime: a.proof.mime } : {}), updatedAt: new Date() }).where(eq(schema.recharges.id, rc.id));
   if (rc.ticketId) {
     await db.insert(schema.ticketMessages).values({ id: newId("tm"), ticketId: rc.ticketId, authorUserId: a.userId, authorKind: "customer", body: (msg || "Uploaded a new payment screenshot.") + (a.proof ? "\n(New payment screenshot attached to the request.)" : ""), attachments: a.proof ? [{ kind: "recharge_proof", rechargeId: rc.id, name: a.proof.name }] : [] });
-    await db.update(schema.tickets).set({ status: "open" }).where(eq(schema.tickets.id, rc.ticketId));
+    await db.update(schema.tickets).set({ status: "open", updatedAt: new Date() }).where(eq(schema.tickets.id, rc.ticketId));
   }
   await rechargeEvent(rc.id, "info_provided", "customer", a.userId, msg || "New screenshot");
   await staffAlert("recharge_info", `Customer replied on recharge ${rc.requestNumber}`, `/admin/recharges/?id=${rc.id}`);
@@ -228,7 +228,7 @@ export async function provideInfo(a: { id: string; orgId: string; userId: string
 async function ticketUpdate(db: Db, rc: typeof schema.recharges.$inferSelect, staffUserId: string, body: string, status: string) {
   if (!rc.ticketId) return;
   await db.insert(schema.ticketMessages).values({ id: newId("tm"), ticketId: rc.ticketId, authorUserId: staffUserId, authorKind: "staff", body });
-  await db.update(schema.tickets).set({ status }).where(eq(schema.tickets.id, rc.ticketId));
+  await db.update(schema.tickets).set({ status, updatedAt: new Date() }).where(eq(schema.tickets.id, rc.ticketId));
 }
 
 /** Pending manual requests (Admin badge). */

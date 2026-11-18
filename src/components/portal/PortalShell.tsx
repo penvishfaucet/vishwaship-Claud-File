@@ -3,13 +3,12 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
+  MessageCircleMore, Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
 } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
 import { QuickSearch } from "./QuickSearch";
-import { SupportChat } from "./SupportChat";
-import { OPEN_CHAT_EVENT, type QuickAction, quickActions } from "./quick-actions";
+import { type QuickAction, quickActions } from "./quick-actions";
 import { SidebarBrand } from "@/components/BrandLogo";
 import { rememberBrowser } from "@/components/site/nav";
 
@@ -183,7 +182,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
               </div>
             )}
           </div>
-          <SupportChat open={tickets.open} recent={tickets.recent.map((t) => ({ id: t.id, number: t.number, subject: t.subject, status: t.status, updatedAt: String(t.updatedAt) }))} />
+          <Link href="/portal/support/" className="hdr-ico hchat" aria-label={`Support Chat${tickets.open ? `, ${tickets.open} open tickets` : ""}`} title="Support Chat"><MessageCircleMore size={19} aria-hidden />{tickets.open > 0 && <i>{tickets.open > 9 ? "9+" : tickets.open}</i>}</Link>
           <div style={{ position: "relative" }}>
             <button className="hdr-ico" aria-label={`Notifications${unreadAlerts.length ? `, ${unreadAlerts.length} unread` : ""}`} aria-haspopup="menu" aria-expanded={menu === "alerts"} onClick={() => setMenu(menu === "alerts" ? null : "alerts")}>
               <Bell size={19} />{unreadAlerts.length > 0 && <i>{unreadAlerts.length > 9 ? "9+" : unreadAlerts.length}</i>}
@@ -231,9 +230,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
 /** One Quick Action: a link to its route, or the Support Chat sheet. */
 function QaItem({ a, onPick, role, className }: { a: QuickAction; onPick: () => void; role?: string; className?: string }) {
   const body = <><a.icon size={16} aria-hidden /> <span>{a.label}</span></>;
-  return a.action === "chat"
-    ? <button type="button" role={role} className={className ?? "dd"} onClick={() => { onPick(); window.dispatchEvent(new Event(OPEN_CHAT_EVENT)); }}>{body}</button>
-    : <Link role={role} className={className} href={a.href!} onClick={onPick}>{body}</Link>;
+  return <Link role={role} className={className} href={a.href!} onClick={onPick}>{body}</Link>;
 }
 
 /** Mobile Quick Actions bottom sheet (closes on pick, close button, backdrop or Escape). */

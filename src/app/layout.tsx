@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/vs-site.css";
 import "@/styles/app.css";
+import "@/styles/support.css";
 
 /*
  * Roboto (same face as the live site) is loaded with a plain Google Fonts stylesheet link instead of

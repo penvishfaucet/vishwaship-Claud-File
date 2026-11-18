@@ -25,6 +25,6 @@ export async function POST(req: Request) {
     await audit({ actorUserId: s.userId, actorKind: "customer", orgId: s.orgId, action: "ticket.create", targetType: "ticket", targetId: ticketId, details: { via: "chat" } });
   }
   await db.insert(schema.ticketMessages).values({ id: newId("tm"), ticketId, authorUserId: s.userId, authorKind: "customer", body: p.data.message });
-  await db.update(schema.tickets).set({ status: "open" }).where(eq(schema.tickets.id, ticketId));
+  await db.update(schema.tickets).set({ status: "open", updatedAt: new Date() }).where(eq(schema.tickets.id, ticketId));
   return NextResponse.json({ ticketId });
 }

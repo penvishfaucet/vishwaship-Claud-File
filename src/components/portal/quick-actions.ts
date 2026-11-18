@@ -1,10 +1,7 @@
 import { Calculator, CalendarClock, LifeBuoy, MapPin, MessageCircleMore, PlusCircle, Truck, Upload, Wallet } from "lucide-react";
 import type { ModuleState } from "./nav";
 
-export type QuickAction = { id: string; label: string; icon: typeof PlusCircle; href?: string; action?: "chat"; primary?: boolean };
-
-/** Event that opens the Support Chat sheet from anywhere in the portal. */
-export const OPEN_CHAT_EVENT = "vs:open-support-chat";
+export type QuickAction = { id: string; label: string; icon: typeof PlusCircle; href?: string; primary?: boolean };
 
 /**
  * One list of shortcuts for the desktop header menu and the mobile Quick Actions sheet.
@@ -22,7 +19,7 @@ export function quickActions(mods: ModuleState): QuickAction[] {
     { id: "recharge", label: "Wallet Recharge", icon: Wallet, href: "/portal/billing/passbook/?recharge=1" },
     { id: "warehouse", label: "Add Warehouse", icon: MapPin, href: "/portal/addresses/?add=1", module: "warehouses" },
     { id: "ticket", label: "Raise Ticket", icon: LifeBuoy, href: "/portal/support/new/" },
-    { id: "chat", label: "Support Chat", icon: MessageCircleMore, action: "chat" },
+    { id: "chat", label: "Support Chat", icon: MessageCircleMore, href: "/portal/support/" },
   ];
   return all.filter((a) => !a.module || on(a.module));
 }

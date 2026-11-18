@@ -316,5 +316,22 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795027828319,
   "hash": "a77573c0ec647bf26d1b5f5cd46cf82b272640e113110fe4939d083f5b8e2569"
+ },
+ {
+  "tag": "0013_ticket_workflow",
+  "sql": [
+   "ALTER TABLE \"ticket_messages\" ADD COLUMN \"client_id\" text;",
+   "\nALTER TABLE \"tickets\" ADD COLUMN \"order_id\" text;",
+   "\nALTER TABLE \"tickets\" ADD COLUMN \"order_number\" text;",
+   "\nALTER TABLE \"tickets\" ADD COLUMN \"idem_key\" text;",
+   "\nALTER TABLE \"tickets\" ADD COLUMN \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL;",
+   "\nUPDATE \"tickets\" t SET \"updated_at\" = COALESCE((SELECT max(m.\"created_at\") FROM \"ticket_messages\" m WHERE m.\"ticket_id\" = t.\"id\"), t.\"created_at\");",
+   "\nCREATE UNIQUE INDEX \"ticket_messages_client\" ON \"ticket_messages\" USING btree (\"ticket_id\",\"client_id\");",
+   "\nCREATE UNIQUE INDEX \"tickets_org_idem\" ON \"tickets\" USING btree (\"org_id\",\"idem_key\");",
+   "\nCREATE INDEX \"tickets_org_status\" ON \"tickets\" USING btree (\"org_id\",\"status\");\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795032939140,
+  "hash": "98f81474e43793ac483f82353d8b84135bc53ef13437d12a5b873c0b5d62e98b"
  }
 ];
