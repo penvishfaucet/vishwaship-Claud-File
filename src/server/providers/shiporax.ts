@@ -40,6 +40,30 @@ async function call(ctx: ProviderContext, path: string, init: RequestInit & { ti
   return { ok: true, value: j };
 }
 
+const digits10 = (s: string) => s.replace(/\D/g, "").slice(-10);
+const awbOf = (d: Record<string, unknown>) => firstString(d, ["awbNumber", "awb_number"]);
+
+async function getOrder(ctx: ProviderContext, id: string): Promise<Result<Record<string, unknown>>> {
+  const r = await call(ctx, `/api/orders/${encodeURIComponent(id)}`);
+  return r.ok ? { ok: true, value: (r.value.data ?? {}) as Record<string, unknown> } : r;
+}
+
+/** Find an order we created earlier by our reference (stored in product_sku), newest first. */
+async function findByRef(ctx: ProviderContext, ref: string): Promise<Result<Record<string, unknown> | null>> {
+  const r = await call(ctx, "/api/orders?limit=100");
+  if (!r.ok) return r;
+  const list = (((r.value.data as { orders?: unknown[] })?.orders ?? []) as Array<Record<string, unknown>>);
+  return { ok: true, value: list.find((o) => String(o.product_sku ?? "") === ref && o.status !== "cancelled") ?? null };
+}
+
+function toBooking(d: Record<string, unknown>) {
+  if (d.status === "cancelled") return null;
+  const awb = awbOf(d);
+  // Imported but never shipped (no courier): nothing will move, so it counts as not booked.
+  if (!awb && !d.assignedCourier && !d.courier_name) return null;
+  return { providerOrderRef: String(d.id), awb, state: awb ? "confirmed" as const : "pending_async" as const, labelAvailable: !!awb };
+}
+
 const num = (v: unknown) => { const n = typeof v === "number" ? v : Number(String(v ?? "").replace(/[,₹\s]/g, "")); return Number.isFinite(n) ? n : NaN; };
 
 /** One calc-rate row → provider quote (paise). Comparable rate = `total` (base + fuel + COD charge). */
@@ -101,8 +125,7 @@ export function parseShiporaWebhook(body: unknown): Result<PushedUpdate[]> {
 export const shiporaAdapter: ShippingAdapter = {
   key: "shiporax",
   displayName: "Shipora X",
-  // Booking, label and cancel are not built until Shipora X documents the order-create body and responses.
-  implemented: ["authenticate", "health", "quote", "serviceability", "track", "inbound_events"],
+  implemented: ["authenticate", "health", "warehouse_sync", "quote", "serviceability", "book", "booking_lookup", "label", "track", "cancel", "inbound_events"],
   // COD stays off until Shipora X confirms how its COD charge is quoted (codCharge was 0 for every COD request tried).
   paymentModes: ["prepaid"],
 
@@ -141,10 +164,104 @@ export const shiporaAdapter: ShippingAdapter = {
     return { ok: true, value: quotes };
   },
 
-  async book() { return unsupported("booking (Shipora X order-create fields pending)"); },
-  async lookupBooking() { return unsupported("booking lookup"); },
-  async label() { return unsupported("label (Shipora X label response pending)"); },
-  async schedulePickup() { return unsupported("pickup"); },
+  /** Map a Vishwaship pickup address to a Shipora X warehouse (same PIN + phone, else same title, else create). */
+  async registerWarehouse(ctx, w) {
+    const list = await call(ctx, "/api/warehouses");
+    if (!list.ok) return list;
+    const all = (((list.value.data as { warehouses?: unknown[] })?.warehouses ?? []) as Array<Record<string, unknown>>).filter((x) => x.is_active !== false);
+    const phone = digits10(w.mobile);
+    const title = `VS-${w.code}`.slice(0, 60);
+    const hit = all.find((x) => String(x.pincode) === w.pincode && digits10(String(x.phone ?? "")) === phone) ?? all.find((x) => String(x.name ?? "") === title);
+    if (hit?.id) return { ok: true, value: { ref: String(hit.id) } };
+    const r = await call(ctx, "/api/warehouses", { method: "POST", body: JSON.stringify({ name: title, contact_name: w.contactName, phone, email: w.email ?? "", address: [w.line1, w.line2].filter(Boolean).join(", "), city: w.city, state: w.state, pincode: w.pincode }) });
+    if (!r.ok) return r;
+    const id = firstString(r.value.data, ["warehouse.id", "id", "warehouseId", "warehouse_id"]);
+    return id ? { ok: true, value: { ref: id } } : { ok: false, error: { category: "upstream", message: "Shipora X created the warehouse but returned no id", retryable: true } };
+  },
+
+  /**
+   * import order → read it back and check address + pickup warehouse were stored (fix with PATCH if not) →
+   * ship with the quoted courierId (this is the step that charges) → read back the AWB.
+   * product_sku carries the Vishwaship order id so an uncertain attempt can be found again before any retry.
+   */
+  async book(ctx, req) {
+    const [kind, courierId, rateId] = (req.quote.providerQuoteRef ?? "").split(":");
+    if (kind !== "shiporax" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Shipora X courierId — refresh rates", retryable: false } };
+    if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Shipora X warehouse", retryable: false } };
+    if (req.packages.reduce((t, p) => t + p.count, 0) !== 1) return { ok: false, error: { category: "validation", message: "Shipora X books one package per order", retryable: false } };
+    if (req.paymentType !== "prepaid") return { ok: false, error: { category: "unsupported", message: "Shipora X COD is not enabled yet", retryable: false } };
+    const existing = await findByRef(ctx, req.vishwashipOrderId);
+    if (!existing.ok) return existing;
+    let orderId = existing.value ? String(existing.value.id) : "";
+    const p = req.packages[0];
+    const c = req.consignee;
+    const address = [c.line1, c.line2].filter(Boolean).join(", ");
+    const product = req.products[0]?.name?.slice(0, 100) || "Goods";
+    const fields = {
+      customer_name: c.name, customer_phone: digits10(c.mobile), customer_email: c.email ?? "",
+      customer_address: address, customer_city: c.city, customer_state: c.state, customer_pincode: c.pincode, delivery_pincode: c.pincode,
+      weight: p.actualWeightGrams / 1000, length: Math.ceil(p.lengthMm / 10), breadth: Math.ceil(p.breadthMm / 10), height: Math.ceil(p.heightMm / 10),
+      payment_mode: "prepaid", cod_amount: 0, product_name: product, product_sku: req.vishwashipOrderId,
+      quantity: req.products.reduce((t, x) => t + x.qty, 0) || 1, product_value: req.declaredValue / 100, total_amount: req.declaredValue / 100,
+      warehouse_id: req.pickup.providerWarehouseRef, pickup_pincode: req.pickup.pincode, channel_order_id: req.orderNumber,
+    };
+    if (!orderId) {
+      const imp = await call(ctx, "/api/orders/webhook/import", { method: "POST", timeoutMs: 25_000, body: JSON.stringify(fields) });
+      if (!imp.ok) return imp.error.category === "timeout" || imp.error.category === "upstream" ? { ok: false, error: { ...imp.error, category: "ambiguous" } } : imp;
+      orderId = firstString(imp.value, ["data.orderId", "orderId", "data.id"]) ?? "";
+      if (!orderId) return { ok: false, error: { category: "ambiguous", message: "Shipora X imported the order but returned no order id", retryable: false } };
+    }
+    // Read back: Shipora X ignores unknown import fields, so confirm the address and pickup warehouse stuck.
+    let det = await getOrder(ctx, orderId);
+    if (!det.ok) return { ok: false, error: { ...det.error, category: "ambiguous" } };
+    const bad = (d: Record<string, unknown>) => {
+      const rec = (d.recipient ?? {}) as Record<string, unknown>;
+      const wh = (d.warehouse as Record<string, unknown> | null)?.id ?? d.warehouse_id;
+      return !rec.address || !rec.city || String(rec.pincode ?? "") !== c.pincode || String(wh ?? "") !== req.pickup.providerWarehouseRef;
+    };
+    if (bad(det.value)) {
+      await call(ctx, `/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify(fields) });
+      det = await getOrder(ctx, orderId);
+      if (!det.ok) return { ok: false, error: { ...det.error, category: "ambiguous" } };
+      if (bad(det.value)) {
+        await call(ctx, `/api/orders/${orderId}/cancel`, { method: "POST", body: JSON.stringify({ reason: "Vishwaship: address or pickup warehouse not stored" }) });
+        return { ok: false, error: { category: "validation", message: "Shipora X did not store the delivery address or pickup warehouse — booking stopped before any charge", retryable: false } };
+      }
+    }
+    if (!awbOf(det.value)) {
+      const ship = await call(ctx, `/api/orders/${orderId}/ship`, { method: "PATCH", timeoutMs: 30_000, body: JSON.stringify({ courierId, ...(rateId ? { rateId } : {}) }) });
+      if (!ship.ok) return ship.error.category === "validation" || ship.error.category === "auth" ? ship : { ok: false, error: { ...ship.error, category: "ambiguous" } };
+      const fromShip = firstString(ship.value, ["data.awbNumber", "data.awb_number", "data.awb", "awbNumber", "awb_number", "data.order.awb_number"]);
+      det = await getOrder(ctx, orderId);
+      if (det.ok && !awbOf(det.value) && fromShip) det.value.awb_number = fromShip;
+    }
+    const awb = det.ok ? awbOf(det.value) : null;
+    return { ok: true, value: { providerOrderRef: orderId, awb, state: awb ? "confirmed" : "pending_async", labelAvailable: !!awb, pickupScheduled: !!awb } };
+  },
+
+  async lookupBooking(ctx, ref) {
+    if (ref.providerOrderRef && /^[0-9a-f-]{36}$/i.test(ref.providerOrderRef)) {
+      const d = await getOrder(ctx, ref.providerOrderRef);
+      if (!d.ok) return d.error.category === "not_found" ? { ok: true, value: null } : d;
+      return { ok: true, value: toBooking(d.value) };
+    }
+    const f = await findByRef(ctx, ref.vishwashipOrderId);
+    if (!f.ok) return f;
+    return { ok: true, value: f.value ? toBooking(f.value) : null };
+  },
+
+  /** Shipora X returns its own 4×6 / A4 label as an HTML page; it is served sandboxed from the order page. */
+  async label(ctx, ref, format) {
+    const formatsAvailable = ["thermal_4x6" as const];
+    if (format !== "thermal_4x6") return { ok: true, value: { formatsAvailable } };
+    let r: Response;
+    try { r = await ctx.fetch(`${base(ctx)}/api/orders/${encodeURIComponent(ref.providerOrderRef)}/label`, { timeoutMs: 20_000, headers: { "X-Api-Key": ctx.secrets.apiKey ?? "" } }); }
+    catch (e) { return { ok: false, error: { category: "timeout", message: `Shipora X label: ${(e as Error).message}`, retryable: true } }; }
+    const html = await r.text();
+    if (!r.ok || !/<html/i.test(html)) return { ok: false, error: { category: "not_found", message: "Shipora X has not generated the label yet", retryable: true } };
+    return { ok: true, value: { html, formatsAvailable } };
+  },
+  async schedulePickup() { return unsupported("pickup (Shipora X schedules pickup when the order is shipped)"); },
 
   async track(ctx, awb) {
     const r = await call(ctx, `/api/orders/track-by-awb/${encodeURIComponent(awb)}`);
@@ -162,7 +279,10 @@ export const shiporaAdapter: ShippingAdapter = {
     return { ok: true, value: { awb, carrierName: firstString(d, ["courierName", "courier_name"]) ?? "Courier", status: mapShiporaStatus(cur || events[events.length - 1].rawStatus), events } };
   },
 
-  async cancel() { return unsupported("cancel (Shipora X cancel route pending)"); },
+  async cancel(ctx, ref) {
+    const r = await call(ctx, `/api/orders/${encodeURIComponent(ref.providerOrderRef)}/cancel`, { method: "POST", body: JSON.stringify({ reason: "Cancelled from Vishwaship" }) });
+    return r.ok ? { ok: true, value: { acknowledged: true } } : r;
+  },
   parseTrackingWebhook: parseShiporaWebhook,
   async ndrAction() { return unsupported("NDR action"); },
 };

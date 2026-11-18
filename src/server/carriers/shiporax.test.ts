@@ -27,3 +27,63 @@ describe("Shipora X", () => {
     expect(mapShiporaStatus("SOMETHING_NEW")).toBe("booked");
   });
 });
+
+const { shiporaAdapter } = await import("@/server/providers/shiporax");
+type Hit = { method: string; path: string; body: unknown };
+function fakeCtx(handler: (h: Hit) => unknown) {
+  const hits: Hit[] = [];
+  const ctx = {
+    accountId: "pa_x", mode: "live" as const, config: { service: "B2C", gstTreatment: "exclusive" }, secrets: { apiKey: "k" },
+    fetch: async (url: string, init: RequestInit) => {
+      const h = { method: String(init.method ?? "GET"), path: new URL(url).pathname + new URL(url).search, body: typeof init.body === "string" ? JSON.parse(init.body) : null };
+      hits.push(h);
+      return new Response(JSON.stringify(handler(h)), { status: 200 });
+    },
+  };
+  return { ctx: ctx as never, hits };
+}
+const REQ = {
+  vishwashipOrderId: "ord_9", orderNumber: "VS-9", quote: { carrierCode: "blue-dart", serviceName: "Blue-Dart Surface", providerQuoteRef: "shiporax:cour-1:rate-1" },
+  mode: "B2C" as const, paymentType: "prepaid" as const, codAmount: 0, declaredValue: 50000,
+  pickup: { name: "Ravi", mobile: "9876543210", line1: "Plot 1", pincode: "249402", city: "Haridwar", state: "Uttarakhand", providerWarehouseRef: "wh-1" },
+  consignee: { name: "Asha", mobile: "9123456780", line1: "Sector 1", pincode: "411001", city: "Pune", state: "Maharashtra" },
+  packages: [{ count: 1, lengthMm: 200, breadthMm: 150, heightMm: 100, actualWeightGrams: 1200 }], products: [{ name: "Shoes", qty: 1, unitPrice: 50000 }],
+};
+const goodOrder = (awb: string | null) => ({ success: true, data: { id: "11111111-2222-3333-4444-555555555555", status: "pending", recipient: { address: "Sector 1", city: "Pune", pincode: "411001" }, warehouse: { id: "wh-1" }, awb_number: awb } });
+
+describe("Shipora X booking", () => {
+  it("imports, checks the stored address + warehouse, ships with the quoted courierId, returns the AWB", async () => {
+    let shipped = false;
+    const { ctx, hits } = fakeCtx((h) => {
+      if (h.path.startsWith("/api/orders?")) return { success: true, data: { orders: [] } };
+      if (h.path === "/api/orders/webhook/import") return { success: true, data: { orderId: "11111111-2222-3333-4444-555555555555" } };
+      if (h.path.endsWith("/ship")) { shipped = true; return { success: true, data: {} }; }
+      return goodOrder(shipped ? "AWB777" : null);
+    });
+    const r = await shiporaAdapter.book(ctx, REQ);
+    expect(r).toMatchObject({ ok: true, value: { awb: "AWB777", state: "confirmed", providerOrderRef: "11111111-2222-3333-4444-555555555555" } });
+    const imp = hits.find((h) => h.path === "/api/orders/webhook/import")!.body as Record<string, unknown>;
+    expect(imp).toMatchObject({ customer_address: "Sector 1", customer_pincode: "411001", warehouse_id: "wh-1", weight: 1.2, breadth: 15, product_sku: "ord_9" });
+    expect(hits.find((h) => h.path.endsWith("/ship"))!.body).toEqual({ courierId: "cour-1", rateId: "rate-1" });
+  });
+  it("never ships (no charge) when Shipora X did not store the address or pickup warehouse", async () => {
+    const { ctx, hits } = fakeCtx((h) => {
+      if (h.path.startsWith("/api/orders?")) return { success: true, data: { orders: [] } };
+      if (h.path === "/api/orders/webhook/import") return { success: true, data: { orderId: "11111111-2222-3333-4444-555555555555" } };
+      return { success: true, data: { id: "11111111-2222-3333-4444-555555555555", recipient: { address: "", city: "", pincode: "411001" }, warehouse: null } };
+    });
+    const r = await shiporaAdapter.book(ctx, REQ);
+    expect(r.ok).toBe(false);
+    expect(hits.some((h) => h.path.endsWith("/ship"))).toBe(false);
+    expect(hits.some((h) => h.path.endsWith("/cancel"))).toBe(true);
+  });
+  it("a retry finds the earlier order by reference instead of importing a second one", async () => {
+    const { ctx, hits } = fakeCtx((h) => {
+      if (h.path.startsWith("/api/orders?")) return { success: true, data: { orders: [{ id: "11111111-2222-3333-4444-555555555555", product_sku: "ord_9", status: "pending" }] } };
+      return goodOrder("AWB777");
+    });
+    const r = await shiporaAdapter.book(ctx, REQ);
+    expect(r).toMatchObject({ ok: true, value: { awb: "AWB777" } });
+    expect(hits.some((h) => h.path === "/api/orders/webhook/import" || h.path.endsWith("/ship"))).toBe(false);
+  });
+});

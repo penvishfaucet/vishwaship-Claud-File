@@ -48,6 +48,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       const imgs = r.value.images.filter((u) => /^(https:|data:image\/png;base64,)/.test(u)).map((u) => `<img src="${u.replace(/"/g, "")}" alt="Label" style="display:block;max-width:100%;page-break-after:always">`).join("");
       return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Labels ${row.s.lrNumber ?? row.s.awb}</title><style>@page{margin:0}body{margin:0}</style></head><body onload="window.print()">${imgs}</body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" } });
     }
+    // Carrier HTML label (Shipora X): served as-is but sandboxed, so its scripts cannot touch Vishwaship cookies or pages.
+    if (r.value.html) return new Response(r.value.html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "content-security-policy": "sandbox allow-scripts allow-modals allow-downloads", "x-content-type-options": "nosniff" } });
     if (r.value.pdf) return new Response(Buffer.from(r.value.pdf), { headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="${row.s.awb}.pdf"` } });
     if (r.value.url) return Response.redirect(r.value.url, 302);
   }

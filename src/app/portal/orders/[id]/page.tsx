@@ -133,8 +133,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
               <ul className="plain-list" style={{ margin: "0 -16px" }}>
                 {!shipment.awb ? <li><span className="small muted">Label — available once the courier assigns the AWB</span></li> : shipment.provider !== "demo" ? (
                   <>
-                    <li><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=original`}>Courier label · original format (one page per package)</a></li>
-                    {labelFormatsFor(shipment.provider).filter((f) => f.ok && f.key !== "original").map((f) => <li key={f.key}><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=${f.key}`}>Label · {f.name}{f.reason ? <span className="tiny muted"> ({f.reason})</span> : null}</a></li>)}
+                    <li><a className="link-navy small" href={shipment.provider === "shiporax" ? `/api/portal/shipments/${shipment.id}/label` : `/api/portal/labels?ids=${shipment.id}&format=original`}>Courier label · original format (one page per package)</a></li>
+                    {shipment.provider !== "shiporax" && labelFormatsFor(shipment.provider).filter((f) => f.ok && f.key !== "original").map((f) => <li key={f.key}><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=${f.key}`}>Label · {f.name}{f.reason ? <span className="tiny muted"> ({f.reason})</span> : null}</a></li>)}
                   </>
                 ) : [["thermal_4x6", "Label · thermal 4×6 in"], ["a4", "Label · A4"], ["thermal_3x4", "Label · thermal 3×4 in"], ["thermal_4x4", "Label · thermal 4×4 in"], ["thermal_2x4", "Label · thermal 2×4 in"], ["thermal_38x100", "Label · 38×100 mm"]].map(([f, l]) => (
                   <li key={f}><a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/label?format=${f}`}>{l}</a></li>

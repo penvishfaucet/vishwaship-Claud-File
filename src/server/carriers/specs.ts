@@ -94,9 +94,9 @@ export const CARRIER_SPECS: Record<string, CarrierSpec> = {
     missing: {
       general: "Ask Shipora X whether they sign webhooks (header + secret); until then the token in the URL authenticates pushes.",
       quote: "Whether calc-rate 'total' includes GST (no GST field is returned) — set the GST basis under Service settings — and how to request COD charges (codCharge stayed 0 for every COD request tried), so COD is off until confirmed.",
-      book: "Full request body for POST /api/orders/webhook/import (only customer_name and customer_phone are confirmed), its response (order UUID field), duplicate-order behaviour, and the PATCH /api/orders/:id/ship body/response (courierId confirmed; rateId? AWB field?). Customers do not see Shipora X rates until booking is built.",
-      label: "Response of GET /api/orders/:id/label (PDF, PNG or URL).",
-      cancel: "Exact cancel route (POST /api/orders/webhook/cancel is read by the server as /api/orders/:id/cancel).",
+      book: "Built from a real test order (2026-11-18): import (customer_* fields, warehouse_id) → read back and check address + pickup warehouse → PATCH /api/orders/:id/ship {courierId, rateId} → AWB from GET /api/orders/:id. Not yet run end-to-end with a real shipment: the first live booking verifies the ship response and charge. B2B: Shipora X's B2B rate/booking parameters are still needed.",
+      label: "GET /api/orders/:id/label returns an HTML 4×6 / A4 label; served sandboxed from the order page (not in bulk PDF downloads).",
+      cancel: "POST /api/orders/:id/cancel (confirmed on the test order).",
       track: "Response shape of GET /api/orders/track-by-awb/:awb and the full status list (pickup / out-for-delivery codes).",
     },
   },
