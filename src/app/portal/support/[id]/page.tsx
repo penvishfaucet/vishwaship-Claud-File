@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
@@ -46,8 +48,8 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
         <span className={`tk-st ${st}`}>{STATUS_LABEL[st]}</span>
       </header>
       <div className="tk-meta">
-        {t.orderNumber && <span><b>Order ID:</b> {t.orderNumber}</span>}
-        {t.awb && <span><b>AWB:</b> {t.awb}</span>}
+        {t.orderNumber && <span><b>Order ID:</b> <OrderIdLink value={t.orderNumber} href={portalOrderHref(t.orderId)} /></span>}
+        {t.awb && <span className="id-row"><b>AWB:</b> <AwbLink value={t.awb} href={portalTrackHref(t.awb)} /><CopyBtn value={t.awb} label="AWB" /></span>}
         <span><b>Category:</b> {categoryLabel(t.category)}</span>
       </div>
       {rc && <Link className="note row" style={{ gap: 8 }} href={`/portal/billing/recharges/${rc.id}/`}>Recharge request <b>{rc.n}</b> · {rechargeStatus(rc.status).label} — view details{rc.status === "info_required" ? " and send the requested information" : ""} →</Link>}

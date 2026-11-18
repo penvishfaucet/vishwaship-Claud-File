@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { NdrActions } from "@/components/portal/NdrActions";
@@ -35,7 +37,7 @@ export default async function NdrPage({ searchParams }: { searchParams: Promise<
             <tbody>
               {filtered.map(({ c, s, o }) => (
                 <tr key={c.id}>
-                  <td><Link className="b link-navy" href={`/portal/orders/${o.id}/`}>{o.orderNumber}</Link><div className="tiny mono muted">{s.awb}</div></td>
+                  <td><OrderIdLink value={o.orderNumber} href={portalOrderHref(o.id)} /><div className="tiny id-row"><AwbLink value={s.awb} href={portalTrackHref(s.awb)} />{s.awb && <CopyBtn value={s.awb} label="AWB" />}</div></td>
                   <td>{carrierLogo(s.carrierCode) ? <img className="clogo-sm" src={carrierLogo(s.carrierCode)!} alt={s.carrierName} /> : s.carrierName}</td>
                   <td className="small">{c.reason ?? "—"}</td>
                   <td>{c.attempt}</td>

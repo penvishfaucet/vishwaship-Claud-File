@@ -1,4 +1,5 @@
 "use client";
+import { AwbLink, portalTrackHref } from "@/components/IdLinks";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -42,7 +43,7 @@ export function PickupRequestForm({ warehouses, rows, today }: { warehouses: WH[
           <tbody>{list.map((r) => (
             <tr key={r.id}>
               <td><input type="checkbox" aria-label={`Include ${r.orderNumber}`} checked={sel.includes(r.id)} onChange={() => toggle(r.id)} /></td>
-              <td className="small">{r.orderNumber}</td><td className="mono tiny">{r.awb ?? "—"}</td>
+              <td className="small">{r.orderNumber}</td><td className="tiny"><AwbLink value={r.awb} href={portalTrackHref(r.awb)} /></td>
               <td className="small">{r.carrier}{r.code ? <span className="tiny muted"> · {r.code}</span> : null}</td><td className="small">{r.boxes}</td>
               <td className="small">{r.pickup === "scheduled" ? "Requested" : r.auto ? "Courier schedules automatically" : "Not requested"}</td>
             </tr>

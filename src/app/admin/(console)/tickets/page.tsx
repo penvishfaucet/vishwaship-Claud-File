@@ -74,8 +74,8 @@ export default async function AdminTickets({ searchParams }: { searchParams: Pro
             </div>
             <div className="tk-meta" style={{ padding: 0 }}>
               <span><b>Category:</b> {categoryLabel(openRow.t.category)}</span>
-              {openRow.t.orderNumber && <span><b>Order ID:</b> {openRow.t.orderNumber}</span>}
-              {openRow.t.awb && <span><b>AWB:</b> {openRow.t.awb}</span>}
+              {openRow.t.orderNumber && <span><b>Order ID:</b> {openRow.t.shipmentId ? <a className="id-link" href={`/admin/shipments/${openRow.t.shipmentId}/`}>{openRow.t.orderNumber}</a> : openRow.t.orderNumber}</span>}
+              {openRow.t.awb && <span><b>AWB:</b> {openRow.t.shipmentId ? <a className="id-link mono" href={`/admin/shipments/${openRow.t.shipmentId}/#tracking`}>{openRow.t.awb}</a> : openRow.t.awb}</span>}
             </div>
             {linkedRc && <a className="note" href={`/admin/recharges/?id=${linkedRc.id}`}>Manual recharge <b>{linkedRc.n}</b> — open to review the screenshot and approve / reject →</a>}
             <ol className="chat-thread" style={{ padding: 0 }}>

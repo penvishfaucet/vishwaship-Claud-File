@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/BrandLogo";
 import Link from "next/link";
 import { useState } from "react";
 import { ArrowUpRight } from "@/components/icons";
@@ -26,7 +27,7 @@ export function SiteHeader() {
       </div>
       <header className="vs-head">
         <div className="in" style={{ position: "relative" }}>
-          <Link className="logo" href="/"><img src="/brand/logo-full.png" alt="vishwaship.com" /></Link>
+          <Link className="logo" href="/"><BrandLogo height={56} /></Link>
           <nav className="vs-nav" aria-label="Main">
             {NAV.map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}
           </nav>
@@ -51,7 +52,7 @@ export function SiteFooter() {
       <div className="vs-wrap">
         <div className="cols">
           <div>
-            <img src="/brand/logo-full.png" alt="vishwaship.com" style={{ height: 34 }} />
+            <BrandLogo height={56} plate />
             <p style={{ margin: "18px 0 6px" }}>Your parcels. Our promise.<br />Doorstep shipping, across India.</p>
             <p style={{ margin: "14px 0 4px" }}>{SITE.phone}</p>
             <a href={`mailto:${SITE.email}`} style={{ color: "var(--navy)", fontWeight: 600 }}>{SITE.email} ↗</a>

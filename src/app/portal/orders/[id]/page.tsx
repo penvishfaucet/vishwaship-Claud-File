@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import { SchedulePickup } from "@/components/portal/SchedulePickup";
 import { OrderTagsEditor } from "@/components/portal/OrderTagsEditor";
 import { tagsForOrders } from "@/server/orders/extras";
@@ -41,7 +43,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           {logo && <img src={logo} alt={shipment!.carrierName} style={{ height: 30 }} />}
           <div>
             <h1>{order.orderNumber}</h1>
-            <div className="small muted mono">{shipment?.awb ?? "Not booked yet"}{shipment?.lrNumber && shipment.lrNumber !== shipment.awb ? ` · LR ${shipment.lrNumber}` : ""}</div>
+            <div className="small muted mono id-row">{shipment?.awb ? <><AwbLink value={shipment.awb} href={portalTrackHref(shipment.awb)} /><CopyBtn value={shipment.awb} label="AWB" /></> : "Not booked yet"}{shipment?.lrNumber && shipment.lrNumber !== shipment.awb ? ` · LR ${shipment.lrNumber}` : ""}</div>
           </div>
           {shipment ? <StatusChip status={shipment.status} /> : <span className="chip c-draft">{order.status.replace(/_/g, " ")}</span>}
           {shipment?.provider === "demo" && <span className="demo-badge">DEMO</span>}

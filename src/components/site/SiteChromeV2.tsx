@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/BrandLogo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -98,7 +99,7 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
   return (
     <header className="w-head">
       <div className="w-wrap in">
-        <Link className="w-logo" href="/" aria-label="Vishwaship home"><img src="/brand/logo-full.png" alt="Vishwaship" width={168} height={38} /></Link>
+        <Link className="w-logo" href="/" aria-label="Vishwaship home"><BrandLogo height={60} /></Link>
         <nav className="w-nav" aria-label="Main">
           {SITE_NAV.map((n) => <Link key={n.href} href={n.href} aria-current={isCurrent(path, n.href) ? "page" : undefined}>{n.label}</Link>)}
         </nav>
@@ -129,7 +130,7 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
       <div className={open ? "w-drawer-wrap open" : "w-drawer-wrap"} aria-hidden={!open} onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
         <div id="w-drawer" ref={panel} className="w-drawer" role="dialog" aria-modal="true" aria-label="Menu">
           <div className="top">
-            <Link href="/" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1} aria-label="Vishwaship home"><img src="/brand/logo-full.png" alt="Vishwaship" width={140} height={32} /></Link>
+            <Link href="/" onClick={() => setOpen(false)} tabIndex={open ? 0 : -1} aria-label="Vishwaship home"><BrandLogo height={52} /></Link>
             <button ref={closeBtn} type="button" className="w-ic" aria-label="Close menu" onClick={close} tabIndex={open ? 0 : -1}><X size={24} aria-hidden="true" /></button>
           </div>
           {signedIn && <p className="who">Signed in as <b>{name}</b></p>}
@@ -165,7 +166,7 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
       <div className="w-wrap">
         <div className="cols">
           <div>
-            <span className="logo"><img src="/brand/logo-full.png" alt="Vishwaship" width={132} height={30} /></span>
+            <span className="logo"><BrandLogo height={56} plate /></span>
             <p style={{ margin: "0 0 14px", lineHeight: 1.6 }}>{footer.tagline}</p>
             {footer.phone && <a href={`tel:${tel}`}>{footer.phone}</a>}
             {footer.email && <a href={`mailto:${footer.email}`}>{footer.email}</a>}

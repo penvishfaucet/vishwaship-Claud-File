@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { Suspense } from "react";
 import { and, desc, eq, gte, lte } from "drizzle-orm";
@@ -151,7 +153,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
               return (
                 <tr key={o.orderId}>
                   <td><Link className="b link-navy" href={`/portal/orders/${o.orderId}/`}>{o.orderNumber}</Link></td>
-                  <td className="mono small">{o.awb ?? o.lr ?? <span className="muted">—</span>}{o.lr && o.lr !== o.awb && o.awb ? <div className="tiny muted">LR {o.lr}</div> : null}</td>
+                  <td className="small"><span className="id-row">{o.awb ? <><AwbLink value={o.awb} href={portalTrackHref(o.awb)} /><CopyBtn value={o.awb} label="AWB" /></> : <span className="mono">{o.lr ?? "—"}</span>}</span>{o.lr && o.lr !== o.awb && o.awb ? <div className="tiny muted">LR {o.lr}</div> : null}</td>
                   <td className="small">{c.name}<div className="tiny muted">{c.city}</div></td>
                   <td>{logo ? <img className="clogo-sm" src={logo} alt={o.carrierName ?? ""} title={o.carrierName ?? ""} /> : <span className="small muted">{o.carrierName ?? "—"}</span>}</td>
                   <td><span className={`chip ${o.paymentType === "cod" ? "c-cod" : "c-prepaid"}`}>{o.paymentType === "cod" ? `COD ${formatINR(o.codAmount)}` : o.paymentType === "fod" ? "FOD" : "Prepaid"}</span></td>

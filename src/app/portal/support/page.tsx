@@ -1,3 +1,4 @@
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { and, desc, eq, ilike, inArray, notInArray, or, type SQL } from "drizzle-orm";
 import { ChevronLeft, MessageSquarePlus } from "lucide-react";
@@ -56,8 +57,8 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
               <li key={t.id} className="tk-card">
                 <div className="tk-card-h"><b>#{t.number}</b><span className={`tk-st ${st}`}>{STATUS_LABEL[st]}</span></div>
                 <div>{categoryLabel(t.category)}</div>
-                <div>Order ID: {t.orderNumber ?? "--"}</div>
-                <div className="tk-awb">AWB: {t.awb ? <><span className="tk-awbv">{t.awb}</span><CopyBtn value={t.awb} label="AWB" /></> : "--"}</div>
+                <div>Order ID: <OrderIdLink value={t.orderNumber} href={portalOrderHref(t.orderId)} /></div>
+                <div className="tk-awb">AWB: {t.awb ? <><AwbLink value={t.awb} href={portalTrackHref(t.awb)} /><CopyBtn value={t.awb} label="AWB" /></> : "--"}</div>
                 <div className="tk-card-f">
                   <div className="small">Created: {when(t.createdAt)}<br />Updated: {when(t.updatedAt)}</div>
                   <Link className="tk-comment" href={`/portal/support/${t.id}/${back}`}>Add Comment</Link>

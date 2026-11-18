@@ -56,7 +56,7 @@ export default async function AdminShipments({ searchParams }: { searchParams: P
             {rows.map(({ s: x, o, org }) => (
               <tr key={x.id}>
                 <td><Link className="link-navy small" href={`/admin/customers/${org.id}/`}>{org.businessName}</Link></td>
-                <td><Link className="b link-navy" href={`/admin/shipments/${x.id}/`}>{o.orderNumber}</Link><div className="mono tiny muted">{x.awb}{x.lrNumber && x.lrNumber !== x.awb ? ` · LR ${x.lrNumber}` : ""}</div><div className="mono tiny muted">{x.id}{x.providerOrderRef && x.providerOrderRef !== x.orderId ? ` · ext ${x.providerOrderRef}` : ""}</div></td>
+                <td><Link className="b link-navy" href={`/admin/shipments/${x.id}/`}>{o.orderNumber}</Link><div className="mono tiny muted">{x.awb ? <Link className="id-link" href={`/admin/shipments/${x.id}/#tracking`} aria-label={`Tracking for AWB ${x.awb}`}>{x.awb}</Link> : "—"}{x.lrNumber && x.lrNumber !== x.awb ? ` · LR ${x.lrNumber}` : ""}</div><div className="mono tiny muted">{x.id}{x.providerOrderRef && x.providerOrderRef !== x.orderId ? ` · ext ${x.providerOrderRef}` : ""}</div></td>
                 <td>{carrierLogo(x.carrierCode) ? <img className="clogo-sm" src={carrierLogo(x.carrierCode)!} alt={x.carrierName} title={x.carrierName} /> : x.carrierName}</td>
                 <td className="small">{x.provider}{x.provider === "demo" && <span className="demo-badge" style={{ marginLeft: 4 }}>DEMO</span>}</td>
                 <td className="small">{(x.chargeableWeightGrams / 1000).toFixed(1)} kg{x.carrierWeightGrams ? ` / ${(x.carrierWeightGrams / 1000).toFixed(1)}` : ""}</td>

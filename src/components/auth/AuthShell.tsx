@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import Link from "next/link";
 import { CheckCircle2, Search } from "lucide-react";
 
@@ -11,10 +12,7 @@ export function AuthShell({ children, variant = "customer" }: { children: React.
       <div className="auth">
         <div className="l">
           <Link href="/">
-            <span className="row" style={{ gap: 8 }}>
-              <img src="/brand/logo-icon.png" alt="" width={30} height={30} style={{ display: "block" }} />
-              <span style={{ fontWeight: 600, fontSize: 18, letterSpacing: "-0.03em", color: "#fff" }}>vishwa<span style={{ color: "var(--orange)" }}>ship</span><span style={{ fontSize: 11.88, fontWeight: 600 }}>.com</span></span>
-            </span>
+            <BrandLogo height={56} plate />
           </Link>
           <h2>{variant === "customer" ? <>Your shipping,<span>one dashboard.</span></> : <>Vishwaship<span>admin workspace.</span></>}</h2>
           <ul>{points.map((p) => <li key={p}><CheckCircle2 size={18} />{p}</li>)}</ul>
@@ -23,7 +21,7 @@ export function AuthShell({ children, variant = "customer" }: { children: React.
         </div>
         <div className="r">
           <div className="form">
-            <Link className="show-sm mb16" style={{ display: "block" }} href="/"><img src="/brand/logo-full.png" alt="vishwaship.com" style={{ height: 32 }} /></Link>
+            <Link className="show-sm mb16" style={{ display: "block" }} href="/"><BrandLogo height={52} /></Link>
             {children}
           </div>
         </div>

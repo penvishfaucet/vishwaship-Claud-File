@@ -1,0 +1,103 @@
+/* ==========================================================================
+   Vishwaship brand theme (owner spec 2026-11-19). Loaded last; selectors are
+   prefixed with `html` so they win over older theme blocks and page CSS.
+   Navy #051C46 · Orange #FE6519 · White · Light Blue #EDF5FF · Link #0057B8 · Border #D7E4F3
+   ========================================================================== */
+html:root,html .shell,html .vs{
+  --navy:#051C46;--navy-2:#0b2a5e;--navy-3:#163a78;
+  --orange:#FE6519;--orange-2:#e5540c;--orange-soft:#EDF5FF;--orange-line:#D7E4F3;--peach:#EDF5FF;
+  --bg:#EDF5FF;--card:#FFFFFF;--line:#D7E4F3;--line-2:#e4edf8;--gray-soft:#f3f7fc;
+  --text:#051C46;--muted:#4a5a78;--muted-2:#7d8aa3;
+  --link:#0057B8;--brand-blue:#EDF5FF;--brand-border:#D7E4F3;
+}
+html .wv{--n:#051C46;--n2:#0b2a5e;--n3:#163a78;--o:#FE6519;--o2:#e5540c;--os:#EDF5FF;--ink:#051C46;--mut:#4a5a78;--ln:#D7E4F3;--bg:#EDF5FF}
+html .shell{font-family:var(--font-roboto,Roboto),Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+html:not(.dark) .shell,html:not(.dark) .shell .main,html:not(.dark) .shell .content{background:#EDF5FF}
+html .shell .card,html .shell .oc,html .shell .tk-card,html .shell .rt-card,html .shell .dcard,html .shell .dm-card{background:#fff;border-color:#D7E4F3}
+
+/* ---------- logo ---------- */
+.brand-logo{display:block;max-width:100%;object-fit:contain}
+.logo-plate{display:inline-flex;align-items:center;justify-content:center;background:#fff;border-radius:12px;padding:2px 6px;line-height:0}
+.brand-logo-link{display:block;text-decoration:none}
+.brand-logo-link:focus-visible{outline:3px solid #FE6519;outline-offset:3px;border-radius:12px}
+html .shell .side .brand{padding:12px 0 10px;margin:0 10px}
+html .shell .side .brand .logo-plate{width:100%;border:1px solid #D7E4F3}
+html .shell .side .brand .portal{color:#051C46;margin-top:8px}
+/* collapsed rail: the whole logo, scaled to the rail width */
+@media (min-width:901px){
+  html .shell.rail:not(.pinned) .side:not(:hover):not(:focus-within) .brand{margin:0 6px;padding:12px 0 8px}
+  html .shell.rail:not(.pinned) .side:not(:hover):not(:focus-within) .brand .logo-plate{padding:2px}
+  html .shell.rail:not(.pinned) .side:not(:hover):not(:focus-within) .brand .brand-logo{height:auto!important;width:100%!important}
+}
+html .shell .m-brand .brand-logo{height:46px!important}
+html .wv .w-logo img.brand-logo{height:60px!important;width:auto}
+html .wv .w-foot .logo{padding:4px 8px}
+html .wv .w-foot .logo img.brand-logo{height:56px!important;width:auto}
+html .vs .auth .l .logo-plate{padding:2px 8px}
+
+/* ---------- contrast: white on navy, navy inside white / light-blue cards ---------- */
+html .wv .w-hero,html .wv .w-hero h1,html .wv .w-hero p,html .wv .w-hero .w-lead,html .wv .w-hero-checks,html .wv .w-sec.dark,html .wv .w-sec.dark :is(h1,h2,h3,p,li,span):not(.w-card *,.w-offer *,.card *){color:#fff}
+html .wv .w-hero::after{background:linear-gradient(100deg,rgba(5,28,70,.97) 0%,rgba(5,28,70,.88) 45%,rgba(5,28,70,.6) 100%)}
+html .wv .w-hero2{background:radial-gradient(1200px 600px at 85% 10%,#0e2d63 0%,#051C46 60%)}
+html .wv .w-foot,html .wv .w-foot a,html .wv .w-foot p,html .wv .w-foot li,html .wv .w-foot span{color:#fff}
+html .wv .w-foot a:hover{color:#fff;text-decoration:underline}
+html .wv .w-foot .bottom{border-top-color:rgba(255,255,255,.25)}
+html .wv .w-sec.alt{background:#EDF5FF}
+html :is(.w-hero,.w-sec.dark,.w-foot,.auth .l) :is(.card,.w-card,.w-offer,.awbcard,[class*="-card"]){color:#051C46}
+html .vs .auth .l,html .vs .auth .l h2,html .vs .auth .l li{color:#fff}
+html .vs .auth .l .awbcard{background:#fff;color:#051C46}
+html .vs .auth .l .awbcard .small{color:#051C46!important}
+
+/* ---------- buttons ---------- */
+/* primary: navy + white */
+html .btn-navy,html .shell .btn-navy,html .wv .w-btn.sec,html .tk-raise{background:#051C46;border-color:#051C46;color:#fff}
+html .btn-navy:hover,html .shell .btn-navy:hover,html .tk-raise:hover{background:#0b2a5e;color:#fff}
+/* high-emphasis: orange + navy text */
+html :is(.btn-orange,.shell .btn-orange,.shell .ov-btn.orange,.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.tk-search .go,.qa-fab,.hw-rech,.sc-send,.chat-input button,.dm-ic.wallet,.mo-fab,ol.stepper li.cur .n,.step.on .n,.shell .ov-split .ov-btn.navy){background:#FE6519;border-color:#FE6519;color:#051C46!important}
+html :is(.btn-orange,.shell .btn-orange,.shell .ov-btn.orange,.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.tk-search .go,.qa-fab,.hw-rech,.shell .ov-split .ov-btn.navy):hover{background:#e5540c;color:#051C46!important}
+html .wv .w-btn.pri{box-shadow:0 8px 20px rgba(254,101,25,.28)}
+/* selected pills / counters on orange */
+html :is(.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#FE6519;border-color:#FE6519;color:#051C46}
+/* outline / secondary */
+html .shell .btn-outline,html .oc-btn.ghost,html .tk-comment,html .rt-dismiss{background:#fff;border:1px solid #D7E4F3;color:#051C46!important}
+html .shell .btn-outline:hover,html .oc-btn.ghost:hover,html .tk-comment:hover,html .rt-dismiss:hover{background:#EDF5FF;border-color:#0057B8}
+/* focus + disabled, every button-like control */
+html :is(button,.btn,a.btn,.oc-btn,.rt-save,.rt-dismiss,.tk-comment,.tk-raise,.ov-btn,.w-btn):focus-visible{outline:3px solid #0057B8;outline-offset:2px}
+html :is(button,.btn,.oc-btn,.rt-save,.rt-dismiss,.ov-btn,.w-btn):disabled,html :is(.btn,.ov-btn)[aria-disabled=true]{background:#e4ebf4!important;border-color:#D7E4F3!important;color:#5d6b85!important;box-shadow:none!important;cursor:not-allowed;opacity:1}
+
+/* ---------- chat bubbles ---------- */
+html .chat-msg.me span{background:#051C46;color:#fff}
+html .chat-msg.them span{background:#fff;color:#051C46;border:1px solid #D7E4F3}
+html .chat-msg.me .tk-att-doc{color:#fff}
+
+/* ---------- navigation: orange indicator, navy text ---------- */
+html:not(.dark) .shell .side a.item.on,html:not(.dark) .shell .side a.item.on:hover{background:#EDF5FF!important;color:#051C46!important;box-shadow:inset 4px 0 0 #FE6519;font-weight:500}
+html:not(.dark) .shell .side a.item.on svg{color:#FE6519!important}
+html:not(.dark) .shell .side a.item:hover{background:#EDF5FF}
+html .shell .bnav a.on{color:#051C46}
+html .shell .bnav a.on .bi{background:#EDF5FF;box-shadow:inset 0 -3px 0 #FE6519}
+html .shell .tabs a.on,html .shell .ov-tabs a.on,html .oc-tabs a.on{color:#051C46;border-bottom-color:#FE6519}
+html .wv .w-nav a[aria-current=page],html .wv .w-drawer a.lnk[aria-current=page]{color:#051C46;background:#EDF5FF;box-shadow:inset 0 -3px 0 #FE6519}
+html .seg-tabs a.on{background:#051C46;color:#fff}
+
+/* ---------- forms + tables ---------- */
+html .shell :is(.input,.select,.textarea,.ov-field,.rt-input,.dsearch,.tk-search,.tk-box){border-color:#D7E4F3}
+html .shell :is(.input,.select,.textarea,.ov-field,.rt-input):focus{border-color:#0057B8;box-shadow:0 0 0 3px #EDF5FF;outline:none}
+html .shell .tbl th{background:#EDF5FF;color:#051C46}
+html .shell .tbl td,html .shell .tbl th{border-color:#D7E4F3}
+html .shell .tbl tbody tr:hover,html .shell .tbl tr.sel{background:#f5f9ff}
+
+/* ---------- Order ID / AWB links ---------- */
+html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy,.tk-awbv,.ro-l b a){color:#0057B8!important;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;font-weight:500}
+html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy):hover{color:#003f87!important;text-decoration-thickness:2px}
+html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy):focus-visible{outline:3px solid #0057B8;outline-offset:2px;border-radius:4px}
+/* identifiers inside navy areas sit on a light chip so they stay blue */
+html :is(.w-hero,.w-sec.dark,.w-foot,.auth .l) .id-link{background:#fff;padding:1px 6px;border-radius:6px}
+.id-row{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+/* offers banner icons: orange chip with navy icon */
+html body .shell .vo-compact .ic{background:#FE6519!important;color:#051C46!important}
+html body .shell .vo-compact{background:#fff!important;border-color:#D7E4F3!important}
+html .tk-tabs a:not(.on){background:#fff;border:1px solid #D7E4F3;color:#051C46}
+html .tk-tabs a:not(.on):hover{border-color:#0057B8}
+html .oc-tabs,html .oc-seg,html .oc-opt{border-color:#D7E4F3}

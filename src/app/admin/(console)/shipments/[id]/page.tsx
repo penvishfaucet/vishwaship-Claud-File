@@ -49,7 +49,7 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
           </dl>
         </section>
       </div>
-      <section className="card mt16" style={{ padding: 16 }}>
+      <section className="card mt16" id="tracking" style={{ padding: 16, scrollMarginTop: 80 }}>
         <h2 className="b small" style={{ marginTop: 0 }}>Event history</h2>
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Time (IST)</th><th>Status</th><th>Raw</th><th>Location</th><th>Source</th></tr></thead>
           <tbody>{events.map((e) => <tr key={e.id}><td className="small">{e.occurredAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td><td>{statusLabel(e.status)}</td><td className="mono tiny">{e.rawStatus}</td><td className="small">{e.location}</td><td className="small">{e.source}</td></tr>)}</tbody></table></div>

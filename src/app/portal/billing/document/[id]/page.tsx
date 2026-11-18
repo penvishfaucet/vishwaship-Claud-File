@@ -1,3 +1,4 @@
+import { BrandLogo } from "@/components/BrandLogo";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { formatINR } from "@/lib/money";
@@ -25,7 +26,7 @@ export default async function BillingDocument({ params }: { params: Promise<{ id
       <article className="card doc" style={{ padding: 28 }}>
         <header className="row between" style={{ alignItems: "flex-start", gap: 16 }}>
           <div>
-            <img src="/brand/logo-full.png" alt="Vishwaship" style={{ height: 34 }} />
+            <BrandLogo height={56} />
             <p className="small" style={{ margin: "8px 0 0", whiteSpace: "pre-line" }}><b>{co.legalName}</b>{co.address ? `\n${co.address}` : ""}{co.gstin ? `\nGSTIN: ${co.gstin}` : "\nGSTIN: (set by Vishwaship admin)"}{`\n${co.email}`}</p>
           </div>
           <div style={{ textAlign: "right" }}>

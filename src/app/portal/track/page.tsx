@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { and, desc, eq, or } from "drizzle-orm";
 import { RefreshTracking } from "@/components/portal/RefreshTracking";
@@ -45,7 +47,7 @@ export default async function PortalTrack({ searchParams }: { searchParams: Prom
             <div className="row between wrap" style={{ gap: 12 }}>
               <div className="row" style={{ gap: 12, alignItems: "center" }}>
                 {carrierLogo(s.carrierCode) && <img src={carrierLogo(s.carrierCode)!} alt={s.carrierName} style={{ height: 30 }} />}
-                <div><Link className="b link-navy" href={`/portal/orders/${o.id}/`}>{o.orderNumber}</Link><div className="mono small">{s.awb}</div></div>
+                <div><OrderIdLink value={o.orderNumber} href={portalOrderHref(o.id)} /><div className="small id-row"><AwbLink value={s.awb} href={portalTrackHref(s.awb)} />{s.awb && <CopyBtn value={s.awb} label="AWB" />}</div></div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <StatusChip status={s.status} />

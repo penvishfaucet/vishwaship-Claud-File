@@ -1,3 +1,5 @@
+import { CopyBtn } from "@/components/portal/orders/ui";
+import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
 import { desc, eq, inArray } from "drizzle-orm";
 import { DisputeForm } from "@/components/portal/DisputeForm";
@@ -37,7 +39,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
             const open = w.status === "open" && w.deadlineAt > now;
             return (
               <tr key={w.id}>
-                <td className="small"><Link className="link-navy" href={`/portal/orders/${o.id}/`}>{o.orderNumber}</Link><div className="mono tiny">{s.awb}</div><div className="tiny muted">{s.carrierName}</div></td>
+                <td className="small"><OrderIdLink value={o.orderNumber} href={portalOrderHref(o.id)} /><div className="tiny id-row"><AwbLink value={s.awb} href={portalTrackHref(s.awb)} />{s.awb && <CopyBtn value={s.awb} label="AWB" />}</div><div className="tiny muted">{s.carrierName}</div></td>
                 <td className="small">{kg(actual || w.declaredGrams)}</td>
                 <td className="small">{vol ? kg(vol) : "—"}<div className="tiny muted">÷ 5000</div></td>
                 <td className="small">{kg(s.chargeableWeightGrams)}</td>

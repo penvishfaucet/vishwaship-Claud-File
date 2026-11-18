@@ -9,7 +9,7 @@ import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
 import { QuickSearch } from "./QuickSearch";
 import { type QuickAction, quickActions } from "./quick-actions";
-import { SidebarBrand } from "@/components/BrandLogo";
+import { BrandLogo, SidebarBrand } from "@/components/BrandLogo";
 import { rememberBrowser } from "@/components/site/nav";
 
 interface Props {
@@ -151,7 +151,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
       <QuickSearch open={qs} onClose={() => setQs(false)} menu={searchMenu} />
       <div className="main">
         <header className="top top2" ref={ref}>
-          <Link href="/portal/" className="m-brand" aria-label="vishwaship.com home"><img src="/brand/logo-icon.png" alt="" width={30} height={30} /><span>vishwa<b>ship</b></span></Link>
+          <Link href="/portal/" className="m-brand" aria-label="vishwaship.com home"><BrandLogo height={46} /></Link>
           <button className="icon-btn hide-xs" aria-label={drawer ? "Close menu" : "Open menu"} aria-expanded={drawer || pinned} onClick={onHamburger}><Menu size={20} /></button>
           <div className="hsearch" role="search">
             <label className="sr-only" htmlFor="hs-type">Search by</label>
