@@ -51,6 +51,8 @@ async function call(ctx: ProviderContext, path: string, init: RequestInit & { ti
 const smError = (j: Envelope) => (firstString(j, ["data.error", "data.message", "message", "data.0.error"]) ?? "request failed").slice(0, 240);
 const rupees = (paise: number) => Math.round(paise) / 100;
 const digits10 = (s: string) => s.replace(/\D/g, "").slice(-10);
+/** Shipmozo rejects special characters in names and addresses ("Special characters are not allowed in address line one"): keep letters, digits, spaces and commas; "&" becomes "and". */
+export const smText = (s: string | null | undefined, max = 200) => String(s ?? "").replace(/&/g, " and ").replace(/[^A-Za-z0-9 ,]/g, " ").replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").replace(/^[ ,]+|[ ,]+$/g, "").slice(0, max);
 const istDate = (d = new Date()) => new Date(d.getTime() + 5.5 * 3600_000).toISOString().slice(0, 10);
 const asNum = (v: unknown) => { const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[,₹\s]/g, "")) : NaN; return Number.isFinite(n) ? n : NaN; };
 
@@ -237,7 +239,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     const title = `VS${w.code}`.replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
     const r = await call(ctx, "/create-warehouse", {
       method: "POST",
-      body: JSON.stringify({ address_title: title, name: w.contactName, phone: Number(digits10(w.mobile)), email: w.email ?? "", address_line_one: w.line1, address_line_two: w.line2 ?? "", pin_code: Number(w.pincode) }),
+      body: JSON.stringify({ address_title: title, name: smText(w.contactName, 80), phone: Number(digits10(w.mobile)), email: w.email ?? "", address_line_one: smText(w.line1), address_line_two: smText(w.line2), pin_code: Number(w.pincode) }),
     });
     if (r.ok) {
       const id = firstString(r.value.data, ["warehouse_id", "id"]);
@@ -266,10 +268,10 @@ export const shipmozoAdapter: ShippingAdapter = {
       method: "POST", timeoutMs: 25_000,
       body: JSON.stringify({
         order_id: orderId, order_date: istDate(), order_type: String(ctx.config.orderType ?? "NON ESSENTIALS"),
-        consignee_name: req.consignee.name, consignee_phone: Number(digits10(req.consignee.mobile)), consignee_email: req.consignee.email ?? "",
-        consignee_address_line_one: req.consignee.line1, consignee_address_line_two: req.consignee.line2 ?? "", consignee_pin_code: Number(req.consignee.pincode),
-        consignee_city: req.consignee.city, consignee_state: req.consignee.state,
-        product_detail: (req.products.length ? req.products : [{ name: "Goods", qty: 1, unitPrice: req.declaredValue }]).map((p) => ({ name: p.name.slice(0, 100), sku_number: p.sku ?? "", quantity: p.qty, discount: "", hsn: p.hsn ?? "", unit_price: rupees(p.unitPrice), product_category: "Other" })),
+        consignee_name: smText(req.consignee.name, 80), consignee_phone: Number(digits10(req.consignee.mobile)), consignee_email: req.consignee.email ?? "",
+        consignee_address_line_one: smText(req.consignee.line1), consignee_address_line_two: smText(req.consignee.line2), consignee_pin_code: Number(req.consignee.pincode),
+        consignee_city: smText(req.consignee.city, 60), consignee_state: smText(req.consignee.state, 60),
+        product_detail: (req.products.length ? req.products : [{ name: "Goods", qty: 1, unitPrice: req.declaredValue }]).map((p) => ({ name: smText(p.name, 100) || "Goods", sku_number: p.sku ?? "", quantity: p.qty, discount: "", hsn: p.hsn ?? "", unit_price: rupees(p.unitPrice), product_category: "Other" })),
         payment_type: req.paymentType === "cod" ? "COD" : "PREPAID", cod_amount: req.paymentType === "cod" ? String(rupees(req.codAmount)) : "",
         weight: req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0),
         length: Math.ceil(big.lengthMm / 10), width: Math.ceil(big.breadthMm / 10), height: Math.ceil(big.heightMm / 10),

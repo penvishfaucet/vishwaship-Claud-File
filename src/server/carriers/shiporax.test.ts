@@ -96,3 +96,12 @@ describe("customer messages never name the aggregator", () => {
     expect(hideProviders("Delhivery B2B rejected the request")).toBe("Delhivery B2B rejected the request");
   });
 });
+
+describe("Shipmozo text cleaning", () => {
+  it("removes characters Shipmozo rejects but keeps the address readable", async () => {
+    const { smText } = await import("@/server/providers/shipmozo");
+    expect(smText("House no 15, Near Pink City & Dream Haridwar")).toBe("House no 15, Near Pink City and Dream Haridwar");
+    expect(smText("Flat #4/B - 2nd floor (rear)")).toBe("Flat 4 B 2nd floor rear");
+    expect(smText(" , M/s Sharma & Sons. ,")).toBe("M s Sharma and Sons");
+  });
+});
