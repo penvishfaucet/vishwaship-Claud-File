@@ -366,3 +366,14 @@ html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
 .chat-input button{border:0;background:var(--orange);color:#fff;border-radius:12px;width:46px;height:40px;cursor:pointer;font-size:16px}
 @media (min-width:900px){.chat-input{bottom:12px}}
 .sc-backdrop{z-index:1000}
+.shell .btn.hq{background:#fff;color:var(--text);border:1px solid var(--line)}
+.shell .btn.hq svg{color:var(--orange)}
+/* white sidebar (theme v3): text in blue-black, active item orange with white text */
+html:not(.dark) .shell .side{background:#fff!important;color:var(--text);border-right:1px solid var(--line)}
+html:not(.dark) .shell .side .brand{border-bottom-color:var(--line)}
+html:not(.dark) .shell .side .grp{color:var(--muted)}
+html:not(.dark) .shell .side a.item,html:not(.dark) .shell .side button.item,html:not(.dark) .shell .side summary{color:var(--text)}
+html:not(.dark) .shell .side a.item:hover,html:not(.dark) .shell .side button.item:hover{background:var(--orange-soft)}
+html:not(.dark) .shell .side a.item svg,html:not(.dark) .shell .side button.item svg{color:var(--orange);opacity:1}
+html:not(.dark) .shell .side a.item.on,html:not(.dark) .shell .side a.item.on:hover{background:var(--orange)!important;color:#fff!important}
+html:not(.dark) .shell .side a.item.on svg{color:#fff!important}

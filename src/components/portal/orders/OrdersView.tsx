@@ -149,7 +149,8 @@ export function OrdersView(p: Props) {
 
   return (
     <div className="ov">
-      <h1 className="sr-only">Orders</h1>
+      {/* title + Add Order (reference layout) */}
+      <div className="ov-head"><h1>Orders</h1><AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} /></div>
       {/* row 1: direction · domestic/international · actions */}
       <div className="ov-top">
         <nav className="ov-dir" aria-label="Shipment direction">
@@ -164,7 +165,6 @@ export function OrdersView(p: Props) {
         <div className="ov-act">
           {p.features.storeSync && <button type="button" className="ov-btn navy" onClick={syncOrders} disabled={busy === "sync"}><RefreshCw size={16} aria-hidden className={busy === "sync" ? "spin" : undefined} /> {busy === "sync" ? "Syncing…" : "Sync Orders"}</button>}
           <Link className="ov-btn navy" href="/portal/orders/bulk/"><Upload size={16} aria-hidden /> Bulk Import</Link>
-          <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />
         </div>
       </div>
 
@@ -179,7 +179,7 @@ export function OrdersView(p: Props) {
                 const n = p.counts[t.key];
                 return (
                   <Link key={t.key} href={href({ tab: t.key === "all" ? undefined : t.key })} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>
-                    {L(`portal.orders.tab.${t.key}`, t.label)}<span className={`ov-n${n ? "" : " z"}`} aria-label={`${n} orders`}>{n}</span>
+                    <b className="ov-box-n" aria-label={`${n} orders`}>{n}</b><span className="ov-box-l">{L(`portal.orders.tab.${t.key}`, t.label)}</span>
                   </Link>
                 );
               })}

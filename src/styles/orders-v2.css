@@ -200,3 +200,31 @@ select.ov-field{padding-right:28px}
 .shell .ov-stabs a.on .ov-n{background:var(--orange);color:#fff}
 .shell .ov-split .ov-btn.navy{background:var(--orange);border-color:var(--orange);color:#fff}
 .shell .ov-split .ov-btn.navy:hover{background:var(--orange-2,#c94c08);color:#fff}
+/* ===== Orders layout v3 (owner reference 2026-11-19) ===== */
+.shell .ov-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 6px}
+.shell .ov-head h1{font-size:24px;font-weight:500;margin:0;color:var(--text)}
+.shell .ov-top{display:grid;grid-template-columns:1fr;gap:12px;align-items:start}
+.shell .ov-dir a{font-size:16px}
+.shell .ov-act{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.shell .ov-act .ov-btn{justify-content:center;min-height:42px}
+.shell .ov-status{display:flex;flex-direction:column;gap:14px;overflow:visible}
+.shell .ov-sgroup>span{display:block;font-size:16px;font-weight:500;color:var(--text);margin:4px 0 8px}
+.shell .ov-stabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;overflow:visible;flex-wrap:wrap}
+.shell .ov-stabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;min-height:84px;padding:10px 8px;border:1px solid var(--line);border-radius:14px;background:#fff;color:var(--text);font-size:13px;text-decoration:none;white-space:normal}
+.shell .ov-stabs a .ov-box-n{font-size:22px;font-weight:500;line-height:1}
+.shell .ov-stabs a .ov-box-l{font-size:13px;line-height:1.25}
+.shell .ov-stabs a.on{background:var(--orange-soft);border-color:var(--orange-line,#ffd9c2)}
+.shell .ov-stabs a:hover{border-color:var(--orange)}
+@media (min-width:900px){
+  .shell .ov-top{grid-template-columns:auto auto 1fr}
+  .shell .ov-act{justify-self:end;grid-template-columns:auto auto}
+  .shell .ov-status{flex-direction:row;flex-wrap:wrap;gap:20px}
+  .shell .ov-sgroup{flex:1 1 300px}
+}
+/* header: quick-actions button outlined (no dark fill) */
+.shell .hdr-ico{background:#fff;color:var(--text);border:1px solid var(--line)}
+.shell .hdr-ico.hchat{background:var(--orange-soft);border-color:var(--orange-line,#ffd9c2)}
+.shell .ov-status{display:flex!important;grid-template-columns:none!important;width:100%}
+.shell .ov-sgroup{width:100%;min-width:0;display:block}
+.shell .ov-stabs{grid-template-columns:repeat(3,minmax(0,1fr))!important;width:100%}
+@media (min-width:900px){.shell .ov-stabs{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))!important}.shell .ov-sgroup{width:auto}}

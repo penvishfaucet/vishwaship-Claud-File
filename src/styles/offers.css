@@ -17,3 +17,8 @@
 .vo-compact p{color:#c7d1e3;margin-top:8px}
 .dark .vo-light li{background:#171d2b;border-color:#273044;color:#e6e9f2}
 @media (max-width:640px){.vo ul{flex-direction:column}.vo li{width:100%}}
+/* theme v3: peach offers banner in the portal, blue-black text, orange icons */
+.shell .vo-compact{background:var(--orange-soft,#fff1e7);border:1px solid var(--orange-line,#ffd9c2)}
+.shell .vo-compact li{background:#fff!important;border-color:var(--orange-line,#ffd9c2)!important;color:var(--text)!important}
+.shell .vo-compact .tx,.shell .vo-compact .tx b,.shell .vo-compact p{color:var(--text)!important}
+.shell .vo-compact .ic{background:var(--orange)!important;color:#fff!important}
