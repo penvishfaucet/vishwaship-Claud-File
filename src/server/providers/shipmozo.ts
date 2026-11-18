@@ -164,9 +164,9 @@ const detailRow = (d: unknown) => (Array.isArray(d) ? d[0] : d) as Record<string
 export function parseOrderDetail(env: Envelope, orderId: string): BookResult | null {
   const d = detailRow(env.data);
   if (!d) return null;
-  const awb = firstString(d, ["awb_number", "awb", "shipping_details.awb_number", "order_details.awb_number", "courier_details.awb_number"]);
-  const lr = firstString(d, ["lr_number", "shipping_details.lr_number", "order_details.lr_number"]);
-  const courier = firstString(d, ["courier", "courier_company", "courier_name", "shipping_details.courier_company", "courier_details.courier_company", "assigned_courier"]);
+  const awb = firstString(d, ["awb_number", "awb", "shipping_details.0.awb_number", "shipping_details.0.awb", "shipping_details.awb_number", "order_details.awb_number", "courier_details.awb_number"]);
+  const lr = firstString(d, ["lr_number", "shipping_details.0.lr_number", "shipping_details.lr_number", "order_details.lr_number"]);
+  const courier = firstString(d, ["courier", "courier_company", "courier_name", "shipping_details.0.courier_company", "shipping_details.0.courier", "shipping_details.courier_company", "courier_details.courier_company", "assigned_courier"]);
   const ref = firstString(d, ["order_id", "reference_id", "order_details.order_id"]) ?? orderId;
   if (awb) return { providerOrderRef: ref, awb, lrNumber: lr, state: "confirmed", labelAvailable: true };
   if (courier) return { providerOrderRef: ref, awb: null, lrNumber: lr, state: "pending_async", labelAvailable: false };
@@ -280,39 +280,44 @@ export const shipmozoAdapter: ShippingAdapter = {
         warehouse_id: req.pickup.providerWarehouseRef, gst_ewaybill_number: req.ewayBill ?? "", gstin_number: "",
       }),
     });
-    if (!push.ok) {
-      if (push.error.category === "timeout" || push.error.category === "upstream") return { ok: false, error: { ...push.error, category: "ambiguous" } };
-      if (!/already|exist|duplicate/i.test(push.error.message)) return push;
-    }
+    if (!push.ok) return push.error.category === "timeout" || push.error.category === "upstream" ? { ok: false, error: { ...push.error, category: "ambiguous" } } : push;
+    // Shipmozo answers with its OWN order id ("61041AP370785560124"); our id comes back as refrence_id. Every later
+    // call (assign-courier, schedule-pickup, get-order-detail, cancel) needs Shipmozo's id. push-order is not
+    // idempotent (a second push creates a second order), so the id is carried in every result from here on.
+    const smId = firstString(push.value.data, ["order_id"]) ?? orderId;
 
-    const assign = await call(ctx, "/assign-courier", { method: "POST", timeoutMs: 25_000, body: JSON.stringify({ order_id: orderId, courier_id: Number(courierId) || courierId }) });
+    const assign = await call(ctx, "/assign-courier", { method: "POST", timeoutMs: 25_000, body: JSON.stringify({ order_id: smId, courier_id: Number(courierId) || courierId }) });
     if (!assign.ok && !/already/i.test(assign.error.message)) {
-      return assign.error.category === "timeout" || assign.error.category === "upstream" ? { ok: false, error: { ...assign.error, category: "ambiguous" } } : assign;
+      return assign.error.category === "timeout" || assign.error.category === "upstream" ? { ok: false, error: { ...assign.error, category: "ambiguous", message: `${assign.error.message} (courier partner order ${smId})` } } : assign;
     }
 
     let awb: string | null = assign.ok ? firstString(assign.value.data, ["awb_number", "awb"]) : null;
     let lr: string | null = null;
     let pickupRef: string | undefined;
     if (pickupMode === "manual" && !ctx.config.skipManualPickup) {
-      const pk = await call(ctx, "/schedule-pickup", { method: "POST", timeoutMs: 20_000, body: JSON.stringify({ order_id: orderId }) });
+      const pk = await call(ctx, "/schedule-pickup", { method: "POST", timeoutMs: 20_000, body: JSON.stringify({ order_id: smId }) });
       if (pk.ok) { awb = firstString(pk.value.data, ["awb_number"]) ?? awb; lr = firstString(pk.value.data, ["lr_number"]); pickupRef = firstString(pk.value.data, ["pickup_id", "pickup_reference", "reference_id"]) ?? undefined; }
     }
     if (!awb) {
-      const det = await call(ctx, `/get-order-detail/${encodeURIComponent(orderId)}`, { timeoutMs: 15_000 });
-      if (det.ok) { const d = parseOrderDetail(det.value, orderId); awb = d?.awb ?? null; lr = d?.lrNumber ?? lr; }
+      const det = await call(ctx, `/get-order-detail/${encodeURIComponent(smId)}`, { timeoutMs: 15_000 });
+      if (det.ok) { const d = parseOrderDetail(det.value, smId); awb = d?.awb ?? null; lr = d?.lrNumber ?? lr; }
     }
     const res: BookResult = {
-      providerOrderRef: orderId, awb, lrNumber: lr && lr !== awb ? lr : null, state: awb ? "confirmed" : "pending_async", labelAvailable: !!awb,
+      providerOrderRef: smId, awb, lrNumber: lr && lr !== awb ? lr : null, state: awb ? "confirmed" : "pending_async", labelAvailable: !!awb,
       pickupRef, pickupScheduled: pickupMode === "auto" || !!pickupRef,
     };
     return { ok: true, value: res };
   },
 
   async lookupBooking(ctx, ref) {
-    const orderId = smOrderId(ref.vishwashipOrderId);
-    const r = await call(ctx, `/get-order-detail/${encodeURIComponent(orderId)}`);
+    // Needs Shipmozo's own order id (returned by push-order). Without it the order cannot be looked up, so the
+    // result stays "unknown" (funds remain on hold for an Admin check) instead of wrongly releasing them.
+    if (!ref.providerOrderRef || ref.providerOrderRef === smOrderId(ref.vishwashipOrderId)) {
+      return { ok: false, error: { category: "ambiguous", message: "Courier partner order id not known — check the courier partner panel for this order", retryable: true } };
+    }
+    const r = await call(ctx, `/get-order-detail/${encodeURIComponent(ref.providerOrderRef)}`);
     if (!r.ok) return r.error.category === "not_found" ? { ok: true, value: null } : r;
-    return { ok: true, value: parseOrderDetail(r.value, orderId) };
+    return { ok: true, value: parseOrderDetail(r.value, ref.providerOrderRef) };
   },
 
   async label(ctx, ref, format) {

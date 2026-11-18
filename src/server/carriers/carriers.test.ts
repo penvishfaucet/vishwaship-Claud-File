@@ -41,13 +41,14 @@ const ORG = "org_a", OTHER = "org_b", STAFF = "usr_staff";
 const SM_B2C = "pa_sm_b2c", SM_B2B = "pa_sm_b2b", DEMO = "pa_demo";
 const RATE_ROW = { courier_id: 12, name: "Delhivery Surface", before_tax_total_charges: 1000, gst: 180, total_charges: 1180, estimated_delivery: "4 days", pickups_automatically_scheduled: "YES" };
 const req = (mode: "B2C" | "B2B" = "B2C") => ({ mode, originPincode: "122001", destinationPincode: "110001", paymentType: "prepaid" as const, codAmount: 0, declaredValue: 100000, packages: [{ count: 1, lengthMm: 220, breadthMm: 100, heightMm: 100, actualWeightGrams: 500 }] });
-const shipmozoHappy = (url: string) => {
+const shipmozoHappy = (url: string, body?: unknown) => {
   if (url.endsWith("/pincode-serviceability")) return { result: "1", data: { serviceable: true } };
   if (url.endsWith("/rate-calculator")) return { result: "1", data: [RATE_ROW] };
   if (url.endsWith("/create-warehouse")) return { result: "1", data: { warehouse_id: "9001" } };
-  if (url.endsWith("/push-order")) return { result: "1", data: { order_id: "x", reference_id: "x" } };
+  // live behaviour: Shipmozo returns its own order id; ours comes back as refrence_id
+  if (url.endsWith("/push-order")) { const ref = String((body as { order_id?: string } | null)?.order_id ?? ""); return { result: "1", data: { order_id: `61041AP${ref}`, refrence_id: ref } }; }
   if (url.endsWith("/assign-courier")) return { result: "1", data: { courier: "Delhivery" } };
-  if (url.includes("/get-order-detail/")) { const id = url.split("/").pop()!; return { result: "1", data: { order_id: id, awb_number: id === "ord1" ? "SMAWB123" : `SM${id}`, courier: "Delhivery" } }; }
+  if (url.includes("/get-order-detail/")) { const id = url.split("/").pop()!; return { result: "1", data: { order_id: id, awb_number: id === "61041APord1" ? "SMAWB123" : `SM${id}`, courier: "Delhivery" } }; }
   return { result: "1", data: {} };
 };
 
@@ -206,10 +207,10 @@ describe("booking through Shipmozo", () => {
     expect(r).toMatchObject({ ok: true, awb: "SMAWB123", state: "confirmed" });
     const push = calls.find((c) => c.url.endsWith("/push-order"))!.body as Record<string, unknown>;
     expect(push).toMatchObject({ order_id: "ord1", payment_type: "PREPAID", weight: 500, length: 22, warehouse_id: "9001", consignee_pin_code: 110001 });
-    expect(calls.find((c) => c.url.endsWith("/assign-courier"))!.body).toEqual({ order_id: "ord1", courier_id: 12 });
+    expect(calls.find((c) => c.url.endsWith("/assign-courier"))!.body).toEqual({ order_id: "61041APord1", courier_id: 12 }) // Shipmozo's own id, not ours;
     expect(calls.some((c) => c.url.endsWith("/schedule-pickup"))).toBe(false); // pickups_automatically_scheduled = YES
     const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_1"));
-    expect(sh).toMatchObject({ provider: "shipmozo", providerAccountId: SM_B2C, providerOrderRef: "ord1", awb: "SMAWB123", pickupStatus: "scheduled" });
+    expect(sh).toMatchObject({ provider: "shipmozo", providerAccountId: SM_B2C, providerOrderRef: "61041APord1", awb: "SMAWB123", pickupStatus: "scheduled" });
     expect(await debits("ord_1")).toBe(1);
   });
   it("a repeated click never makes a second provider booking or wallet charge", async () => {
@@ -223,7 +224,7 @@ describe("booking through Shipmozo", () => {
   });
   it("a timeout keeps the hold and reconciles by order reference instead of re-booking", async () => {
     const quoteId = await newOrder("ord_2");
-    script = (url) => (url.endsWith("/push-order") ? Promise.reject(new Error("socket hang up")) : shipmozoHappy(url));
+    script = (url, body) => (url.endsWith("/push-order") ? Promise.reject(new Error("socket hang up")) : shipmozoHappy(url, body));
     const r = await bookOrder({ orgId: ORG, orderId: "ord_2", quoteId, actorUserId: "usr_c" });
     expect(r).toMatchObject({ ok: false, code: "ambiguous" });
     const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, "ord_2"));
@@ -235,7 +236,7 @@ describe("booking through Shipmozo", () => {
   it("asks before charging when the live rate changed since the quote expired", async () => {
     const quoteId = await newOrder("ord_3");
     await db.update(schema.quotes).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.quotes.id, quoteId));
-    script = (url) => (url.endsWith("/rate-calculator") ? { result: "1", data: [{ ...RATE_ROW, before_tax_total_charges: 1100 }] } : shipmozoHappy(url));
+    script = (url, body) => (url.endsWith("/rate-calculator") ? { result: "1", data: [{ ...RATE_ROW, before_tax_total_charges: 1100 }] } : shipmozoHappy(url, body));
     const r = await bookOrder({ orgId: ORG, orderId: "ord_3", quoteId, actorUserId: "usr_c" });
     expect(r).toMatchObject({ ok: false, code: "price_changed" });
     expect(calls.some((c) => c.url.endsWith("/push-order"))).toBe(false);
@@ -293,7 +294,7 @@ describe("automatic warehouse sync and pickup request", () => {
   it("a booking whose courier needs a pickup request queues one automatically", async () => {
     const saved = (await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, SM_B2C)))[0];
     await db.update(schema.providerAccounts).set({ configPublic: { ...(saved.configPublic as object), skipManualPickup: true } }).where(eq(schema.providerAccounts.id, SM_B2C));
-    script = (url) => (url.endsWith("/rate-calculator") ? { result: "1", data: [{ ...RATE_ROW, pickups_automatically_scheduled: "NO" }] } : shipmozoHappy(url));
+    script = (url, body) => (url.endsWith("/rate-calculator") ? { result: "1", data: [{ ...RATE_ROW, pickups_automatically_scheduled: "NO" }] } : shipmozoHappy(url, body));
     const quoteId = await newOrder("ord_5");
     const r = await bookOrder({ orgId: ORG, orderId: "ord_5", quoteId, actorUserId: "usr_c" });
     expect(r).toMatchObject({ ok: true });
