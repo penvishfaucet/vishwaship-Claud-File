@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { NextResponse } from "next/server";
 import { hasFeature } from "@/server/features";
 import { and, eq } from "drizzle-orm";
@@ -18,5 +19,5 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const rl = await rateLimit(`trkrefresh:${id}`, 6, 300);
   if (!rl.ok) return apiError(429, "rate_limited", "Refreshed recently — try again in a few minutes");
   const r = await refreshFromCarrier(id);
-  return r.ok ? NextResponse.json(r) : apiError(502, "provider_error", r.message);
+  return r.ok ? NextResponse.json(r) : apiError(502, "provider_error", hideProviders(r.message));
 }

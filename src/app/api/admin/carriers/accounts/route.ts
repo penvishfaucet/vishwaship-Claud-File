@@ -15,6 +15,7 @@ import { shipmozoRaw } from "@/server/providers/shipmozo";
 import { refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
 import { enqueue } from "@/server/jobs/runner";
+import { registerWarehouseAt } from "@/server/carriers/automation";
 
 const id = z.string().min(3).max(64);
 const env = z.enum(["test", "live"]);
@@ -39,6 +40,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("pilots"), id, customers: z.string().trim().max(2000).default("") }),
   z.object({ op: z.literal("status"), id, action: z.enum(["activate", "activate_now", "pause", "resume", "disable", "archive"]) }),
   z.object({ op: z.literal("map_warehouse"), id, warehouseId: id, providerRef: z.string().trim().min(1).max(80) }),
+  z.object({ op: z.literal("register_warehouse"), id, warehouseId: id }),
   z.object({ op: z.literal("retry_job"), id, jobId: id }),
   z.object({ op: z.literal("refresh_shipment"), id, shipmentId: id }),
 ]);
@@ -281,6 +283,15 @@ export async function POST(req: Request) {
       if (next === "enabled") await syncAllWarehouses();
       const msg = { activate: "Active — customers now get quotes and bookings from this service", resume: "Resumed — taking new quotes and bookings again", pause: "Paused — no new quotes or bookings; existing shipments keep tracking", disable: "Moved back to setup — no quotes or bookings (pilot customers excepted)", archive: "Archived" }[b.action];
       return ok(msg);
+    }
+    case "register_warehouse": {
+      // Admin "Register now": forget the old mapping and register this pickup address with the provider again.
+      const [wh] = await db.select().from(schema.warehouses).where(eq(schema.warehouses.id, b.warehouseId));
+      if (!wh) return apiError(404, "not_found", "Warehouse not found");
+      await db.delete(schema.warehouseProviderSync).where(and(eq(schema.warehouseProviderSync.warehouseId, wh.id), eq(schema.warehouseProviderSync.providerAccountId, acct.id)));
+      const r = await registerWarehouseAt(wh, acct);
+      await log("register_warehouse", acct.id, { warehouseId: wh.id, ok: r.ok });
+      return r.ok ? ok(`Registered — provider warehouse ${r.value.ref ?? "(not needed)"}`) : apiError(502, "provider_error", r.error.message);
     }
     case "map_warehouse": {
       const [wh] = await db.select({ id: schema.warehouses.id }).from(schema.warehouses).where(eq(schema.warehouses.id, b.warehouseId));

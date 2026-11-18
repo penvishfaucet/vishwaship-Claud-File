@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -19,6 +20,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const [own] = await db.select({ id: schema.shipments.id }).from(schema.shipments).where(and(eq(schema.shipments.id, id), eq(schema.shipments.orgId, s.orgId)));
   if (!own) return apiError(404, "not_found", "Shipment not found");
   const r = await requestPickup(own.id, p.data.date, { userId: s.userId, kind: s.impersonatorId ? "staff" : "customer" });
-  if (!r.ok) return apiError(r.retry ? 502 : 409, r.retry ? "provider_error" : "conflict", r.message);
+  if (!r.ok) return apiError(r.retry ? 502 : 409, r.retry ? "provider_error" : "conflict", hideProviders(r.message));
   return NextResponse.json({ ok: true, pickupRef: r.pickupRef, date: r.date, duplicate: r.duplicate ?? false });
 }

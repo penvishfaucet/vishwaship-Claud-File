@@ -11,7 +11,8 @@ import {
 } from "@/server/pricing/engine";
 import { adapterFor, providerContext } from "@/server/providers/registry";
 import { canTakeBookings } from "@/server/carriers/verification";
-import { partnerCodeFor } from "@/server/carriers/specs";
+import { CARRIER_SPECS, partnerCodeFor } from "@/server/carriers/specs";
+import { hideProviders } from "@/server/customer-safe";
 import type { QuoteRequest } from "@/server/providers/types";
 
 export const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -109,7 +110,9 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
 
   const results = await Promise.all(accounts.map(async (acct) => {
     const offers: QuoteOffer[] = [];
-    const label = String((acct.configPublic as Record<string, unknown>)?.brandName ?? acct.label);
+    // Customer-facing name: aggregator accounts appear only by partner code (never "Shipmozo" / "Shipora X").
+    const spec = CARRIER_SPECS[acct.adapter];
+    const label = spec?.route === "aggregator" ? (partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>) ?? "Courier partner") : String((acct.configPublic as Record<string, unknown>)?.brandName ?? acct.label);
     const adapter = adapterFor(acct);
     if (!adapter) return { offers, error: `${label}: integration pending` };
     const pay = paymentConfig(acct, adapter);
@@ -146,7 +149,7 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
   }));
 
   const offers = results.flatMap((r) => r.offers).sort((a, b) => a.total - b.total);
-  const errors = results.map((r) => r.error).filter((e): e is string => !!e);
+  const errors = results.map((r) => r.error).filter((e): e is string => !!e).map(hideProviders);
   // Say so instead of an empty list when no courier service is switched on for this shipment type.
   if (!offers.length && !errors.length && !opts.onlyAccountId) errors.push(`${req.mode} rates are not available right now — no ${req.mode} courier service is active yet. Please try again later.`);
   return { offers, errors };

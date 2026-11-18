@@ -11,6 +11,7 @@ import type { BookRequest, QuoteRequest } from "@/server/providers/types";
 import { getQuotes, quotesByIds, sameService } from "@/server/quotes/service";
 import { canTakeBookings, noteCapability } from "@/server/carriers/verification";
 import { registerWarehouseAt } from "@/server/carriers/automation";
+import { hideProviders } from "@/server/customer-safe";
 
 /** Comparable view of a quote request (field order and optional defaults normalised). */
 function normReq(r: QuoteRequest) {
@@ -35,7 +36,13 @@ export type BookOutcome =
  *    Timeout / unknown -> keep the hold, mark the order needs_reconcile; a job calls lookupBooking()
  *    before anything is retried or rebooked elsewhere. No AWB is ever invented.
  */
+/** Customer-facing: messages never name the aggregator behind a quote. */
 export async function bookOrder(args: { orgId: string; orderId: string; quoteId: string; actorUserId: string }): Promise<BookOutcome> {
+  const r = await bookOrderInner(args);
+  return r.ok ? r : { ...r, message: hideProviders(r.message) };
+}
+
+async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: string; actorUserId: string }): Promise<BookOutcome> {
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, args.orderId), eq(schema.orders.orgId, args.orgId)));
   if (!order) return { ok: false, code: "not_found", message: "Order not found" };
@@ -94,7 +101,7 @@ export async function bookOrder(args: { orgId: string; orderId: string; quoteId:
   let providerWarehouseRef: string | undefined;
   if (adapter.registerWarehouse) {
     const reg = await registerWarehouseAt(wh, acct);
-    if (!reg.ok) return { ok: false, code: "provider_failed", message: `Could not register this pickup address with ${acct.label}: ${reg.error.message}` };
+    if (!reg.ok) return { ok: false, code: "provider_failed", message: `Could not register this pickup address with the courier partner: ${reg.error.message}` };
     providerWarehouseRef = reg.value.ref ?? undefined;
   }
 

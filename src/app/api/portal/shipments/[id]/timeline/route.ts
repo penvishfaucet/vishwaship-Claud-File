@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { NextResponse } from "next/server";
 import { and, desc, eq } from "drizzle-orm";
 import { apiCustomer } from "@/server/auth/session";
@@ -22,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json({
     orderNumber: o.orderNumber, carrier: sh.carrierName, service: sh.serviceName, awb: sh.awb, lr: sh.lrNumber && sh.lrNumber !== sh.awb ? sh.lrNumber : null,
     status: sh.status, etaDate: sh.etaDate, deliveredAt: sh.deliveredAt, lastLocation: sh.lastLocation, lastEventAt: sh.lastEventAt,
-    lastSyncAt: sh.lastSyncAt, lastSyncError: sh.lastSyncError, syncFailures: sh.syncFailures, demo: sh.provider === "demo",
+    lastSyncAt: sh.lastSyncAt, lastSyncError: sh.lastSyncError ? hideProviders(sh.lastSyncError) : null, syncFailures: sh.syncFailures, demo: sh.provider === "demo",
     destination: { city: c.city, state: c.state, pincode: c.pincode },
     events: events.slice().reverse().map((e) => ({ status: e.status, raw: e.rawStatus, location: e.location, at: e.occurredAt, remark: e.remark, source: e.source })),
     amendments: amendments.map((a) => ({ at: a.occurredAt, previous: addr(a.previous), next: addr(a.next) })),

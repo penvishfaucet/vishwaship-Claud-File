@@ -27,15 +27,15 @@ const base = (ctx: ProviderContext) => {
 type Env = { success?: boolean; message?: string; data?: unknown };
 
 async function call(ctx: ProviderContext, path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<Result<Env>> {
-  if (!ctx.secrets.apiKey) return { ok: false, error: { category: "auth", message: "Shipora X API key not configured", retryable: false } };
+  if (!ctx.secrets.apiKey) return { ok: false, error: { category: "auth", message: "Courier partner API key not configured", retryable: false } };
   let r: Response;
   try {
     r = await ctx.fetch(`${base(ctx)}${path}`, { timeoutMs: 15_000, ...init, headers: { "X-Api-Key": ctx.secrets.apiKey, "content-type": "application/json", accept: "application/json" } });
-  } catch (e) { return { ok: false, error: { category: "timeout", message: `Shipora X did not respond: ${(e as Error).message}`.slice(0, 200), retryable: true } }; }
+  } catch (e) { return { ok: false, error: { category: "timeout", message: `Courier partner did not respond: ${(e as Error).message}`.slice(0, 200), retryable: true } }; }
   const j = (await jsonOrNull(r)) as Env | null;
-  if (r.status === 401 || r.status === 403) return { ok: false, error: { category: "auth", message: "Shipora X rejected the API key", retryable: false } };
-  if (r.status === 429) return { ok: false, error: { category: "rate_limited", message: "Shipora X rate limit reached", retryable: true } };
-  if (r.status >= 500) return { ok: false, error: { category: "upstream", message: `Shipora X error HTTP ${r.status}`, retryable: true } };
+  if (r.status === 401 || r.status === 403) return { ok: false, error: { category: "auth", message: "Courier partner rejected the API key", retryable: false } };
+  if (r.status === 429) return { ok: false, error: { category: "rate_limited", message: "Courier partner rate limit reached", retryable: true } };
+  if (r.status >= 500) return { ok: false, error: { category: "upstream", message: `Courier partner error HTTP ${r.status}`, retryable: true } };
   if (!j || j.success !== true) return { ok: false, error: { category: r.status === 404 ? "not_found" : "validation", message: String(j?.message ?? `HTTP ${r.status}`).slice(0, 240), retryable: false } };
   return { ok: true, value: j };
 }
@@ -133,13 +133,13 @@ export const shiporaAdapter: ShippingAdapter = {
     const r = await call(ctx, "/api/couriers", { timeoutMs: 10_000 });
     if (!r.ok) return r;
     const n = ((r.value.data as { couriers?: unknown[] })?.couriers ?? []).length;
-    return { ok: true, value: { message: `Shipora X API key accepted (${n} couriers on the account)` } };
+    return { ok: true, value: { message: `Courier partner API key accepted (${n} couriers on the account)` } };
   },
 
   async quote(ctx, req) {
     const service = ctx.config.service === "B2B" ? "B2B" : "B2C";
     if (req.mode !== service || req.paymentType === "fod") return { ok: true, value: [] };
-    if (req.packages.reduce((t, p) => t + p.count, 0) !== 1) return { ok: false, error: { category: "unsupported", message: "Shipora X quotes single-package shipments", retryable: false } };
+    if (req.packages.reduce((t, p) => t + p.count, 0) !== 1) return { ok: false, error: { category: "unsupported", message: "Courier partner quotes single-package shipments", retryable: false } };
     const p = req.packages[0];
     const actualGrams = p.actualWeightGrams;
     const body = {
@@ -160,7 +160,7 @@ export const shiporaAdapter: ShippingAdapter = {
       if (allow.size && !allow.has(q.providerQuoteRef!.split(":")[1])) continue;
       quotes.push(q);
     }
-    if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped[0] ?? "Shipora X returned no courier for this shipment", retryable: false } };
+    if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped[0] ?? "Courier partner returned no courier for this shipment", retryable: false } };
     return { ok: true, value: quotes };
   },
 
@@ -176,7 +176,7 @@ export const shiporaAdapter: ShippingAdapter = {
     const r = await call(ctx, "/api/warehouses", { method: "POST", body: JSON.stringify({ name: title, contact_name: w.contactName, phone, email: w.email ?? "", address: [w.line1, w.line2].filter(Boolean).join(", "), city: w.city, state: w.state, pincode: w.pincode }) });
     if (!r.ok) return r;
     const id = firstString(r.value.data, ["warehouse.id", "id", "warehouseId", "warehouse_id"]);
-    return id ? { ok: true, value: { ref: id } } : { ok: false, error: { category: "upstream", message: "Shipora X created the warehouse but returned no id", retryable: true } };
+    return id ? { ok: true, value: { ref: id } } : { ok: false, error: { category: "upstream", message: "Courier partner created the warehouse but returned no id", retryable: true } };
   },
 
   /**
@@ -186,10 +186,10 @@ export const shiporaAdapter: ShippingAdapter = {
    */
   async book(ctx, req) {
     const [kind, courierId, rateId] = (req.quote.providerQuoteRef ?? "").split(":");
-    if (kind !== "shiporax" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Shipora X courierId — refresh rates", retryable: false } };
-    if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Shipora X warehouse", retryable: false } };
-    if (req.packages.reduce((t, p) => t + p.count, 0) !== 1) return { ok: false, error: { category: "validation", message: "Shipora X books one package per order", retryable: false } };
-    if (req.paymentType !== "prepaid") return { ok: false, error: { category: "unsupported", message: "Shipora X COD is not enabled yet", retryable: false } };
+    if (kind !== "shiporax" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Courier partner courierId — refresh rates", retryable: false } };
+    if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Courier partner warehouse", retryable: false } };
+    if (req.packages.reduce((t, p) => t + p.count, 0) !== 1) return { ok: false, error: { category: "validation", message: "Courier partner books one package per order", retryable: false } };
+    if (req.paymentType !== "prepaid") return { ok: false, error: { category: "unsupported", message: "Courier partner COD is not enabled yet", retryable: false } };
     const existing = await findByRef(ctx, req.vishwashipOrderId);
     if (!existing.ok) return existing;
     let orderId = existing.value ? String(existing.value.id) : "";
@@ -209,7 +209,7 @@ export const shiporaAdapter: ShippingAdapter = {
       const imp = await call(ctx, "/api/orders/webhook/import", { method: "POST", timeoutMs: 25_000, body: JSON.stringify(fields) });
       if (!imp.ok) return imp.error.category === "timeout" || imp.error.category === "upstream" ? { ok: false, error: { ...imp.error, category: "ambiguous" } } : imp;
       orderId = firstString(imp.value, ["data.orderId", "orderId", "data.id"]) ?? "";
-      if (!orderId) return { ok: false, error: { category: "ambiguous", message: "Shipora X imported the order but returned no order id", retryable: false } };
+      if (!orderId) return { ok: false, error: { category: "ambiguous", message: "Courier partner imported the order but returned no order id", retryable: false } };
     }
     // Read back: Shipora X ignores unknown import fields, so confirm the address and pickup warehouse stuck.
     let det = await getOrder(ctx, orderId);
@@ -225,7 +225,7 @@ export const shiporaAdapter: ShippingAdapter = {
       if (!det.ok) return { ok: false, error: { ...det.error, category: "ambiguous" } };
       if (bad(det.value)) {
         await call(ctx, `/api/orders/${orderId}/cancel`, { method: "POST", body: JSON.stringify({ reason: "Vishwaship: address or pickup warehouse not stored" }) });
-        return { ok: false, error: { category: "validation", message: "Shipora X did not store the delivery address or pickup warehouse — booking stopped before any charge", retryable: false } };
+        return { ok: false, error: { category: "validation", message: "Courier partner did not store the delivery address or pickup warehouse — booking stopped before any charge", retryable: false } };
       }
     }
     if (!awbOf(det.value)) {
@@ -256,9 +256,9 @@ export const shiporaAdapter: ShippingAdapter = {
     if (format !== "thermal_4x6") return { ok: true, value: { formatsAvailable } };
     let r: Response;
     try { r = await ctx.fetch(`${base(ctx)}/api/orders/${encodeURIComponent(ref.providerOrderRef)}/label`, { timeoutMs: 20_000, headers: { "X-Api-Key": ctx.secrets.apiKey ?? "" } }); }
-    catch (e) { return { ok: false, error: { category: "timeout", message: `Shipora X label: ${(e as Error).message}`, retryable: true } }; }
+    catch (e) { return { ok: false, error: { category: "timeout", message: `Courier partner label: ${(e as Error).message}`, retryable: true } }; }
     const html = await r.text();
-    if (!r.ok || !/<html/i.test(html)) return { ok: false, error: { category: "not_found", message: "Shipora X has not generated the label yet", retryable: true } };
+    if (!r.ok || !/<html/i.test(html)) return { ok: false, error: { category: "not_found", message: "Courier partner has not generated the label yet", retryable: true } };
     return { ok: true, value: { html, formatsAvailable } };
   },
   async schedulePickup() { return unsupported("pickup (Shipora X schedules pickup when the order is shipped)"); },

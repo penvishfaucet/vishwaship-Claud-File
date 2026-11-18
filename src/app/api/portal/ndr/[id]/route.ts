@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -35,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (r.ok && r.value.acknowledged) await db.update(schema.ndrCases).set({ status: "acknowledged" }).where(eq(schema.ndrCases.id, id));
   else if (!r.ok) {
     await db.update(schema.ndrCases).set({ status: "open" }).where(eq(schema.ndrCases.id, id));
-    return apiError(502, "provider_error", r.error.message);
+    return apiError(502, "provider_error", hideProviders(r.error.message));
   }
   await audit({ actorUserId: s.userId, actorKind: "customer", orgId: s.orgId, action: `ndr.${p.data.action}`, targetType: "ndr_case", targetId: id });
   return NextResponse.json({ ok: true });

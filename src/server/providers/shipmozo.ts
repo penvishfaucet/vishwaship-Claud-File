@@ -27,19 +27,19 @@ const base = (ctx: ProviderContext) => {
 type Envelope = { result?: string | number; message?: string; data?: unknown };
 
 async function call(ctx: ProviderContext, path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<Result<Envelope>> {
-  if (!ctx.secrets.publicKey || !ctx.secrets.privateKey) return { ok: false, error: { category: "auth", message: "Shipmozo public / private key not configured", retryable: false } };
+  if (!ctx.secrets.publicKey || !ctx.secrets.privateKey) return { ok: false, error: { category: "auth", message: "Courier partner public / private key not configured", retryable: false } };
   let r: Response;
   try {
     r = await ctx.fetch(`${base(ctx)}${path}`, {
       timeoutMs: 15_000, ...init,
       headers: { "public-key": ctx.secrets.publicKey, "private-key": ctx.secrets.privateKey, accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}), ...(init.headers as Record<string, string> | undefined) },
     });
-  } catch (e) { return { ok: false, error: { category: "timeout", message: `Shipmozo did not respond: ${(e as Error).message}`.slice(0, 200), retryable: true } }; }
+  } catch (e) { return { ok: false, error: { category: "timeout", message: `Courier partner did not respond: ${(e as Error).message}`.slice(0, 200), retryable: true } }; }
   const json = (await jsonOrNull(r)) as Envelope | null;
-  if (r.status === 401 || r.status === 403) return { ok: false, error: { category: "auth", message: "Shipmozo rejected the public / private key", retryable: false } };
-  if (r.status === 429) return { ok: false, error: { category: "rate_limited", message: "Shipmozo rate limit reached — try again shortly", retryable: true } };
-  if (r.status >= 500) return { ok: false, error: { category: "upstream", message: `Shipmozo error HTTP ${r.status}`, retryable: true } };
-  if (!json || typeof json !== "object") return { ok: false, error: { category: "upstream", message: `Shipmozo returned an unreadable response (HTTP ${r.status})`, retryable: true } };
+  if (r.status === 401 || r.status === 403) return { ok: false, error: { category: "auth", message: "Courier partner rejected the public / private key", retryable: false } };
+  if (r.status === 429) return { ok: false, error: { category: "rate_limited", message: "Courier partner rate limit reached — try again shortly", retryable: true } };
+  if (r.status >= 500) return { ok: false, error: { category: "upstream", message: `Courier partner error HTTP ${r.status}`, retryable: true } };
+  if (!json || typeof json !== "object") return { ok: false, error: { category: "upstream", message: `Courier partner returned an unreadable response (HTTP ${r.status})`, retryable: true } };
   if (String(json.result) !== "1") {
     const msg = smError(json);
     const auth = /key|auth|unauthori[sz]ed|invalid user|token/i.test(msg);
@@ -207,7 +207,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     const wh = await call(ctx, "/get-warehouses", { timeoutMs: 10_000 });
     if (!wh.ok) return wh;
     const n = Array.isArray(wh.value.data) ? wh.value.data.length : 0;
-    return { ok: true, value: { message: `Shipmozo API reachable and keys accepted (${n} warehouse${n === 1 ? "" : "s"} on the account)` } };
+    return { ok: true, value: { message: `Courier partner API reachable and keys accepted (${n} warehouse${n === 1 ? "" : "s"} on the account)` } };
   },
 
   async quote(ctx, req) {
@@ -228,12 +228,13 @@ export const shipmozoAdapter: ShippingAdapter = {
       if (allow.size && !allow.has(p.courierId)) continue;
       quotes.push(p.quote);
     }
-    if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped.length ? `Shipmozo rate could not be verified: ${skipped[0]}` : `Shipmozo has no courier from ${req.originPincode} to ${req.destinationPincode} for this shipment`, retryable: false } };
+    if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped.length ? `Courier partner rate could not be verified: ${skipped[0]}` : `Courier partner has no courier from ${req.originPincode} to ${req.destinationPincode} for this shipment`, retryable: false } };
     return { ok: true, value: quotes };
   },
 
   async registerWarehouse(ctx, w) {
-    const title = `VS-${w.code}`.slice(0, 60);
+    // Shipmozo rejects special characters in address_title ("Special characters are not allowed in address title")
+    const title = `VS${w.code}`.replace(/[^A-Za-z0-9]/g, "").slice(0, 40);
     const r = await call(ctx, "/create-warehouse", {
       method: "POST",
       body: JSON.stringify({ address_title: title, name: w.contactName, phone: Number(digits10(w.mobile)), email: w.email ?? "", address_line_one: w.line1, address_line_two: w.line2 ?? "", pin_code: Number(w.pincode) }),
@@ -247,17 +248,17 @@ export const shipmozoAdapter: ShippingAdapter = {
     if (!list.ok) return list;
     const hit = (Array.isArray(list.value.data) ? list.value.data : []).find((x: Record<string, unknown>) => String(x.address_title ?? "") === title) as Record<string, unknown> | undefined;
     if (hit?.id != null) return { ok: true, value: { ref: String(hit.id) } };
-    return r.ok ? { ok: false, error: { category: "upstream", message: "Shipmozo created the warehouse but returned no warehouse_id", retryable: true } } : r;
+    return r.ok ? { ok: false, error: { category: "upstream", message: "Courier partner created the warehouse but returned no warehouse_id", retryable: true } } : r;
   },
 
   async book(ctx, req) {
     const service = ctx.config.service === "B2B" ? "B2B" : "B2C";
     const [kind, courierId, pickupMode] = (req.quote.providerQuoteRef ?? "").split(":");
-    if (kind !== "shipmozo_api" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Shipmozo courier_id — refresh rates", retryable: false } };
-    if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Shipmozo warehouse", retryable: false } };
+    if (kind !== "shipmozo_api" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Courier partner courier_id — refresh rates", retryable: false } };
+    if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Courier partner warehouse", retryable: false } };
     const boxes = req.packages.reduce((t, p) => t + p.count, 0);
-    if (boxes > 1 && service === "B2C") return { ok: false, error: { category: "validation", message: "Shipmozo B2C books one package per order — use B2B for multiple cartons", retryable: false } };
-    if (boxes > 1 && !ctx.config.mpsBookingVerified) return { ok: false, error: { category: "unsupported", message: "Shipmozo multi-carton booking needs Shipmozo's B2B push-order fields (pending documentation)", retryable: false } };
+    if (boxes > 1 && service === "B2C") return { ok: false, error: { category: "validation", message: "Courier partner B2C books one package per order — use B2B for multiple cartons", retryable: false } };
+    if (boxes > 1 && !ctx.config.mpsBookingVerified) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
     const big = [...req.packages].sort((a, b) => b.lengthMm * b.breadthMm * b.heightMm - a.lengthMm * a.breadthMm * a.heightMm)[0];
     const orderId = req.vishwashipOrderId; // stable and globally unique → Shipmozo's duplicate check makes retries safe
 
@@ -318,7 +319,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     const rows = Array.isArray(r.value.data) ? r.value.data : [r.value.data];
     const images = rows.map((x) => firstString(x, ["label", "image", "label_url"]) ?? "").filter(Boolean)
       .map((s) => (s.startsWith("data:") || s.startsWith("https:") ? s : `data:image/png;base64,${s}`));
-    if (!images.length) return { ok: false, error: { category: "not_found", message: "Shipmozo has not generated the label yet", retryable: true } };
+    if (!images.length) return { ok: false, error: { category: "not_found", message: "Courier partner has not generated the label yet", retryable: true } };
     return { ok: true, value: { images, formatsAvailable } };
   },
 

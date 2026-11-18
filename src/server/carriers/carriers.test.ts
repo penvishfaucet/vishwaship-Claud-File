@@ -150,6 +150,7 @@ describe("quotes across providers", () => {
     expect(r.offers.some((o) => o.provider === "demo")).toBe(true);
     expect(r.offers.some((o) => o.provider === "shipmozo")).toBe(false);
     expect(r.errors.join(" ")).toMatch(/did not respond/);
+    expect(r.errors.join(" ")).not.toMatch(/shipmozo/i); // customers see the partner code, never the aggregator
   });
   it("B2C and B2B are separate: the B2B pilot account quotes only for its pilot customer", async () => {
     const mine = await getQuotes(req("B2B"), ORG, { persist: false });

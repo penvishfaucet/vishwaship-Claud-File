@@ -182,7 +182,7 @@ registerHandler("pickup.auto", async (p, attempt): Promise<JobResult> => {
   if (r.retry) {
     const db = await getDb();
     const [sh] = await db.select({ orgId: schema.shipments.orgId, orderId: schema.shipments.orderId }).from(schema.shipments).where(eq(schema.shipments.id, String(p.shipmentId)));
-    if (sh) await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: sh.orgId, kind: "tracking", title: `Automatic pickup request failed — please schedule pickup: ${r.message}`.slice(0, 200), href: `/portal/orders/${sh.orderId}/` });
+    if (sh) await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: sh.orgId, kind: "tracking", title: `Automatic pickup request failed — please schedule pickup: ${(await import("@/server/customer-safe")).hideProviders(r.message)}`.slice(0, 200), href: `/portal/orders/${sh.orderId}/` });
   }
   return { done: true };
 });

@@ -87,3 +87,12 @@ describe("Shipora X booking", () => {
     expect(hits.some((h) => h.path === "/api/orders/webhook/import" || h.path.endsWith("/ship"))).toBe(false);
   });
 });
+
+describe("customer messages never name the aggregator", () => {
+  it("replaces Shipmozo / Shipora X with 'courier partner', keeps real carriers", async () => {
+    const { hideProviders } = await import("@/server/customer-safe");
+    expect(hideProviders("Shipmozo: No warehouse added in Shipmozo")).not.toMatch(/shipmozo/i);
+    expect(hideProviders("SHIPORA X: Ats Flat: GST basis not set")).toBe("Courier partner: Ats Flat: GST basis not set");
+    expect(hideProviders("Delhivery B2B rejected the request")).toBe("Delhivery B2B rejected the request");
+  });
+});

@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { NextResponse } from "next/server";
 import { apiCustomer } from "@/server/auth/session";
 import { apiError } from "@/server/http";
@@ -22,7 +23,8 @@ export async function GET(req: Request) {
   const rl = await rateLimit(`labels:${s.orgId}`, 60, 300);
   if (!rl.ok) return apiError(429, "rate_limited", "Too many label downloads - try again in a few minutes");
   const r = await renderLabels(s.orgId, ids, format);
-  if (!r.pdf) return NextResponse.json({ error: { code: "not_available", message: r.skipped.map((x) => `${x.orderNumber}: ${x.reason}`).join("; ") || "No labels available" }, skipped: r.skipped }, { status: 422 });
+  r.skipped = r.skipped.map((x) => ({ ...x, reason: hideProviders(x.reason) }));
+  if (!r.pdf) return NextResponse.json({ error: { code: "not_available", message: r.skipped.map((x) => `${x.orderNumber}: ${hideProviders(x.reason)}`).join("; ") || "No labels available" }, skipped: r.skipped }, { status: 422 });
   const name = ids.length === 1 ? `label-${ids[0]}` : `labels-${ids.length}`;
   return new Response(Buffer.from(r.pdf), {
     headers: {

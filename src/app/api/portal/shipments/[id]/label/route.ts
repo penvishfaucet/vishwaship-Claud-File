@@ -1,3 +1,4 @@
+import { hideProviders } from "@/server/customer-safe";
 import { orgSetting } from "@/server/couriers";
 import { noteCapability } from "@/server/carriers/verification";
 import { and, eq } from "drizzle-orm";
@@ -36,12 +37,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     if (!ad) return apiError(422, "provider_error", "Adapter required");
     const pctx = await providerContext(acct);
     let r = await ad.label(pctx, { providerOrderRef: row.s.providerOrderRef!, awb: row.s.awb }, format);
-    if (!r.ok) return apiError(422, "provider_error", r.error.message);
+    if (!r.ok) return apiError(422, "provider_error", hideProviders(r.error.message));
     if (!r.value.formatsAvailable.includes(format)) {
       // the saved default isn't offered by this courier → use its first size, unless the customer asked for a size explicitly
       if (asked || !r.value.formatsAvailable.length) return apiError(422, "validation_error", `${row.s.carrierName} does not provide ${SIZES[format].name} labels. Available: ${r.value.formatsAvailable.map((x) => SIZES[x]?.name ?? x).join(", ")}`);
       r = await ad.label(pctx, { providerOrderRef: row.s.providerOrderRef!, awb: row.s.awb }, r.value.formatsAvailable[0]);
-      if (!r.ok) return apiError(422, "provider_error", r.error.message);
+      if (!r.ok) return apiError(422, "provider_error", hideProviders(r.error.message));
     }
     await noteCapability(acct.id, "label", true, { evidence: `AWB ${row.s.awb}` });
     if (r.value.images?.length) {
@@ -49,7 +50,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Labels ${row.s.lrNumber ?? row.s.awb}</title><style>@page{margin:0}body{margin:0}</style></head><body onload="window.print()">${imgs}</body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store" } });
     }
     // Carrier HTML label (Shipora X): served as-is but sandboxed, so its scripts cannot touch Vishwaship cookies or pages.
-    if (r.value.html) return new Response(r.value.html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "content-security-policy": "sandbox allow-scripts allow-modals allow-downloads", "x-content-type-options": "nosniff" } });
+    if (r.value.html) return new Response(hideProviders(r.value.html).replace(/courier partner/gi, ""), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "content-security-policy": "sandbox allow-scripts allow-modals allow-downloads", "x-content-type-options": "nosniff" } });
     if (r.value.pdf) return new Response(Buffer.from(r.value.pdf), { headers: { "content-type": "application/pdf", "content-disposition": `inline; filename="${row.s.awb}.pdf"` } });
     if (r.value.url) return Response.redirect(r.value.url, 302);
   }
