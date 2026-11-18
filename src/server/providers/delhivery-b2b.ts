@@ -148,15 +148,24 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     if (req.paymentType === "cod") fd.set("cod_amount", String(rupees(req.codAmount)));
     fd.set("weight", String(totalG));
     fd.set("dropoff_location", JSON.stringify({ consignee_name: req.consignee.name, address: [req.consignee.line1, req.consignee.line2].filter(Boolean).join(", "), city: req.consignee.city, state: req.consignee.state, zip: req.consignee.pincode, phone: req.consignee.mobile, email: req.consignee.email ?? "" }));
-    fd.set("shipment_details", JSON.stringify(req.packages.map((p, i) => ({ order_id: `${req.vishwashipOrderId}-${i + 1}`, box_count: p.count, description: req.products.map((x) => x.name).join(", ").slice(0, 100) || "Goods", weight: p.actualWeightGrams * p.count, waybills: [], master: false }))));
-    fd.set("dimensions", JSON.stringify(req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count }))));
+    const shipments = req.packages.map((p, i) => ({ order_id: `${req.vishwashipOrderId.replace(/[^A-Za-z0-9]/g, "")}${i + 1}`, box_count: p.count, description: req.products.map((x) => x.name).join(", ").replace(/[^A-Za-z0-9 ,]/g, " ").slice(0, 100) || "Goods", weight: p.actualWeightGrams * p.count, waybills: [], master: false }));
+    fd.set("shipment_details", JSON.stringify(shipments));
+    // Live B2B validation (2026-11-18): dimensions need length / width / height (cm) per box group.
+    fd.set("dimensions", JSON.stringify(req.packages.map((p) => ({ box_count: p.count, length: p.lengthMm / 10, width: p.breadthMm / 10, height: p.heightMm / 10 }))));
     fd.set("invoices", JSON.stringify([{ ewaybill: req.ewayBill ?? "", inv_num: req.invoiceNumber ?? req.orderNumber, inv_amt: rupees(req.declaredValue), inv_qr_code: "" }]));
     fd.set("rov_insurance", ctx.config.rovInsurance ? "True" : "False");
     const fm = freightMode(ctx, req.paymentType).freight_mode;
     if (fm) fd.set("freight_mode", fm);
     fd.set("fm_pickup", "True");
     if (ctx.config.billingAddress) fd.set("billing_address", JSON.stringify(ctx.config.billingAddress));
-    const r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
+    let r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
+    // "shipment_details: value is not a valid list" (live): send each shipment as its own form value instead.
+    // A validation failure creates nothing at Delhivery, so this second attempt cannot duplicate a manifest.
+    if (!r.ok && /shipment_details.{0,40}not a valid list/i.test(r.error.message)) {
+      fd.delete("shipment_details");
+      for (const sd of shipments) fd.append("shipment_details", JSON.stringify(sd));
+      r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
+    }
     if (!r.ok) return r.error.category === "timeout" ? { ok: false, error: { ...r.error, category: "ambiguous" } } : r;
     const jobId = firstString(r.value.json, ["job_id", "data.job_id", "request_id", "data.request_id", "jobId"]);
     if (!jobId) return { ok: false, error: { category: "ambiguous", message: "Delhivery accepted the manifest but returned no job ID", retryable: false } };
