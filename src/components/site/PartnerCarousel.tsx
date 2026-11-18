@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import type { Partner } from "@/lib/site-content";
 
 /**
@@ -9,7 +9,7 @@ import type { Partner } from "@/lib/site-content";
  * Pauses on hover, keyboard focus and touch (resumes a few seconds after the finger lifts); Pause button for
  * everyone; reduced-motion visitors get the same row without automatic movement. The loop copy is hidden from AT.
  */
-export function PartnerCarousel({ partners, heading, showCount = true, compact = false, bare = false }: { partners: Partner[]; heading: string; showCount?: boolean; compact?: boolean; bare?: boolean }) {
+export function PartnerCarousel({ partners, heading, showCount = true, compact = false, bare = false, strip = false }: { partners: Partner[]; heading: string; showCount?: boolean; compact?: boolean; bare?: boolean; strip?: boolean }) {
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
   const vp = useRef<HTMLDivElement>(null);
@@ -63,15 +63,15 @@ export function PartnerCarousel({ partners, heading, showCount = true, compact =
   };
 
   return (
-    <section className={`pc${compact ? " pc-compact" : ""}${bare ? " pc-bare" : ""}`} aria-labelledby="pc-h">
-      <div className="pc-head">
+    <section className={`pc${compact ? " pc-compact" : ""}${bare || strip ? " pc-bare" : ""}${strip ? " pc-strip" : ""}`} aria-labelledby="pc-h">
+      {strip ? <h2 id="pc-h" className="sr-only">{heading}</h2> : <div className="pc-head">
         <h2 id="pc-h" className="pc-title">{heading}{showCount && <span className="pc-count">{unique.length} partners</span>}</h2>
         {!reduced && (
           <button type="button" className="pc-toggle" onClick={() => setPaused((v) => !v)} aria-pressed={paused}>
             {paused ? "Play" : "Pause"}<span className="sr-only"> partner logos</span>
           </button>
         )}
-      </div>
+      </div>}
       <div className="pc-row">
         <button type="button" className="pc-arrow" aria-label="Previous partners" onClick={() => nudge(-1)}><ChevronLeft size={22} aria-hidden="true" /></button>
         <div
@@ -94,8 +94,13 @@ export function PartnerCarousel({ partners, heading, showCount = true, compact =
           </ul>
         </div>
         <button type="button" className="pc-arrow" aria-label="Next partners" onClick={() => nudge(1)}><ChevronRight size={22} aria-hidden="true" /></button>
+        {strip && !reduced && (
+          <button type="button" className="pc-arrow pc-pause" onClick={() => setPaused((v) => !v)} aria-pressed={paused} aria-label={paused ? "Play partner logos" : "Pause partner logos"} title={paused ? "Play" : "Pause"}>
+            {paused ? <Play size={16} aria-hidden="true" /> : <Pause size={16} aria-hidden="true" />}
+          </button>
+        )}
       </div>
-      <p className="pc-note">Courier availability depends on serviceability and the services enabled on your account.</p>
+      {!strip && <p className="pc-note">Courier availability depends on serviceability and the services enabled on your account.</p>}
     </section>
   );
 }

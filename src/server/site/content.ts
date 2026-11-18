@@ -49,7 +49,10 @@ export async function getSiteContent(opts: { preview?: boolean } = {}): Promise<
   c.partners = { items: mergePartners(c.partners.items) };
   c.links = upgradeLinks(c.links);
   // the earlier default hero photo is replaced by the warehouse-and-truck background
-  if (c.home.heroPosterUrl === "/brand/hero.jpg") c.home.heroPosterUrl = DEFAULTS.home.heroPosterUrl;
+  // earlier built-in hero images/copy are replaced by the current defaults (custom uploads are kept)
+  if (["/brand/hero.jpg", "/brand/hero-desktop.webp"].includes(c.home.heroPosterUrl)) c.home.heroPosterUrl = DEFAULTS.home.heroPosterUrl;
+  if (["", "/brand/hero-mobile.webp"].includes(c.home.heroMobileUrl)) c.home.heroMobileUrl = DEFAULTS.home.heroMobileUrl;
+  if (["Simple shipping for parcels and cargo.", "Compare courier rates, book parcels and cargo, and manage your shipments with Vishwaship.", "From everyday parcels to business cargo, manage your shipping with Vishwaship."].includes(c.home.heroText)) c.home.heroText = DEFAULTS.home.heroText;
   return c;
 }
 

@@ -101,9 +101,10 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
         <Link className="w-logo" href="/" aria-label="Vishwaship home"><img src="/brand/logo-full.png" alt="Vishwaship" width={168} height={38} /></Link>
         <nav className="w-nav" aria-label="Main">
           {SITE_NAV.map((n) => <Link key={n.href} href={n.href} aria-current={isCurrent(path, n.href) ? "page" : undefined}>{n.label}</Link>)}
-          <Link href={L.dashboard} aria-current={path.startsWith("/portal") ? "page" : undefined}>Dashboard</Link>
         </nav>
         <div className="w-acts">
+          {!signedIn && <a className="w-btn out sm" href={L.login}>Login</a>}
+          <Link className="w-btn pri sm" href={L.dashboard}>Dashboard</Link>
           {signedIn ? (
             <div className="w-acct" ref={acctRef}>
               <button type="button" className="w-acct-btn" aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}>
@@ -111,27 +112,15 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
               </button>
               {acct && <div className="w-pop" role="menu"><AccountMenu auth={auth} logoutCustomer={logoutCustomer} logoutStaff={logoutStaff} onNavigate={() => setAcct(false)} /></div>}
             </div>
-          ) : known ? (
-            <>
-              <a className="w-btn ghost sm" href={L.signup}>Create Account</a>
-              <a className="w-btn pri sm" href={L.login}>Login</a>
-            </>
-          ) : (
-            <>
-              <a className="w-btn ghost sm" href={L.login}>Login</a>
-              <a className="w-btn pri sm" href={L.signup}>Create Account</a>
-            </>
-          )}
+          ) : <a className="w-btn pri sm" href={L.signup}>Create Account</a>}
         </div>
         <div className="w-micons">
-          <Link className="w-ic" href={L.dashboard} aria-label="Dashboard" title="Dashboard"><LayoutDashboard size={22} aria-hidden="true" /></Link>
-          {signedIn ? (
+          <Link className="w-btn pri sm w-mdash" href={L.dashboard}><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
+          {signedIn && (
             <div className="w-acct" ref={acctRef2}>
               <button type="button" className="w-ic" aria-label={`Account: ${name}`} aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}><UserCircle2 size={23} aria-hidden="true" /></button>
               {acct && <div className="w-pop" role="menu"><AccountMenu auth={auth} logoutCustomer={logoutCustomer} logoutStaff={logoutStaff} onNavigate={() => setAcct(false)} /></div>}
             </div>
-          ) : (
-            <a className="w-ic" href={L.login} aria-label="Account login" title="Login"><UserCircle2 size={23} aria-hidden="true" /></a>
           )}
           <button ref={burger} type="button" className="w-burger" aria-label="Open menu" aria-expanded={open} aria-controls="w-drawer" onClick={() => setOpen(true)}><Menu size={24} aria-hidden="true" /></button>
         </div>

@@ -28,7 +28,7 @@ export function HeroMedia({ video, poster, mobile }: { video: string; poster: st
           ? <video ref={ref} src={video} poster={poster || undefined} autoPlay muted loop playsInline preload="metadata" onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} />
           : poster ? (
             <picture>
-              {mobile && <source media="(max-width: 1023px)" srcSet={mobile} />}
+              {mobile && <source media="(max-width: 719px)" srcSet={mobile} />}
               <img src={poster} alt="" fetchPriority="high" decoding="async" />
             </picture>
           ) : null}

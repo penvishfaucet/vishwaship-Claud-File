@@ -130,9 +130,17 @@ export function WebsiteEditor({ initial, thresholdGrams }: { initial: Record<Sec
             <div className="split" style={{ gap: 12 }}><Field label="Login button (returning visitors)" value={h.loginCta} onChange={(v) => upd("home", { loginCta: v })} /><Field label="Dashboard button (signed-in customers)" value={h.dashboardCta} onChange={(v) => upd("home", { dashboardCta: v })} /></div>
             <Field label="Track box heading (hero)" value={h.trackHeading} onChange={(v) => upd("home", { trackHeading: v })} />
             <MediaField label="Hero background video (optional; MP4/WebM, muted, max 20 MB)" accept="video/mp4,video/webm" value={h.heroVideoUrl} onChange={(v) => upd("home", { heroVideoUrl: v })} hint="Keep it short (10–20 s) and compressed. Visitors with reduced motion or data saver see the poster." />
-            <MediaField label="Hero background — desktop (wide)" accept="image/png,image/jpeg,image/webp" value={h.heroPosterUrl} onChange={(v) => upd("home", { heroPosterUrl: v })} hint="About 1920×800 WebP/JPG under 400 KB. Keep the truck/warehouse on the right; the left is washed white behind the text." />
-            <MediaField label="Hero background — phone (portrait)" accept="image/png,image/jpeg,image/webp" value={h.heroMobileUrl} onChange={(v) => upd("home", { heroMobileUrl: v })} hint="About 780×1100. Light/empty at the top (behind the text), subject in the lower half." />
-            <Field label="Offer line under the buttons" value={h.offerLine} onChange={(v) => upd("home", { offerLine: v })} hint="Separate items with • — e.g. COD Available • Parcels from ₹28 • Cargo from ₹8/kg. Hidden when Offers are switched off for Home." />
+            <MediaField label="Hero background — desktop (wide)" accept="image/png,image/jpeg,image/webp" value={h.heroPosterUrl} onChange={(v) => upd("home", { heroPosterUrl: v })} hint="About 1920×800 WebP/JPG under 400 KB. Courier/subject on the right; the left is covered by the navy wash behind the text." />
+            <MediaField label="Hero background — phone (portrait)" accept="image/png,image/jpeg,image/webp" value={h.heroMobileUrl} onChange={(v) => upd("home", { heroMobileUrl: v })} hint="About 780×1400, used on phones (under 720 px). Quiet top for the text; courier lower-right." />
+            <Field label="Track link text" value={h.trackCta} onChange={(v) => upd("home", { trackCta: v })} />
+            <h3 className="small b mt12">Pricing highlights (under the buttons)</h3>
+            {h.highlights.map((x, i) => (
+              <div key={i} className="split" style={{ gap: 12 }}>
+                <Field label={`Highlight ${i + 1} — large text`} value={x.big} onChange={(v) => upd("home", { highlights: h.highlights.map((y, j) => (j === i ? { ...y, big: v } : y)) })} />
+                <Field label={`Highlight ${i + 1} — caption`} value={x.small} onChange={(v) => upd("home", { highlights: h.highlights.map((y, j) => (j === i ? { ...y, small: v } : y)) })} />
+              </div>
+            ))}
+            <Field label="Note under the highlights" value={h.highlightNote} onChange={(v) => upd("home", { highlightNote: v })} hint="Highlights are hidden when Offers are switched off for Home (Offers & features tab)." />
           </section>
           <section className="card" style={{ padding: 16 }}><h2 className="small b">Sections</h2>
             <Field label="Courier carousel heading" value={h.partnersHeading} onChange={(v) => upd("home", { partnersHeading: v })} />

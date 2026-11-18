@@ -2,7 +2,6 @@ import Link from "next/link";
 import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
 import { HeroMedia } from "@/components/site/HeroMedia";
 import { HeroCtas } from "@/components/site/HeroCtas";
-import { HeroPanel } from "@/components/site/HeroPanel";
 import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
 import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
@@ -25,24 +24,24 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const auth = await siteAuth();
   return (
     <>
-      <section className="w-hero3" aria-labelledby="hero-h">
-        <div className="w-hero-top">
+      <section className="w-hero4" aria-labelledby="hero-h">
         <HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} mobile={h.heroMobileUrl} />
         <div className="w-wrap in">
           <div className="txt">
             <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
             <p className="w-lead">{h.heroText}</p>
-            <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta }} />
-            {c.offers.visible && c.offers.showOnHome && h.offerLine && (
-              <p className="w-offerline">{h.offerLine.split("•").map((x, i) => <span key={i}>{x.trim()}</span>)}</p>
+            <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta, track: h.trackCta }} />
+            {c.offers.visible && c.offers.showOnHome && h.highlights.length > 0 && (
+              <div className="w-hl">
+                <ul>{h.highlights.map((x, i) => <li key={i}><b>{x.big}</b><span>{x.small}</span></li>)}</ul>
+                {h.highlightNote && <p>{h.highlightNote}</p>}
+              </div>
             )}
           </div>
         </div>
-        </div>
-        <div className="w-wrap w-panel-wrap"><HeroPanel showCalc={c.features.calculator} showTrack={c.features.tracking} threshold={kg} /></div>
       </section>
 
-      <div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} bare /></div>
+      <div className="w-strip"><div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} strip /></div></div>
 
       <section className="w-sec alt" aria-labelledby="svc-h">
         <div className="w-wrap">
