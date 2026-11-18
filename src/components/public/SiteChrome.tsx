@@ -54,7 +54,7 @@ export function SiteFooter() {
             <img src="/brand/logo-full.png" alt="vishwaship.com" style={{ height: 34 }} />
             <p style={{ margin: "18px 0 6px" }}>Your parcels. Our promise.<br />Doorstep shipping, across India.</p>
             <p style={{ margin: "14px 0 4px" }}>{SITE.phone}</p>
-            <a href={`mailto:${SITE.email}`} style={{ color: "var(--navy)", fontWeight: 700 }}>{SITE.email} ↗</a>
+            <a href={`mailto:${SITE.email}`} style={{ color: "var(--navy)", fontWeight: 600 }}>{SITE.email} ↗</a>
           </div>
           <div>
             <b>Ship with us</b>

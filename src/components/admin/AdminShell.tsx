@@ -57,11 +57,11 @@ export function AdminShell({ user, allowed, logout, children, bell, markSeen }: 
               <button className="icon-btn" aria-label={`Notifications${badge ? `, ${badge} new` : ""}${bell.pendingRecharges ? `, ${bell.pendingRecharges} recharge requests pending` : ""}`} aria-haspopup="dialog" aria-expanded={bellOpen}
                 onClick={() => { const o = !bellOpen; setBellOpen(o); setMenu(false); if (o && badge && markSeen) void markSeen(); }} style={{ position: "relative" }}>
                 <Bell size={20} aria-hidden />
-                {(badge > 0 || bell.pendingRecharges > 0) && <span className="badge-dot" style={{ position: "absolute", top: 2, right: 2, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: "var(--orange)", color: "#fff", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badge || bell.pendingRecharges}</span>}
+                {(badge > 0 || bell.pendingRecharges > 0) && <span className="badge-dot" style={{ position: "absolute", top: 2, right: 2, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, background: "var(--orange)", color: "#fff", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{badge || bell.pendingRecharges}</span>}
               </button>
               {bellOpen && (
                 <div className="dropdown wide" role="dialog" aria-label="Notifications" style={{ width: 340, maxHeight: 440, overflowY: "auto" }}>
-                  {bell.pendingRecharges > 0 && <Link href="/admin/recharges/?status=open" className="dd" onClick={() => setBellOpen(false)} style={{ display: "block", fontWeight: 700 }}>{bell.pendingRecharges} manual recharge request{bell.pendingRecharges === 1 ? "" : "s"} pending verification →</Link>}
+                  {bell.pendingRecharges > 0 && <Link href="/admin/recharges/?status=open" className="dd" onClick={() => setBellOpen(false)} style={{ display: "block", fontWeight: 600 }}>{bell.pendingRecharges} manual recharge request{bell.pendingRecharges === 1 ? "" : "s"} pending verification →</Link>}
                   {bell.items.length === 0 && <p className="small muted" style={{ padding: 10, margin: 0 }}>No notifications.</p>}
                   {bell.items.map((a) => (
                     <Link key={a.id} href={a.href ?? "/admin/"} className="dd" onClick={() => setBellOpen(false)} style={{ display: "block", borderLeft: a.unseen ? "3px solid var(--orange)" : "3px solid transparent" }}>

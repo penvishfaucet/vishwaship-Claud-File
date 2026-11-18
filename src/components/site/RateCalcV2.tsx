@@ -213,7 +213,7 @@ export function RateCalcV2({ thresholdGrams, logos, compact = false, signedIn = 
 
         <div className="w-svcsel" role="status" aria-live="polite">
           <div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--mut)", textTransform: "uppercase", letterSpacing: ".08em" }}>Service</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase", letterSpacing: ".08em" }}>Service</div>
             <b data-testid="service">{service}</b>
           </div>
           <span className="why">{override ? "Changed manually" : `Selected automatically based on shipment weight (${service === "B2B" ? `${thresholdGrams / 1000} kg or more` : `under ${thresholdGrams / 1000} kg`})`}</span>

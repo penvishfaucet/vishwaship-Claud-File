@@ -94,12 +94,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <div className="w-road" aria-hidden="true">
               <div className="w-lane">
                 <svg className="w-truck" viewBox="0 0 96 56" fill="none">
-                  <rect x="2" y="8" width="56" height="34" rx="4" fill="#0b1f3a" />
+                  <rect x="2" y="8" width="56" height="34" rx="4" fill="#0b2c6a" />
                   <rect x="8" y="14" width="44" height="6" rx="2" fill="#f0712c" />
                   <path d="M58 18h18l14 14v10H58z" fill="#13294b" />
                   <path d="M62 22h12l9 9H62z" fill="#cfe0ff" />
-                  <g className="wheel"><circle cx="20" cy="44" r="8" fill="#0b1f3a" /><circle cx="20" cy="44" r="3" fill="#fff" /></g>
-                  <g className="wheel"><circle cx="74" cy="44" r="8" fill="#0b1f3a" /><circle cx="74" cy="44" r="3" fill="#fff" /></g>
+                  <g className="wheel"><circle cx="20" cy="44" r="8" fill="#0b2c6a" /><circle cx="20" cy="44" r="3" fill="#fff" /></g>
+                  <g className="wheel"><circle cx="74" cy="44" r="8" fill="#0b2c6a" /><circle cx="74" cy="44" r="3" fill="#fff" /></g>
                 </svg>
               </div>
             </div>

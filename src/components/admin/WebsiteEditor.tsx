@@ -204,7 +204,7 @@ export function WebsiteEditor({ initial, thresholdGrams }: { initial: Record<Sec
                 </div>
                 <div className="row wrap" style={{ gap: 14, alignItems: "flex-start", marginTop: 10 }}>
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ width: 88, height: 88, borderRadius: "50%", overflow: "hidden", background: "#0b1f3a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 26 }}>{m.photoUrl ? <img src={m.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : m.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
+                    <div style={{ width: 88, height: 88, borderRadius: "50%", overflow: "hidden", background: "#0b2c6a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600, fontSize: 26 }}>{m.photoUrl ? <img src={m.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : m.name.split(" ").map((w) => w[0]).join("").slice(0, 2)}</div>
                     <label className="btn btn-outline btn-sm" style={{ cursor: "pointer", marginTop: 8 }}>Photo<input type="file" hidden accept="image/png,image/jpeg,image/webp" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) setCrop({ file: f, memberId: m.id }); }} /></label>
                     {m.photoUrl && <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 4 }} onClick={() => setMember(m.id, { photoUrl: "" })}>Remove</button>}
                   </div>

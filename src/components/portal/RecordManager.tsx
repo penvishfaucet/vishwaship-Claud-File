@@ -31,7 +31,7 @@ export function RecordManager({ kind, rows }: { kind: OthersKind; rows: Row[] })
     <>
       <div className="row wrap between mb12" style={{ gap: 8 }}>
         <label className="search" style={{ maxWidth: 320, flex: 1 }}><Search size={16} aria-hidden /><span className="sr-only">Search {def.title}</span><input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Search ${def.title.toLowerCase()}`} /></label>
-        <button type="button" className="btn btn-orange" onClick={() => { setErr(""); setEdit({ id: null, form: kind === "tags" ? { color: "#0b1f3a" } : {} }); }}><Plus size={16} /> Add {def.singular}</button>
+        <button type="button" className="btn btn-orange" onClick={() => { setErr(""); setEdit({ id: null, form: kind === "tags" ? { color: "#0b2c6a" } : {} }); }}><Plus size={16} /> Add {def.singular}</button>
       </div>
       {err && <p className="small t-debit" role="alert">{err}</p>}
       {edit && (

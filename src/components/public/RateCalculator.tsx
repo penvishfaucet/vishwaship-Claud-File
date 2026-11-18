@@ -104,7 +104,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
           <div className="b small">{best ? `Best: ${best.carrierName} · ${best.serviceName}` : "Check your final rate"}</div>
           <div className="tiny muted">final price incl. GST</div>
         </div>
-        <div style={{ textAlign: "right" }}><div style={{ fontSize: 24, fontWeight: 700 }}>{state === "loading" ? "…" : best ? formatINR(best.total) : "—"}</div></div>
+        <div style={{ textAlign: "right" }}><div style={{ fontSize: 24, fontWeight: 600 }}>{state === "loading" ? "…" : best ? formatINR(best.total) : "—"}</div></div>
       </div>
       <button className="btn btn-orange btn-block" disabled={state === "loading"}>{state === "loading" ? "Checking…" : "Check rate"}</button>
       {msg && <p className={state === "error" ? "err small mt8" : "small muted mt8"} role={state === "error" ? "alert" : undefined}>{msg}</p>}
