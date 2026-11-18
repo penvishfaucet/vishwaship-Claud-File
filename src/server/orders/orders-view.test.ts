@@ -65,7 +65,7 @@ describe("Orders tabs: SQL mapping matches tabOf()", () => {
   });
   it("counts per tab, All excludes archive, cancelled/lost only under All", async () => {
     const c = await tabCounts(ORG, f());
-    expect(c).toMatchObject({ new: 3, courier_assigned: 1, pickups: 2, in_transit: 3, out_for_delivery: 1, delivered: 1, ndr: 1, rto_in_transit: 2, rto_delivered: 1, archive: 1 });
+    expect(c).toMatchObject({ drafts: 1, new: 2, courier_assigned: 1, pickups: 2, in_transit: 3, out_for_delivery: 1, delivered: 1, ndr: 1, rto_in_transit: 2, rto_delivered: 1, archive: 1 });
     expect(c.all).toBe(CASES.length - 1);
     const listed = await listOrderRows(ORG, { ...f(), tab: "all", pageSize: 100 });
     expect(listed.total).toBe(c.all);

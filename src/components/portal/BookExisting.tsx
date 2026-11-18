@@ -43,7 +43,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) return book(j.error.newQuoteId);
   }
   return (
     <section className="card mb16" style={{ padding: 16 }}>
-      <div className="row between wrap" style={{ gap: 8 }}><b>Not booked yet</b>{!offers && !auto && <span className="row" style={{ gap: 8 }}>{autoAssign && <button className="btn btn-navy btn-sm" onClick={runAuto} disabled={busy}>Auto-assign</button>}<button className="btn btn-orange btn-sm" onClick={quote} disabled={busy}>{busy ? "Getting rates…" : "Choose courier"}</button></span>}</div>
+      <div className="row between wrap" style={{ gap: 8 }}><b>Courier not assigned yet</b>{!offers && !auto && <span className="row" style={{ gap: 8 }}>{autoAssign && <button className="btn btn-navy btn-sm" onClick={runAuto} disabled={busy}>Auto-assign</button>}<button className="btn btn-orange btn-sm" onClick={quote} disabled={busy}>{busy ? "Getting rates…" : "Assign Courier"}</button></span>}</div>
       {auto && !offers && (
         <div className="note small mt8">
           <b>{auto.carrierName} · {auto.serviceName}</b> — ₹{(auto.total / 100).toFixed(2)} incl. GST
@@ -64,7 +64,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) return book(j.error.newQuoteId);
               </label>
             ))}
           </div>
-          <button className="btn btn-orange mt12" onClick={() => book()} disabled={busy || !sel}>{busy ? "Booking…" : "Book Shipment"}</button>
+          <button className="btn btn-orange mt12" onClick={() => book()} disabled={busy || !sel}>{busy ? "Booking…" : "Assign Courier & Book"}</button>
         </>
       )}
       {err && <p className="err small" role="alert">{err}</p>}

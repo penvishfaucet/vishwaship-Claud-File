@@ -15,7 +15,9 @@ export const OrderInput = z.object({
   direction: z.enum(["forward", "reverse"]).default("forward"),
   paymentType: z.enum(["prepaid", "cod", "fod"]),
   codAmountRupees: z.number().min(0).max(5_00_000).default(0),
-  declaredValueRupees: z.number().positive().max(50_00_000),
+  declaredValueRupees: z.number().min(0).max(50_00_000),
+  /** "draft" = Drafts tab, not offered to couriers yet; "ready" = New tab, waiting for courier assignment. */
+  saveAs: z.enum(["draft", "ready"]).optional(),
   warehouseId: z.string().min(1),
   consignee: z.object({
     name: z.string().trim().min(2).max(80), mobile, email: z.string().email().optional().or(z.literal("")),
@@ -28,6 +30,7 @@ export const OrderInput = z.object({
   ewayBill: z.string().regex(/^$|^\d{12}$/, "E-way bill must be 12 digits").optional(),
   buyerGstin: z.string().max(15).optional(),
 }).superRefine((v, ctx) => {
+  if (v.saveAs !== "draft" && !(v.declaredValueRupees > 0)) ctx.addIssue({ code: "custom", path: ["declaredValueRupees"], message: "Enter the declared (invoice) value" });
   if (v.paymentType === "cod" && v.codAmountRupees <= 0) ctx.addIssue({ code: "custom", path: ["codAmountRupees"], message: "COD amount is required" });
   if (v.declaredValueRupees >= 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments of ₹50,000 or more" });
 });
@@ -44,11 +47,11 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
 
   // COD confirmation hold applies to every source (manual, bulk, store, API) when subscribed.
   const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codHold = input.paymentType === "cod" && input.direction === "forward" && !!codSetting?.enabled;
+  const codHold = input.saveAs !== "draft" && input.paymentType === "cod" && input.direction === "forward" && !!codSetting?.enabled;
 
   await db.insert(schema.orders).values({
     id, orgId, orderNumber, source, externalStoreId: external?.storeId, externalOrderId: external?.orderId,
-    status: codHold ? "cod_hold" : "ready", mode: input.mode, direction: input.direction, paymentType: input.paymentType,
+    status: input.saveAs === "draft" ? "draft" : codHold ? "cod_hold" : "ready", mode: input.mode, direction: input.direction, paymentType: input.paymentType,
     codAmountPaise: input.paymentType === "cod" ? rupeesToPaise(input.codAmountRupees) : 0,
     declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, pickupSnapshot: pickupSnapshot(wh), consignee: input.consignee,
     products: input.products.map((p) => ({ name: p.name, sku: p.sku, qty: p.qty, unitPrice: rupeesToPaise(p.unitPriceRupees), hsn: p.hsn })),
@@ -57,14 +60,52 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
   for (const p of input.packages) {
     await db.insert(schema.packages).values({ id: newId("pkg"), orderId: id, count: p.count, lengthMm: Math.round(p.lengthCm * 10), breadthMm: Math.round(p.breadthCm * 10), heightMm: Math.round(p.heightCm * 10), actualWeightGrams: Math.round(p.weightKg * 1000) });
   }
-  if (codHold) {
-    const [cfgRow] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "cod_confirmation"));
-    const cfg = (cfgRow?.value as { reminderMinutes?: number; expiryMinutes?: number } | undefined) ?? {};
-    await db.insert(schema.codConfirmations).values({
-      id: newId("cod"), orgId, orderId: id, status: "pending",
-      reminderAt: new Date(Date.now() + (cfg.reminderMinutes ?? 120) * 60_000), expiresAt: new Date(Date.now() + (cfg.expiryMinutes ?? 1440) * 60_000),
-    });
-    await db.insert(schema.jobs).values({ id: newId("job"), queue: "cod.send", payload: { orderId: id }, dedupeKey: `cod.send:${id}` });
-  }
+  if (codHold) await startCodHold(orgId, id);
   return { ok: true as const, orderId: id, orderNumber, codHold, origin: wh.pincode };
+}
+
+/** WhatsApp COD confirmation hold (reminder + expiry + send job). */
+async function startCodHold(orgId: string, id: string) {
+  const db = await getDb();
+  const [cfgRow] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "cod_confirmation"));
+  const cfg = (cfgRow?.value as { reminderMinutes?: number; expiryMinutes?: number } | undefined) ?? {};
+  await db.insert(schema.codConfirmations).values({
+    id: newId("cod"), orgId, orderId: id, status: "pending",
+    reminderAt: new Date(Date.now() + (cfg.reminderMinutes ?? 120) * 60_000), expiresAt: new Date(Date.now() + (cfg.expiryMinutes ?? 1440) * 60_000),
+  }).onConflictDoNothing();
+  await db.insert(schema.jobs).values({ id: newId("job"), queue: "cod.send", payload: { orderId: id }, dedupeKey: `cod.send:${id}` }).onConflictDoNothing();
+}
+
+/**
+ * Edit a draft or an unbooked order (Create Shipment → Save / Save as Draft / Save & Assign Courier).
+ * Only orders without a live shipment can change; the pickup snapshot and packages are replaced.
+ */
+export async function updateOrder(orgId: string, orderId: string, input: z.infer<typeof OrderInput>) {
+  const db = await getDb();
+  const [o] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, orderId), eq(schema.orders.orgId, orgId)));
+  if (!o) return { ok: false as const, message: "Order not found" };
+  if (!["draft", "ready", "booking_failed"].includes(o.status)) return { ok: false as const, message: "This order can no longer be edited" };
+  const [wh] = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.id, input.warehouseId), eq(schema.warehouses.orgId, orgId)));
+  if (!wh || !wh.active) return { ok: false as const, message: "Choose an active pickup address" };
+  const orderNumber = input.orderNumber ?? o.orderNumber;
+  if (orderNumber !== o.orderNumber) {
+    const dup = await db.select({ id: schema.orders.id }).from(schema.orders).where(and(eq(schema.orders.orgId, orgId), eq(schema.orders.orderNumber, orderNumber)));
+    if (dup.length) return { ok: false as const, message: `Order ID ${orderNumber} already exists` };
+  }
+  const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
+  const codHold = input.saveAs !== "draft" && input.paymentType === "cod" && input.direction === "forward" && !!codSetting?.enabled;
+  await db.update(schema.orders).set({
+    orderNumber, mode: input.mode, direction: input.direction, paymentType: input.paymentType,
+    status: input.saveAs === "draft" ? "draft" : codHold ? "cod_hold" : "ready",
+    codAmountPaise: input.paymentType === "cod" ? rupeesToPaise(input.codAmountRupees) : 0,
+    declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, pickupSnapshot: pickupSnapshot(wh), consignee: input.consignee,
+    products: input.products.map((p) => ({ name: p.name, sku: p.sku, qty: p.qty, unitPrice: rupeesToPaise(p.unitPriceRupees), hsn: p.hsn })),
+    invoiceNumber: input.invoiceNumber, ewayBill: input.ewayBill || null, buyerGstin: input.buyerGstin || null,
+  }).where(eq(schema.orders.id, o.id));
+  await db.delete(schema.packages).where(eq(schema.packages.orderId, o.id));
+  for (const p of input.packages) {
+    await db.insert(schema.packages).values({ id: newId("pkg"), orderId: o.id, count: p.count, lengthMm: Math.round(p.lengthCm * 10), breadthMm: Math.round(p.breadthCm * 10), heightMm: Math.round(p.heightCm * 10), actualWeightGrams: Math.round(p.weightKg * 1000) });
+  }
+  if (codHold) await startCodHold(orgId, o.id);
+  return { ok: true as const, orderId: o.id, orderNumber, codHold, origin: wh.pincode };
 }

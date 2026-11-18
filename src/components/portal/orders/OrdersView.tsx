@@ -40,7 +40,7 @@ function bookingBadge(r: OrderRow): { text: string; cls: string } {
   const s = r.shipment;
   if (r.orderStatus === "cancelled" || s?.status === "cancelled") return { text: "Cancelled", cls: "red" };
   if (!s || s.bookingStatus === "failed") {
-    const m: Record<string, [string, string]> = { draft: ["New", "gray"], ready: ["Ready to Ship", "navy"], cod_hold: ["COD Hold", "yellow"], booking_failed: ["Booking Failed", "red"], booking: ["Booking…", "orange"], needs_reconcile: ["Confirming with courier", "orange"] };
+    const m: Record<string, [string, string]> = { draft: ["Draft", "gray"], ready: ["Ready — assign courier", "navy"], cod_hold: ["COD Hold", "yellow"], booking_failed: ["Booking Failed", "red"], booking: ["Booking…", "orange"], needs_reconcile: ["Confirming with courier", "orange"] };
     const [text, cls] = m[r.orderStatus] ?? ["New", "gray"];
     return { text, cls };
   }
@@ -470,7 +470,7 @@ function RowMenu({ r, open, onLabel, onCancel, onArchive, onMenu }: { r: OrderRo
 
 function TrackingCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void }) {
   const s = r.shipment;
-  if (!s) return r.orderStatus === "cancelled" ? <span className="small muted">Order cancelled</span> : <div className="small"><span className="muted">Not shipped yet</span><div><Link className="ov-link" href={`/portal/orders/${r.id}/`}>Ship Now →</Link></div></div>;
+  if (!s) return r.orderStatus === "cancelled" ? <span className="small muted">Order cancelled</span> : <div className="small"><span className="muted">Not shipped yet</span><div><Link className="ov-link" href={r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`}>{r.orderStatus === "draft" ? "Edit draft →" : "Assign Courier →"}</Link></div></div>;
   const logo = carrierLogo(s.carrierCode);
   return (
     <div>
@@ -580,7 +580,7 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
           <div className="ov-track">
             {s?.awb
               ? <button type="button" className="ov-btn" onClick={() => open({ kind: "track", shipmentId: s.id })}><Truck size={15} aria-hidden /> Track</button>
-              : <Link className="ov-btn" href={`/portal/orders/${r.id}/`} style={{ background: "var(--ov-orange)" }}>{s || r.orderStatus === "cancelled" ? "View" : "Ship Now"}</Link>}
+              : <Link className="ov-btn" href={!s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`} style={{ background: "var(--ov-orange)" }}>{s || r.orderStatus === "cancelled" ? "View" : r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
             <RowMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onArchive={onArchive} onMenu={onMenu} />
           </div>
           {busy === `cancel:${r.id}` && <div className="tiny muted" role="status">Cancelling…</div>}
@@ -618,7 +618,7 @@ function MobileCard({ r, selected, onToggle, open, defaultLabel, codLabel, onLab
       </div>
       <div className="btns">
         {s?.awb ? <button type="button" className="ov-btn navy" onClick={() => open({ kind: "track", shipmentId: s.id })}><Truck size={16} aria-hidden /> Track</button>
-          : <Link className="ov-btn orange" href={`/portal/orders/${r.id}/`}>{s || r.orderStatus === "cancelled" ? "View order" : "Ship Now"}</Link>}
+          : <Link className="ov-btn orange" href={!s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`}>{s || r.orderStatus === "cancelled" ? "View order" : r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
         {s?.awb && fmt && <button type="button" className="ov-btn ghost" onClick={() => onLabel(fmt.key)} disabled={busy === "labels"}><Download size={16} aria-hidden /> Download Label</button>}
       </div>
       <details>

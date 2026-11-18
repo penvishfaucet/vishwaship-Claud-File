@@ -60,6 +60,7 @@ export function tabSql(): SQL<string> {
   return sql<string>`case
     when ${O.archivedAt} is not null then 'archive'
     when ${O.status} = 'cancelled' then 'other'
+    when ${S.id} is null and ${O.status} = 'draft' then 'drafts'
     when ${S.id} is null or ${S.bookingStatus} = 'failed' then 'new'
     when ${S.status} = 'cancelled' then 'other'
     when ${S.status} = 'booked' then case when ${S.pickupStatus} = 'not_scheduled' then 'courier_assigned' else 'pickups' end
@@ -115,7 +116,7 @@ export async function tabCounts(orgId: string, f: OrderFilters): Promise<Record<
   const by = Object.fromEntries(rows.map((r) => [r.tab, Number(r.n)]));
   const sum = (k: string[]) => k.reduce((s, x) => s + (by[x] ?? 0), 0);
   return {
-    new: sum(["new"]), courier_assigned: sum(["courier_assigned"]), pickups: sum(["pickups"]),
+    drafts: sum(["drafts"]), new: sum(["new"]), courier_assigned: sum(["courier_assigned"]), pickups: sum(["pickups"]),
     in_transit: sum(["in_transit"]), out_for_delivery: sum(["out_for_delivery"]), delivered: sum(["delivered"]),
     ndr: sum(["ndr"]), rto_in_transit: sum(["rto_in_transit"]), rto_delivered: sum(["rto_delivered"]),
     all: Object.entries(by).filter(([k]) => k !== "archive").reduce((s, [, n]) => s + n, 0), archive: sum(["archive"]),

@@ -73,6 +73,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           </div>
         </section>
       )}
+      {!shipment && order.status === "draft" && <section className="card mb16 row between wrap" style={{ padding: 16, gap: 8 }}><span><b>Draft</b> <span className="small muted">— finish the details, then save it to assign a courier.</span></span><Link className="btn btn-orange btn-sm" href={`/portal/orders/new/?draft=${order.id}`}>Edit draft</Link></section>}
       {!shipment && ["ready", "booking_failed", "cod_hold"].includes(order.status) && <BookExisting orderId={order.id} held={order.status === "cod_hold"} autoAssign={await hasFeature(ctx.org.id, "auto_assign")} />}
       <div className="mb12"><span className="small b" style={{ marginRight: 8 }}>Tags</span><OrderTagsEditor orderId={order.id} all={tagList} initial={(await tagsForOrders([order.id])).get(order.id)?.map((t) => t.id) ?? []} /></div>
       {order.source !== "manual" && <p className="tiny muted mb8">Source: {order.source}{order.externalOrderId ? ` · store order ${order.externalOrderId}` : ""}</p>}

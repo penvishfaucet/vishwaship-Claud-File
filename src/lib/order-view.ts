@@ -5,13 +5,13 @@
  */
 
 export type TabKey =
-  | "new" | "courier_assigned" | "pickups"
+  | "drafts" | "new" | "courier_assigned" | "pickups"
   | "in_transit" | "out_for_delivery" | "delivered"
   | "ndr" | "rto_in_transit" | "rto_delivered"
   | "all" | "archive";
 
 export const TAB_GROUPS: Array<{ title: string; tabs: Array<{ key: TabKey; label: string }> }> = [
-  { title: "Shipment Booking", tabs: [{ key: "new", label: "New" }, { key: "courier_assigned", label: "Courier Assigned" }, { key: "pickups", label: "Pickups & Manifests" }] },
+  { title: "Shipment Booking", tabs: [{ key: "drafts", label: "Drafts" }, { key: "new", label: "New" }, { key: "courier_assigned", label: "Courier Assigned" }, { key: "pickups", label: "Pickups & Manifests" }] },
   { title: "Shipment Journey", tabs: [{ key: "in_transit", label: "In Transit" }, { key: "out_for_delivery", label: "Out For Delivery" }, { key: "delivered", label: "Delivered" }] },
   { title: "NDR Exceptions", tabs: [{ key: "ndr", label: "NDR" }, { key: "rto_in_transit", label: "RTO In-Transit" }, { key: "rto_delivered", label: "RTO Delivered" }] },
   { title: "", tabs: [{ key: "all", label: "All" }, { key: "archive", label: "Archive" }] },
@@ -39,6 +39,7 @@ export function tabOf(o: { archived: boolean; orderStatus: string; shipment: nul
   if (o.archived) return "archive";
   const s = o.shipment;
   if (o.orderStatus === "cancelled") return "other";
+  if (!s && o.orderStatus === "draft") return "drafts"; // saved as draft: not ready for a courier yet
   if (!s || s.bookingStatus === "failed") return "new"; // a failed booking can be booked again
   if (s.status === "cancelled") return "other";
   if (s.status === "booked") return s.pickupStatus === "not_scheduled" ? "courier_assigned" : "pickups";
@@ -46,7 +47,7 @@ export function tabOf(o: { archived: boolean; orderStatus: string; shipment: nul
 }
 
 /** Legacy ?group= links (dashboard, bulk upload) → new tabs. */
-export const LEGACY_GROUP: Record<string, TabKey> = { drafts: "new", pickup: "pickups", transit: "in_transit", ofd: "out_for_delivery", delivered: "delivered", ndr: "ndr", rto: "rto_in_transit" };
+export const LEGACY_GROUP: Record<string, TabKey> = { drafts: "drafts", pickup: "pickups", transit: "in_transit", ofd: "out_for_delivery", delivered: "delivered", ndr: "ndr", rto: "rto_in_transit" };
 
 // ---------------------------------------------------------------- WhatsApp COD confirmation
 

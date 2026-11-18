@@ -254,3 +254,47 @@ ol.stepper li+li::before{content:"";width:28px;height:1px;background:var(--line)
 @media (max-width:640px){.pickup-grid{grid-template-columns:1fr!important}.pickup-actions .btn{flex:1 1 100%;justify-content:center;min-height:44px}}
 .show-xs{display:none!important}
 @media (max-width:560px){.show-xs{display:grid!important}.hide-xs{display:none!important}.top2{gap:6px}.top2 .hq{padding:8px 10px}.top2 .dropdown{right:0;left:auto}.top2 .dropdown.wide{position:fixed;left:12px;right:12px;top:58px;max-width:none;min-width:0}}
+/* Create Shipment: step navigation and save actions */
+.create-nav{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+.create-nav-r{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+ol.stepper li .step-link{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:0;font:inherit;color:var(--navy);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+@media (max-width:600px){
+  .create-nav{gap:8px}
+  .create-nav>.btn{flex:0 0 auto}
+  .create-nav-r{flex:1 1 100%;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .create-nav-r .btn{width:100%;justify-content:center;min-height:44px;padding-left:8px;padding-right:8px}
+  .create-nav-r .btn-orange{grid-column:1/-1}
+}
+
+/* ---------- Portal + Admin colour system (2026-11-18): no near-black surfaces ----------
+   One set of tokens for both shells. Navy is a mid brand blue (not #0b1f3a), text a soft ink,
+   backgrounds a cool light grey; orange stays the single action colour. */
+.shell{
+  --navy:#22467f; --navy-2:#2d5292; --navy-3:#3d62a3;
+  --text:#1e2a45; --muted:#5f6b80; --muted-2:#8d97a8;
+  --bg:#f5f7fb; --card:#ffffff; --line:#e2e7f0; --line-2:#edf1f7; --gray-soft:#eef2f8;
+  background:var(--bg); color:var(--text);
+}
+html:not(.dark) .shell .side a.item.on,html:not(.dark) .shell .side a.item.on:hover{color:#fff!important}
+html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
+@media (max-width:600px){
+  .create-nav{display:grid;grid-template-columns:1fr 1fr;align-items:stretch}
+  .create-nav>span:empty{display:none}
+  .create-nav-back{grid-column:1/2;min-height:44px}
+  .create-nav-r{grid-column:1/-1}
+  .create-nav:has(.create-nav-back) .create-nav-r{grid-column:1/-1}
+}
+@media (max-width:600px){
+  .create-nav-r .btn-orange{grid-column:auto}
+  .create-nav-r:has(> .btn:nth-child(3)) .btn-orange{grid-column:1/-1}
+}
+/* mobile: one 2-column grid — Back | Save as Draft, Save | (primary spans) — keeps the bar short */
+@media (max-width:600px){
+  .create-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .create-nav-r{display:contents}
+  .create-nav .btn{width:100%;justify-content:center;min-height:44px;padding-left:8px;padding-right:8px}
+  .create-nav-back{grid-column:auto}
+  .create-nav-r .btn-orange{grid-column:auto}
+  .create-nav:has(.create-nav-back) .create-nav-r .btn-orange{grid-column:1/-1}
+}
+@media (max-width:600px){ .create-nav:has(.create-nav-back) .create-nav-r .btn-orange{grid-column:auto} }

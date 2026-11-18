@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { and, asc, eq } from "drizzle-orm";
-import { CreateShipment, type Library } from "@/components/portal/CreateShipment";
+import { CreateShipment, type DraftOrder, type Library } from "@/components/portal/CreateShipment";
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
 import { getSetting } from "@/server/quotes/service";
@@ -14,13 +14,30 @@ function parsePk(v?: string) {
   return out.length ? out : undefined;
 }
 
-export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string; pay?: string; cod?: string; pk?: string; qc?: string; qs?: string; qt?: string }> }) {
+export default async function NewOrderPage({ searchParams }: { searchParams: Promise<{ quick?: string; direction?: string; dest?: string; weight?: string; mode?: string; pay?: string; cod?: string; pk?: string; qc?: string; qs?: string; qt?: string; draft?: string }> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const db = await getDb();
   const warehouses = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, ctx.org.id), eq(schema.warehouses.active, true)));
   const threshold = await getSetting<number>("b2b_threshold_grams", 10_000);
-  const otpRequired = await pickupOtpRequired(); // Admin → Warehouses switch; off = pickup addresses usable without OTP
+  const otpRequired = await pickupOtpRequired();
+  // Orders → Drafts → Edit draft (tenant-scoped; only orders that are not booked yet)
+  let draft: DraftOrder | undefined;
+  if (sp.draft && /^[A-Za-z0-9_-]{4,64}$/.test(sp.draft)) {
+    const [o] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, sp.draft), eq(schema.orders.orgId, ctx.org.id)));
+    if (o && ["draft", "ready", "booking_failed"].includes(o.status)) {
+      const pk = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
+      const cn = o.consignee as Record<string, string>;
+      const rs = (paise: number) => (paise ? String(paise / 100) : "");
+      draft = {
+        id: o.id, orderNumber: o.orderNumber, warehouseId: o.warehouseId ?? "", mode: o.mode === "B2B" ? "B2B" : "B2C", payment: (["prepaid", "cod", "fod"].includes(o.paymentType) ? o.paymentType : "prepaid") as DraftOrder["payment"],
+        cod: rs(o.codAmountPaise), declared: rs(o.declaredValuePaise), invoice: o.invoiceNumber ?? "", eway: o.ewayBill ?? "",
+        consignee: { name: cn.name ?? "", mobile: cn.mobile ?? "", email: cn.email ?? "", line1: cn.line1 ?? "", line2: cn.line2 ?? "", pincode: cn.pincode ?? "", city: cn.city ?? "", state: cn.state ?? "" },
+        products: (o.products as Array<{ name: string; qty: number; unitPrice: number; hsn?: string }>).map((x) => ({ name: x.name === "Item" && o.status === "draft" ? "" : x.name, qty: String(x.qty), price: rs(x.unitPrice), hsn: x.hsn ?? "" })),
+        pkgs: pk.map((x) => ({ count: String(x.count), l: String(x.lengthMm / 10), b: String(x.breadthMm / 10), h: String(x.heightMm / 10), w: String(x.actualWeightGrams / 1000) })),
+      };
+    }
+  } // Admin → Warehouses switch; off = pickup addresses usable without OTP
   const [buyers, products, presets, tags] = await Promise.all([
     db.select().from(schema.buyers).where(eq(schema.buyers.orgId, ctx.org.id)).orderBy(asc(schema.buyers.name)).limit(500),
     db.select().from(schema.products).where(and(eq(schema.products.orgId, ctx.org.id), eq(schema.products.active, true))).orderBy(asc(schema.products.name)).limit(500),
@@ -37,7 +54,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
     <>
       <div className="page-h">
         <div>
-          <h1>{sp.direction === "reverse" ? "Create return" : sp.quick ? "Quick add" : "Create shipment"}</h1>
+          <h1>{draft ? `Edit ${draft.orderNumber}` : sp.direction === "reverse" ? "Create return" : sp.quick ? "Quick add" : "Create shipment"}</h1>
           <p className="small muted" style={{ margin: "4px 0 0" }}>Domestic shipments across India</p>
         </div>
         <Link className="btn btn-outline" href="/portal/orders/">Cancel</Link>
@@ -52,7 +69,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
           direction={sp.direction === "reverse" ? "reverse" : "forward"}
           initial={{ destination: sp.dest, weightKg: sp.weight, mode: sp.mode === "B2B" ? "B2B" : sp.mode === "B2C" ? "B2C" : undefined,
             payment: sp.pay === "cod" || sp.pay === "fod" || sp.pay === "prepaid" ? sp.pay : undefined, codAmount: sp.cod && /^\d{1,7}(\.\d{1,2})?$/.test(sp.cod) ? sp.cod : undefined,
-            packages: parsePk(sp.pk),
+            packages: parsePk(sp.pk), draft,
             calc: sp.qc && sp.qs && /^[0-9]{1,9}$/.test(sp.qt ?? "") ? { carrierCode: sp.qc.slice(0, 60), serviceName: sp.qs.slice(0, 120), totalPaise: Number(sp.qt) } : undefined }}
           library={library}
         />

@@ -26,7 +26,15 @@ const PRESETS: Array<{ label: string; pkg: Pkg }> = [
 
 const STEPS = ["Addresses", "Packages", "Courier & Payment"] as const;
 
-export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" | "B2C"; payment?: "prepaid" | "cod" | "fod"; codAmount?: string; packages?: Pkg[]; calc?: { carrierCode: string; serviceName: string; totalPaise: number } }; library?: Library }) {
+/** A saved draft / unbooked order loaded back into the form (Orders → Drafts → Edit draft). */
+export type DraftOrder = {
+  id: string; orderNumber: string; warehouseId: string; mode: "B2C" | "B2B"; payment: "prepaid" | "cod" | "fod"; cod: string; declared: string; invoice: string; eway: string;
+  consignee: { name: string; mobile: string; email: string; line1: string; line2: string; pincode: string; city: string; state: string };
+  products: Prod[]; pkgs: Pkg[];
+};
+
+export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b2bThresholdGrams: number; direction: "forward" | "reverse"; initial: { destination?: string; weightKg?: string; mode?: "B2B" | "B2C"; payment?: "prepaid" | "cod" | "fod"; codAmount?: string; packages?: Pkg[]; calc?: { carrierCode: string; serviceName: string; totalPaise: number }; draft?: DraftOrder }; library?: Library }) {
+  const dr = props.initial.draft;
   const lib = props.library ?? { buyers: [], products: [], presets: [], tags: [] };
   const myPresets: Array<{ label: string; pkg: Pkg }> = lib.presets.map((p) => ({ label: `${p.name} ${p.l}×${p.b}×${p.h}`, pkg: { count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(Math.max(p.tareKg, 0.1)) } }));
   const allPresets = [...myPresets, ...PRESETS];
@@ -46,24 +54,25 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const latestPin = useRef("");
   const latestMobile = useRef("");
   const [step, setStep] = useState(0);
-  const [warehouseId, setWarehouseId] = useState(def.id);
+  const [warehouseId, setWarehouseId] = useState(dr && props.warehouses.some((w) => w.id === dr.warehouseId) ? dr.warehouseId : def.id);
   const [pickupDate, setPickupDate] = useState(new Date(Date.now() + 86400_000).toISOString().slice(0, 10));
-  const [c, setC] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: props.initial.destination ?? "", city: "", state: "" });
-  const [orderNumber, setOrderNumber] = useState("");
-  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">(props.initial.payment ?? "prepaid");
+  const [c, setC] = useState(dr ? dr.consignee : { name: "", mobile: "", email: "", line1: "", line2: "", pincode: props.initial.destination ?? "", city: "", state: "" });
+  const [orderNumber, setOrderNumber] = useState(dr?.orderNumber ?? "");
+  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">(dr?.payment ?? props.initial.payment ?? "prepaid");
   const [notices, setNotices] = useState<string[]>([]);
-  const [cod, setCod] = useState(props.initial.codAmount ?? "");
-  const [declared, setDeclared] = useState("");
-  const [invoice, setInvoice] = useState("");
-  const [eway, setEway] = useState("");
-  const [products, setProducts] = useState<Prod[]>([{ name: "", qty: "1", price: "", hsn: "" }]);
-  const [pkgs, setPkgs] = useState<Pkg[]>(props.initial.packages?.length ? props.initial.packages : [defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
-  const [modeOverride, setModeOverride] = useState<"B2C" | "B2B" | null>(props.initial.mode ?? null);
+  const [cod, setCod] = useState(dr?.cod ?? props.initial.codAmount ?? "");
+  const [declared, setDeclared] = useState(dr?.declared ?? "");
+  const [invoice, setInvoice] = useState(dr?.invoice ?? "");
+  const [eway, setEway] = useState(dr?.eway ?? "");
+  const [products, setProducts] = useState<Prod[]>(dr?.products.length ? dr.products : [{ name: "", qty: "1", price: "", hsn: "" }]);
+  const [pkgs, setPkgs] = useState<Pkg[]>(dr?.pkgs.length ? dr.pkgs : props.initial.packages?.length ? props.initial.packages : [defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
+  const [modeOverride, setModeOverride] = useState<"B2C" | "B2B" | null>(dr?.mode ?? props.initial.mode ?? null);
   const [offers, setOffers] = useState<OfferView[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(dr?.id ?? null);
+  const [saved, setSaved] = useState<null | { id: string; as: "draft" | "ready"; codHold: boolean }>(null);
   const [done, setDone] = useState<{ awb: string | null; shipmentId: string; state: string } | null>(null);
 
   const wh = whs.find((w) => w.id === warehouseId) ?? whs[0];
@@ -196,6 +205,34 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
+  /** Create or update the order. "draft" → Drafts tab; "ready" → New tab, waiting for a courier. */
+  async function saveOrder(as: "draft" | "ready"): Promise<{ orderId: string; codHold: boolean }> {
+    const named = products.filter((p) => p.name.trim());
+    const body = {
+      orderNumber: orderNumber.trim() || undefined, mode, direction: props.direction, paymentType: payment, saveAs: as,
+      codAmountRupees: payment === "cod" ? Number(cod) || 0 : 0, declaredValueRupees: declaredValue, warehouseId,
+      consignee: { ...c, mobile: c.mobile, email: c.email || undefined, line2: c.line2 || undefined },
+      products: (as === "draft" && !named.length ? [{ name: "Item", qty: "1", price: "", hsn: "" }] : as === "draft" ? named : products)
+        .map((p) => ({ name: p.name, qty: Number(p.qty) || 1, unitPriceRupees: Number(p.price) || 0, hsn: p.hsn || undefined })),
+      packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
+      invoiceNumber: invoice || undefined, ewayBill: eway || undefined, tagIds, saveBuyer,
+    };
+    const r = await fetch(orderId ? `/api/portal/orders/${orderId}` : "/api/portal/orders", { method: orderId ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error?.issues?.[0]?.message ?? j.error?.message ?? "Could not save the order");
+    setOrderId(j.orderId);
+    return { orderId: j.orderId as string, codHold: !!j.codHold };
+  }
+
+  /** Save as Draft (address step done) or Save (all details valid, courier assigned later from Orders → New). */
+  async function saveOnly(as: "draft" | "ready") {
+    const e = as === "draft" ? validateStep(0) : validateStep(0) ?? validateStep(1);
+    if (e) { setErr(e); if (as === "ready" && !validateStep(0)) setStep(1); return; }
+    setBusy(true); setErr(null);
+    try { const sv = await saveOrder(as); setSaved({ id: sv.orderId, as, codHold: sv.codHold }); }
+    catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
+  }
+
   async function book() {
     if (!chosen) return;
     if (new Date(chosen.expiresAt).getTime() < Date.now()) { setErr("This quote expired. Refreshing rates…"); await fetchQuotes(); return; }
@@ -203,22 +240,9 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     if (youPay > props.walletPaise) { setErr(`Insufficient wallet balance. You need ${formatINR(youPay - props.walletPaise)} more.`); return; }
     setBusy(true); setErr(null);
     try {
-      let id = orderId;
-      if (!id) {
-        const r = await fetch("/api/portal/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-          orderNumber: orderNumber.trim() || undefined, mode, direction: props.direction, paymentType: payment,
-          codAmountRupees: payment === "cod" ? Number(cod) : 0, declaredValueRupees: declaredValue, warehouseId,
-          consignee: { ...c, mobile: c.mobile, email: c.email || undefined, line2: c.line2 || undefined },
-          products: products.map((p) => ({ name: p.name, qty: Number(p.qty), unitPriceRupees: Number(p.price) || 0, hsn: p.hsn || undefined })),
-          packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
-          invoiceNumber: invoice || undefined, ewayBill: eway || undefined, tagIds, saveBuyer,
-        }) });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error?.message ?? j.error?.issues?.[0]?.message ?? "Could not create order");
-        id = j.orderId as string;
-        setOrderId(id);
-        if (j.codHold) { setDone({ awb: null, shipmentId: "", state: "cod_hold" }); return; }
-      }
+      const sv = await saveOrder("ready");
+      const id = sv.orderId;
+      if (sv.codHold) { setDone({ awb: null, shipmentId: "", state: "cod_hold" }); return; }
       let r = await fetch(`/api/portal/orders/${id}/book`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ quoteId: chosen.quoteId }) });
       let j = await r.json();
       if (j.error?.code === "price_changed") {
@@ -233,6 +257,22 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
       if (!r.ok) throw new Error(j.error?.message ?? "Booking failed");
       setDone({ awb: j.awb, shipmentId: j.shipmentId, state: j.state });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+
+  if (saved) {
+    return (
+      <div className="card" style={{ padding: 28, maxWidth: 640 }} role="status">
+        <CheckCircle2 size={36} color="var(--green)" />
+        <h2 style={{ fontSize: 20 }}>{saved.as === "draft" ? "Saved as draft" : saved.codHold ? "Order saved — waiting for buyer COD confirmation" : "Order saved — courier not assigned yet"}</h2>
+        <p className="muted">{saved.as === "draft" ? "Find it under Orders → Drafts. Open it any time to finish and assign a courier." : saved.codHold ? "We sent the buyer a WhatsApp Confirm / Cancel message. You can assign a courier once they confirm." : "It is in Orders → New. Assign a courier there when you are ready; it then moves to Courier Assigned and Pickups & Manifests."}</p>
+        <div className="row wrap mt16" style={{ gap: 8 }}>
+          {saved.as === "draft"
+            ? <><Link className="btn btn-orange" href={`/portal/orders/new/?draft=${saved.id}`}>Continue editing</Link><Link className="btn btn-outline" href="/portal/orders/?tab=drafts">Open Drafts</Link></>
+            : <><Link className="btn btn-orange" href={`/portal/orders/${saved.id}/`}>Assign courier now</Link><Link className="btn btn-outline" href="/portal/orders/?tab=new">Go to Orders → New</Link></>}
+          <Link className="btn btn-outline" href="/portal/orders/new/">Create another</Link>
+        </div>
+      </div>
+    );
   }
 
   if (done) {
@@ -286,8 +326,9 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
   return (
     <div>
       <ol className="stepper mb16" aria-label="Steps">
-        {STEPS.map((s, i) => <li key={s} className={i === step ? "cur" : i < step ? "done" : ""} aria-current={i === step ? "step" : undefined}><span className="n">{i + 1}</span>{s}</li>)}
+        {STEPS.map((s, i) => <li key={s} className={i === step ? "cur" : i < step ? "done" : ""} aria-current={i === step ? "step" : undefined}>{i < step && !busy ? <button type="button" className="step-link" onClick={() => { setErr(null); setStep(i); }} aria-label={`Go back to ${s}`}><span className="n">{i + 1}</span>{s}</button> : <><span className="n">{i + 1}</span>{s}</>}</li>)}
       </ol>
+      {step > 0 && <button type="button" className="btn btn-sm btn-outline mb12 create-back" onClick={() => { setErr(null); setStep((x) => Math.max(0, x - 1)); }} disabled={busy}>← Back to {STEPS[step - 1]}</button>}
       <div className="split-2-1 create-grid" style={{ gap: 16, alignItems: "start" }}>
         <div className="col" style={{ gap: 16 }}>
           {step === 0 && (
@@ -501,11 +542,15 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
             </section>
           )}
           {err && <p className="err" role="alert">{err}</p>}
-          <div className="row between create-nav">
-            <button type="button" className="btn btn-outline" onClick={() => { setErr(null); setStep((s) => Math.max(0, s - 1)); }} disabled={step === 0 || busy}>Back</button>
-            {step < 2
-              ? <button type="button" className="btn btn-orange" onClick={next} disabled={busy}>{busy ? "Please wait…" : "Next"}</button>
-              : <button type="button" className="btn btn-orange" onClick={book} disabled={busy || !chosen}>{busy ? "Booking…" : chosen ? `Book Shipment · ${formatINR(chosen.payer?.sender ?? chosen.total)}${chosen.payer && chosen.payer.receiver > 0 ? " (FOD)" : ""}` : "Book Shipment"}</button>}
+          <div className="create-nav">
+            {step > 0 ? <button type="button" className="btn btn-outline create-nav-back" onClick={() => { setErr(null); setStep((x) => Math.max(0, x - 1)); }} disabled={busy}>Back</button> : <span />}
+            <div className="create-nav-r">
+              <button type="button" className="btn btn-outline" onClick={() => saveOnly("draft")} disabled={busy}>Save as Draft</button>
+              {step > 0 && <button type="button" className="btn btn-navy" onClick={() => saveOnly("ready")} disabled={busy}>Save</button>}
+              {step === 0 && <button type="button" className="btn btn-orange" onClick={next} disabled={busy}>{busy ? "Please wait…" : "Next"}</button>}
+              {step === 1 && <button type="button" className="btn btn-orange" onClick={next} disabled={busy}>{busy ? "Please wait…" : "Save & Assign Courier"}</button>}
+              {step === 2 && <button type="button" className="btn btn-orange" onClick={book} disabled={busy || !chosen}>{busy ? "Booking…" : chosen ? `Save & Assign · ${formatINR(chosen.payer?.sender ?? chosen.total)}${chosen.payer && chosen.payer.receiver > 0 ? " (FOD)" : ""}` : "Save & Assign Courier"}</button>}
+            </div>
           </div>
         </div>
         <div className="only-desktop">{summary}</div>
