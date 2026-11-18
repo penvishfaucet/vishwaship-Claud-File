@@ -3,16 +3,25 @@ import { and, count, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
 
+/**
+ * Courier partners reject special characters in warehouse names and addresses ("Special characters are not
+ * allowed in address title / address line one"). Pickup addresses therefore accept only English letters,
+ * numbers, spaces and commas, so every new address can be registered with every courier automatically.
+ */
+export const SAFE_TEXT = /^[A-Za-z0-9 ,]*$/;
+const SAFE_MSG = "Use only letters, numbers, spaces and commas — no special characters like & - _ / # . ( )";
+const safe = (min: number, max: number) => z.string().trim().min(min).max(max).regex(SAFE_TEXT, SAFE_MSG);
+
 export const WarehouseInput = z.object({
-  label: z.string().trim().min(2).max(60),
-  contactName: z.string().trim().min(2).max(80),
+  label: safe(2, 60),
+  contactName: safe(2, 80),
   email: z.string().trim().email("Enter a valid email").max(120).optional().or(z.literal("")),
   mobile: z.string().transform((s) => s.replace(/\D/g, "").replace(/^91(?=\d{10}$)/, "")).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit mobile")),
-  line1: z.string().trim().min(5).max(200),
-  line2: z.string().trim().max(200).optional(),
+  line1: safe(5, 200),
+  line2: safe(0, 200).optional(),
   pincode: z.string().regex(/^[1-9]\d{5}$/, "PIN code must be 6 digits"),
-  city: z.string().trim().min(2).max(60),
-  state: z.string().trim().min(2).max(60),
+  city: safe(2, 60),
+  state: safe(2, 60),
 });
 
 /** Next short display code (W1001, W1002…), unique across the platform. */

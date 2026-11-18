@@ -24,7 +24,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
 
   async function save(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null);
-    const r = await fetch(editing ? `/api/portal/warehouses/${editing.id}` : "/api/portal/warehouses", { method: editing ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(f) });
+    const r = await fetch(editing ? `/api/portal/warehouses/${editing.id}` : "/api/portal/warehouses", { method: editing ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, SAFE_KEYS.includes(k) ? clean(String(v)).trim() : v]))) });
     const j = await r.json(); setBusy(false);
     if (!r.ok) { setErr(j.error?.issues?.[0]?.message ?? j.error?.message ?? "Could not save"); return; }
     if (editing && !j.mobileChanged) { onDone ? onDone() : router.refresh(); return; }
@@ -71,7 +71,10 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
       </div>
     );
   }
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  // Courier partners reject special characters in pickup addresses: only letters, numbers, spaces and commas are kept.
+  const SAFE_KEYS = ["label", "contactName", "line1", "line2", "city", "state"];
+  const clean = (v: string) => v.replace(/&/g, " and ").replace(/[^A-Za-z0-9 ,]/g, "").replace(/ {2,}/g, " ");
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: SAFE_KEYS.includes(k) ? clean(e.target.value) : e.target.value });
   return (
     <form className="card mb16" style={{ padding: 16 }} onSubmit={save}>
       <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>{editing ? `Edit “${editing.label}”` : "New pickup address"}</h2>
@@ -81,7 +84,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
         <div className="field"><label htmlFor="a-c">Contact name</label><input id="a-c" className="input" required value={f.contactName} onChange={set("contactName")} /></div>
         <div className="field"><label htmlFor="a-e">Email (optional)</label><input id="a-e" className="input" type="email" value={f.email} onChange={set("email")} /></div>
         <div className="field"><label htmlFor="a-m">Pickup mobile</label><input id="a-m" className="input" required inputMode="tel" value={f.mobile} onChange={set("mobile")} /></div>
-        <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="a-1">Address</label><input id="a-1" className="input" required value={f.line1} onChange={set("line1")} /></div>
+        <div className="field" style={{ gridColumn: "span 2" }}><label htmlFor="a-1">Address</label><input id="a-1" className="input" required value={f.line1} onChange={set("line1")} aria-describedby="a-1-h" /><span id="a-1-h" className="tiny muted">Only letters, numbers, spaces and commas — courier partners reject &amp; - _ / # . ( )</span></div>
         <div className="field"><label htmlFor="a-p">PIN code</label><input id="a-p" className="input" required inputMode="numeric" maxLength={6} value={f.pincode} onChange={(e) => {
           const v = e.target.value.replace(/\D/g, "").slice(0, 6);
           setF((x) => ({ ...x, pincode: v, ...(v !== x.pincode ? { city: "", state: "" } : {}) }));
@@ -90,7 +93,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
           fetch(`/api/portal/pincode/${v}`).then((r) => (r.ok ? r.json() : null)).then((j) => {
             if (pinRef.current !== v) return; // a newer PIN was typed
             const g = j ?? guessPincode(v);
-            setF((x) => ({ ...x, city: g.city || x.city, state: g.state || x.state }));
+            setF((x) => ({ ...x, city: clean(g.city || x.city).trim(), state: clean(g.state || x.state).trim() }));
           }).catch(() => undefined);
         }} /></div>
         <div className="field"><label htmlFor="a-ci">City</label><input id="a-ci" className="input" required value={f.city} onChange={set("city")} /></div>
