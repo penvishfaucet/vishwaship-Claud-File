@@ -2,10 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Hero background: muted inline looping video with a Pause/Play control, or the poster image when there is no
- * video, the visitor prefers reduced motion, or saves data. The poster is always the first paint.
+ * Hero background. Image first (responsive <picture>: portrait crop on phones, wide crop elsewhere) so the
+ * hero paints immediately; an uploaded video replaces it only when the visitor allows motion and is not
+ * saving data. Pause/Play control for the video.
  */
-export function HeroMedia({ video, poster }: { video: string; poster: string }) {
+export function HeroMedia({ video, poster, mobile }: { video: string; poster: string; mobile?: string }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [useVideo, setUseVideo] = useState(false);
   const [playing, setPlaying] = useState(true);
@@ -25,7 +26,12 @@ export function HeroMedia({ video, poster }: { video: string; poster: string }) 
       <div className="w-hero-media" aria-hidden="true">
         {useVideo
           ? <video ref={ref} src={video} poster={poster || undefined} autoPlay muted loop playsInline preload="metadata" onPause={() => setPlaying(false)} onPlay={() => setPlaying(true)} />
-          : poster ? <img src={poster} alt="" fetchPriority="high" decoding="async" /> : null}
+          : poster ? (
+            <picture>
+              {mobile && <source media="(max-width: 1023px)" srcSet={mobile} />}
+              <img src={poster} alt="" fetchPriority="high" decoding="async" />
+            </picture>
+          ) : null}
       </div>
       {useVideo && (
         <button type="button" className="w-vidctl" onClick={toggle} aria-pressed={!playing}>

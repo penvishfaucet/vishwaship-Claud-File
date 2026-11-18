@@ -45,3 +45,11 @@ Screenshots: `docs/screenshots/site-{home,rate-calculator,track}-{desktop,mobile
 ## Outstanding
 - Courier integrations must be enabled in Admin for live rates and live tracking scans (Shipmozo API documentation/keys still needed; Delhivery credentials).
 - Hero video: none uploaded yet (image shown).
+
+## Home page v3 (reference design)
+- Full-width hero photo with a soft white wash behind the text (left on laptop/desktop, top on phones/tablets); navy "Big & Small," / orange "We Ship It All."; "Simple shipping for parcels and cargo."; Calculate Rates + Create Account (account-aware); offer line "COD Available • Parcels from ₹28 • Cargo from ₹8/kg".
+- Floating panel at the hero's bottom edge: **Calculate Rates** (Pickup PIN, Delivery PIN, Weight → full Rate Calculator with these values; carton size and payment are added there) and **Track Shipment** (AWB/LR → /track/). Values are kept while browsing (session storage).
+- Courier partners directly below: one row, auto-scrolls and can be swiped/scrolled by hand, arrows on desktop, ~3 logos visible on phones, pause on hover/focus/touch, Pause button, no auto-motion for reduced-motion users. Same component on the Rate Calculator.
+- **Background assets:** `public/brand/hero-desktop.webp` (1920×800) and `public/brand/hero-mobile.webp` (780×1100, used up to 1023 px). Cut from the truck-and-warehouse part of the supplied reference design (no image generator was available); a higher-resolution original photo would be sharper on large/retina screens — upload it in Admin → Website Content → Home (desktop and phone fields).
+- Admin → Website Content → Home: headline, text, button texts, offer line, desktop/phone background, optional video.
+- Checked: no horizontal overflow at 360, 390, 768, 1024, 1440 px; Get Rates carries PINs and weight into the calculator; Track opens the shipment result; carousel stays in one row.

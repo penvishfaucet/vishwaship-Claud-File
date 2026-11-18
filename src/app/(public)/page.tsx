@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
 import { HeroMedia } from "@/components/site/HeroMedia";
-import { HeroCtas, HeroTrack } from "@/components/site/HeroCtas";
-import { OfferStrip } from "@/components/site/OfferStrip";
+import { HeroCtas } from "@/components/site/HeroCtas";
+import { HeroPanel } from "@/components/site/HeroPanel";
 import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
 import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
@@ -25,23 +25,24 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const auth = await siteAuth();
   return (
     <>
-      <section className="w-hero w-hero2" aria-labelledby="hero-h">
+      <section className="w-hero3" aria-labelledby="hero-h">
+        <div className="w-hero-top">
+        <HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} mobile={h.heroMobileUrl} />
         <div className="w-wrap in">
           <div className="txt">
-            <span className="w-eyebrow">Parcels &amp; cargo across India</span>
             <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
             <p className="w-lead">{h.heroText}</p>
             <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta }} />
-            <div className="w-hero-offers"><OfferStrip offers={c.offers} where="home" variant="dark" /></div>
-          </div>
-          <div className="media">
-            <div className="frame"><HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} /></div>
-            {c.features.tracking && <div className="w-hero-track"><HeroTrack heading={h.trackHeading} /></div>}
+            {c.offers.visible && c.offers.showOnHome && h.offerLine && (
+              <p className="w-offerline">{h.offerLine.split("•").map((x, i) => <span key={i}>{x.trim()}</span>)}</p>
+            )}
           </div>
         </div>
+        </div>
+        <div className="w-wrap w-panel-wrap"><HeroPanel showCalc={c.features.calculator} showTrack={c.features.tracking} threshold={kg} /></div>
       </section>
 
-      <div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} /></div>
+      <div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} bare /></div>
 
       <section className="w-sec alt" aria-labelledby="svc-h">
         <div className="w-wrap">

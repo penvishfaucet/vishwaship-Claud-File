@@ -1,16 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Partner } from "@/lib/site-content";
 
 /**
  * Shared courier-partner logo carousel (Home + Rate Calculator). Records come from Admin → Website Content → Partners.
- * Continuous scroll; pauses on hover, keyboard focus or touch; Pause button for everyone; reduced-motion users
- * (or a paused carousel) get a static row they can scroll by hand. The duplicate loop copy is hidden from AT.
+ * One row that scrolls by itself and can also be swiped / scrolled by hand (it is a real scroll container).
+ * Pauses on hover, keyboard focus and touch (resumes a few seconds after the finger lifts); Pause button for
+ * everyone; reduced-motion visitors get the same row without automatic movement. The loop copy is hidden from AT.
  */
-export function PartnerCarousel({ partners, heading, showCount = true, compact = false }: { partners: Partner[]; heading: string; showCount?: boolean; compact?: boolean }) {
+export function PartnerCarousel({ partners, heading, showCount = true, compact = false, bare = false }: { partners: Partner[]; heading: string; showCount?: boolean; compact?: boolean; bare?: boolean }) {
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
-  const [touchHold, setTouchHold] = useState(false);
+  const vp = useRef<HTMLDivElement>(null);
+  const hold = useRef({ hover: false, focus: false, touchUntil: 0 });
+
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const on = () => setReduced(mq.matches);
@@ -18,17 +22,36 @@ export function PartnerCarousel({ partners, heading, showCount = true, compact =
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
-  useEffect(() => {
-    if (!touchHold) return;
-    const t = setTimeout(() => setTouchHold(false), 4000);
-    return () => clearTimeout(t);
-  }, [touchHold]);
 
   const unique = partners.filter((p, i, a) => a.findIndex((x) => x.name.toLowerCase() === p.name.toLowerCase()) === i);
+  const auto = !reduced && !paused && unique.length > 1;
+
+  useEffect(() => {
+    const el = vp.current;
+    if (!el || !auto) return;
+    let raf = 0, last = performance.now(), carry = 0;
+    const step = (t: number) => {
+      const dt = Math.min(64, t - last); last = t;
+      const h = hold.current;
+      if (!h.hover && !h.focus && Date.now() > h.touchUntil) {
+        carry += dt * 0.045; // ≈ 45 px per second
+        const px = Math.floor(carry);
+        if (px) { carry -= px; el.scrollLeft += px; }
+        const half = el.scrollWidth / 2;
+        if (el.scrollLeft >= half) el.scrollLeft -= half;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [auto, unique.length]);
+
   if (unique.length === 0) return null;
-  const moving = !reduced && !paused;
-  // ~4.4 s per logo keeps the speed constant however many partners are published
-  const duration = `${Math.max(20, unique.length * 4.4)}s`;
+  const nudge = (dir: 1 | -1) => {
+    const el = vp.current; if (!el) return;
+    hold.current.touchUntil = Date.now() + 4000;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: reduced ? "auto" : "smooth" });
+  };
 
   const logo = (p: Partner, dup: boolean) => {
     const img = <img src={p.logoUrl} alt={dup ? "" : p.name} loading="lazy" decoding="async" draggable={false} />;
@@ -40,7 +63,7 @@ export function PartnerCarousel({ partners, heading, showCount = true, compact =
   };
 
   return (
-    <section className={`pc${compact ? " pc-compact" : ""}`} aria-labelledby="pc-h">
+    <section className={`pc${compact ? " pc-compact" : ""}${bare ? " pc-bare" : ""}`} aria-labelledby="pc-h">
       <div className="pc-head">
         <h2 id="pc-h" className="pc-title">{heading}{showCount && <span className="pc-count">{unique.length} partners</span>}</h2>
         {!reduced && (
@@ -49,17 +72,28 @@ export function PartnerCarousel({ partners, heading, showCount = true, compact =
           </button>
         )}
       </div>
-      <div
-        className={`pc-viewport${moving ? "" : " pc-static"}${touchHold ? " pc-hold" : ""}`}
-        onTouchStart={() => setTouchHold(true)}
-        tabIndex={moving ? undefined : 0}
-        aria-label={moving ? undefined : "Courier partner logos, scroll sideways"}
-        role={moving ? undefined : "region"}
-      >
-        <ul className="pc-track" style={moving ? { animationDuration: duration } : undefined}>
-          {unique.map((p) => logo(p, false))}
-          {moving && unique.map((p) => logo(p, true))}
-        </ul>
+      <div className="pc-row">
+        <button type="button" className="pc-arrow" aria-label="Previous partners" onClick={() => nudge(-1)}><ChevronLeft size={22} aria-hidden="true" /></button>
+        <div
+          ref={vp}
+          className={`pc-viewport${auto ? " pc-auto" : ""}`}
+          tabIndex={0}
+          role="region"
+          aria-label="Courier partner logos — scroll sideways"
+          onMouseEnter={() => { hold.current.hover = true; }}
+          onMouseLeave={() => { hold.current.hover = false; }}
+          onFocus={() => { hold.current.focus = true; }}
+          onBlur={() => { hold.current.focus = false; }}
+          onTouchStart={() => { hold.current.touchUntil = Date.now() + 60_000; }}
+          onTouchEnd={() => { hold.current.touchUntil = Date.now() + 3000; }}
+          onWheel={() => { hold.current.touchUntil = Date.now() + 3000; }}
+        >
+          <ul className="pc-track">
+            {unique.map((p) => logo(p, false))}
+            {auto && unique.map((p) => logo(p, true))}
+          </ul>
+        </div>
+        <button type="button" className="pc-arrow" aria-label="Next partners" onClick={() => nudge(1)}><ChevronRight size={22} aria-hidden="true" /></button>
       </div>
       <p className="pc-note">Courier availability depends on serviceability and the services enabled on your account.</p>
     </section>

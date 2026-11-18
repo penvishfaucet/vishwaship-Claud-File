@@ -48,6 +48,8 @@ export async function getSiteContent(opts: { preview?: boolean } = {}): Promise<
   const c = out as SiteContent;
   c.partners = { items: mergePartners(c.partners.items) };
   c.links = upgradeLinks(c.links);
+  // the earlier default hero photo is replaced by the warehouse-and-truck background
+  if (c.home.heroPosterUrl === "/brand/hero.jpg") c.home.heroPosterUrl = DEFAULTS.home.heroPosterUrl;
   return c;
 }
 
