@@ -470,7 +470,9 @@
 }
 @media (max-width:719px){
   .w-hero4 .w-hero-media img,.w-hero4 .w-hero-media video{object-position:center bottom}
-  .w-hero4 .w-hero-media::after{background:linear-gradient(180deg,rgba(11,31,58,.96) 0%,rgba(11,31,58,.9) 30%,rgba(11,31,58,.55) 46%,rgba(11,31,58,.12) 60%,rgba(11,31,58,.25) 78%,rgba(11,31,58,.92) 92%),linear-gradient(90deg,rgba(11,31,58,.55) 0%,rgba(11,31,58,0) 60%)}
+  .w-hero4 .w-hero-media::after{background:linear-gradient(180deg,rgba(11,31,58,.66) 0%,rgba(11,31,58,.52) 30%,rgba(11,31,58,.3) 46%,rgba(11,31,58,.1) 60%,rgba(11,31,58,.22) 76%,rgba(11,31,58,.9) 90%),linear-gradient(90deg,rgba(11,31,58,.4) 0%,rgba(11,31,58,0) 58%)}
+  .w-hero4 .w-slogan,.w-hero4 .w-lead,.w-tracklink,.w-hl{text-shadow:0 2px 4px rgba(4,12,28,.75),0 4px 22px rgba(4,12,28,.65)}
+  .w-hero4 .w-btn.sec{background:rgba(11,31,58,.55);backdrop-filter:blur(2px)}
   .w-hero4 .in{display:block;min-height:0;padding:40px 20px 28px}
   .w-hero4 .w-hl{margin-top:clamp(200px,46vw,300px)}
 }
