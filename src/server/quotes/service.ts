@@ -143,6 +143,8 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
 
   const offers = results.flatMap((r) => r.offers).sort((a, b) => a.total - b.total);
   const errors = results.map((r) => r.error).filter((e): e is string => !!e);
+  // Say so instead of an empty list when no courier service is switched on for this shipment type.
+  if (!accounts.length && !opts.onlyAccountId) errors.push(`${req.mode} rates are not available right now — no ${req.mode} courier service is active yet. Please try again later.`);
   return { offers, errors };
 }
 
