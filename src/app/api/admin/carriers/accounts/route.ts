@@ -5,7 +5,7 @@ import { audit } from "@/server/audit";
 import type { Permission } from "@/server/auth/rbac";
 import { apiStaff } from "@/server/auth/session";
 import { CARRIER_SPECS, specFor, validateBaseUrl } from "@/server/carriers/specs";
-import { markPending, missingRequired, recordCapability } from "@/server/carriers/verification";
+import { activatedEarly, isVerified, markPending, missingRequired, recordCapability } from "@/server/carriers/verification";
 import { getDb, schema } from "@/server/db/client";
 import { apiError } from "@/server/http";
 import { adapterFor, providerContext, secretsFor } from "@/server/providers/registry";
@@ -36,7 +36,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("test_track"), id, awb: z.string().trim().min(4).max(40) }),
   z.object({ op: z.literal("test_label"), id, awb: z.string().trim().min(4).max(40) }),
   z.object({ op: z.literal("pilots"), id, customers: z.string().trim().max(2000).default("") }),
-  z.object({ op: z.literal("status"), id, action: z.enum(["activate", "pause", "resume", "disable", "archive"]) }),
+  z.object({ op: z.literal("status"), id, action: z.enum(["activate", "activate_now", "pause", "resume", "disable", "archive"]) }),
   z.object({ op: z.literal("map_warehouse"), id, warehouseId: id, providerRef: z.string().trim().min(1).max(80) }),
   z.object({ op: z.literal("retry_job"), id, jobId: id }),
   z.object({ op: z.literal("refresh_shipment"), id, shipmentId: id }),
@@ -244,8 +244,17 @@ export async function POST(req: Request) {
       return ok(orgIds.size ? `${orgIds.size} pilot customer(s) can now quote and book this service for verification` : "Pilot list cleared");
     }
     case "status": {
+      if (b.action === "activate_now") {
+        const na = needAdapter(); if (na) return na;
+        const a = await fresh();
+        if (!isVerified(a, "authenticate")) return apiError(409, "conflict", "Run Test authentication first — the saved keys must work before rates can be shown");
+        await db.update(schema.providerAccounts).set({ status: "enabled", configPublic: { ...cfg, activatedEarly: { at: new Date().toISOString(), by: s.userId } } }).where(eq(schema.providerAccounts.id, acct.id));
+        await log("status_activate_now", acct.id, { pending: missingRequired(a) });
+        return ok("Active — customers now see live rates and can book. Rates, booking, label and tracking keep verifying from real bookings.");
+      }
       const next = { activate: "enabled", resume: "enabled", pause: "paused", disable: "disabled", archive: "archived" }[b.action];
-      if (next === "enabled") {
+      if (b.action === "disable" || b.action === "archive") await saveCfg({ activatedEarly: null });
+      if (next === "enabled" && !(b.action === "resume" && activatedEarly(acct))) {
         const na = needAdapter(); if (na) return na;
         const a = await fresh();
         const missing = missingRequired(a);

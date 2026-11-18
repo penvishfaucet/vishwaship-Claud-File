@@ -121,7 +121,9 @@ export default async function CourierAccount({ params }: { params: Promise<{ id:
           </dl>
           {write && !docOnly && (
             <div className="row wrap mt8" style={{ gap: 8 }}>
-              {a.status !== "enabled" && a.status !== "paused" && <AdminOpForm endpoint={EP} op="status" submit="Activate" extra={{ id: a.id, action: "activate" }} fields={[]} confirmText={`Customers will see ${brand} ${service} rates and can book it. Continue?`} />}
+              {a.status !== "enabled" && a.status !== "paused" && missing.length === 0 && <AdminOpForm endpoint={EP} op="status" submit="Activate" extra={{ id: a.id, action: "activate" }} fields={[]} confirmText={`Customers will see ${brand} ${service} rates and can book it. Continue?`} />}
+              {a.status !== "paused" && missing.length > 0 && isVerified(a, "authenticate") && !(a.status === "enabled" && cfg.activatedEarly) && <AdminOpForm endpoint={EP} op="status" submit="Activate now" extra={{ id: a.id, action: "activate_now" }} fields={[]} confirmText={`Show ${brand} ${service} live rates to all customers and allow bookings now? Not yet verified: ${missing.map((m) => CAP_LABEL[m]).join(", ")} — these verify from the first real bookings.`} />}
+              {missing.length > 0 && !isVerified(a, "authenticate") && a.status !== "enabled" && <p className="tiny muted" style={{ flexBasis: "100%" }}>Save the keys and pass <b>Test authentication</b> to unlock <b>Activate now</b>.</p>}
               {a.status === "enabled" && <AdminOpForm endpoint={EP} op="status" submit="Pause new bookings" extra={{ id: a.id, action: "pause" }} fields={[]} confirmText="New quotes and bookings stop immediately. Existing shipments keep tracking. Continue?" />}
               {a.status === "paused" && <AdminOpForm endpoint={EP} op="status" submit="Resume" extra={{ id: a.id, action: "resume" }} fields={[]} />}
               {a.status !== "disabled" && <AdminOpForm endpoint={EP} op="status" submit="Back to setup" extra={{ id: a.id, action: "disable" }} fields={[]} confirmText="Stops quotes and bookings (pilot customers excepted). Continue?" />}

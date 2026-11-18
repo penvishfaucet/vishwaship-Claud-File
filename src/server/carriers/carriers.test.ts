@@ -164,6 +164,15 @@ describe("quotes across providers", () => {
     expect((await getQuotes(req(), ORG, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2C)).toBe(false);
     await db.update(schema.providerAccounts).set({ capabilities: Object.fromEntries(["authenticate", "quote", "book", "label", "track"].map((c) => [c, { state: "live_verified" }])) }).where(eq(schema.providerAccounts.id, SM_B2C));
   });
+  it("'Activate now' quotes once the keys pass authentication, never before", async () => {
+    const quotes = async () => (await getQuotes(req(), OTHER, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2C);
+    const saved = (await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, SM_B2C)))[0];
+    await db.update(schema.providerAccounts).set({ capabilities: {}, configPublic: { ...(saved.configPublic as object), activatedEarly: { at: "now", by: STAFF } } }).where(eq(schema.providerAccounts.id, SM_B2C));
+    expect(await quotes()).toBe(false);
+    await db.update(schema.providerAccounts).set({ capabilities: { authenticate: { state: "live_verified" } } }).where(eq(schema.providerAccounts.id, SM_B2C));
+    expect(await quotes()).toBe(true);
+    await db.update(schema.providerAccounts).set({ capabilities: saved.capabilities, configPublic: saved.configPublic }).where(eq(schema.providerAccounts.id, SM_B2C));
+  });
   it("paused accounts stop quoting", async () => {
     await db.update(schema.providerAccounts).set({ status: "paused" }).where(eq(schema.providerAccounts.id, SM_B2C));
     expect((await getQuotes(req(), ORG, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2C)).toBe(false);

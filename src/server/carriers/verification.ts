@@ -35,12 +35,12 @@ export function isVerified(acct: Account, cap: Capability) {
   return acct.mode === "live" ? r.state === "live_verified" : r.state === "sandbox_verified" || r.state === "live_verified";
 }
 
-export type SetupState = "documentation_required" | "missing_credentials" | "not_tested" | "connection_failed" | "connected" | "ready" | "active" | "blocked" | "paused" | "archived";
+export type SetupState = "documentation_required" | "missing_credentials" | "not_tested" | "connection_failed" | "connected" | "ready" | "active" | "active_early" | "blocked" | "paused" | "archived";
 
 export const SETUP_LABEL: Record<SetupState, [string, string]> = {
   documentation_required: ["Documentation Required", "c-pending"], missing_credentials: ["Missing Credentials", "c-draft"], not_tested: ["Credentials saved — not tested", "c-draft"],
   connection_failed: ["Connection failed", "c-failed"], connected: ["Connected", "c-pending"], ready: ["Ready for Activation", "c-active"],
-  active: ["Active", "c-active"], blocked: ["Enabled but unverified — not quoting", "c-failed"], paused: ["Paused", "c-failed"], archived: ["Archived", "c-draft"],
+  active: ["Active", "c-active"], active_early: ["Active — verifying from live bookings", "c-active"], blocked: ["Enabled but unverified — not quoting", "c-failed"], paused: ["Paused", "c-failed"], archived: ["Archived", "c-draft"],
 };
 
 export function setupState(acct: Account): SetupState {
@@ -48,7 +48,7 @@ export function setupState(acct: Account): SetupState {
   const cfg = (acct.configPublic ?? {}) as Record<string, unknown>;
   const spec = specFor(acct.adapter, cfg.protocol as string | undefined);
   if (!getAdapter(cfg.protocol ? String(cfg.protocol) : acct.adapter) || spec?.build === "documentation_required") return "documentation_required";
-  if (acct.status === "enabled") return canTakeBookings(acct) ? "active" : "blocked";
+  if (acct.status === "enabled") return !canTakeBookings(acct) ? "blocked" : missingRequired(acct).length ? "active_early" : "active";
   if (acct.status === "paused") return "paused";
   if (!acct.secretsEnc) return "missing_credentials";
   if (missingRequired(acct).length === 0) return "ready";
@@ -57,9 +57,19 @@ export function setupState(acct: Account): SetupState {
   return "not_tested";
 }
 
-/** Runtime gate used by quoting and booking: an account must be Active AND fully verified (demo fixtures excepted). */
+/**
+ * Runtime gate used by quoting and booking: an account must be Active AND fully verified (demo fixtures excepted),
+ * unless the owner chose "Activate now" — then the saved keys must still pass authentication and the remaining
+ * capabilities verify from real bookings (owner decision, 2026-11-18).
+ */
 export function canTakeBookings(acct: Account) {
-  return acct.adapter === "demo" || missingRequired(acct).length === 0;
+  if (acct.adapter === "demo" || missingRequired(acct).length === 0) return true;
+  return activatedEarly(acct) && isVerified(acct, "authenticate");
+}
+
+/** Admin activated before every capability was verified (recorded with who / when in config). */
+export function activatedEarly(acct: Account) {
+  return !!(acct.configPublic as Record<string, unknown> | null)?.activatedEarly;
 }
 
 export function missingRequired(acct: Account): Capability[] {
