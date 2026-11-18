@@ -166,6 +166,22 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       for (const sd of shipments) fd.append("shipment_details", JSON.stringify(sd));
       r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
     }
+    // Still rejected: send the whole manifest as JSON, where shipment_details / dimensions are real lists.
+    if (!r.ok && /shipment_details.{0,40}not a valid list/i.test(r.error.message)) {
+      const json: Record<string, unknown> = {
+        lrn: "", pickup_location_name: req.pickup.providerWarehouseRef, payment_mode: req.paymentType === "cod" ? "cod" : "prepaid",
+        ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount) } : {}), weight: totalG,
+        dropoff_location: { consignee_name: req.consignee.name, address: [req.consignee.line1, req.consignee.line2].filter(Boolean).join(", "), city: req.consignee.city, state: req.consignee.state, zip: req.consignee.pincode, phone: req.consignee.mobile, email: req.consignee.email ?? "" },
+        shipment_details: shipments,
+        dimensions: req.packages.map((p) => ({ box_count: p.count, length: p.lengthMm / 10, width: p.breadthMm / 10, height: p.heightMm / 10 })),
+        invoices: [{ ewaybill: req.ewayBill ?? "", inv_num: req.invoiceNumber ?? req.orderNumber, inv_amt: rupees(req.declaredValue), inv_qr_code: "" }],
+        rov_insurance: !!ctx.config.rovInsurance, fm_pickup: true, ...(fm ? { freight_mode: fm } : {}),
+        ...(ctx.config.billingAddress ? { billing_address: ctx.config.billingAddress } : {}),
+      };
+      const rj = await call(ctx, "/manifest", { method: "POST", body: JSON.stringify(json), timeoutMs: 30_000 });
+      if (rj.ok || !/field required|value is not a valid/i.test(rj.error.message) || !/shipment_details/i.test(rj.error.message)) r = rj;
+      if (!rj.ok) r = { ...rj, error: { ...rj.error, message: `${rj.error.message} [form-data: ${r.ok ? "ok" : r.error.message.slice(0, 120)}]`.slice(0, 400) } };
+    }
     if (!r.ok) return r.error.category === "timeout" ? { ok: false, error: { ...r.error, category: "ambiguous" } } : r;
     const jobId = firstString(r.value.json, ["job_id", "data.job_id", "request_id", "data.request_id", "jobId"]);
     if (!jobId) return { ok: false, error: { category: "ambiguous", message: "Delhivery accepted the manifest but returned no job ID", retryable: false } };
