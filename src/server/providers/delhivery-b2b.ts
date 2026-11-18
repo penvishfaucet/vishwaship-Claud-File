@@ -44,6 +44,15 @@ async function call(ctx: ProviderContext, path: string, init: RequestInit & { ti
   return { ok: true, value: { status: r.status, json } };
 }
 
+/**
+ * freight_mode is a retail (B2BR) field: a regular B2B client gets "Freight mode FoP not allowed for B2B" (seen on the live
+ * account 2026-11-18). Send it only for FOD, or "fop" when Admin marks the account as retail (config.retailClient).
+ */
+function freightMode(ctx: ProviderContext, pay: string): { freight_mode?: string } {
+  if (pay === "fod") return { freight_mode: "fod" };
+  return ctx.config.retailClient ? { freight_mode: "fop" } : {};
+}
+
 const STATUS: Record<string, NormalizedStatus> = {
   MANIFESTED: "booked", NOT_PICKED: "pickup_pending", PICKED_UP: "picked_up", LEFT_ORIGIN: "in_transit", REACH_DESTINATION: "at_delivery_center",
   UNDEL_REATTEMPT: "ndr", PART_DEL: "delivered", OFD: "out_for_delivery", DELIVERED: "delivered", RETURNED_INTRANSIT: "rto_in_transit",
@@ -95,7 +104,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
           dimensions: req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count })),
           weight_g: totalG, cheque_payment: false, source_pin: req.originPincode, consignee_pin: req.destinationPincode,
           payment_mode: req.paymentType === "cod" ? "cod" : "prepaid", ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount ?? 0) } : {}),
-          inv_amount: rupees(req.declaredValue ?? 0), freight_mode: req.paymentType === "fod" ? "fod" : "fop", rov_insurance: !!ctx.config.rovInsurance,
+          inv_amount: rupees(req.declaredValue ?? 0), ...freightMode(ctx, req.paymentType), rov_insurance: !!ctx.config.rovInsurance,
         }),
       });
       if (!est.ok) return est;
@@ -143,7 +152,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     fd.set("dimensions", JSON.stringify(req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count }))));
     fd.set("invoices", JSON.stringify([{ ewaybill: req.ewayBill ?? "", inv_num: req.invoiceNumber ?? req.orderNumber, inv_amt: rupees(req.declaredValue), inv_qr_code: "" }]));
     fd.set("rov_insurance", ctx.config.rovInsurance ? "True" : "False");
-    fd.set("freight_mode", req.paymentType === "fod" ? "fod" : "fop");
+    const fm = freightMode(ctx, req.paymentType).freight_mode;
+    if (fm) fd.set("freight_mode", fm);
     fd.set("fm_pickup", "True");
     if (ctx.config.billingAddress) fd.set("billing_address", JSON.stringify(ctx.config.billingAddress));
     const r = await call(ctx, "/manifest", { method: "POST", body: fd, timeoutMs: 30_000 });
