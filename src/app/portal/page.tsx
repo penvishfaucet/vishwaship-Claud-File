@@ -14,6 +14,8 @@ import { OfferStrip } from "@/components/site/OfferStrip";
 import { DEFAULTS } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
+import { DashSearch } from "@/components/portal/DashSearch";
+import { Bell, Wallet } from "lucide-react";
 
 const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
   { key: "new", icon: PackagePlus, tone: "blue" },
@@ -42,13 +44,21 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
   return (
     <>
+      {/* phone: search, then wallet + notification credits */}
+      <div className="dash-m">
+        <DashSearch />
+        <div className="dash-m-cards">
+          <Link href="/portal/billing/passbook/" className="dm-card"><span className="dm-ic wallet"><Wallet size={24} aria-hidden /></span><b>{formatINR(ctx.walletAvailable)}</b><span>Wallet Balance</span></Link>
+          <Link href="/portal/billing/notification-credits/" className="dm-card"><span className="dm-ic credit"><Bell size={24} aria-hidden /></span><b>{ctx.credits.toLocaleString("en-IN")}</b><span>Notification Credits</span></Link>
+        </div>
+      </div>
       {announcement && <p className="note small mb12">{announcement}</p>}
       <div className="mb12"><OfferStrip offers={offers} where="dashboard" variant="compact" /></div>
       {ctx.org.kycStatus !== "approved" && (
         <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
           <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>
       )}
-      <div className="row between wrap mb12" style={{ gap: 12 }}>
+      <div className="row between wrap mb12 dash-desk" style={{ gap: 12 }}>
         <nav className="seg-tabs" aria-label="Dashboard view">
           <Link href={`/portal/?${rq}`} className={tab === "analytics" ? "on" : ""} aria-current={tab === "analytics" ? "page" : undefined}>Analytics</Link>
           <Link href={`/portal/?tab=status&${rq}`} className={tab === "status" ? "on" : ""} aria-current={tab === "status" ? "page" : undefined}>Order Status</Link>
@@ -72,6 +82,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
   const segs = DONUT.map((d) => { const len = donutTotal ? (counts[d.key] / donutTotal) * C : 0; const s = { ...d, len, offset }; offset += len; return s; });
   return (
     <>
+      <h2 className="dm-h dm-only">Analytics</h2>
       <section className="dash-cards mb16" aria-label="Order summary">
         {CARDS.map((c) => (
           <Link key={c.key} href={href(c.key)} className={`dcard t-${c.tone}`} aria-label={`${BUCKETS[c.key].label}: ${counts[c.key]} — open list`}>
@@ -82,7 +93,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
         ))}
       </section>
 
-      <div className="dash-panels mb16">
+      <div className="dash-panels mb16 dash-desk">
         <section className="card p0" aria-labelledby="wt-h">
           <div className="row between card-h"><h2 id="wt-h" className="b" style={{ fontSize: 16, margin: 0 }}>Wallet Transactions</h2><Link className="btn btn-sm btn-soft" href={`/portal/billing/passbook/?${rq}`}>View All</Link></div>
           {txns.length === 0 ? <div className="empty" style={{ minHeight: 260, justifyContent: "center" }}><p className="muted small">No wallet transactions in this period.</p></div> : (
@@ -120,7 +131,19 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
       <section className="card p0" aria-labelledby="ro-h">
         <div className="row between card-h"><h2 id="ro-h" className="b" style={{ fontSize: 16, margin: 0 }}>Recent Orders</h2><Link className="btn btn-sm btn-soft" href={`/portal/orders/?bucket=all&${rq}`}>View All Orders</Link></div>
         {recent.rows.length === 0 ? <div className="empty"><p className="muted small">No orders in this period.</p><Link className="btn btn-orange btn-sm" href="/portal/orders/new/">Create Shipment</Link></div> : (
-          <div className="tbl-wrap"><table className="tbl">
+          <>
+          <ul className="ro-cards" aria-label="Recent orders">
+            {recent.rows.map((o) => {
+              const c = o.consignee as { name: string; city: string };
+              return (
+                <li key={o.orderId}><Link href={`/portal/orders/${o.orderId}/`}>
+                  <span className="ro-l"><b>{o.orderNumber}</b><span className="tiny muted">{c.name}{c.city ? ` · ${c.city}` : ""}{o.awb ? ` · AWB ${o.awb}` : ""}</span></span>
+                  <span className="ro-r">{o.status ? <StatusChip status={o.status} /> : <span className="chip c-draft">{o.orderStatus.replace(/_/g, " ")}</span>}<span className="tiny">{o.paymentType === "cod" ? `COD ${formatINR(o.codAmount)}` : o.paymentType === "fod" ? "FOD" : "Prepaid"} · {dt(o.createdAt)}</span></span>
+                </Link></li>
+              );
+            })}
+          </ul>
+          <div className="tbl-wrap ro-table"><table className="tbl">
             <thead><tr><th>Order ID</th><th>AWB / LR</th><th>Recipient</th><th>Courier</th><th>Payment</th><th>Status</th><th>Order date</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>{recent.rows.map((o) => {
               const c = o.consignee as { name: string; city: string };
@@ -142,6 +165,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
               );
             })}</tbody>
           </table></div>
+          </>
         )}
       </section>
     </>

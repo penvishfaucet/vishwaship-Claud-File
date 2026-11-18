@@ -9,6 +9,7 @@ import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
 import { QuickSearch } from "./QuickSearch";
 import { SupportChat } from "./SupportChat";
+import { OPEN_CHAT_EVENT, type QuickAction, quickActions } from "./quick-actions";
 import { SidebarBrand } from "@/components/BrandLogo";
 import { rememberBrowser } from "@/components/site/nav";
 
@@ -51,6 +52,8 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
   const path = usePathname();
   const nav = useMemo(() => visibleNav(modules, labels), [modules, labels]);
   const links = useMemo(() => flatNav(nav), [nav]);
+  const qa = useMemo(() => quickActions(modules), [modules]);
+  const [sheet, setSheet] = useState(false);
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
   const [drawer, setDrawer] = useState(false);
@@ -149,7 +152,8 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
       <QuickSearch open={qs} onClose={() => setQs(false)} menu={searchMenu} />
       <div className="main">
         <header className="top top2" ref={ref}>
-          <button className="icon-btn" aria-label={drawer ? "Close menu" : "Open menu"} aria-expanded={drawer || pinned} onClick={onHamburger}><Menu size={20} /></button>
+          <Link href="/portal/" className="m-brand" aria-label="vishwaship.com home"><img src="/brand/logo-icon.png" alt="" width={30} height={30} /><span>vishwa<b>ship</b></span></Link>
+          <button className="icon-btn hide-xs" aria-label={drawer ? "Close menu" : "Open menu"} aria-expanded={drawer || pinned} onClick={onHamburger}><Menu size={20} /></button>
           <div className="hsearch" role="search">
             <label className="sr-only" htmlFor="hs-type">Search by</label>
             <select id="hs-type" value={sType} onChange={(e) => setSType(e.target.value as typeof sType)}><option value="awb">AWB ID</option><option value="order">Order ID</option><option value="lr">LR / LRN</option></select>
@@ -164,23 +168,18 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
             )}
             {sState === "error" && <span className="tiny t-debit" role="alert" style={{ position: "absolute", top: "100%" }}>Search failed — try again</span>}
           </div>
-          <button type="button" className="hdr-ico show-xs" aria-label="Search orders and menus" onClick={() => setQs(true)}><Search size={18} /></button>
           <div className="grow" />
           <Link href="/portal/billing/notification-credits/" className="hcredits hide-md" title="Notification credit history">Notification Credits: <b>{credits.toLocaleString("en-IN")}</b></Link>
           <button type="button" className="hdr-ico hide-xs" aria-label="Refresh dashboard data" title="Refresh" onClick={() => startRefresh(() => router.refresh())}><RefreshCw size={18} className={refreshing ? "spin" : undefined} /></button>
-          <div className="hwallet">
+          <div className="hwallet hide-xs">
             <Link href="/portal/billing/passbook/" className="hw-bal" aria-label={`Wallet balance ${formatINR(walletPaise)} — open Passbook`}><Wallet size={15} aria-hidden /><span>{formatINR(walletPaise)}</span></Link>
             <Link href="/portal/billing/passbook/?recharge=1" className="hw-rech">Recharge</Link>
           </div>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative" }} className="hide-xs">
             <button className="btn btn-navy btn-sm hq" aria-label="Quick Actions" aria-haspopup="menu" aria-expanded={menu === "quick"} onClick={() => setMenu(menu === "quick" ? null : "quick")}><Zap size={15} /><span className="hide-md">Quick Actions</span><ChevronDown size={14} className="hide-xs" /></button>
             {menu === "quick" && (
               <div className="dropdown" role="menu">
-                <Link role="menuitem" href="/portal/orders/new/"><Plus size={14} /> Create Shipment</Link>
-                <Link role="menuitem" href="/portal/rates/"><Calculator size={14} /> Rate Calculator</Link>
-                <Link role="menuitem" href="/portal/track/"><Truck size={14} /> Track Order</Link>
-                <Link role="menuitem" href="/portal/addresses/?add=1"><MapPin size={14} /> Add Warehouse</Link>
-                <Link role="menuitem" href="/portal/support/new/"><LifeBuoy size={14} /> Raise Ticket</Link>
+                {qa.map((a) => <QaItem key={a.id} a={a} role="menuitem" onPick={close} />)}
               </div>
             )}
           </div>
@@ -198,7 +197,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
               </div>
             )}
           </div>
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative" }} className="hide-xs">
             <button className="avatar" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu === "profile"} onClick={() => setMenu(menu === "profile" ? null : "profile")}>{initials}</button>
             {menu === "profile" && (
               <div className="dropdown" role="menu">
@@ -212,6 +211,8 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
           </div>
         </header>
         <div className="content has-bnav" id="main">{children}</div>
+        <button type="button" className="qa-fab" aria-label="Quick Actions" aria-haspopup="dialog" aria-expanded={sheet} onClick={() => setSheet(true)}><Zap size={26} aria-hidden /></button>
+        {sheet && <QaSheet items={qa} onClose={() => setSheet(false)} />}
         <nav className="bnav" aria-label="Quick navigation">
           {[
             { href: "/portal/", label: "Home", icon: Home },
@@ -223,6 +224,34 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
           ))}
         </nav>
       </div>
+    </div>
+  );
+}
+
+/** One Quick Action: a link to its route, or the Support Chat sheet. */
+function QaItem({ a, onPick, role, className }: { a: QuickAction; onPick: () => void; role?: string; className?: string }) {
+  const body = <><a.icon size={16} aria-hidden /> <span>{a.label}</span></>;
+  return a.action === "chat"
+    ? <button type="button" role={role} className={className ?? "dd"} onClick={() => { onPick(); window.dispatchEvent(new Event(OPEN_CHAT_EVENT)); }}>{body}</button>
+    : <Link role={role} className={className} href={a.href!} onClick={onPick}>{body}</Link>;
+}
+
+/** Mobile Quick Actions bottom sheet (closes on pick, close button, backdrop or Escape). */
+function QaSheet({ items, onClose }: { items: QuickAction[]; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", k);
+    return () => document.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div className="sc-backdrop" onClick={onClose}>
+      <section className="sc-sheet qa-sheet" role="dialog" aria-modal="true" aria-labelledby="qa-h" onClick={(e) => e.stopPropagation()}>
+        <span className="sc-grip" aria-hidden />
+        <header className="sc-h"><Zap size={22} aria-hidden /><h2 id="qa-h">Quick Actions</h2><button type="button" className="sc-x" aria-label="Close" onClick={onClose}><X size={22} /></button></header>
+        <div className="qa-grid">
+          {items.map((a) => <QaItem key={a.id} a={a} onPick={onClose} className={`qa-tile${a.primary ? " primary" : ""}`} />)}
+        </div>
+      </section>
     </div>
   );
 }

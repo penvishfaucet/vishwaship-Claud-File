@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Layers, MessageCircleMore, Paperclip, SendHorizontal, Ticket, X } from "lucide-react";
+import { OPEN_CHAT_EVENT } from "./quick-actions";
 
 type Recent = { id: string; number: string; subject: string; status: string; updatedAt: string };
 
@@ -14,6 +15,11 @@ export function SupportChat({ open: openCount, recent }: { open: number; recent:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const o = () => setShow(true);
+    window.addEventListener(OPEN_CHAT_EVENT, o);
+    return () => window.removeEventListener(OPEN_CHAT_EVENT, o);
+  }, []);
   useEffect(() => {
     if (!show) return;
     const t = setTimeout(() => input.current?.focus(), 80);
