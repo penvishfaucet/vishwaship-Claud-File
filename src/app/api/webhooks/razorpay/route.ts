@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const db = await getDb();
   const ins = await db.insert(schema.inboundEvents).values({ id: newId("ie"), provider: "razorpay", dedupeKey: `razorpay:${eventId}`, verified: true, payloadRedacted: { event: evt.event, paymentId: evt.payload?.payment?.entity?.id } }).onConflictDoNothing().returning();
   if (!ins.length) return NextResponse.json({ ok: true, duplicate: true });
-  if ((evt.event === "payment.captured" || evt.event === "order.paid") && evt.payload?.payment?.entity?.id) {
+  if (["payment.captured", "order.paid", "payment.failed"].includes(evt.event) && evt.payload?.payment?.entity?.id) {
     // Corroborate with the source before moving money.
     const payment = await fetchPayment(evt.payload.payment.entity.id);
     await applyCapturedPayment(payment, "webhook");

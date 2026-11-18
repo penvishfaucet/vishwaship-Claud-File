@@ -28,6 +28,7 @@ export const PROVIDER_CATALOG = [
   { adapter: "fedex", category: "shipping", name: "FedEx", status: "adapter_required" },
   { adapter: "demo", category: "shipping", name: "Demo network (fixtures)", status: "demo" },
   { adapter: "razorpay", category: "payments", name: "Razorpay", status: "implemented" },
+  { adapter: "cashfree", category: "payments", name: "Cashfree", status: "implemented" },
   { adapter: "wati", category: "messaging", name: "WATI (WhatsApp)", status: "implemented" },
   { adapter: "sms", category: "messaging", name: "SMS / OTP", status: "awaiting_provider" },
   { adapter: "resend", category: "email", name: "Resend", status: "implemented" },

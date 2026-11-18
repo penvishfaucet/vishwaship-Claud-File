@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { rechargeStatus } from "@/lib/recharge";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
@@ -11,6 +13,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const [t] = await db.select().from(schema.tickets).where(and(eq(schema.tickets.id, id), eq(schema.tickets.orgId, ctx.org.id)));
   if (!t) notFound();
   const msgs = await db.select().from(schema.ticketMessages).where(eq(schema.ticketMessages.ticketId, id)).orderBy(asc(schema.ticketMessages.createdAt));
+  const [rc] = t.category === "wallet_recharge" ? await db.select({ id: schema.recharges.id, n: schema.recharges.requestNumber, status: schema.recharges.status }).from(schema.recharges).where(and(eq(schema.recharges.ticketId, id), eq(schema.recharges.orgId, ctx.org.id))) : [];
 
   async function reply(fd: FormData) {
     "use server";
@@ -29,6 +32,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     <>
       <div className="page-h"><div><h1>{t.subject}</h1><p className="small muted" style={{ margin: "4px 0 0" }}>{t.number} · {t.category.replace(/_/g, " ")}{t.awb ? ` · AWB ${t.awb}` : ""} · <span className={`chip c-${t.status}`}>{t.status}</span></p></div></div>
       <div className="col" style={{ gap: 10, maxWidth: 760 }}>
+        {rc && <Link className="note row" style={{ gap: 8 }} href={`/portal/billing/recharges/${rc.id}/`}>Recharge request <b>{rc.n}</b> · {rechargeStatus(rc.status).label} — view details, screenshot{rc.status === "info_required" ? " and send the requested information" : ""} →</Link>}
         {msgs.map((m) => (
           <div key={m.id} className="card" style={{ padding: 14, borderLeft: m.authorKind === "staff" ? "3px solid var(--orange)" : undefined }}>
             <div className="tiny muted">{m.authorKind === "staff" ? "Vishwaship support" : "You"} · {m.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</div>

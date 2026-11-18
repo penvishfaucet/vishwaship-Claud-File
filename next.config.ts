@@ -14,6 +14,8 @@ const config: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   trailingSlash: true, // keeps existing public paths (/book/, /login/, /track/ …)
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
+  // Admin uploads the UPI QR through a server action (QR images are capped at 2 MB in code)
+  experimental: { serverActions: { bodySizeLimit: "3mb" } },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

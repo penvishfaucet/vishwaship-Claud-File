@@ -401,14 +401,68 @@ export const reservations = pgTable("reservations", {
 export const recharges = pgTable("recharges", {
   id: id(),
   orgId: text("org_id").notNull().references(() => orgs.id),
+  /** Wallet amount to credit (the requested recharge). */
   amountPaise: paise("amount_paise").notNull(),
   currency: text("currency").notNull().default("INR"),
+  /** razorpay | cashfree | manual | demo */
+  method: text("method").notNull().default("razorpay"),
+  /** Customer-facing reference, e.g. RR100023. */
+  requestNumber: text("request_number").unique(),
   razorpayOrderId: text("razorpay_order_id").unique(),
   razorpayPaymentId: text("razorpay_payment_id").unique(),
-  status: text("status").notNull().default("pending"), // pending | captured | failed | refunded | mismatch
+  /** Gateway order / payment ids for non-Razorpay gateways (Cashfree order_id / cf_payment_id). */
+  providerOrderId: text("provider_order_id"),
+  providerPaymentId: text("provider_payment_id"),
+  // payment_pending | pending_verification | info_required | credited | rejected | failed | expired | cancelled | mismatch
+  // (older rows: pending → payment_pending, captured → credited)
+  status: text("status").notNull().default("payment_pending"),
+  /** Manual UPI: discount and payable fixed at request time (later setting changes never alter it). */
+  discountBps: integer("discount_bps").notNull().default(0),
+  discountPaise: paise("discount_paise").notNull().default(0),
+  payablePaise: paise("payable_paise"),
+  /** Customer-reported (manual) or gateway-confirmed amount received. */
+  paidPaise: paise("paid_paise"),
+  utr: text("utr"),
+  utrDuplicate: boolean("utr_duplicate").notNull().default(false),
+  paidAt: ts("paid_at"),
+  proofKey: text("proof_key"),
+  proofName: text("proof_name"),
+  proofMime: text("proof_mime"),
+  remarks: text("remarks"),
+  ticketId: text("ticket_id"),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  decisionNote: text("decision_note"),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
-});
+}, (t) => [
+  uniqueIndex("recharges_provider_order").on(t.method, t.providerOrderId),
+  // one UTR can back only one credited manual recharge
+  uniqueIndex("recharges_utr_credited").on(t.utr).where(sql`${t.status} = credited and ${t.method} = manual`),
+  index("recharges_org_created").on(t.orgId, t.createdAt),
+  index("recharges_status").on(t.status),
+]);
+
+/** Approval / payment history of a recharge (shown to Admin; customer-facing notes also go to the ticket). */
+export const rechargeEvents = pgTable("recharge_events", {
+  id: id(),
+  rechargeId: text("recharge_id").notNull().references(() => recharges.id),
+  action: text("action").notNull(), // created | submitted | info_requested | info_provided | approved | rejected | gateway_success | gateway_failed | flagged_duplicate_utr
+  actorKind: text("actor_kind").notNull(), // customer | staff | system | gateway
+  actorUserId: text("actor_user_id"),
+  note: text("note"),
+  createdAt: created(),
+}, (t) => [index("recharge_events_rc").on(t.rechargeId, t.createdAt)]);
+
+/** Admin notification bell (all staff; seen-state per user in users.prefs.staffAlertsSeenAt). */
+export const staffAlerts = pgTable("staff_alerts", {
+  id: id(),
+  kind: text("kind").notNull(), // manual_recharge | recharge_info | ...
+  title: text("title").notNull(),
+  href: text("href"),
+  perm: text("perm"), // permission needed to see it
+  createdAt: created(),
+}, (t) => [index("staff_alerts_created").on(t.createdAt)]);
 
 // ---------- notifications & credits ----------
 export const creditBalances = pgTable("credit_balances", {

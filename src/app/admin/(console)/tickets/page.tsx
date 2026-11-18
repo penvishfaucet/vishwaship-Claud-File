@@ -27,6 +27,7 @@ export default async function AdminTickets({ searchParams }: { searchParams: Pro
   const rows = await db.select({ t: schema.tickets, o: schema.orgs }).from(schema.tickets).innerJoin(schema.orgs, eq(schema.orgs.id, schema.tickets.orgId)).orderBy(desc(schema.tickets.createdAt));
   const open = sp.open ? rows.find((r) => r.t.id === sp.open) : undefined;
   const msgs = open ? await db.select().from(schema.ticketMessages).where(eq(schema.ticketMessages.ticketId, open.t.id)).orderBy(asc(schema.ticketMessages.createdAt)) : [];
+  const [linkedRc] = open && open.t.category === "wallet_recharge" ? await db.select({ id: schema.recharges.id, n: schema.recharges.requestNumber }).from(schema.recharges).where(eq(schema.recharges.ticketId, open.t.id)) : [];
   return (
     <>
       <div className="page-h"><h1>Tickets</h1></div>
@@ -34,6 +35,7 @@ export default async function AdminTickets({ searchParams }: { searchParams: Pro
         <div className="card p0"><ul className="plain-list">{rows.length === 0 && <li className="small muted">No tickets.</li>}{rows.map(({ t, o }) => <li key={t.id}><a className="row between" href={`/admin/tickets/?open=${t.id}`}><span><b className="small">{t.number}</b> <span className="small">{t.subject}</span><span className="tiny muted" style={{ display: "block" }}>{o.businessName} · {t.category}{t.awb ? ` · ${t.awb}` : ""}</span></span><span className={`chip c-${t.status}`}>{t.status}</span></a></li>)}</ul></div>
         {open && (
           <div className="col" style={{ gap: 8 }}>
+            {linkedRc && <a className="note" href={`/admin/recharges/?id=${linkedRc.id}`}>Manual recharge <b>{linkedRc.n}</b> — open to review the screenshot and approve / reject →</a>}
             {msgs.map((m) => <div key={m.id} className="card" style={{ padding: 12, borderLeft: m.authorKind === "staff" ? "3px solid var(--orange)" : undefined }}><div className="tiny muted">{m.authorKind} · {m.createdAt.toLocaleString("en-IN")}</div><p className="small" style={{ margin: "4px 0 0", whiteSpace: "pre-wrap" }}>{m.body}</p></div>)}
             {can(s.role, "tickets.write") && (
               <form action={reply} className="card col" style={{ padding: 12, gap: 8 }}>

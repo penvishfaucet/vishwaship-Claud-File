@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, BadgeIndianRupee, Bell, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -23,6 +23,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   { group: "FINANCE", items: [
     { href: "/admin/pricing/", label: "Pricing", icon: Tags, perm: "pricing.read" },
     { href: "/admin/finance/", label: "Wallets", icon: Wallet, perm: "finance.read" },
+    { href: "/admin/recharges/", label: "Wallet Recharges", icon: Banknote, perm: "finance.read" },
     { href: "/admin/cod-remittance/", label: "COD & Early COD", icon: BadgeIndianRupee, perm: "finance.read" },
     { href: "/admin/billing-documents/", label: "Invoices & Notes", icon: FileSpreadsheet, perm: "finance.read" },
     { href: "/admin/couriers/", label: "Couriers & Rate Cards", icon: TruckIcon, perm: "pricing.read" },
@@ -30,6 +31,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   ] },
   { group: "SETTINGS", items: [
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
+    { href: "/admin/payments/", label: "Payment Settings", icon: CreditCard, perm: "integrations.read" },
     { href: "/admin/carriers/delhivery/", label: "Delhivery Direct", icon: TruckIcon, perm: "integrations.read" },
     { href: "/admin/oms/", label: "OMS Requests", icon: Boxes, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },

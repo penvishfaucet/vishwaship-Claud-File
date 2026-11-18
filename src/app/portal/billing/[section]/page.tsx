@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { Download, Printer, Wallet } from "lucide-react";
 import { BuyCredits } from "@/components/portal/BuyCredits";
-import { RechargePanel } from "@/components/portal/RechargePanel";
+import { RechargeV2 } from "@/components/portal/RechargeV2";
+import { activeGateway, getPaymentSettings } from "@/server/payments/settings";
+import { METHOD_LABEL, rechargeStatus } from "@/lib/recharge";
 import { formatINR } from "@/lib/money";
 import { codOverview, creditHistory, documentsOf, ledgerStatement, range, rechargesOf, shippingCharges } from "@/server/billing";
 import { t } from "@/server/content";
@@ -36,7 +38,9 @@ export default async function BillingSection({ params, searchParams }: { params:
   const sp = await searchParams;
   const ctx = await portalContext();
   const db = await getDb();
-  const [razorpay] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, "razorpay"), eq(schema.providerAccounts.status, "enabled")));
+  const showRecharge = ["passbook", "recharges"].includes(key);
+  const pay = showRecharge ? await getPaymentSettings() : null;
+  const gw = showRecharge ? await activeGateway() : null;
   const meta = SECTIONS[key];
   const dated = ["passbook", "shipping-charges", "ledgers"].includes(key);
   const { from, to } = range(sp, key === "ledgers" ? 30 : 90);
@@ -50,14 +54,21 @@ export default async function BillingSection({ params, searchParams }: { params:
           <a className="btn btn-outline" href={`/api/portal/export/${meta.export}?${qs}${qs ? "&" : ""}format=xlsx`}><Download size={16} /> Excel</a>
         </div>
       </div>
-      {["passbook", "recharges"].includes(key) && (
-        <div className="grid2 mb16" style={{ gap: 12, alignItems: "start" }}>
-          <div className="stat bl-orange">
+      {showRecharge && pay && (
+        <div className="mb16">
+          <div className="stat bl-orange mb12">
             <div className="t"><Wallet size={14} /> Available balance</div>
             <div className="v">{formatINR(ctx.walletAvailable)}</div>
             <div className="s">Posted {formatINR(ctx.walletPosted)}{ctx.walletReserved ? ` · on hold ${formatINR(ctx.walletReserved)}` : ""}</div>
           </div>
-          <RechargePanel open={!!sp.recharge} razorpayConfigured={!!razorpay} />
+          <RechargeV2
+            balancePaise={ctx.walletAvailable}
+            gateway={gw?.gateway ?? null}
+            demo={!gw && process.env.NODE_ENV !== "production"}
+            online={{ minPaise: pay.onlineMinPaise, maxPaise: pay.onlineMaxPaise }}
+            manual={pay.manual.enabled && pay.manual.upiId && pay.manual.qrKey ? { upiId: pay.manual.upiId, payeeName: pay.manual.payeeName, hasQr: !!pay.manual.qrKey, instructions: pay.manual.instructions, discountBps: pay.manual.discountBps, minPaise: pay.manual.minPaise, maxPaise: pay.manual.maxPaise, reviewMessage: pay.manual.reviewMessage } : null}
+            autoFocus={!!sp.recharge}
+          />
         </div>
       )}
       {dated && (
@@ -194,11 +205,24 @@ async function Cod({ orgId }: { orgId: string }) {
 async function Recharges({ orgId }: { orgId: string }) {
   const rows = await rechargesOf(orgId);
   if (!rows.length) return <Empty text="No recharges yet. Use Recharge above to add money to your wallet." />;
-  const S: Record<string, string> = { pending: "c-pending", captured: "c-active", failed: "c-failed", refunded: "c-draft", mismatch: "c-failed" };
   return (
     <div className="card p0 tbl-wrap"><table className="tbl">
-      <thead><tr><th>Date</th><th style={R}>Amount</th><th>Payment reference</th><th>Order reference</th><th>Payment status</th><th>Wallet credit</th></tr></thead>
-      <tbody>{rows.map((r) => <tr key={r.id}><td className="small">{dt(r.createdAt)}</td><td style={R} className="b">{formatINR(r.amountPaise)}</td><td className="small mono">{r.razorpayPaymentId ?? "—"}</td><td className="tiny mono muted">{r.razorpayOrderId ?? r.id}</td><td><span className={`chip ${S[r.status] ?? "c-pending"}`}>{r.status}</span></td><td>{r.walletCredited ? <span className="chip c-active">Credited</span> : r.status === "captured" ? <span className="chip c-pending">Processing</span> : <span className="small muted">—</span>}</td></tr>)}</tbody>
+      <thead><tr><th>Date</th><th>Request / reference</th><th>Method</th><th style={R}>Wallet credit</th><th style={R}>Paid</th><th style={R}>Discount</th><th>Status</th><th /></tr></thead>
+      <tbody>{rows.map((r) => {
+        const st = rechargeStatus(r.status);
+        return (
+          <tr key={r.id}>
+            <td className="small">{dt(r.createdAt)}</td>
+            <td className="small"><span className="b mono">{r.requestNumber ?? "—"}</span><div className="tiny mono muted">{r.utr ?? r.razorpayPaymentId ?? r.providerPaymentId ?? r.razorpayOrderId ?? r.id}</div></td>
+            <td className="small">{METHOD_LABEL[r.method] ?? r.method}</td>
+            <td style={R} className="b">{formatINR(r.amountPaise)}</td>
+            <td style={R} className="small">{r.paidPaise != null ? formatINR(r.paidPaise) : r.payablePaise != null ? formatINR(r.payablePaise) : "—"}</td>
+            <td style={R} className="small">{r.discountPaise ? formatINR(r.discountPaise) : "—"}</td>
+            <td><span className={`chip ${st.chip}`}>{st.label}</span></td>
+            <td className="row" style={{ gap: 6 }}><Link className="btn btn-sm btn-outline" href={`/portal/billing/recharges/${r.id}/`}>View</Link>{r.ticketId && <Link className="btn btn-sm btn-outline" href={`/portal/support/${r.ticketId}/`}>Ticket</Link>}</td>
+          </tr>
+        );
+      })}</tbody>
     </table></div>
   );
 }

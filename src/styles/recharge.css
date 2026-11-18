@@ -1,0 +1,59 @@
+/* Wallet recharge (Customer Portal) — navy / orange / white, follows the portal's light/dark tokens. */
+.rc{padding:20px}
+.rc h2{font-size:19px;margin:0}
+.rc-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(260px,.85fr);gap:24px;align-items:start}
+.rc-bal{font-size:13px;color:var(--muted)}
+.rc-bal b{color:var(--text);font-size:15px}
+.rc-amt{font-size:22px;font-weight:700;height:52px}
+.pills .pill.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.rc-methods{border:0;padding:0;margin:16px 0 12px;display:flex;flex-direction:column;gap:10px}
+.rc-methods legend{font-size:13px;font-weight:700;margin-bottom:8px}
+.rc-m{display:flex;align-items:center;gap:12px;border:1.5px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;background:var(--card);transition:border-color .15s,box-shadow .15s}
+.rc-m input{accent-color:var(--orange);width:18px;height:18px;flex-shrink:0}
+.rc-m svg{color:var(--navy);flex-shrink:0}
+.rc-m span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rc-m b{font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rc-m small{color:var(--muted);font-size:12.5px}
+.rc-m.on{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft)}
+.rc-save{font-style:normal;background:#1e7b3a;color:#fff;border-radius:999px;padding:2px 9px;font-size:11.5px;font-weight:800}
+.rc-cta{width:100%;justify-content:center;margin-top:6px;min-height:52px}
+.rc-sum{background:var(--gray-soft);border-radius:14px;padding:16px;position:sticky;top:80px}
+.rc-sum h3{font-size:14px;margin:0 0 10px}
+.rc-sum dl{margin:0;display:flex;flex-direction:column;gap:8px}
+.rc-sum dl div{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.rc-sum dt{color:var(--muted)}
+.rc-sum dd{margin:0;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.rc-sum .disc dd{color:#1e7b3a}
+.rc-sum .tot{border-top:1px solid var(--line);padding-top:8px;font-size:16px}
+.rc-sum .tot dd{color:var(--orange);font-size:19px}
+.rc-back{border:0;background:none;display:inline-flex;gap:6px;align-items:center;font-weight:600;color:var(--muted);cursor:pointer;padding:0 0 10px}
+.rc-qr{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:14px 0;padding:16px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.rc-qr img{width:240px;height:240px;object-fit:contain;background:#fff;border-radius:12px;border:1px solid var(--line);padding:6px}
+.rc-pay{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rc-pay .lbl{font-size:12px;color:var(--muted);margin-top:6px}
+.rc-pay .amt{font-size:30px;color:var(--orange);line-height:1.1}
+.rc-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0}
+.rc-mini div{background:var(--gray-soft);border-radius:10px;padding:8px 10px}
+.rc-mini dt{font-size:11.5px;color:var(--muted)}
+.rc-mini dd{margin:2px 0 0;font-weight:800}
+.rc-drop{display:flex;align-items:center;gap:10px;border:1.5px dashed var(--line);border-radius:12px;padding:14px;cursor:pointer;color:var(--navy);font-weight:600;min-height:52px}
+.rc-drop:focus-within{border-color:var(--orange)}
+.rc-drop input{position:absolute;opacity:0;width:1px;height:1px}
+.rc-drop span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-result h2{font-size:21px}
+.rc-result p{margin:8px 0 12px}
+.rc-result.ok h2{color:#1e7b3a}
+.rc-result.wait h2{color:var(--orange)}
+.rc-result.bad h2{color:var(--red,#c62828)}
+.rc-status{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+@media (max-width:860px){
+  .rc{padding:16px}
+  .rc-grid{grid-template-columns:minmax(0,1fr);gap:16px}
+  .rc-sum{position:static}
+  .rc-qr{flex-direction:column;align-items:stretch;text-align:center}
+  .rc-qr img{width:min(280px,100%);height:auto;aspect-ratio:1;margin:0 auto}
+  .rc-pay{align-items:center}
+  .rc-pay .row{justify-content:center}
+  .rc-mini{grid-template-columns:minmax(0,1fr)}
+  .rc-mini div{display:flex;justify-content:space-between}
+}
