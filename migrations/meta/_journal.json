@@ -71,6 +71,13 @@
       "when": 1794999415143,
       "tag": "0009_courier_integrations",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795005998981,
+      "tag": "0010_keep_live_couriers",
+      "breakpoints": true
     }
   ]
 }

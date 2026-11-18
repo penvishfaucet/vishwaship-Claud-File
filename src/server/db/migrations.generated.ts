@@ -283,5 +283,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1794999415143,
   "hash": "bcf152c50d4d19077f770b958d18e0744a9c29377fa1b5d2c01636ba2034e0dc"
+ },
+ {
+  "tag": "0010_keep_live_couriers",
+  "sql": [
+   "-- Courier accounts that were already live (enabled, connection test passed) before capability verification\n-- existed keep quoting: they are treated like the owner's \"Activate now\" (owner decision 2026-11-18).\n-- The remaining capabilities verify from real bookings. Shipmozo is excluded: its adapter did not exist before.\nUPDATE \"provider_accounts\"\nSET \"config_public\" = \"config_public\" || '{\"activatedEarly\":{\"at\":\"2026-11-18\",\"by\":\"migration\"}}'::jsonb,\n    \"capabilities\" = \"capabilities\" || jsonb_build_object('authenticate', jsonb_build_object(\n      'state', CASE WHEN \"mode\" = 'live' THEN 'live_verified' ELSE 'sandbox_verified' END,\n      'mode', \"mode\", 'message', 'Connection test passed before verification tracking existed', 'evidence', 'last connection test'))\nWHERE \"category\" = 'shipping' AND \"status\" = 'enabled' AND \"adapter\" NOT IN ('demo', 'shipmozo') AND \"last_test_ok\" = true;\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795005998981,
+  "hash": "0663079f651acb73794141cc3764f44774bbaa135541a0f39e3a843604c3de07"
  }
 ];
