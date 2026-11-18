@@ -61,7 +61,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         <section className="card mb16" style={{ padding: 16 }}>
           <div className="grid2" style={{ gap: 12 }}>
             <dl className="kv-list" style={{ margin: 0 }}>
-              <dt>Courier</dt><dd>{shipment.carrierName} · {shipment.serviceName}</dd>
+              <dt>Courier</dt><dd>{shipment.carrierName} · {shipment.serviceName}{(quote?.priced as { partnerCode?: string } | undefined)?.partnerCode ? <span className="tiny muted"> · Partner code {(quote!.priced as { partnerCode: string }).partnerCode}</span> : null}</dd>
               <dt>{order.mode === "B2B" ? "LR / AWB" : "AWB"}</dt><dd className="mono">{shipment.awb ?? (shipment.bookingStatus === "pending" ? "Pending — the courier is assigning it; this page updates automatically" : "—")}{shipment.lrNumber && shipment.lrNumber !== shipment.awb ? ` · LR ${shipment.lrNumber}` : ""}</dd>
               {Array.isArray(shipment.pieceIds) && (shipment.pieceIds as string[]).length > 0 && <><dt>Package IDs</dt><dd className="mono tiny">{(shipment.pieceIds as string[]).join(", ")}</dd></>}
             </dl>

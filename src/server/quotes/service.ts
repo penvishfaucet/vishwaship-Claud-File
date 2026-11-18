@@ -11,6 +11,7 @@ import {
 } from "@/server/pricing/engine";
 import { adapterFor, providerContext } from "@/server/providers/registry";
 import { canTakeBookings } from "@/server/carriers/verification";
+import { partnerCodeFor } from "@/server/carriers/specs";
 import type { QuoteRequest } from "@/server/providers/types";
 
 export const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -55,6 +56,8 @@ export interface QuoteOffer extends PricedQuote {
   /** Offered only to pilot customers while Admin verifies the integration. */
   isPilot?: boolean;
   providerAccountId: string;
+  /** Courier partner code of the provider account this rate came from (e.g. VISW001B2C). */
+  partnerCode: string | null;
 }
 
 /** Which component rules a provider uses (Admin can override per provider via pricing_settings). */
@@ -121,6 +124,7 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     if (!res.ok) return { offers, error: res.error.category === "unsupported" ? null : `${label}: ${res.error.message}` };
 
     const markup = pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
+    const partnerCode = partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>);
     const provRules = await getSetting(`component_rules:${acct.adapter}`, defaultRules(acct.adapter, rules.value));
     for (const q of res.value) {
       if (!allowed(q.carrierCode)) continue; // switched off by Admin or by this customer (Manage Courier)
@@ -130,11 +134,11 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
       const quoteId = newId("qt");
       const expiresAt = new Date(now.getTime() + QUOTE_TTL_MS);
       const isPilot = acct.status !== "enabled";
-      offers.push({ ...priced, quoteId, expiresAt: expiresAt.toISOString(), isDemo: acct.adapter === "demo", isPilot, payer, pricingSource, paymentMode: req.paymentType, providerAccountId: acct.id });
+      offers.push({ ...priced, quoteId, expiresAt: expiresAt.toISOString(), isDemo: acct.adapter === "demo", isPilot, payer, pricingSource, paymentMode: req.paymentType, providerAccountId: acct.id, partnerCode });
       if (persist) await db.insert(schema.quotes).values({
         id: quoteId, orgId, providerAccountId: acct.id, provider: acct.adapter, carrierCode: q.carrierCode,
         serviceName: q.serviceName, mode: q.mode, request: req,
-        priced: { ...priced, providerQuoteRef: q.providerQuoteRef, payer, pricingSource, paymentMode: req.paymentType, markupKey: markup.source, isPilot, providerComponents: q.components, providerTaxInclusive: q.taxInclusive },
+        priced: { ...priced, providerQuoteRef: q.providerQuoteRef, payer, pricingSource, paymentMode: req.paymentType, markupKey: markup.source, isPilot, partnerCode, providerComponents: q.components, providerTaxInclusive: q.taxInclusive },
         totalPaise: priced.total, expiresAt,
       });
     }

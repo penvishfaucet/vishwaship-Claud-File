@@ -263,6 +263,7 @@ export function RateCalcV2({ thresholdGrams, logos, compact = false, signedIn = 
                 {o.etaDays ? <span className="w-chip">Est. {o.etaDays} day{o.etaDays > 1 ? "s" : ""} in transit</span> : <span className="w-chip">Transit time on booking</span>}
                 <span className="w-chip">{PAY_LABEL[o.paymentMode ?? pay]}</span>
                 {o.isDemo && <span className="w-chip">Sample rate</span>}
+                {o.partnerCode && <span className="w-chip" title="Courier partner code">Code {o.partnerCode}</span>}
               </div>
               {fod && <p style={{ fontSize: 13.5, color: "var(--mut)", margin: "10px 0 0" }}>You pay {formatINR(o.payer!.sender)} · receiver pays {formatINR(o.payer!.receiver)} at delivery</p>}
               <div className="acts">

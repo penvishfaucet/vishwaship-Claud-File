@@ -23,6 +23,7 @@ export interface OfferView {
   pricingSource?: string;
   isDemo: boolean;
   isPilot?: boolean;
+  partnerCode?: string | null;
 }
 
 interface Props {
@@ -123,7 +124,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
                 {logo ? <img className="clogo" src={logo} alt={o.carrierName} /> : <span className="b">{o.carrierName}</span>}
                 <div style={{ minWidth: 0 }}>
                   <div className="b small">{o.carrierName} · {o.serviceName}</div>
-                  <div className="tiny muted">{o.mode}{o.etaDays ? ` · ETA ${o.etaDays} day${o.etaDays > 1 ? "s" : ""}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg chargeable{o.isPilot ? " · verification service" : ""}</div>
+                  <div className="tiny muted">{o.mode}{o.etaDays ? ` · ETA ${o.etaDays} day${o.etaDays > 1 ? "s" : ""}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg chargeable{o.isPilot ? " · verification service" : ""}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</div>
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>

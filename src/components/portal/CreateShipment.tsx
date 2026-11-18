@@ -484,7 +484,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                       {logo ? <img className="clogo-sm" src={logo} alt="" /> : null}
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span className="b small">{o.carrierName} · {o.serviceName}</span>
-                        <span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg · {o.lines.map((l) => `${l.label} ${formatINR(l.sellPreTax)}`).join(" · ")} · GST {formatINR(o.gst)}</span>
+                        <span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg · {o.lines.map((l) => `${l.label} ${formatINR(l.sellPreTax)}`).join(" · ")} · GST {formatINR(o.gst)}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</span>
                       </span>
                       <span style={{ textAlign: "right" }}>
                         {o.payer && o.payer.receiver > 0 ? <>

@@ -27,7 +27,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("environment"), id, mode: env }),
   z.object({ op: z.literal("config"), id, brandName: z.string().trim().max(60).default(""), logoCode: z.string().trim().max(60).default(""), baseUrlTest: z.string().trim().max(300).default(""), baseUrlLive: z.string().trim().max(300).default(""),
     typeOfPackage: z.string().trim().max(20).default(""), rovType: z.string().trim().max(30).default(""), gstTreatment: z.enum(["auto", "inclusive", "exclusive"]).default("auto"),
-    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), webhookNote: z.string().trim().max(300).default("") }),
+    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), webhookNote: z.string().trim().max(300).default(""), partnerCode: z.string().trim().max(20).regex(/^[A-Za-z0-9_-]*$/, "Letters, numbers, - and _ only").default("") }),
   z.object({ op: z.literal("test_auth"), id }),
   z.object({ op: z.literal("test_serviceability"), id, from: pin, to: pin }),
   z.object({ op: z.literal("rate_check"), id, from: pin, to: pin, weightKg: z.coerce.number().positive().max(5000), lengthCm: z.coerce.number().positive().max(500), widthCm: z.coerce.number().positive().max(500), heightCm: z.coerce.number().positive().max(500),
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
       return ok(`Now using ${b.mode === "live" ? "production" : "sandbox"}. Capabilities must be verified in this environment before activation.`);
     }
     case "config": {
-      const patch: Record<string, unknown> = { brandName: b.brandName || cfg.brandName, logoCode: b.logoCode || null, webhookNote: b.webhookNote || null };
+      const patch: Record<string, unknown> = { brandName: b.brandName || cfg.brandName, logoCode: b.logoCode || null, webhookNote: b.webhookNote || null, partnerCode: b.partnerCode ? b.partnerCode.toUpperCase() : null };
       if (spec?.baseUrlEditable) {
         const urls: Record<string, string> = { ...((cfg.baseUrl as Record<string, string> | undefined) ?? {}) };
         for (const [m, v] of [["test", b.baseUrlTest], ["live", b.baseUrlLive]] as const) {

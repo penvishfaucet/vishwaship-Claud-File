@@ -5,7 +5,7 @@ import { carrierLogo } from "@/lib/site";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { ensureDelhiveryAccount } from "@/server/carriers/delhivery";
-import { CAP_LABEL, CARRIER_SPECS, REQUIRED_CAPS } from "@/server/carriers/specs";
+import { CAP_LABEL, CARRIER_SPECS, REQUIRED_CAPS, partnerCodeFor } from "@/server/carriers/specs";
 import { SETUP_LABEL, isVerified, setupState } from "@/server/carriers/verification";
 import { getDb, schema } from "@/server/db/client";
 
@@ -47,7 +47,7 @@ export default async function CourierIntegrations() {
             const probs = count(syncErr, a.id) + count(stuck, a.id);
             return (
               <tr key={a.id}>
-                <td><span className="row" style={{ gap: 8, alignItems: "center" }}>{logo ? <img src={logo} alt="" style={{ height: 22, width: 44, objectFit: "contain" }} /> : <span className="chip c-draft" style={{ minWidth: 44, textAlign: "center" }}>{String(cfg.brandName ?? a.label).slice(0, 2).toUpperCase()}</span>}<span><b className="small">{String(cfg.brandName ?? spec?.name ?? a.label)}</b> <span className="chip c-draft">{service}</span></span></span></td>
+                <td><span className="row" style={{ gap: 8, alignItems: "center" }}>{logo ? <img src={logo} alt="" style={{ height: 22, width: 44, objectFit: "contain" }} /> : <span className="chip c-draft" style={{ minWidth: 44, textAlign: "center" }}>{String(cfg.brandName ?? a.label).slice(0, 2).toUpperCase()}</span>}<span><b className="small">{String(cfg.brandName ?? spec?.name ?? a.label)}</b> <span className="chip c-draft">{service}</span>{partnerCodeFor(a.adapter, cfg) ? <span className="tiny mono muted" style={{ display: "block" }}>{partnerCodeFor(a.adapter, cfg)}</span> : null}</span></span></td>
                 <td className="small">{(spec?.route ?? cfg.route) === "aggregator" ? `Aggregator (${spec?.name ?? "custom"})` : "Direct"}</td>
                 <td className="small">{a.mode === "live" ? "Production" : "Sandbox"}</td>
                 <td><span className={`chip ${chip}`}>{label}</span></td>

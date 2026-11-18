@@ -184,6 +184,7 @@ describe("quotes across providers", () => {
     const sm = r.offers.find((o) => o.providerAccountId === SM_B2C)!;
     expect(sm.costPreTax).toBe(100_000);
     expect(sm.sellingSubtotal).toBe(110_000);
+    expect(sm.partnerCode).toBe("VISW001B2C"); // shows which provider account the rate came from
     await setMarkup("*", ORG, 2500, STAFF);
   });
 });

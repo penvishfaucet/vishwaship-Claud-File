@@ -166,3 +166,20 @@ export const SHOWN_CAPS: Capability[] = ["authenticate", "serviceability", "quot
 export const CAP_LABEL: Partial<Record<Capability, string>> = {
   authenticate: "Authentication", serviceability: "Serviceability", quote: "Rates", book: "Booking", label: "Label", pickup: "Pickup", track: "Tracking", cancel: "Cancellation",
 };
+
+/**
+ * Courier partner code shown in small print on every customer rate ("Partner code VISW001B2C"), so the owner can
+ * tell which provider account a rate came from. Admin can override per account (config.partnerCode).
+ */
+export const DEFAULT_PARTNER_CODES: Record<string, string> = {
+  "shipmozo:B2C": "VISW001B2C", "shipmozo:B2B": "VISW002B2B",
+  "delhivery_b2c:B2C": "DHL0001B2C", "delhivery_b2b:B2B": "DHL0002B2B",
+  "shiporax:B2C": "VISIPO00B2C", "shiporax:B2B": "VISIPO00B2B",
+};
+
+export function partnerCodeFor(adapter: string, config: Record<string, unknown> | null | undefined): string | null {
+  const own = typeof config?.partnerCode === "string" ? config.partnerCode.trim() : "";
+  if (own) return own;
+  const service = config?.service === "B2B" || adapter === "delhivery_b2b" ? "B2B" : "B2C";
+  return DEFAULT_PARTNER_CODES[`${adapter}:${service}`] ?? null;
+}
