@@ -302,3 +302,67 @@ html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
 .shell h1,.shell h2,.shell h3,.shell h4,.shell b,.shell strong,.shell th,.auth h1,.auth h2,.auth b{font-weight:600}
 .shell{font-size:13px}
 .shell .page-h h1{font-size:19px}
+
+/* ===== Theme v3 (owner reference 2026-11-19): white + peach + dark orange, blue-black text, Roboto regular ===== */
+.shell{
+  --navy:#1b2232; --navy-2:#283147; --navy-3:#38425c;
+  --text:#1b2232; --muted:#667085; --muted-2:#98a2b3;
+  --orange:#e8590c; --orange-2:#c94c08; --orange-soft:#fff1e7; --orange-line:#ffd9c2; --peach:#ffe6d5;
+  --bg:#fffaf7; --card:#ffffff; --line:#f0e4dc; --line-2:#f6ede7; --gray-soft:#f7f2ee;
+  font-weight:400;
+}
+.shell h1,.shell h2,.shell h3,.shell h4,.shell b,.shell strong,.shell th,.shell .b{font-weight:500}
+.shell .page-h h1{font-size:20px;font-weight:500}
+.shell .btn{font-weight:500;border-radius:10px}
+.shell .btn-orange,.shell .ov-btn.orange{background:var(--orange);border-color:var(--orange);color:#fff}
+.shell .btn-orange:hover,.shell .ov-btn.orange:hover{background:var(--orange-2);color:#fff}
+.shell .btn-navy{background:var(--navy);border-color:var(--navy);color:#fff}
+.shell .btn-outline{background:#fff;border-color:var(--line);color:var(--text)}
+.shell .card{border-color:var(--line);box-shadow:0 1px 2px rgba(27,34,50,.04)}
+.shell .tabs a.on,.shell .ov-tabs a.on{color:var(--orange);border-color:var(--orange)}
+.shell .input,.shell .select,.shell .textarea{border-color:var(--line);border-radius:10px}
+.shell .input:focus,.shell .select:focus,.shell .textarea:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);outline:none}
+
+/* header Support Chat button */
+.hdr-ico.hchat{background:var(--orange-soft)}
+.hdr-ico.hchat svg{color:var(--orange)}
+
+/* Support Chat sheet (bottom sheet on phones, side panel on desktop) */
+.sc-backdrop{position:fixed;inset:0;z-index:200;background:rgba(27,34,50,.35);display:flex;align-items:flex-end;justify-content:center}
+.sc-sheet{background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;display:flex;flex-direction:column;max-height:86vh;box-shadow:0 -10px 40px rgba(27,34,50,.18)}
+.sc-grip{width:44px;height:4px;border-radius:4px;background:#d9d4d0;margin:10px auto 0}
+.sc-h{display:flex;align-items:center;gap:10px;padding:14px 18px 6px;color:var(--text)}
+.sc-h h2{font-size:19px;font-weight:500;margin:0;flex:1}
+.sc-x{border:0;background:none;color:var(--text);cursor:pointer;padding:6px}
+.sc-body{padding:8px 18px 14px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.sc-bubble{align-self:flex-start;background:var(--peach,#ffe6d5);color:var(--text);padding:12px 16px;border-radius:16px 16px 16px 4px;margin:0;font-size:14.5px}
+.sc-quick{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sc-quick a{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line);border-radius:12px;padding:11px 8px;color:var(--text);text-decoration:none;font-size:14px}
+.sc-quick a:hover{border-color:var(--orange);color:var(--orange)}
+.sc-recent{display:flex;flex-direction:column;gap:6px}
+.sc-recent a{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;border-radius:10px;background:var(--gray-soft);color:var(--text);text-decoration:none;font-size:13px}
+.sc-st{font-size:11.5px;color:var(--muted)}.sc-st.open{color:var(--orange)}
+.sc-input{display:flex;align-items:center;gap:8px;margin:6px 14px 16px;border:1px solid var(--line);border-radius:16px;padding:6px 6px 6px 10px}
+.sc-input input{flex:1;border:0;outline:none;font:inherit;font-size:15px;padding:8px 4px;min-width:0;background:transparent}
+.sc-attach{color:var(--muted);display:flex}
+.sc-send{border:0;background:var(--orange);color:#fff;border-radius:12px;width:44px;height:40px;display:grid;place-items:center;cursor:pointer}
+.sc-send:disabled{opacity:.5}
+@media (min-width:900px){.sc-backdrop{align-items:stretch;justify-content:flex-end}.sc-sheet{border-radius:0;max-height:none;height:100%;max-width:420px}.sc-grip{display:none}}
+
+/* Ticket as a chat */
+.chat-page{max-width:760px;display:flex;flex-direction:column;gap:10px;min-height:calc(100vh - 150px)}
+.chat-head{display:flex;align-items:center;gap:12px}
+.chat-head h1{font-size:19px;font-weight:500;margin:0}
+.chat-head p{margin:2px 0 0}
+.chat-back{font-size:22px;color:var(--text);text-decoration:none;padding:4px 8px}
+.chat-thread{flex:1;display:flex;flex-direction:column;gap:10px;padding:14px;background:#fff;border:1px solid var(--line);border-radius:16px}
+.chat-msg{margin:0;max-width:82%;display:flex;flex-direction:column;gap:3px}
+.chat-msg span{padding:10px 14px;border-radius:16px;white-space:pre-wrap;font-size:14.5px;line-height:1.45}
+.chat-msg small{font-size:11px;color:var(--muted)}
+.chat-msg.them{align-self:flex-start}.chat-msg.them span{background:var(--peach,#ffe6d5);border-radius:16px 16px 16px 4px}
+.chat-msg.me{align-self:flex-end;align-items:flex-end}.chat-msg.me span{background:var(--orange);color:#fff;border-radius:16px 16px 4px 16px}
+.chat-input{position:sticky;bottom:76px;display:flex;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:6px 6px 6px 14px}
+.chat-input input{flex:1;border:0;outline:none;font:inherit;font-size:15px;padding:8px 0;min-width:0}
+.chat-input button{border:0;background:var(--orange);color:#fff;border-radius:12px;width:46px;height:40px;cursor:pointer;font-size:16px}
+@media (min-width:900px){.chat-input{bottom:12px}}
+.sc-backdrop{z-index:1000}

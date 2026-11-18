@@ -526,3 +526,6 @@
 /* type system: lighter headings and emphasis (owner request 2026-11-18) */
 .wv h1,.wv h2,.wv h3,.wv h4,.wv b,.wv strong,.wv th{font-weight:600}
 .wv h1.w-h1,.wv .w-h1{font-weight:600;letter-spacing:-.015em}
+/* Theme v3: white + peach + dark orange, blue-black ink, Roboto regular */
+.wv{--n:#1b2232;--n2:#283147;--n3:#38425c;--o:#e8590c;--o2:#c94c08;--os:#fff1e7;--ink:#1b2232;--mut:#667085;--ln:#f0e4dc;--bg:#fffaf7;font-weight:400}
+.wv h1,.wv h2,.wv h3,.wv h4,.wv b,.wv strong{font-weight:500}

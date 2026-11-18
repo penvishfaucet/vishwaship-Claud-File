@@ -174,3 +174,29 @@ select.ov-field{padding-right:28px}
   .ov-pager{justify-content:center}
 }
 @media (prefers-reduced-motion:reduce){.ov *{transition:none!important;animation:none!important}}
+/* Simple order cards (owner request 2026-11-19): ID, payment, status, Cancel / Clone / Raise ticket */
+.ov-cards[hidden],.ov-tablewrap[hidden]{display:none!important}
+.ov-simple{display:flex;flex-direction:column;gap:10px}
+.ov-sc{background:#fff;border:1px solid var(--line,#e3e8f2);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.ov-sc[data-selected]{border-color:var(--orange)}
+.ov-sc-top,.ov-sc-mid{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ov-sc-id{display:flex;align-items:center;gap:10px;min-width:0}
+.ov-sc-id a{font-weight:500;font-size:14.5px;color:var(--navy);text-decoration:none}
+.ov-sc-id a:hover{color:var(--orange);text-decoration:underline}
+.ov-pay{font-size:13px;color:var(--text);background:var(--gray-soft,#eef2f9);border-radius:999px;padding:3px 10px}
+.ov-pay.cod{background:var(--orange-soft,#fff1e7);color:#9a3a07}
+.ov-pay b{font-weight:500}
+.ov-sc-act{display:flex;gap:8px;flex-wrap:wrap}
+@media (min-width:900px){.ov-sc{flex-direction:row;align-items:center}.ov-sc-top{flex:1}.ov-sc-mid{flex:1}.ov-sc-act{justify-content:flex-end}}
+@media (max-width:600px){.ov-sc-act .ov-btn{flex:1;justify-content:center}}
+/* Theme v3 (reference): outlined white buttons, peach active states, orange primary with white text */
+.shell .ov-btn.navy{background:#fff;color:var(--text);border:1px solid var(--line)}
+.shell .ov-btn.navy:hover{border-color:var(--orange);color:var(--orange)}
+.shell .ov-btn.orange{color:#fff}
+.shell .ov-seg .on{background:var(--orange-soft);color:var(--orange-2,#c94c08)}
+.shell .ov-dir a{font-weight:500}
+.shell .ov-tabs .on,.shell .ov-tab.on,.shell [aria-current="page"].ov-tab{background:var(--orange-soft);border-color:var(--orange-line,#ffd9c2);color:var(--text)}
+.shell .ov-stabs a.on{background:var(--orange-soft);color:var(--text);border-color:var(--orange-line,#ffd9c2)}
+.shell .ov-stabs a.on .ov-n{background:var(--orange);color:#fff}
+.shell .ov-split .ov-btn.navy{background:var(--orange);border-color:var(--orange);color:#fff}
+.shell .ov-split .ov-btn.navy:hover{background:var(--orange-2,#c94c08);color:#fff}

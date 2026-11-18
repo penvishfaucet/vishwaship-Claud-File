@@ -8,6 +8,7 @@ import {
 import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
 import { QuickSearch } from "./QuickSearch";
+import { SupportChat } from "./SupportChat";
 import { SidebarBrand } from "@/components/BrandLogo";
 import { rememberBrowser } from "@/components/site/nav";
 
@@ -183,24 +184,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
               </div>
             )}
           </div>
-          <div style={{ position: "relative" }}>
-            <button className="hdr-ico htickets" aria-label={`Tickets${tickets.open ? `, ${tickets.open} open` : ""}`} aria-haspopup="menu" aria-expanded={menu === "tickets"} onClick={() => setMenu(menu === "tickets" ? null : "tickets")}>
-              <Ticket size={19} /><span className="hide-md">Tickets</span>{tickets.open > 0 && <i>{tickets.open > 9 ? "9+" : tickets.open}</i>}
-            </button>
-            {menu === "tickets" && (
-              <div className="dropdown wide" role="menu">
-                <div className="dd-h"><b className="small">Recent tickets</b><span className="tiny muted">{tickets.open} open</span></div>
-                {tickets.recent.length === 0 && <p className="small muted" style={{ padding: 10 }}>No tickets yet.</p>}
-                {tickets.recent.map((t) => (
-                  <Link key={t.id} role="menuitem" href={`/portal/support/${t.id}/`}>
-                    <span className="row between" style={{ gap: 8 }}><b className="small mono">{t.number}</b><span className={`chip ${t.status === "open" ? "c-pending" : t.status === "resolved" || t.status === "closed" ? "c-active" : "c-draft"}`}>{t.status.replace(/_/g, " ")}</span></span>
-                    <span className="small" style={{ display: "block" }}>{t.subject}</span><span className="tiny muted">Updated {ago(t.updatedAt)}</span>
-                  </Link>
-                ))}
-                <div className="dd-f"><Link href="/portal/support/new/" className="btn btn-sm btn-orange">Raise Ticket</Link><Link href="/portal/support/" className="btn btn-sm btn-outline">View All Tickets</Link></div>
-              </div>
-            )}
-          </div>
+          <SupportChat open={tickets.open} recent={tickets.recent.map((t) => ({ id: t.id, number: t.number, subject: t.subject, status: t.status, updatedAt: String(t.updatedAt) }))} />
           <div style={{ position: "relative" }}>
             <button className="hdr-ico" aria-label={`Notifications${unreadAlerts.length ? `, ${unreadAlerts.length} unread` : ""}`} aria-haspopup="menu" aria-expanded={menu === "alerts"} onClick={() => setMenu(menu === "alerts" ? null : "alerts")}>
               <Bell size={19} />{unreadAlerts.length > 0 && <i>{unreadAlerts.length > 9 ? "9+" : unreadAlerts.length}</i>}

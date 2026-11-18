@@ -215,7 +215,22 @@ export function OrdersView(p: Props) {
           </div>
         ) : (
           <>
-            <div className="ov-tablewrap">
+            {/* One simple card per order: ID, payment, status and three actions. Everything else is inside the order. */}
+            <div className="ov-simple" style={{ padding: 12 }}>
+              <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
+              {p.rows.map((r) => (
+                <SimpleCard key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => toggle(r.id)} onCancel={() => cancel(r)}
+                  onClone={async () => {
+                    setBusy("clone");
+                    const res = await fetch(`/api/portal/orders/${r.id}/clone`, { method: "POST" });
+                    const j = await res.json().catch(() => ({}));
+                    setBusy(null);
+                    if (!res.ok) { setToast({ text: j.error?.message ?? "Could not clone the order", bad: true }); return; }
+                    router.push(j.editUrl);
+                  }} busy={busy} />
+              ))}
+            </div>
+            <div className="ov-tablewrap" hidden>
               <table className="ov-table">
                 <thead>
                   <tr>
@@ -241,7 +256,7 @@ export function OrdersView(p: Props) {
                 </tbody>
               </table>
             </div>
-            <div className="ov-cards" style={{ padding: 12 }}>
+            <div className="ov-cards" style={{ padding: 12 }} hidden>
               <label className="row small" style={{ gap: 8 }}><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
               {p.rows.map((r) => (
                 <MobileCard key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => toggle(r.id)} open={setDialog} defaultLabel={p.defaultLabel}
@@ -654,6 +669,32 @@ function MobileCard({ r, selected, onToggle, open, defaultLabel, codLabel, onLab
         </div>
       </details>
       <div className="tiny muted">{istDate(r.createdAt)} {istTime(r.createdAt)} · {SOURCE[r.source] ?? r.source}</div>
+    </article>
+  );
+}
+
+function SimpleCard({ r, selected, onToggle, onCancel, onClone, busy }: { r: OrderRow; selected: boolean; onToggle: () => void; onCancel: () => void; onClone: () => void; busy: string | null }) {
+  const s = r.shipment;
+  const b = bookingBadge(r);
+  const canCancel = s ? s.cancellable : r.cancellableOrder;
+  const pay = r.payment === "cod" ? <>COD <b>{inr(r.codPaise)}</b></> : r.payment === "fod" ? <>FOD <b>{inr(r.receiverFreightPaise)}</b></> : <>Prepaid</>;
+  const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
+  return (
+    <article className="ov-sc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
+      <div className="ov-sc-top">
+        <label className="ov-sc-id"><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} />
+          <Link href={!s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`}>{r.orderNumber}</Link></label>
+        <span className={`ov-badge ${b.cls}`}>{b.text}</span>
+      </div>
+      <div className="ov-sc-mid">
+        <span className={`ov-pay ${r.payment}`}>{pay}</span>
+        <span className="tiny muted">{istDate(r.createdAt)}</span>
+      </div>
+      <div className="ov-sc-act">
+        {canCancel && <button type="button" className="ov-btn ghost sm" onClick={onCancel}>{s ? "Cancel shipment" : "Cancel"}</button>}
+        <button type="button" className="ov-btn ghost sm" onClick={onClone} disabled={busy === "clone"}>Clone</button>
+        <Link className="ov-btn ghost sm" href={ticket}>Raise ticket</Link>
+      </div>
     </article>
   );
 }

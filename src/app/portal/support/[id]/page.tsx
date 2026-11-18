@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { rechargeStatus } from "@/lib/recharge";
+import { AutoRefresh } from "@/components/portal/AutoRefresh";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
@@ -28,23 +29,29 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     redirect(`/portal/support/${id}/`);
   }
 
+  const time = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
   return (
-    <>
-      <div className="page-h"><div><h1>{t.subject}</h1><p className="small muted" style={{ margin: "4px 0 0" }}>{t.number} · {t.category.replace(/_/g, " ")}{t.awb ? ` · AWB ${t.awb}` : ""} · <span className={`chip c-${t.status}`}>{t.status}</span></p></div></div>
-      <div className="col" style={{ gap: 10, maxWidth: 760 }}>
-        {rc && <Link className="note row" style={{ gap: 8 }} href={`/portal/billing/recharges/${rc.id}/`}>Recharge request <b>{rc.n}</b> · {rechargeStatus(rc.status).label} — view details, screenshot{rc.status === "info_required" ? " and send the requested information" : ""} →</Link>}
+    <div className="chat-page">
+      <AutoRefresh active={t.status !== "closed"} everyMs={20_000} />
+      <header className="chat-head">
+        <Link href="/portal/support/" className="chat-back" aria-label="Back to my tickets">←</Link>
+        <div><h1>{t.category === "chat" ? "Support Chat" : t.subject}</h1><p className="tiny muted">{t.number}{t.awb ? ` · AWB ${t.awb}` : ""} · <span className={`chip c-${t.status}`}>{t.status.replace(/_/g, " ")}</span></p></div>
+      </header>
+      {rc && <Link className="note row" style={{ gap: 8 }} href={`/portal/billing/recharges/${rc.id}/`}>Recharge request <b>{rc.n}</b> · {rechargeStatus(rc.status).label} — view details{rc.status === "info_required" ? " and send the requested information" : ""} →</Link>}
+      <div className="chat-thread" aria-live="polite">
+        <p className="chat-msg them"><span>Hi! How can we help you today?</span></p>
         {msgs.map((m) => (
-          <div key={m.id} className="card" style={{ padding: 14, borderLeft: m.authorKind === "staff" ? "3px solid var(--orange)" : undefined }}>
-            <div className="tiny muted">{m.authorKind === "staff" ? "Vishwaship support" : "You"} · {m.createdAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</div>
-            <p className="small" style={{ margin: "6px 0 0", whiteSpace: "pre-wrap" }}>{m.body}</p>
-          </div>
+          <p key={m.id} className={`chat-msg ${m.authorKind === "staff" ? "them" : "me"}`}>
+            <span>{m.body}</span>
+            <small>{m.authorKind === "staff" ? "Vishwaship support" : "You"} · {time(m.createdAt)}</small>
+          </p>
         ))}
-        <form action={reply} className="card col" style={{ padding: 14, gap: 8 }}>
-          <label htmlFor="r" className="sr-only">Reply</label>
-          <textarea id="r" name="body" className="textarea" rows={3} placeholder="Write a reply…" required />
-          <button className="btn btn-orange btn-sm" style={{ alignSelf: "start" }}>Send reply</button>
-        </form>
       </div>
-    </>
+      <form action={reply} className="chat-input">
+        <label htmlFor="r" className="sr-only">Message</label>
+        <input id="r" name="body" placeholder="Type a message" required minLength={2} maxLength={4000} autoComplete="off" />
+        <button aria-label="Send">➤</button>
+      </form>
+    </div>
   );
 }
