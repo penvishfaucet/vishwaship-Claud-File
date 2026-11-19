@@ -5,7 +5,9 @@ import Link from "next/link";
  * used everywhere, unmodified — never cropped, recoloured, redrawn or split into icon / text.
  * Only resized proportionally (height set, width auto). On navy surfaces it sits on a white plate.
  */
-export const LOGO_SRC = "/brand/vishwaship-logo.png";
+// Same artwork with the cream background (and letter holes) made transparent — nothing else changed.
+// The untouched original stays at /brand/vishwaship-logo.png.
+export const LOGO_SRC = "/brand/vishwaship-logo-transparent.png";
 const W = 2169, H = 725;
 
 export function BrandLogo({ height = 48, plate = false, className }: { height?: number; plate?: boolean; className?: string }) {
