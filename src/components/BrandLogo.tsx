@@ -1,26 +1,27 @@
 import Link from "next/link";
 
 /**
- * THE Vishwaship logo: the owner's original file (public/brand/vishwaship-logo.png, 2169×725),
- * used everywhere, unmodified — never cropped, recoloured, redrawn or split into icon / text.
- * Only resized proportionally (height set, width auto). On navy surfaces it sits on a white plate.
+ * Vishwaship logo — transparent PNGs only, never on a background plate.
+ * - Light surfaces: the original artwork with its background removed (navy + orange wordmark).
+ * - Dark / navy surfaces (`onDark`): the same artwork with only the navy letters ("vishwa", ".com") in white,
+ *   so the full logo stays readable without a white box behind it. The orange box and "ship" are unchanged.
+ * The untouched source file stays at /brand/vishwaship-logo.png. Resized proportionally only (height set, width auto).
  */
-// Same artwork with the cream background (and letter holes) made transparent — nothing else changed.
-// The untouched original stays at /brand/vishwaship-logo.png.
 export const LOGO_SRC = "/brand/vishwaship-logo-transparent.png";
+export const LOGO_ON_DARK_SRC = "/brand/vishwaship-logo-on-dark.png";
 const W = 2169, H = 725;
 
-export function BrandLogo({ height = 48, plate = false, className }: { height?: number; plate?: boolean; className?: string }) {
-  const img = <img src={LOGO_SRC} alt="vishwaship.com" width={Math.round((height * W) / H)} height={height} className="brand-logo" style={{ height, width: "auto" }} />;
-  return plate ? <span className={`logo-plate${className ? ` ${className}` : ""}`}>{img}</span> : className ? <span className={className}>{img}</span> : img;
+export function BrandLogo({ height = 48, onDark = false, className }: { height?: number; onDark?: boolean; className?: string }) {
+  const img = <img src={onDark ? LOGO_ON_DARK_SRC : LOGO_SRC} alt="vishwaship.com" width={Math.round((height * W) / H)} height={height} className="brand-logo" style={{ height, width: "auto" }} />;
+  return className ? <span className={className}>{img}</span> : img;
 }
 
-/** Sidebar header for the portals: full original logo on a white plate + portal label. */
+/** Sidebar header for the portals (navy sidebar): transparent on-dark logo + portal label. */
 export function SidebarBrand({ href, label, onClick }: { href: string; label: string; onClick?: () => void }) {
   return (
     <div className="brand">
       <Link href={href} onClick={onClick} className="brand-logo-link" aria-label={`vishwaship.com — ${label}`}>
-        <BrandLogo height={52} plate />
+        <BrandLogo height={56} onDark />
       </Link>
       <div className="portal">{label}</div>
     </div>

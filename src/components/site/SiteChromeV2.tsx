@@ -166,7 +166,7 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
       <div className="w-wrap">
         <div className="cols">
           <div>
-            <span className="logo"><BrandLogo height={56} plate /></span>
+            <span className="logo"><BrandLogo height={56} onDark /></span>
             <p style={{ margin: "0 0 14px", lineHeight: 1.6 }}>{footer.tagline}</p>
             {footer.phone && <a href={`tel:${tel}`}>{footer.phone}</a>}
             {footer.email && <a href={`mailto:${footer.email}`}>{footer.email}</a>}

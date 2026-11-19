@@ -52,7 +52,7 @@ export function SiteFooter() {
       <div className="vs-wrap">
         <div className="cols">
           <div>
-            <BrandLogo height={56} plate />
+            <BrandLogo height={56} onDark />
             <p style={{ margin: "18px 0 6px" }}>Your parcels. Our promise.<br />Doorstep shipping, across India.</p>
             <p style={{ margin: "14px 0 4px" }}>{SITE.phone}</p>
             <a href={`mailto:${SITE.email}`} style={{ color: "var(--navy)", fontWeight: 600 }}>{SITE.email} ↗</a>

@@ -149,3 +149,7 @@ html .shell .dcard:hover{border-color:#051C46}
 /* colourful dashboard illustrations keep their own colours */
 html .shell .dcard svg.dash-ill{color:inherit!important;width:56px;height:56px;flex:none;filter:drop-shadow(0 2px 3px rgba(5,28,70,.12))}
 @media (max-width:560px){html .shell .dcard svg.dash-ill{width:46px!important;height:46px!important}}
+
+/* logo never sits on a plate: transparent PNG everywhere (on-dark variant on navy) */
+html .wv .w-foot .logo,html .logo-plate,html .shell .side .brand .logo-plate{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:100%!important}

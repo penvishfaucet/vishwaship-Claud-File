@@ -12,7 +12,7 @@ export function AuthShell({ children, variant = "customer" }: { children: React.
       <div className="auth">
         <div className="l">
           <Link href="/">
-            <BrandLogo height={56} plate />
+            <BrandLogo height={56} onDark />
           </Link>
           <h2>{variant === "customer" ? <>Your shipping,<span>one dashboard.</span></> : <>Vishwaship<span>admin workspace.</span></>}</h2>
           <ul>{points.map((p) => <li key={p}><CheckCircle2 size={18} />{p}</li>)}</ul>
