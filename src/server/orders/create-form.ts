@@ -32,7 +32,8 @@ export async function createOrderFromForm(orgId: string, raw: unknown):
 
   const r = await createOrder(orgId, {
     orderNumber: v.orderNumber, mode: pkg.mode, direction: "forward", paymentType: v.paymentType,
-    codAmountRupees: v.paymentType === "cod" ? t.grandTotal / 100 : 0, declaredValueRupees: t.grandTotal / 100, saveAs: "ready", warehouseId: v.warehouseId,
+    // COD: the customer's own amount when entered, otherwise the invoice value.
+    codAmountRupees: v.paymentType === "cod" ? (typeof v.codAmountRupees === "number" && v.codAmountRupees > 0 ? Math.round(v.codAmountRupees * 100) / 100 : t.grandTotal / 100) : 0, declaredValueRupees: t.grandTotal / 100, saveAs: "ready", warehouseId: v.warehouseId,
     consignee: { name: v.buyer.name, mobile: v.buyer.mobile, email: v.buyer.email, line1: v.buyer.line1, line2: v.buyer.line2 || undefined, pincode: v.buyer.pincode, city: v.buyer.city, state: v.buyer.state },
     products: v.products.map((x) => ({ name: x.name, sku: x.sku || undefined, qty: x.qty, unitPriceRupees: x.unitPriceRupees, hsn: x.hsn || undefined })),
     packages: v.boxes.map((b) => ({ count: b.count, lengthCm: b.lengthCm, breadthCm: b.breadthCm, heightCm: b.heightCm, weightKg: b.weightKg })),

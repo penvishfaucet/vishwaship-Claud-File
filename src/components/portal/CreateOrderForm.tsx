@@ -16,7 +16,7 @@ type Box = { key: string; count: string; weightKg: string; lengthCm: string; bre
 type Form = {
   buyer: Buyer; billingSame: boolean; billing: Billing;
   orderNumber: string; orderDate: string; referenceId: string; invoiceNumber: string;
-  products: Product[]; paymentType: "" | "prepaid" | "cod" | "fod";
+  products: Product[]; paymentType: "" | "prepaid" | "cod" | "fod"; /** null = follow the invoice value */ codAmount: string | null;
   warehouseId: string; packageType: "" | "parcel" | "heavy"; rovType: "owner" | "carrier"; boxes: Box[]; ewayBill: string;
 };
 export type WarehouseOpt = { id: string; label: string; code: string | null; line1: string; line2: string | null; city: string; state: string; pincode: string; contactName: string; mobile: string; isDefault: boolean };
@@ -50,7 +50,7 @@ function initial(warehouses: WarehouseOpt[]): Form {
   return {
     buyer: { mobile: "", name: "", altMobile: "", email: "", gstin: "", ...emptyAddr }, billingSame: true, billing: { name: "", mobile: "", ...emptyAddr },
     orderNumber: newOrderId(), orderDate: today(), referenceId: "", invoiceNumber: "",
-    products: [emptyProduct()], paymentType: "",
+    products: [emptyProduct()], paymentType: "", codAmount: null,
     warehouseId: def?.id ?? "", packageType: "", rovType: "owner", boxes: [emptyBox()], ewayBill: "",
   };
 }
@@ -81,7 +81,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
 
   // keep the form when the customer leaves to add a pickup address (or reloads)
   useEffect(() => {
-    try { const s = sessionStorage.getItem(STORE); if (s) { const v = JSON.parse(s) as Form; if (v?.buyer && v.products?.length && v.boxes?.length) setF(v); } } catch { /* storage blocked */ }
+    try { const s = sessionStorage.getItem(STORE); if (s) { const v = JSON.parse(s) as Form; if (v?.buyer && v.products?.length && v.boxes?.length) setF({ ...v, codAmount: v.codAmount ?? null }); } } catch { /* storage blocked */ }
     restored.current = true;
   }, []);
   useEffect(() => { if (!restored.current) return; try { sessionStorage.setItem(STORE, JSON.stringify(f)); } catch { /* ignore */ } }, [f]);
@@ -153,7 +153,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
       orderNumber: f.orderNumber, orderDate: f.orderDate, referenceId: f.referenceId, invoiceNumber: f.invoiceNumber,
       buyer: f.buyer, billingSame: f.billingSame, billing: f.billingSame ? undefined : f.billing,
       products: f.products.map((p) => ({ name: p.name, qty: p.qty, unitPriceRupees: p.unitPrice, hsn: p.hsn, category: p.category, sku: p.sku, discountRupees: p.discount || 0, taxPct: p.taxPct || 0 })),
-      paymentType: f.paymentType || undefined, warehouseId: f.warehouseId, packageType: f.packageType || undefined,
+      paymentType: f.paymentType || undefined, codAmountRupees: f.paymentType === "cod" ? (f.codAmount === null ? totals.grandTotal / 100 : f.codAmount === "" ? 0 : f.codAmount) : undefined, warehouseId: f.warehouseId, packageType: f.packageType || undefined,
       rovType: pkg?.rov ? f.rovType : undefined, boxes: f.boxes.map((b) => ({ count: b.count, weightKg: b.weightKg, lengthCm: b.lengthCm, breadthCm: b.breadthCm, heightCm: b.heightCm })),
       ewayBill: eway ? f.ewayBill : "", // at or below ₹50,000 the number is never sent
     };
@@ -344,7 +344,15 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
             {(["prepaid", "cod", "fod"] as const).map((t) => <label key={t}><input type="radio" name="pay" checked={f.paymentType === t} onChange={() => set("paymentType", t)} /> {t === "cod" ? "COD" : t === "fod" ? "FOD" : "Prepaid"}</label>)}
           </div>
         </Field>
-        {f.paymentType === "cod" && <p className="co-hint">COD amount to collect from the receiver: <b>{inr(totals.grandTotal)}</b> (the invoice value)</p>}
+        {f.paymentType === "cod" && (
+          <Field id="cod-amt" label="COD amount to collect" req error={err("codAmountRupees")} hint={<>The courier collects this amount from the receiver. It starts at the invoice value ({inr(totals.grandTotal)}) — type any amount.</>}>
+            <div className="co-row"><span className="co-pre">₹</span>
+              <input {...inputProps("cod-amt", "codAmountRupees")} value={f.codAmount === null ? (totals.grandTotal ? String(totals.grandTotal / 100) : "") : f.codAmount} inputMode="decimal" placeholder="COD amount"
+                onChange={(e) => set("codAmount", e.target.value.replace(/[^\d.]/g, ""))} />
+              {f.codAmount !== null && <button type="button" className="co-add" style={{ padding: "8px 12px" }} onClick={() => set("codAmount", null)}>Use invoice value</button>}
+            </div>
+          </Field>
+        )}
         {f.paymentType === "fod" && <p className="co-hint">FOD (freight on delivery): the receiver pays the freight to the courier at delivery. Mostly offered for heavy (B2B) shipments.</p>}
         {eway && (
           <div className="co-eway">

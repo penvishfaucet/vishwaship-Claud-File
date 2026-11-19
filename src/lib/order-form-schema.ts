@@ -36,6 +36,8 @@ export const CreateOrderForm = z.object({
     discountRupees: num("Discount must be a number").min(0).optional().default(0), taxPct: num("Tax must be a number").min(0).max(28).optional().default(0),
   })).min(1, "Add at least one product").max(100),
   paymentType: z.enum(["prepaid", "cod", "fod"], { errorMap: () => ({ message: "Choose Prepaid, COD or FOD" }) }),
+  /** COD only: the amount the courier collects from the receiver — any amount the customer enters (defaults to the invoice value). */
+  codAmountRupees: z.union([z.literal(""), z.coerce.number({ invalid_type_error: "Enter the COD amount" })]).optional(),
   warehouseId: z.string().min(1, "Select a pickup address"),
   packageType: z.enum(PACKAGE_TYPES.map((p) => p.key) as ["parcel", "heavy"], { errorMap: () => ({ message: "Select a package type" }) }),
   rovType: z.enum(ROV_TYPES.map((r) => r.key) as ["owner", "carrier"]).optional(),
@@ -56,6 +58,12 @@ export function crossIssues(raw: unknown): Array<{ path: string; message: string
   const out: Array<{ path: string; message: string }> = [];
   const n = (x: unknown) => Number(x) || 0;
   if (v.billingSame === false && !v.billing) out.push({ path: "billing.line1", message: "Enter the billing address" });
+  const cod = (raw as { paymentType?: string; codAmountRupees?: unknown }) ?? {};
+  if (cod.paymentType === "cod" && cod.codAmountRupees !== undefined && cod.codAmountRupees !== "") {
+    const amt = Number(cod.codAmountRupees);
+    if (!Number.isFinite(amt) || amt <= 0) out.push({ path: "codAmountRupees", message: "COD amount must be more than ₹0" });
+    else if (amt > 5_00_000) out.push({ path: "codAmountRupees", message: "COD amount can be up to ₹5,00,000" });
+  }
   const boxes = Array.isArray(v.boxes) ? v.boxes : [];
   const limit = dimensionLimitCm(boxes.map((b) => ({ count: n(b.count), weightKg: n(b.weightKg), lengthCm: n(b.lengthCm), breadthCm: n(b.breadthCm), heightCm: n(b.heightCm) })));
   boxes.forEach((b, i) => (["lengthCm", "breadthCm", "heightCm"] as const).forEach((k) => {

@@ -95,6 +95,19 @@ describe("Create Order submission", () => {
     const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, r.orderId));
     expect(o).toMatchObject({ paymentType: "cod", codAmountPaise: 60_000, declaredValuePaise: 60_000 });
   });
+  it("COD can collect any amount the customer enters; ₹0 is refused; empty means the invoice value", async () => {
+    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFCOD2", paymentType: "cod", codAmountRupees: 1234.5, products: [{ name: "A", qty: 1, unitPriceRupees: 600 }] }));
+    if (!r.ok) throw new Error(r.message);
+    const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, r.orderId));
+    expect(o).toMatchObject({ paymentType: "cod", codAmountPaise: 123_450, declaredValuePaise: 60_000 });
+    const zero = await createOrderFromForm(ORG, base({ orderNumber: "CFCOD3", paymentType: "cod", codAmountRupees: 0 }));
+    expect(zero).toMatchObject({ ok: false, status: 422 });
+    if (!zero.ok) expect(zero.issues?.map((i) => i.path)).toContain("codAmountRupees");
+    const auto = await createOrderFromForm(ORG, base({ orderNumber: "CFCOD4", paymentType: "cod", codAmountRupees: "" }));
+    if (!auto.ok) throw new Error(auto.message);
+    const [o2] = await db.select().from(schema.orders).where(eq(schema.orders.id, auto.orderId));
+    expect(o2.codAmountPaise).toBe(100_000);
+  });
   it("FOD saves as freight-on-delivery with nothing to collect as COD", async () => {
     const r = await createOrderFromForm(ORG, base({ orderNumber: "CFFOD1", paymentType: "fod", packageType: "heavy", products: [{ name: "Tiles", qty: 1, unitPriceRupees: 8000 }], boxes: [{ count: 2, weightKg: 40, lengthCm: 80, breadthCm: 50, heightCm: 40 }] }));
     if (!r.ok) throw new Error(r.message);
