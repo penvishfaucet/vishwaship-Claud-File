@@ -1,4 +1,5 @@
 "use client";
+import { fetchLabels } from "@/components/labels/LabelDownload";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +12,7 @@ import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
 import { statusLabel } from "@/lib/status";
 import {
-  COD_FILTERS, OPTIONAL_COLUMNS, type OptionalColumn, PAGE_SIZES, type PrintFormat, PRINT_FORMATS, TAB_GROUPS, type TabKey, codDisplay,
+  COD_FILTERS, OPTIONAL_COLUMNS, type OptionalColumn, PAGE_SIZES, type PrintFormat, PRINT_FORMATS, PRINT_HINT, TAB_GROUPS, type TabKey, codDisplay,
 } from "@/lib/order-view";
 import type { OrderFilters, OrderRow } from "@/server/orders/view";
 import { BreakdownDialog, CodDialog, PickupDialog, TrackDialog } from "./dialogs";
@@ -32,7 +33,7 @@ interface Props {
 }
 
 type DialogState = null | { kind: "track"; shipmentId: string } | { kind: "cod" | "breakdown" | "pickup"; row: OrderRow };
-type Toast = null | { text: string; bad?: boolean };
+type Toast = null | { text: string; bad?: boolean; retry?: { ids: string[]; format: PrintFormat }; sub?: string[] };
 
 const SOURCE: Record<string, string> = { manual: "Custom", bulk: "Bulk Import", api: "API", shopify: "Shopify", woocommerce: "WooCommerce", custom: "Custom" };
 const SHIP_STATUSES = ["not_booked", "booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr", "rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"];
@@ -95,22 +96,14 @@ export function OrdersView(p: Props) {
     const w = window.open("about:blank", "_blank");
     setBusy("labels");
     try {
-      const r = await fetch(`/api/portal/labels?ids=${encodeURIComponent(ids.join(","))}&format=${format}`);
-      if (!r.ok) {
-        w?.close();
-        const j = await r.json().catch(() => ({}));
-        setToast({ text: j.error?.message ?? "Labels are not available", bad: true });
-        return;
-      }
-      let skipped: Array<{ orderNumber: string; reason: string }> = [];
-      try { skipped = JSON.parse(decodeURIComponent(r.headers.get("x-label-skipped") ?? "%5B%5D")); } catch { /* ignore */ }
-      const url = URL.createObjectURL(await r.blob());
-      if (w) w.location.href = url; else window.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 120_000);
-      const pages = r.headers.get("x-label-pages");
-      setToast(skipped.length
-        ? { text: `${pages} label page(s) ready. Not included: ${skipped.map((s) => `${s.orderNumber} (${s.reason})`).join("; ")}`, bad: true }
-        : { text: `${pages} label page(s) ready (${PRINT_FORMATS.find((x) => x.key === format)?.name}).` });
+      const r = await fetchLabels("/api/portal/labels", ids, format, w);
+      const retryIds = r.skipped.filter((x) => x.retryable).map((x) => x.shipmentId);
+      const retry = (r.ok ? retryIds : retryIds.length ? retryIds : r.skipped.length ? [] : ids);
+      const sub = [...r.notices, PRINT_HINT];
+      if (!r.ok) { setToast({ text: r.message, bad: true, retry: retry.length ? { ids: retry, format } : undefined, sub }); return; }
+      setToast(r.skipped.length
+        ? { text: `${r.pages} label page(s) ready. Not included: ${r.skipped.map((x) => `${x.orderNumber} (${x.reason})`).join("; ")}`, bad: true, retry: retry.length ? { ids: retry, format } : undefined, sub }
+        : { text: `${r.pages} label page(s) ready (${PRINT_FORMATS.find((x) => x.key === format)?.name}).`, sub });
     } finally { setBusy(null); }
   }
   async function cancel(r: OrderRow) {
@@ -302,7 +295,7 @@ export function OrdersView(p: Props) {
       {dialog?.kind === "cod" && <CodDialog row={dialog.row} onClose={() => setDialog(null)} />}
       {dialog?.kind === "breakdown" && <BreakdownDialog row={dialog.row} onClose={() => setDialog(null)} />}
       {dialog?.kind === "pickup" && <PickupDialog row={dialog.row} onClose={() => setDialog(null)} />}
-      {toast && <div className={`ov-toast${toast.bad ? " bad" : ""}`} role={toast.bad ? "alert" : "status"}><span>{toast.text}</span><button type="button" onClick={() => setToast(null)} aria-label="Dismiss">✕</button></div>}
+      {toast && <div className={`ov-toast${toast.bad ? " bad" : ""}`} role={toast.bad ? "alert" : "status"}><span>{toast.text}{toast.sub?.map((x) => <small key={x} style={{ display: "block", opacity: 0.85, marginTop: 4 }}>{x}</small>)}</span>{toast.retry && <button type="button" className="ov-btn sm ghost" onClick={() => { const t = toast.retry!; setToast(null); void downloadLabels(t.ids, t.format); }}>Retry {toast.retry.ids.length > 1 ? `${toast.retry.ids.length} ` : ""}failed</button>}<button type="button" onClick={() => setToast(null)} aria-label="Dismiss">✕</button></div>}
     </div>
   );
 }
@@ -464,7 +457,7 @@ function LabelMenu({ label, formats, onPick, disabled, dark, onOpen }: { label: 
       <button ref={m.btn} type="button" className={`ov-btn sm ${dark ? "ghost" : "navy"}`} disabled={disabled} aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle}><FileText size={14} aria-hidden /> {label} <ChevronDown size={14} aria-hidden /></button>
       {m.pos && (
         <div className="ov-menu" role="menu" style={m.pos}>
-          <span className="hd">Label size</span>
+          <span className="hd">Label format</span>
           {formats.map((x) => <button key={x.key} role="menuitem" type="button" disabled={!x.ok} onClick={() => { m.close(); onPick(x.key); }}><span>{x.name}{x.reason && <span className="why">{x.reason}</span>}</span></button>)}
         </div>
       )}

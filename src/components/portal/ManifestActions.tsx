@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CalendarDays, ClipboardList, Download, FileText, History } from "lucide-react";
+import { type FormatOption, LabelDownload } from "@/components/labels/LabelDownload";
+import type { PrintFormat } from "@/lib/order-view";
 
 export const MANIFEST_NOTE = "Important: Print the manifest before pickup. Count the parcels with the pickup executive, get the manifest signed, and keep a copy as proof of handover. You may need it if your pickup does not appear in the courier panel.";
 
@@ -18,13 +20,13 @@ export async function openManifest(body: Record<string, string | undefined>): Pr
 }
 
 /** After booking (and on the order page): Download Label + Download Manifest for one AWB. */
-export function ShipmentDocs({ shipmentId, awb, compact }: { shipmentId: string; awb: string; compact?: boolean }) {
+export function ShipmentDocs({ shipmentId, awb, compact, formats, defaultFormat }: { shipmentId: string; awb: string; compact?: boolean; formats?: FormatOption[]; defaultFormat?: PrintFormat }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   return (
     <div className={`mf-docs${compact ? " compact" : ""}`}>
       <div className="mf-btns">
-        <a className="btn btn-orange" href={`/api/portal/shipments/${shipmentId}/label`} target="_blank" rel="noopener"><Download size={16} aria-hidden /> Download Label</a>
+        <LabelDownload ids={[shipmentId]} formats={formats} defaultFormat={defaultFormat} compact />
         <button type="button" className="btn btn-navy" disabled={busy} onClick={async () => {
           setBusy(true); setMsg(null);
           const r = await openManifest({ shipmentId });

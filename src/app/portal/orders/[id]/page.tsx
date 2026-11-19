@@ -59,7 +59,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <Link className="btn btn-outline" href={`/portal/support/new/?awb=${shipment?.awb ?? ""}&order=${order.orderNumber}`}><Ticket size={16} /> Raise Ticket</Link>
         </div>
       </div>
-      {shipment?.awb && shipment.status !== "cancelled" && <section className="card mb12" style={{ padding: 14 }} aria-label="Label and manifest"><ShipmentDocs shipmentId={shipment.id} awb={shipment.awb} /></section>}
+      {shipment?.awb && shipment.status !== "cancelled" && <section className="card mb12" style={{ padding: 14 }} aria-label="Label and manifest"><ShipmentDocs shipmentId={shipment.id} awb={shipment.awb} formats={labelFormatsFor(shipment.provider)} /></section>}
 
       {(order.status === "booking" || order.status === "needs_reconcile" || (shipment && !["delivered", "rto_delivered", "cancelled", "lost"].includes(shipment.status))) && <AutoRefresh active everyMs={60_000} />}
       {shipment && (
@@ -138,14 +138,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
             <h2 className="b small" style={{ marginTop: 0 }}>Documents</h2>
             {shipment ? (
               <ul className="plain-list" style={{ margin: "0 -16px" }}>
-                {!shipment.awb ? <li><span className="small muted">Label — available once the courier assigns the AWB</span></li> : shipment.provider !== "demo" ? (
-                  <>
-                    <li><a className="link-navy small" href={shipment.provider === "shiporax" ? `/api/portal/shipments/${shipment.id}/label` : `/api/portal/labels?ids=${shipment.id}&format=original`}>Courier label · original format (one page per package)</a></li>
-                    {shipment.provider !== "shiporax" && labelFormatsFor(shipment.provider).filter((f) => f.ok && f.key !== "original").map((f) => <li key={f.key}><a className="link-navy small" href={`/api/portal/labels?ids=${shipment.id}&format=${f.key}`}>Label · {f.name}{f.reason ? <span className="tiny muted"> ({f.reason})</span> : null}</a></li>)}
-                  </>
-                ) : [["thermal_4x6", "Label · thermal 4×6 in"], ["a4", "Label · A4"], ["thermal_3x4", "Label · thermal 3×4 in"], ["thermal_4x4", "Label · thermal 4×4 in"], ["thermal_2x4", "Label · thermal 2×4 in"], ["thermal_38x100", "Label · 38×100 mm"]].map(([f, l]) => (
-                  <li key={f}><a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/label?format=${f}`}>{l}</a></li>
-                ))}
+                {!shipment.awb ? <li><span className="small muted">Label — available once the courier assigns the AWB</span></li>
+                  : <li><span className="small">Labels — use <b>Download Label</b> above (A4 2 / 4 per page, thermal sizes, or the courier&apos;s own label)</span>{shipment.provider === "shiporax" && <> · <a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/label`}>Courier label</a></>}</li>}
                 <li><a className="link-navy small" href={`/api/portal/shipments/${shipment.id}/invoice`}>Invoice</a></li>
                 {order.mode === "B2B" && <li><span className="small muted">LR / docket copy — available from the carrier after manifest</span></li>}
               </ul>

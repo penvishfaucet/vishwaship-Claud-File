@@ -122,14 +122,29 @@ export const COD_FILTERS: Array<{ key: string; label: string }> = [
 
 // ---------------------------------------------------------------- labels
 
-export type PrintFormat = "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "original";
-export const PRINT_FORMATS: Array<{ key: PrintFormat; name: string; w?: string; h?: string; mm?: [number, number] }> = [
-  { key: "thermal_3x4", name: "3 × 4 inches", w: "3in", h: "4in", mm: [76.2, 101.6] },
-  { key: "thermal_4x4", name: "4 × 4 inches", w: "4in", h: "4in", mm: [101.6, 101.6] },
-  { key: "thermal_2x4", name: "2 × 4 inches", w: "2in", h: "4in", mm: [50.8, 101.6] },
-  { key: "thermal_38x100", name: "38 × 100 mm", w: "38mm", h: "100mm", mm: [38, 100] },
-  { key: "original", name: "Original carrier format" },
+/**
+ * Download Label formats. Every size except "original" is the Vishwaship-branded label (drawn from the booking);
+ * "original" is the courier's own label, untouched (Carrier Label).
+ *  - mm: physical page size (exact PDF page dimensions)
+ *  - slots: A4 sheets hold several labels in a grid (cols × rows), placed in order; unused slots stay blank
+ */
+export type PrintFormat = "a4_2up" | "a4_4up" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "original";
+export const PRINT_FORMATS: Array<{ key: PrintFormat; name: string; group: "a4" | "thermal" | "carrier"; w?: string; h?: string; mm?: [number, number]; slots?: [number, number] }> = [
+  { key: "a4_2up", name: "A4 · 2 labels per page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297], slots: [1, 2] },
+  { key: "a4_4up", name: "A4 · 4 labels per page (2 × 2)", group: "a4", w: "210mm", h: "297mm", mm: [210, 297], slots: [2, 2] },
+  { key: "thermal_4x6", name: "Thermal 4 × 6 inches", group: "thermal", w: "4in", h: "6in", mm: [101.6, 152.4] },
+  { key: "thermal_3x4", name: "Thermal 3 × 4 inches", group: "thermal", w: "3in", h: "4in", mm: [76.2, 101.6] },
+  { key: "thermal_4x4", name: "Thermal 4 × 4 inches", group: "thermal", w: "4in", h: "4in", mm: [101.6, 101.6] },
+  { key: "thermal_2x4", name: "Thermal 2 × 4 inches", group: "thermal", w: "2in", h: "4in", mm: [50.8, 101.6] },
+  { key: "thermal_38x100", name: "Thermal 38 × 100 mm", group: "thermal", w: "38mm", h: "100mm", mm: [38, 100] },
+  { key: "original", name: "Carrier label (courier's original)", group: "carrier" },
 ];
+/** Terms printed at the foot of the Vishwaship label: full text where there is room, the short line on small rolls. */
+export const LABEL_TERMS = {
+  full: "Terms & Conditions: Shipped under Vishwaship and courier partner terms (vishwaship.in/terms). Contents, invoice value and GSTIN are declared by the shipper, who is responsible for them. Receiver: do not accept the parcel if its seal or packing is broken or tampered - note it on the delivery record. If undelivered, the parcel returns to the pickup address above. Prohibited and dangerous goods are not carried.",
+  short: "T&C: vishwaship.in/terms | Do not accept if tampered | Undelivered: return to pickup address",
+};
+export const PRINT_HINT ="Print at Actual size / 100 % (turn off “Fit to page”), so barcodes scan and the label matches the roll.";
 
 /**
  * Smallest page edge (mm) a carrier image label may be scaled into while keeping its barcode

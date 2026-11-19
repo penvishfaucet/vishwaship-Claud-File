@@ -6,6 +6,8 @@ import { StatusChip, statusLabel } from "@/lib/status";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { LabelDownload } from "@/components/labels/LabelDownload";
+import { labelFormatsFor } from "@/server/labels/formats";
 
 export default async function AdminShipment({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -33,6 +35,12 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
         <div><Link className="small link-navy" href={`/admin/customers/${org.id}/`}>{org.businessName}</Link><h1>{o.orderNumber} <span className="mono small muted">{x.awb}</span></h1></div>
         <div className="actions"><StatusChip status={x.status} />{x.provider === "demo" && <span className="demo-badge">DEMO</span>}</div>
       </div>
+      {x.status !== "cancelled" && (
+        <section className="card mb12" style={{ padding: 14 }} aria-label="Label">
+          <h2 className="b small" style={{ marginTop: 0 }}>Label</h2>
+          {x.awb ? <LabelDownload ids={[x.id]} api="/api/admin/labels" formats={labelFormatsFor(x.provider)} /> : <p className="small muted" style={{ margin: 0 }}>Label pending — the courier has not assigned the AWB / LRN yet.</p>}
+        </section>
+      )}
       <div className="split-2-1" style={{ alignItems: "start" }}>
         <section className="card" style={{ padding: 16 }}>
           <h2 className="b small" style={{ marginTop: 0 }}>Operations</h2>

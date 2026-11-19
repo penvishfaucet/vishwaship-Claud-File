@@ -3,6 +3,7 @@ import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/eng
 import {
   type BookResult, type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type WarehouseInput, unsupported,
 } from "./types";
+import { labelStrings } from "@/server/labels/strings";
 import { pickupAgent, amountToPaise, b2bCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
 
 /**
@@ -224,12 +225,28 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const formatsAvailable = Object.keys(LABEL_SIZE) as LabelFormat[];
     const size = LABEL_SIZE[format];
     if (!size) return { ok: true, value: { formatsAvailable } };
-    const r = await call(ctx, `/label/get_urls/${size}/${encodeURIComponent(ref.awb)}`);
-    if (!r.ok) return r;
-    const list = (Array.isArray(r.value.json) ? r.value.json : ((r.value.json as Record<string, unknown>)?.data ?? (r.value.json as Record<string, unknown>)?.urls ?? [])) as unknown[];
-    const images = list.map((x) => (typeof x === "string" ? x : firstString(x, ["url", "label", "image", "data"]) ?? "")).filter(Boolean)
-      .map((s) => (s.startsWith("http") || s.startsWith("data:") ? s : `data:image/png;base64,${s}`));
-    if (!images.length) return { ok: false, error: { category: "not_found", message: "Delhivery has not generated labels for this LR yet", retryable: true } };
+    // Raw request: Delhivery may answer with the label file itself (PDF / PNG) or JSON carrying links or base64 per carton.
+    const t = await login(ctx);
+    if (!t.ok) return t;
+    let res: Response;
+    try {
+      res = await ctx.fetch(`${base(ctx)}/label/get_urls/${size}/${encodeURIComponent(ref.awb)}`, { timeoutMs: 25_000, headers: { authorization: `Bearer ${t.value}` } });
+    } catch (e) { return { ok: false, error: { category: "timeout", message: `Delhivery B2B label request timed out: ${(e as Error).message}`, retryable: true } }; }
+    if (res.status === 401) tokens.delete(ctx.accountId);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const head = Buffer.from(bytes.slice(0, 4)).toString("latin1");
+    if (res.ok && (head === "%PDF")) return { ok: true, value: { pdf: bytes, formatsAvailable } };
+    if (res.ok && (head.startsWith("\x89PNG") || head.startsWith("\xff\xd8"))) return { ok: true, value: { images: [`data:image/${head.startsWith("\x89") ? "png" : "jpeg"};base64,${Buffer.from(bytes).toString("base64")}`], formatsAvailable } };
+    const text = Buffer.from(bytes).toString("utf8");
+    let json: unknown = null; try { json = JSON.parse(text); } catch { /* not JSON */ }
+    if (res.status === 429 || res.status >= 500 || res.status === 401) return { ok: false, error: { category: res.status === 429 ? "rate_limited" : "upstream", message: `Delhivery B2B label service answered HTTP ${res.status} — try again shortly`, retryable: true } };
+    if (!res.ok) return { ok: false, error: { category: res.status === 404 ? "not_found" : "validation", message: providerError(json, `Delhivery B2B could not return the label (HTTP ${res.status})`), retryable: res.status === 404 } };
+    const found = labelStrings(json);
+    const images = found.map((s) => (s.startsWith("http") || s.startsWith("data:") ? s : `data:application/octet-stream;base64,${s.replace(/\s/g, "")}`));
+    if (!images.length) {
+      const keys = json && typeof json === "object" ? Object.keys(json as object).slice(0, 6).join(", ") : text.slice(0, 40);
+      return { ok: false, error: { category: "not_found", message: `Delhivery has not generated labels for this LR yet (reply: ${keys || "empty"})`, retryable: true } };
+    }
     return { ok: true, value: { images, formatsAvailable } };
   },
 

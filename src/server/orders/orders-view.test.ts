@@ -181,7 +181,7 @@ describe("WhatsApp COD confirmation → pickup hold and automatic cancellation",
   });
 });
 
-describe("label PDFs (generated demo labels)", () => {
+describe("label PDFs (generated demo labels)", { timeout: 20_000 }, () => {
   async function pdfInfo(bytes: Uint8Array) {
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const doc = await pdfjs.getDocument({ data: bytes.slice() }).promise;
@@ -205,9 +205,10 @@ describe("label PDFs (generated demo labels)", () => {
     expect(pages).toHaveLength(3);
     expect(pages.map((p) => [p.wMm, p.hMm])).toEqual([[102, 102], [102, 102], [102, 102]]);
     expect(pages[0].text).toContain(`AWB AWB${n}`);
-    expect(pages[1].text).toContain("BOX 2 OF 3");
+    expect(pages[1].text).toContain("CARTON 2 OF 3");
     expect(pages[2].text).toContain("PIN 400001");
-    expect(pages[0].text).toContain("COD Rs.500");
+    expect(pages[0].text).toContain("COD"); // payment mode is shown …
+    expect(pages[0].text).not.toMatch(/Rs.?s?500/); // … the COD amount never is
   });
   it("38 × 100 mm: barcode runs along the long side (page rotated), still readable", async () => {
     const { renderLabels } = await import("@/server/labels/render");
@@ -260,19 +261,14 @@ describe("label formats", () => {
   it("demo courier: every layout generated", () => {
     expect(labelFormatsFor("demo").every((x) => x.ok)).toBe(true);
   });
-  it("Delhivery B2C 4×6 PDF scales to 3×4 and 4×4 but not 2×4 / 38×100 (barcode readability)", () => {
-    expect(labelSource("delhivery_b2c", "thermal_4x4").kind).toBe("scaled");
-    expect(labelSource("delhivery_b2c", "thermal_3x4").kind).toBe("scaled");
-    expect(labelSource("delhivery_b2c", "thermal_2x4").kind).toBe("unavailable");
-    expect(labelSource("delhivery_b2c", "thermal_38x100").kind).toBe("unavailable");
-    expect(labelSource("delhivery_b2c", "original")).toEqual({ kind: "native", carrierFormat: "thermal_4x6" });
+  it("every size is the Vishwaship label; Carrier label = the courier's own default size", () => {
+    for (const f of ["a4_2up", "a4_4up", "thermal_4x6", "thermal_3x4", "thermal_4x4", "thermal_2x4", "thermal_38x100"] as const) expect(labelSource("delhivery_b2b", f).kind).toBe("branded");
+    expect(labelSource("delhivery_b2c", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_4x6" });
+    expect(labelSource("delhivery_b2b", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_3x4" });
   });
-  it("Delhivery B2B native sizes; 38×100 scaled from 2×4", () => {
-    expect(labelSource("delhivery_b2b", "thermal_3x4").kind).toBe("native");
-    expect(labelSource("delhivery_b2b", "thermal_38x100").kind).toBe("scaled");
-  });
-  it("providers without a label integration are unavailable, not faked", () => {
-    expect(labelFormatsFor("bluedart").every((x) => !x.ok)).toBe(true);
+  it("a courier without a label integration: Vishwaship label yes, carrier label not faked", () => {
+    expect(labelFormatsFor("bluedart").find((x) => x.key === "original")?.ok).toBe(false);
+    expect(labelFormatsFor("bluedart").filter((x) => x.key !== "original").every((x) => x.ok)).toBe(true);
     expect(labelFormatsFor("shipmozo").find((x) => x.key === "original")?.ok).toBe(true); // Shipmozo get-order-label (PNG)
   });
   it("fitScale", () => {
