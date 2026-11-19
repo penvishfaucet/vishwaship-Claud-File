@@ -244,6 +244,8 @@ export const orders = pgTable("orders", {
   invoiceNumber: text("invoice_number"),
   ewayBill: text("eway_bill"),
   buyerGstin: text("buyer_gstin"),
+  /** Create Order extras: referenceId, orderDate, altMobile, billing, shippingChargesPaise, packageType, rovType, invoice totals. */
+  meta: jsonb("meta").notNull().default({}),
   /** Hidden from active Orders tabs (Archive tab). Never deletes anything. */
   archivedAt: ts("archived_at"),
   createdAt: created(),

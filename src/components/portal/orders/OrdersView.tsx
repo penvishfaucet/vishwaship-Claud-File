@@ -236,7 +236,7 @@ export function OrdersView(p: Props) {
             <p className="muted">No orders match these filters for {istDate(`${f.from}T12:00:00+05:30`)} – {istDate(`${f.to}T12:00:00+05:30`)}.</p>
             <div className="row" style={{ justifyContent: "center", gap: 8 }}>
               <Link className="ov-btn ghost" href={path}>Clear filters</Link>
-              <Link className="ov-btn orange" href={f.direction === "reverse" ? "/portal/orders/new/?direction=reverse" : "/portal/orders/new/"}><PlusCircle size={16} aria-hidden /> Add Order</Link>
+              <Link className="ov-btn orange" href={f.direction === "reverse" ? "/portal/orders/new/?direction=reverse" : "/portal/orders/create/"}><PlusCircle size={16} aria-hidden /> {f.direction === "reverse" ? "Add Return" : "Create Order"}</Link>
             </div>
           </div>
         ) : (
@@ -313,11 +313,12 @@ function AddOrder({ reverse, onOpen }: { reverse: boolean; onOpen: (o: boolean) 
   const ref = useDismiss(open, () => set(false));
   return (
     <div className="ov-split" ref={ref}>
-      <Link className="ov-btn navy" href={reverse ? "/portal/orders/new/?direction=reverse" : "/portal/orders/new/"}><PlusCircle size={16} aria-hidden /> {reverse ? "Add Return" : "Add Order"}</Link>
+      <Link className="ov-btn orange" href={reverse ? "/portal/orders/new/?direction=reverse" : "/portal/orders/create/"}><PlusCircle size={16} aria-hidden /> {reverse ? "Add Return" : "Create Order"}</Link>
       <button type="button" className="ov-btn navy caret" aria-label="More ways to add orders" aria-expanded={open} aria-haspopup="menu" onClick={() => set(!open)}><ChevronDown size={16} aria-hidden /></button>
       {open && (
         <div className="ov-menu" role="menu">
-          <Link role="menuitem" href="/portal/orders/new/">Create forward shipment</Link>
+          <Link role="menuitem" href="/portal/orders/create/">Create Order</Link>
+          <Link role="menuitem" href="/portal/orders/new/">Create order with courier rates</Link>
           <Link role="menuitem" href="/portal/orders/new/?direction=reverse">Create return (reverse pickup)</Link>
           <Link role="menuitem" href="/portal/orders/new/?quick=1">Quick add</Link>
           <Link role="menuitem" href="/portal/orders/bulk/">Bulk import (Excel / CSV)</Link>

@@ -32,7 +32,7 @@ export const OrderInput = z.object({
 }).superRefine((v, ctx) => {
   if (v.saveAs !== "draft" && !(v.declaredValueRupees > 0)) ctx.addIssue({ code: "custom", path: ["declaredValueRupees"], message: "Enter the declared (invoice) value" });
   if (v.paymentType === "cod" && v.codAmountRupees <= 0) ctx.addIssue({ code: "custom", path: ["codAmountRupees"], message: "COD amount is required" });
-  if (v.declaredValueRupees >= 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments of ₹50,000 or more" });
+  if (v.declaredValueRupees > 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments above ₹50,000" });
 });
 
 export async function createOrder(orgId: string, input: z.infer<typeof OrderInput>, source: "manual" | "bulk" | "api" | "shopify" | "woocommerce" | "custom" = "manual", external?: { storeId: string; orderId: string }) {

@@ -11,7 +11,7 @@ export type QuickAction = { id: string; label: string; icon: typeof PlusCircle; 
 export function quickActions(mods: ModuleState): QuickAction[] {
   const on = (k: string) => !mods[k] || mods[k].enabled;
   const all: Array<QuickAction & { module?: string }> = [
-    { id: "add", label: "Add Order", icon: PlusCircle, href: "/portal/orders/new/", primary: true },
+    { id: "add", label: "Add Order", icon: PlusCircle, href: "/portal/orders/create/", primary: true },
     { id: "rates", label: "Rate Calculator", icon: Calculator, href: "/portal/rates/", primary: true },
     { id: "bulk", label: "Bulk Upload Orders", icon: Upload, href: "/portal/orders/bulk/" },
     { id: "track", label: "Track Shipment", icon: Truck, href: "/portal/track/", module: "tracking" },

@@ -352,5 +352,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795069840976,
   "hash": "1729c2ae627a719f1a0e590873d2119369477fd2e2873c6fbf4665e8b271a425"
+ },
+ {
+  "tag": "0016_order_meta",
+  "sql": [
+   "ALTER TABLE \"orders\" ADD COLUMN \"meta\" jsonb DEFAULT '{}'::jsonb NOT NULL;"
+  ],
+  "bps": true,
+  "folderMillis": 1795074493023,
+  "hash": "acce49bf01a1a6dac5c3bc5f4fec640fe90998b0be177007129219b51040b681"
  }
 ];

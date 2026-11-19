@@ -33,7 +33,8 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
   const priced = quote?.priced as { lines?: Array<{ label: string; sellPreTax: number }>; gst?: number; total?: number } | undefined;
   const boxes = pkgs.reduce((s, p) => s + p.count, 0);
   const actual = pkgs.reduce((s, p) => s + p.count * p.actualWeightGrams, 0);
-  const vol = pkgs.reduce((s, p) => s + p.count * Math.ceil((p.lengthMm * p.breadthMm * p.heightMm) / 5000 / 1000), 0);
+  // volumetric grams per box = (L×B×H in cm³) / 5000 kg = mm³ / 5000 g
+  const vol = pkgs.reduce((s, p) => s + p.count * Math.ceil((p.lengthMm * p.breadthMm * p.heightMm) / 5000), 0);
   const logo = shipment ? carrierLogo(shipment.carrierCode) : null;
 
   return (
@@ -107,7 +108,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <section className="card p0">
             <h2 className="b small card-h" style={{ margin: 0 }}>Packages</h2>
             <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Boxes</th><th>L × B × H (cm)</th><th>Actual / box</th><th>Volumetric / box</th></tr></thead>
-              <tbody>{pkgs.map((p) => <tr key={p.id}><td>{p.count}</td><td>{p.lengthMm / 10} × {p.breadthMm / 10} × {p.heightMm / 10}</td><td>{(p.actualWeightGrams / 1000).toFixed(2)} kg</td><td>{((p.lengthMm * p.breadthMm * p.heightMm) / 5000 / 1000 / 1000).toFixed(2)} kg</td></tr>)}</tbody></table></div>
+              <tbody>{pkgs.map((p) => <tr key={p.id}><td>{p.count}</td><td>{p.lengthMm / 10} × {p.breadthMm / 10} × {p.heightMm / 10}</td><td>{(p.actualWeightGrams / 1000).toFixed(2)} kg</td><td>{((p.lengthMm * p.breadthMm * p.heightMm) / 5000 / 1000).toFixed(2)} kg</td></tr>)}</tbody></table></div>
           </section>
         </div>
         <aside className="col" style={{ gap: 14 }}>
