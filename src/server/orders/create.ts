@@ -1,5 +1,5 @@
 import "server-only";
-import { collectsCod } from "@/lib/payment";
+import { FOD_RULE_TEXT, chargeableKg, collectsCod, fodAllowed } from "@/lib/payment";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
@@ -34,6 +34,7 @@ export const OrderInput = z.object({
   if (v.saveAs !== "draft" && !(v.declaredValueRupees > 0)) ctx.addIssue({ code: "custom", path: ["declaredValueRupees"], message: "Enter the declared (invoice) value" });
   if (v.paymentType === "cod" && v.codAmountRupees <= 0) ctx.addIssue({ code: "custom", path: ["codAmountRupees"], message: "COD amount is required" });
   if (v.paymentType === "fod" && v.mode !== "B2B") ctx.addIssue({ code: "custom", path: ["paymentType"], message: "FOD is only for B2B orders" });
+  if (v.paymentType === "fod" && v.saveAs !== "draft" && !fodAllowed(chargeableKg(v.packages))) ctx.addIssue({ code: "custom", path: ["paymentType"], message: `FOD is ${FOD_RULE_TEXT.toLowerCase()}` });
   if (v.declaredValueRupees > 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments above ₹50,000" });
 });
 

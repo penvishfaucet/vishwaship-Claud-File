@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { AddressForm, type SavedWarehouse } from "@/components/portal/AddressForm";
 import { formatINR } from "@/lib/money";
-import { paymentTypeOf } from "@/lib/payment";
+import { FOD_RULE_TEXT, fodAllowed, paymentTypeOf } from "@/lib/payment";
 import { carrierLogo } from "@/lib/site";
 import type { OfferView } from "@/components/public/RateCalculator";
 
@@ -95,8 +95,10 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   }, [pkgs]);
   const suggested: "B2C" | "B2B" = Math.max(weights.actual, weights.vol) * 1000 >= props.b2bThresholdGrams ? "B2B" : "B2C";
   const mode = suggested; // fixed by weight: the customer cannot switch it
-  // FOD is only for B2B orders: switching to B2C moves the freight back to Prepaid (COD stays as chosen)
-  useEffect(() => { if (mode !== "B2B" && freight === "fod") { setFreight("prepaid"); setFodNote("FOD is only for B2B orders, so freight is set to Prepaid."); } }, [mode, freight]);
+  // FOD only for parcels over 15 kg: below that the freight goes back to Prepaid (COD stays as chosen)
+  const chargeKg = Math.max(weights.actual, weights.vol);
+  const fodOk = fodAllowed(chargeKg);
+  useEffect(() => { if (!fodOk && freight === "fod") { setFreight("prepaid"); setFodNote(`FOD is ${FOD_RULE_TEXT.toLowerCase()}, so freight is set to Prepaid.`); } }, [fodOk, freight]);
   const declaredValue = Number(declared) || products.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const chosen = offers?.find((o) => o.quoteId === selected) ?? null;
 
@@ -184,7 +186,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       if (pkgs.some((p) => !(Number(p.count) > 0 && Number(p.l) > 0 && Number(p.b) > 0 && Number(p.h) > 0 && Number(p.w) > 0))) return "Each box needs length, breadth, height and weight.";
       if (!(declaredValue > 0)) return "Enter the declared (invoice) value.";
       if (codOn && !(Number(cod) > 0)) return "Enter the COD amount to collect.";
-      if (freight === "fod" && mode !== "B2B") return "FOD is only for B2B orders.";
+      if (freight === "fod" && !fodOk) return `FOD is ${FOD_RULE_TEXT.toLowerCase()}.`;
       if (mode === "B2B" && declaredValue >= 50000 && !/^\d{12}$/.test(eway)) return "E-way bill (12 digits) is required for ₹50,000 or more.";
     }
     return null;
@@ -523,19 +525,11 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                   <span className="small">Actual <b>{weights.actual.toFixed(2)} kg</b></span>
                   <span className="small">Volumetric <b>{weights.vol.toFixed(2)} kg</b> <span className="muted tiny">(L×B×H ÷ 5000; courier divisor may differ)</span></span>
                 </div>
-                <div className="seg2 mt12" role="radiogroup" aria-label="Shipment type">
-                  {(["B2C", "B2B"] as const).map((m) => (
-                    <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} disabled={mode !== m} aria-disabled={mode !== m}>
-                      <b>{m}</b><span>{m === "B2C" ? `Under ${props.b2bThresholdGrams / 1000} kg` : `${props.b2bThresholdGrams / 1000} kg and above`}</span>
-                    </button>
-                  ))}
-                </div>
-                <p className="tiny muted" style={{ margin: "6px 0 0" }}>Set automatically from the weight: {Math.max(weights.actual, weights.vol).toFixed(2)} kg{weights.vol > weights.actual ? " (volumetric — higher than the actual weight)" : ""} → <b>{mode}</b>.</p>
                 <fieldset className="pay-box mt12">
                   <legend className="small b">Freight payment</legend>
                   <div className="seg2" role="radiogroup" aria-label="Who pays the freight">
                     <button type="button" role="radio" aria-checked={freight === "prepaid"} className={freight === "prepaid" ? "on" : ""} onClick={() => { setFreight("prepaid"); setFodNote(null); }}><b>Prepaid</b><span>You pay the freight</span></button>
-                    <button type="button" role="radio" aria-checked={freight === "fod"} aria-disabled={mode !== "B2B"} className={freight === "fod" ? "on" : ""} disabled={mode !== "B2B"} onClick={() => { setFreight("fod"); setFodNote(null); }}><b>FOD</b><span>{mode === "B2B" ? "Receiver pays the freight" : "Only for B2B orders"}</span></button>
+                    <button type="button" role="radio" aria-checked={freight === "fod"} aria-disabled={!fodOk} className={freight === "fod" ? "on" : ""} disabled={!fodOk} onClick={() => { setFreight("fod"); setFodNote(null); }}><b>FOD</b><span>{fodOk ? "Receiver pays the freight" : FOD_RULE_TEXT}</span></button>
                   </div>
                   {fodNote && <p className="tiny muted" role="status" style={{ margin: "6px 0 0" }}>{fodNote}</p>}
                 </fieldset>

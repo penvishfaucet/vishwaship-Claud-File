@@ -19,3 +19,14 @@ export const paymentTypeOf = (freight: "prepaid" | "fod", cod: boolean): Payment
 
 /** Couriers that can collect COD on a FOD shipment (Shipmozo does not). */
 export const FOD_COD_ADAPTERS = ["delhivery_b2b", "demo"];
+
+/** FOD is offered only for parcels heavier than this (chargeable weight: actual or volumetric, whichever is higher). */
+export const FOD_MIN_KG = 15;
+export const FOD_RULE_TEXT = `Only available for parcels over ${FOD_MIN_KG} kg`;
+/** Chargeable kg of a set of boxes (volumetric = L×B×H cm ÷ 5000), the same figure the Create Order form shows. */
+export function chargeableKg(boxes: Array<{ count: number; lengthCm: number; breadthCm: number; heightCm: number; weightKg: number }>) {
+  const actual = boxes.reduce((t, b) => t + b.count * b.weightKg, 0);
+  const vol = boxes.reduce((t, b) => t + b.count * ((b.lengthCm * b.breadthCm * b.heightCm) / 5000), 0);
+  return Math.max(actual, vol);
+}
+export const fodAllowed = (kg: number) => kg > FOD_MIN_KG;

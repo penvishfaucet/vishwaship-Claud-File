@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { QuoteRequest } from "@/server/providers/types";
 import { rupeesToPaise } from "@/lib/money";
+import { FOD_RULE_TEXT, chargeableKg, fodAllowed } from "@/lib/payment";
 
 const pin = z.string().regex(/^[1-9]\d{5}$/, "Must be a valid 6-digit PIN code");
 
@@ -19,7 +20,8 @@ export const QuoteInput = z.object({
     weightKg: z.number().positive().max(5000),
   })).min(1).max(50),
 }).refine((v) => v.paymentType !== "cod" || (v.codAmountRupees ?? 0) > 0, { message: "COD amount is required for COD", path: ["codAmountRupees"] })
-  .refine((v) => v.paymentType !== "fod" || v.mode === "B2B", { message: "FOD is only for B2B orders", path: ["paymentType"] });
+  .refine((v) => v.paymentType !== "fod" || v.mode === "B2B", { message: "FOD is only for B2B orders", path: ["paymentType"] })
+  .refine((v) => v.paymentType !== "fod" || fodAllowed(chargeableKg(v.packages)), { message: `FOD is ${FOD_RULE_TEXT.toLowerCase()}`, path: ["paymentType"] });
 
 export function toQuoteRequest(v: z.infer<typeof QuoteInput>): QuoteRequest {
   return {

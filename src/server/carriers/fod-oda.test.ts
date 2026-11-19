@@ -183,8 +183,14 @@ describe("FOD + Cash on Delivery (Delhivery B2B)", () => {
 describe("payment rules", () => {
   it("FOD only for B2B; FOD + COD keeps its COD amount", async () => {
     const { QuoteInput, toQuoteRequest } = await import("@/server/quotes/input");
-    const base = { originPincode: "249402", destinationPincode: "110024", packages: [{ count: 1, lengthCm: 10, breadthCm: 10, heightCm: 10, weightKg: 12 }] };
+    const base = { originPincode: "249402", destinationPincode: "110024", packages: [{ count: 1, lengthCm: 10, breadthCm: 10, heightCm: 10, weightKg: 20 }] };
     expect(QuoteInput.safeParse({ ...base, mode: "B2C", paymentType: "fod" }).success).toBe(false);
+    // FOD only for parcels over 15 kg (chargeable = actual or volumetric, whichever is higher)
+    const light = { ...base, packages: [{ count: 1, lengthCm: 10, breadthCm: 10, heightCm: 10, weightKg: 15 }] };
+    expect(QuoteInput.safeParse({ ...light, mode: "B2B", paymentType: "fod" }).success).toBe(false);
+    const bulky = { ...base, packages: [{ count: 1, lengthCm: 60, breadthCm: 50, heightCm: 40, weightKg: 8 }] }; // 24 kg volumetric
+    expect(QuoteInput.safeParse({ ...bulky, mode: "B2B", paymentType: "fod" }).success).toBe(true);
+    expect(QuoteInput.safeParse({ ...light, mode: "B2B", paymentType: "prepaid", codAmountRupees: 500 }).success).toBe(true);
     const ok = QuoteInput.parse({ ...base, mode: "B2B", paymentType: "fod", codAmountRupees: 2500 });
     expect(toQuoteRequest(ok).codAmount).toBe(250_000);
     const { collectsCod, paymentLabel, paymentTypeOf } = await import("@/lib/payment");
