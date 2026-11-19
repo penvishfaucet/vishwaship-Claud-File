@@ -153,7 +153,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
 
       <section className="card p0" aria-labelledby="ro-h">
         <div className="row between card-h"><h2 id="ro-h" className="b" style={{ fontSize: 16, margin: 0 }}>Recent Orders</h2><Link className="btn btn-sm btn-soft" href={`/portal/orders/?bucket=all&${rq}`}>View All Orders</Link></div>
-        {recent.rows.length === 0 ? <div className="empty"><p className="muted small">No orders in this period.</p><Link className="btn btn-orange btn-sm" href="/portal/orders/new/">Create Shipment</Link></div> : (
+        {recent.rows.length === 0 ? <div className="empty"><p className="muted small">No orders in this period.</p><Link className="btn btn-orange btn-sm" href="/portal/orders/new/">Create Order</Link></div> : (
           <>
           <ul className="ro-cards" aria-label="Recent orders">
             {recent.rows.map((o) => {

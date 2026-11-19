@@ -403,8 +403,8 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                   }}><option value="">Use saved customer…</option>{lib.buyers.flatMap((b) => b.addresses.map((a, i) => <option key={`${b.id}${i}`} value={`${b.id}|${i}`}>{b.name} · {a.label} · {a.city} {a.pincode}</option>))}</select></>}
                 </div>
                 <div className="grid2" style={{ gap: 12 }}>
-                  <div className="field"><label htmlFor="cn">Name</label><input id="cn" className="input" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} autoComplete="off" /></div>
-                  <div className="field"><label htmlFor="cm">Mobile</label><input id="cm" className="input" inputMode="tel" autoComplete="off" value={c.mobile} onChange={(e) => setMobile(e.target.value)} onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t) { e.preventDefault(); setMobile(t.trim()); } }} />
+                  <div className="field"><label htmlFor="cn">Name <span aria-hidden className="t-debit">*</span></label><input id="cn" className="input" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} autoComplete="off" /></div>
+                  <div className="field"><label htmlFor="cm">Mobile number <span aria-hidden className="t-debit">*</span></label><input id="cm" className="input" inputMode="tel" autoComplete="off" value={c.mobile} onChange={(e) => setMobile(e.target.value)} onPaste={(e) => { const t = e.clipboardData.getData("text"); if (t) { e.preventDefault(); setMobile(t.trim()); } }} />
                     {matchState === "loading" && <span className="tiny muted">Looking up saved customers…</span>}
                     {match && match.addresses.length === 1 && <span className="tiny t-credit">Filled from saved customer {match.name}</span>}
                     {matchState === "none" && <span className="tiny muted">New customer — enter the details below.</span>}
@@ -419,11 +419,11 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                     {fe.line1 && <span id="c1-err" className="field-err" role="alert">{fe.line1}</span>}</div>
                   <label className="check small" style={{ gridColumn: "1 / -1", order: 99 }}><input type="checkbox" checked={saveBuyer} onChange={(e) => setSaveBuyer(e.target.checked)} /> {match ? "Save these details to this saved customer" : "Save to Customers for next time"}</label>
                   <div className="field" style={{ gridColumn: "1 / -1" }}><label htmlFor="c2">Address line 2 (optional)</label><input id="c2" className="input" value={c.line2} onChange={(e) => setC({ ...c, line2: e.target.value })} /></div>
-                  <div className="field"><label htmlFor="cp">PIN code</label><input id="cp" className={`input hl${fe.pin ? " invalid" : ""}`} inputMode="numeric" maxLength={6} aria-invalid={!!fe.pin} aria-describedby={fe.pin ? "cp-err" : undefined} value={c.pincode} onChange={(e) => setPin(e.target.value)} />
+                  <div className="field"><label htmlFor="cp">PIN code <span aria-hidden className="t-debit">*</span></label><input id="cp" className={`input hl${fe.pin ? " invalid" : ""}`} inputMode="numeric" maxLength={6} aria-invalid={!!fe.pin} aria-describedby={fe.pin ? "cp-err" : undefined} value={c.pincode} onChange={(e) => setPin(e.target.value)} />
                     {pinState === "loading" && <span className="tiny muted">Finding city and state…</span>}
                     {fe.pin && <span id="cp-err" className="field-err" role="alert">{fe.pin}{fe.pinRetry && <> <button type="button" className="linkbtn" onClick={() => lookupPin(c.pincode)}><RefreshCw size={12} /> Retry</button></>}</span>}</div>
-                  <div className="field"><label htmlFor="cc">City / district</label><input id="cc" className="input" value={c.city} onChange={(e) => setC({ ...c, city: e.target.value })} /></div>
-                  <div className="field"><label htmlFor="cs">State</label><input id="cs" className="input" value={c.state} onChange={(e) => setC({ ...c, state: e.target.value })} /></div>
+                  <div className="field"><label htmlFor="cc">City / district <span aria-hidden className="t-debit">*</span></label><input id="cc" className="input" value={c.city} onChange={(e) => setC({ ...c, city: e.target.value })} /></div>
+                  <div className="field"><label htmlFor="cs">State <span aria-hidden className="t-debit">*</span></label><input id="cs" className="input" value={c.state} onChange={(e) => setC({ ...c, state: e.target.value })} /></div>
                   <div className="field"><label htmlFor="ce">Recipient Email (Optional)</label><input id="ce" className="input" type="email" value={c.email} onChange={(e) => setC({ ...c, email: e.target.value })} /></div>
                 </div>
               </section>

@@ -168,3 +168,8 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .pw-wrap .input { padding-right: 42px; width: 100%; }
 .pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; padding: 6px; border-radius: 8px; color: #4a5a78; cursor: pointer; display: inline-flex; }
 .pw-eye:hover { background: #EDF5FF; color: #051C46; }
+
+/* Create Order — always first in the sidebar */
+.side a.item.side-cta{background:#E5540C;color:#fff!important;border-radius:10px;margin:4px 8px 8px;font-weight:700}
+.side a.item.side-cta svg{color:#fff!important}
+.side a.item.side-cta:hover,.side a.item.side-cta.on{background:#c94606}

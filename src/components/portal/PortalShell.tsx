@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  MessageCircleMore, Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
+  MessageCircleMore, Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, PlusCircle, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
 } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
@@ -115,6 +115,9 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
           <button type="button" className="side-close show-sm-flex" aria-label="Close menu" onClick={() => setDrawer(false)}><X size={20} /></button>
         </div>
         <nav>
+          <Link href="/portal/orders/new/" className={`item side-cta${path.startsWith("/portal/orders/new") ? " on" : ""}`} title="Create Order" onClick={() => setDrawer(false)}>
+            <PlusCircle aria-hidden /><span className="lbl">Create Order</span>
+          </Link>
           {nav.map((e) => isNavGroup(e) ? (
             <div key={e.id} className={`grp${e.items.some((n) => active(n.href)) ? " has-on" : ""}`}>
               <button type="button" className="item grp-h" aria-expanded={openGroups.has(e.id)} aria-controls={`grp-${e.id}`} title={e.group} onClick={() => toggleGroup(e.id)}>

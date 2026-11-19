@@ -54,7 +54,7 @@ export default async function NewOrderPage({ searchParams }: { searchParams: Pro
     <>
       <div className="page-h">
         <div>
-          <h1>{draft ? `Edit ${draft.orderNumber}` : sp.direction === "reverse" ? "Create return" : sp.quick ? "Quick add" : "Create shipment"}</h1>
+          <h1>{draft ? `Edit ${draft.orderNumber}` : sp.direction === "reverse" ? "Create return" : sp.quick ? "Quick add" : "Create Order"}</h1>
           <p className="small muted" style={{ margin: "4px 0 0" }}>Domestic shipments across India</p>
         </div>
         <Link className="btn btn-outline" href="/portal/orders/">Cancel</Link>
