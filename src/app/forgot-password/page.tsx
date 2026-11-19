@@ -1,14 +1,13 @@
 import { AuthShell } from "@/components/auth/AuthShell";
-import { SITE } from "@/lib/site";
+import { ForgotPasswordForm } from "@/components/auth/Forms";
 
 export const metadata = { title: "Reset password — Vishwaship" };
 
+/** Forgot password: a 6-digit code to the registered email, then a new password (entered twice). */
 export default function ForgotPassword() {
   return (
     <AuthShell>
-      <h1 style={{ fontSize: 24 }}>Reset your password</h1>
-      <p className="muted small">Password reset links are emailed once the email provider (Resend or SMTP) is connected in Admin → Integrations. Until then, contact <a className="link" href={`mailto:${SITE.email}`}>{SITE.email}</a> from your registered email and our team will send a secure reset link.</p>
-      <a className="btn btn-outline btn-block mt16" href="/login/">Back to login</a>
+      <ForgotPasswordForm />
     </AuthShell>
   );
 }

@@ -67,7 +67,7 @@ async function senderFor(event: EmailEventKey, override?: string | null) {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** Branded email: Vishwaship logo, the message, an optional button. Placeholder values are HTML-escaped. */
+/** Branded email: dark-blue header with the white-lettered Vishwaship logo (readable in light and dark mail apps), the message, an optional button. Placeholder values are HTML-escaped. */
 export function renderEmail(event: EmailEventKey, tpl: { subject: string; body: string }, vars: Record<string, string>) {
   const d = eventDef(event)!;
   const subject = fillPlaceholders(tpl.subject, vars).replace(/[\r\n]+/g, " ").slice(0, 200);
@@ -75,15 +75,15 @@ export function renderEmail(event: EmailEventKey, tpl: { subject: string; body: 
   const safe: Record<string, string> = Object.fromEntries(Object.entries(vars).map(([k, v]) => [k, esc(v)]));
   const htmlBody = fillPlaceholders(esc(tpl.body).replace(/\{\{\s*([a-z_]+)\s*\}\}/g, "{{$1}}"), safe)
     .split(/\n{2,}/).map((p) => {
-      const isCode = event === "signup_otp" && vars.otp && p.trim() === esc(vars.otp);
+      const isCode = !!d.secret?.includes("otp") && !!vars.otp && p.trim() === esc(vars.otp);
       return isCode ? `<p style="margin:18px 0;font-size:30px;letter-spacing:8px;font-weight:700;color:#051C46">${p.trim()}</p>` : `<p style="margin:0 0 14px">${p.replace(/\n/g, "<br>")}</p>`;
     }).join("");
   const button = d.button && vars.tracking_link ? `<p style="margin:22px 0"><a href="${esc(vars.tracking_link)}" style="background:#E5540C;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px;display:inline-block">${esc(d.button)}</a></p>` : "";
   const html = `<!doctype html><html><body style="margin:0;background:#f4f6fa;font-family:Roboto,Arial,sans-serif;color:#051C46">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fa;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;border:1px solid #dbe3ee">
-<tr><td style="padding:22px 26px 8px"><img src="${appUrl()}/brand/vishwaship-logo-transparent.png" alt="vishwaship.com" height="56" style="height:56px;width:auto;display:block"></td></tr>
-<tr><td style="padding:8px 26px 24px;font-size:15px;line-height:1.55">${htmlBody}${button}</td></tr>
+<tr><td bgcolor="#051C46" style="padding:18px 26px;background:#051C46;border-radius:16px 16px 0 0"><img src="${appUrl()}/brand/vishwaship-logo-on-dark.png" alt="vishwaship.com" height="52" style="height:52px;width:auto;display:block;color:#ffffff;font-size:20px;font-weight:700"></td></tr>
+<tr><td style="padding:24px 26px 24px;font-size:15px;line-height:1.55">${htmlBody}${button}</td></tr>
 <tr><td style="padding:14px 26px;border-top:1px solid #e9eef5;font-size:12px;color:#4a5a78">Vishwaship · <a href="${appUrl()}" style="color:#0057B8">vishwaship.in</a></td></tr>
 </table></td></tr></table></body></html>`;
   return { subject, html, text };

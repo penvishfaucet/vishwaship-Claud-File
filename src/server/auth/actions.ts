@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from "@/server/security/crypto";
 import { rateLimit } from "@/server/security/rate-limit";
 import { newId } from "@/server/util/ids";
 import { createSession, destroySession, readSession, revokeAllSessions } from "./session";
-import { consumeSignupOtp } from "./signup-otp";
+import { consumeResetOtp, consumeSignupOtp } from "./signup-otp";
 import { linkPendingGoogle } from "./google";
 import { createCustomerAccount } from "./accounts";
 
@@ -55,6 +55,7 @@ const SignupSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
   otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  confirm: z.string(),
   terms: z.literal("on", { errorMap: () => ({ message: "Please accept the Terms & shipping policy" }) }),
 });
 
@@ -65,6 +66,7 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   const p = SignupSchema.safeParse(Object.fromEntries(fd));
   if (!p.success) return { error: p.error.issues[0].message };
   const v = p.data;
+  if (v.password !== v.confirm) return { error: "Create password and Confirm password do not match" };
   const db = await getDb();
   const dup = await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.email, v.email)));
   if (dup.length) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
@@ -75,6 +77,33 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   if (!userId) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
   await createSession(userId, "customer", m);
   redirect("/portal/onboarding/");
+}
+
+const ResetSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
+  password: z.string().min(8, "Password must be at least 8 characters").max(128),
+  confirm: z.string(),
+});
+
+/** Forgot password: the emailed code proves the email; the new password replaces the old one and every other session is signed out. */
+export async function customerResetPassword(_: FormState, fd: FormData): Promise<FormState> {
+  const m = await meta();
+  if (!(await rateLimit(`reset:${m.ip}`, 10, 3600)).ok) return { error: "Too many attempts. Please try again later." };
+  const p = ResetSchema.safeParse(Object.fromEntries(fd));
+  if (!p.success) return { error: p.error.issues[0].message };
+  const v = p.data;
+  if (v.password !== v.confirm) return { error: "New password and Confirm password do not match" };
+  const db = await getDb();
+  const [u] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.email, v.email)));
+  if (!u || !u.active) return { error: "No Vishwaship account uses this email." };
+  const otp = await consumeResetOtp(v.email, v.otp);
+  if (!otp.ok) return { error: otp.message };
+  await db.update(schema.users).set({ passwordHash: await hashPassword(v.password), emailVerifiedAt: u.emailVerifiedAt ?? new Date() }).where(eq(schema.users.id, u.id));
+  await revokeAllSessions(u.id);
+  await audit({ actorUserId: u.id, actorKind: "customer", orgId: u.orgId, action: "auth.password_reset", details: { via: "email_otp" } });
+  await createSession(u.id, "customer", m);
+  redirect("/portal/?password=changed");
 }
 
 export async function customerLogout() {

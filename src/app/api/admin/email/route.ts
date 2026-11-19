@@ -91,7 +91,7 @@ export async function POST(req: Request) {
     }
     case "rule_save": {
       if (b.senderId) { const x = find(b.senderId); if (!x || x.status !== "verified") return apiError(409, "conflict", "Choose a verified sender (or the default sender)"); }
-      const enabled = b.event === "signup_otp" ? true : b.enabled; // email sign-up always verifies by OTP
+      const enabled = eventDef(b.event)?.audience === "signup" ? true : b.enabled; // sign-up and password-reset codes are always sent
       await db.insert(schema.emailRules).values({ event: b.event, enabled, senderId: b.senderId, toClient: b.toClient, toRecipient: b.toRecipient, updatedBy: s.userId })
         .onConflictDoUpdate({ target: schema.emailRules.event, set: { enabled, senderId: b.senderId, toClient: b.toClient, toRecipient: b.toRecipient, updatedBy: s.userId, updatedAt: new Date() } });
       await log({ event: b.event, enabled, senderId: b.senderId, toClient: b.toClient, toRecipient: b.toRecipient });

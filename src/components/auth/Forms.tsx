@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
-import { Info } from "lucide-react";
-import { type FormState, customerLogin, customerSignup, staffLogin } from "@/server/auth/actions";
+import { type FormEvent, startTransition, useActionState, useEffect, useState } from "react";
+import { Eye, EyeOff, Info } from "lucide-react";
+import { type FormState, customerLogin, customerResetPassword, customerSignup, staffLogin } from "@/server/auth/actions";
 
 /** Keep the return path (e.g. a booking started in the Rate Calculator) when switching between Login and Sign up. */
 const withNext = (path: string, next?: string) => (next && next.startsWith("/") && !next.startsWith("//") ? `${path}?next=${encodeURIComponent(next)}` : path);
@@ -16,7 +16,62 @@ function Seg({ active, next }: { active: "signup" | "login"; next?: string }) {
   );
 }
 
+/** Submit without React's automatic form reset, so a wrong code or mismatch keeps what the customer typed. */
+const keepValues = (action: (fd: FormData) => void) => (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  const fd = new FormData(e.currentTarget);
+  startTransition(() => action(fd));
+};
+
 const Err = ({ s }: { s: FormState }) => s?.error ? <p className="err small" role="alert">{s.error}</p> : null;
+
+/** Create password + Confirm password, with show/hide and a live "do not match" warning (the server checks again). */
+function PasswordPair({ first = "Create password", second = "Confirm password" }: { first?: string; second?: string }) {
+  const [a, setA] = useState("");
+  const [b, setB] = useState("");
+  const [show, setShow] = useState(false);
+  const mismatch = b.length > 0 && a !== b;
+  const t = show ? "text" : "password";
+  return (
+    <div className="grid2">
+      <div className="field">
+        <label htmlFor="password">{first} <span className="req" aria-hidden>*</span></label>
+        <div className="pw-wrap">
+          <input id="password" name="password" className="input" type={t} placeholder="Min 8 characters" required minLength={8} maxLength={128} autoComplete="new-password" value={a} onChange={(e) => setA(e.target.value)} />
+          <button type="button" className="pw-eye" onClick={() => setShow((x) => !x)} aria-label={show ? "Hide passwords" : "Show passwords"}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="confirm">{second} <span className="req" aria-hidden>*</span></label>
+        <input id="confirm" name="confirm" className="input" type={t} placeholder="Type it again" required minLength={8} maxLength={128} autoComplete="new-password" value={b} onChange={(e) => setB(e.target.value)} aria-invalid={mismatch} aria-describedby="pw-match" />
+        <p id="pw-match" className={`tiny ${mismatch ? "err" : "t-credit"}`} aria-live="polite" style={{ margin: 0, minHeight: 14 }}>{mismatch ? "Passwords do not match" : b && a === b ? "Passwords match" : ""}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Send / resend an email code (signup or forgot password) with the server's cooldown. */
+function useEmailOtp(purpose: "signup" | "reset") {
+  const [email, setEmail] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [cool, setCool] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string; reason?: string } | null>(null);
+  useEffect(() => { if (cool <= 0) return; const t = setTimeout(() => setCool((c) => c - 1), 1000); return () => clearTimeout(t); }, [cool]);
+  async function send() {
+    if (busy || cool > 0) return;
+    setBusy(true); setNote(null);
+    const r = await fetch("/api/auth/signup-otp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, purpose }) }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setBusy(false);
+    if (r?.ok) { setSentTo(email.trim().toLowerCase()); setCool(j.cooldownSec ?? 60); setNote({ ok: true, text: `We sent a 6-digit code to ${email.trim()}. It is valid for ${j.validityMin ?? 10} minutes.` }); return; }
+    if (j.error?.retryInSec) setCool(j.error.retryInSec);
+    setNote({ ok: false, text: j.error?.message ?? "Could not send the code. Please try again.", reason: j.error?.reason });
+  }
+  const change = () => { setSentTo(null); setNote(null); setCool(0); };
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  return { email, setEmail, sentTo, cool, busy, note, send, change, valid };
+}
 
 function GoogleButton({ enabled, next, label }: { enabled: boolean; next?: string; label: string }) {
   if (!enabled) return null;
@@ -64,29 +119,14 @@ export function LoginForm({ next, googleEnabled, err, msg, linkEmail }: { next?:
 /** Sign up: email → Send OTP → code + name + password. The account is created only after the code is verified. */
 export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabled: boolean }) {
   const [state, action, pending] = useActionState(customerSignup, undefined);
-  const [email, setEmail] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [cool, setCool] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<{ ok: boolean; text: string; exists?: boolean } | null>(null);
-  useEffect(() => { if (cool <= 0) return; const t = setTimeout(() => setCool((c) => c - 1), 1000); return () => clearTimeout(t); }, [cool]);
-  async function send() {
-    if (busy || cool > 0) return;
-    setBusy(true); setNote(null);
-    const r = await fetch("/api/auth/signup-otp", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email }) }).catch(() => null);
-    const j = r ? await r.json().catch(() => ({})) : {};
-    setBusy(false);
-    if (r?.ok) { setSentTo(email.trim().toLowerCase()); setCool(j.cooldownSec ?? 60); setNote({ ok: true, text: `We sent a 6-digit code to ${email.trim()}. It is valid for ${j.validityMin ?? 10} minutes.` }); return; }
-    if (j.error?.retryInSec) setCool(j.error.retryInSec);
-    setNote({ ok: false, text: j.error?.message ?? "Could not send the code. Please try again.", exists: j.error?.reason === "exists" });
-  }
+  const { email, setEmail, sentTo, cool, busy, note, send, change, valid } = useEmailOtp("signup");
   return (
     <>
       <Seg active="signup" next={next} />
       <h1 style={{ fontSize: 24 }}>Create your account</h1>
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Verify your email to get started</p>
       <GoogleButton enabled={googleEnabled} next={next} label="Continue with Google" />
-      <form className="col" style={{ gap: 14 }} action={action}>
+      <form className="col" style={{ gap: 14 }} onSubmit={keepValues(action)}>
         <input type="hidden" name="next" value={next ?? ""} />
         <div className="field">
           <label htmlFor="email">Email Address <span className="req" aria-hidden>*</span></label>
@@ -94,10 +134,10 @@ export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabl
             <input id="email" name="email" className="input" type="email" placeholder="you@business.in" required autoComplete="email" value={email} readOnly={!!sentTo}
               onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 0 }} />
             {!sentTo
-              ? <button type="button" className="btn btn-navy" onClick={send} disabled={busy || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())}>{busy ? "Sending…" : "Send OTP"}</button>
-              : <button type="button" className="btn btn-outline" onClick={() => { setSentTo(null); setNote(null); setCool(0); }}>Change Email</button>}
+              ? <button type="button" className="btn btn-navy" onClick={send} disabled={busy || !valid}>{busy ? "Sending…" : "Send OTP"}</button>
+              : <button type="button" className="btn btn-outline" onClick={change}>Change Email</button>}
           </div>
-          {note && <p className={`small ${note.ok ? "t-ok" : "err"}`} role={note.ok ? "status" : "alert"}>{note.text}{note.exists && <> <Link className="link" href={withNext("/login/", next)}>Log in</Link> · <Link className="link" href="/forgot-password/">Forgot password</Link></>}</p>}
+          {note && <p className={`small ${note.ok ? "t-ok" : "err"}`} role={note.ok ? "status" : "alert"}>{note.text}{note.reason === "exists" && <> <Link className="link" href={withNext("/login/", next)}>Log in</Link> · <Link className="link" href="/forgot-password/">Forgot password</Link></>}</p>}
         </div>
         {sentTo && (
           <>
@@ -106,10 +146,8 @@ export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabl
               <input id="otp" name="otp" className="input otp-in" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="\d{6}" placeholder="6-digit code" required autoFocus />
               <p className="tiny muted">Didn&apos;t get it? Check spam, or <button type="button" className="link" onClick={send} disabled={cool > 0 || busy}>{cool > 0 ? `Resend OTP in ${cool}s` : "Resend OTP"}</button></p>
             </div>
-            <div className="grid2">
-              <div className="field"><label htmlFor="name">Full name <span className="req" aria-hidden>*</span></label><input id="name" name="name" className="input" placeholder="Rahul Kumar" required autoComplete="name" /></div>
-              <div className="field"><label htmlFor="password">Password <span className="req" aria-hidden>*</span></label><input id="password" name="password" className="input" type="password" placeholder="Min 8 characters" required minLength={8} autoComplete="new-password" /></div>
-            </div>
+            <div className="field"><label htmlFor="name">Full name <span className="req" aria-hidden>*</span></label><input id="name" name="name" className="input" placeholder="Rahul Kumar" required autoComplete="name" /></div>
+            <PasswordPair />
             <label className="check"><input type="checkbox" name="terms" required /> I agree to the <Link className="link" target="_blank" href="/terms/">Terms &amp; shipping policy</Link></label>
             <Err s={state} />
             <button className="btn btn-orange btn-lg btn-block" disabled={pending}>{pending ? "Verifying…" : "Verify & create account"}</button>
@@ -117,6 +155,44 @@ export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabl
         )}
         <div className="center small muted">Already have an account? <Link className="link" href={withNext("/login/", next)}>Login</Link></div>
         <div className="note row" style={{ gap: 6 }}><Info size={16} /> After sign-up: complete your profile → KYC → admin approval → your account is active for booking</div>
+      </form>
+    </>
+  );
+}
+
+/** Forgot password: email → code → new password (twice). The code proves the email; other devices are signed out. */
+export function ForgotPasswordForm() {
+  const [state, action, pending] = useActionState(customerResetPassword, undefined);
+  const { email, setEmail, sentTo, cool, busy, note, send, change, valid } = useEmailOtp("reset");
+  return (
+    <>
+      <h1 style={{ fontSize: 24 }}>Reset your password</h1>
+      <p className="muted small" style={{ margin: "4px 0 18px" }}>We will email a 6-digit code to your registered email address.</p>
+      <form className="col" style={{ gap: 14 }} onSubmit={keepValues(action)}>
+        <div className="field">
+          <label htmlFor="email">Registered email <span className="req" aria-hidden>*</span></label>
+          <div className="row" style={{ gap: 8 }}>
+            <input id="email" name="email" className="input" type="email" placeholder="you@business.in" required autoComplete="email" value={email} readOnly={!!sentTo}
+              onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 0 }} autoFocus />
+            {!sentTo
+              ? <button type="button" className="btn btn-navy" onClick={send} disabled={busy || !valid}>{busy ? "Sending…" : "Send OTP"}</button>
+              : <button type="button" className="btn btn-outline" onClick={change}>Change Email</button>}
+          </div>
+          {note && <p className={`small ${note.ok ? "t-ok" : "err"}`} role={note.ok ? "status" : "alert"}>{note.text}{note.reason === "no_account" && <> <Link className="link" href="/signup/">Create account</Link></>}</p>}
+        </div>
+        {sentTo && (
+          <>
+            <div className="field">
+              <label htmlFor="otp">Verification code <span className="req" aria-hidden>*</span></label>
+              <input id="otp" name="otp" className="input otp-in" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="\d{6}" placeholder="6-digit code" required autoFocus />
+              <p className="tiny muted">Didn&apos;t get it? Check spam, or <button type="button" className="link" onClick={send} disabled={cool > 0 || busy}>{cool > 0 ? `Resend OTP in ${cool}s` : "Resend OTP"}</button></p>
+            </div>
+            <PasswordPair first="New password" second="Confirm new password" />
+            <Err s={state} />
+            <button className="btn btn-orange btn-lg btn-block" disabled={pending}>{pending ? "Saving…" : "Verify & change password"}</button>
+          </>
+        )}
+        <div className="center small muted">Remembered it? <Link className="link" href="/login/">Back to login</Link> · <Link className="link-navy" href="/signup/">Create account</Link></div>
       </form>
     </>
   );

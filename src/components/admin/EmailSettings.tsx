@@ -33,7 +33,7 @@ export function EmailSettings({ d }: { d: EmailSettingsData }) {
   }
   const ro = !d.write || busy;
   const verified = d.senders.filter((s) => s.status === "verified");
-  const otpRule = d.rules.find((r) => r.event === "signup_otp")!;
+  const otpRules = d.rules.filter((r) => r.audience === "signup");
 
   return (
     <div className="em-set">
@@ -66,7 +66,7 @@ export function EmailSettings({ d }: { d: EmailSettingsData }) {
             <p className="tiny muted">A code works once. Sending a new code cancels the previous one. These limits are enforced on the server.</p>
             <div><button className="btn btn-orange" disabled={ro}>Save OTP rules</button></div>
           </form>
-          <RuleForm r={otpRule} senders={d.senders} verified={verified} ro={ro} call={call} title="OTP sender" />
+          {otpRules.map((r) => <RuleForm key={r.event} r={r} senders={d.senders} verified={verified} ro={ro} call={call} title={`Sender — ${r.label}`} />)}
           <p className="small muted">Edit the OTP email text in <button type="button" className="link" onClick={() => setTab("templates")}>Templates</button>.</p>
         </div>
       )}
@@ -154,8 +154,8 @@ function RuleForm({ r, senders, verified, ro, call, title, recipients }: { r: Ru
   const def = senders.find((s) => s.isDefault);
   return (
     <form className="card em-card" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget);
-      void call({ op: "rule_save", event: r.event, enabled: r.event === "signup_otp" ? true : f.get("on") === "on", senderId: (f.get("sender") as string) || null, toClient: r.event === "signup_otp" ? true : f.get("client") === "on", toRecipient: f.get("recipient") === "on" }); }}>
-      <div className="row between"><h2>{title}</h2>{r.event !== "signup_otp" && <label className="em-check"><input type="checkbox" name="on" defaultChecked={r.enabled} disabled={ro} /> ON</label>}</div>
+      void call({ op: "rule_save", event: r.event, enabled: r.audience === "signup" ? true : f.get("on") === "on", senderId: (f.get("sender") as string) || null, toClient: r.audience === "signup" ? true : f.get("client") === "on", toRecipient: f.get("recipient") === "on" }); }}>
+      <div className="row between"><h2>{title}</h2>{r.audience !== "signup" && <label className="em-check"><input type="checkbox" name="on" defaultChecked={r.enabled} disabled={ro} /> ON</label>}</div>
       <div className="field"><label htmlFor={`snd-${r.event}`}>Sender</label>
         <select id={`snd-${r.event}`} name="sender" className="select" defaultValue={r.senderId ?? ""} disabled={ro}>
           <option value="">Default sender{def ? ` (${def.email})` : ""}</option>

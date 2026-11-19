@@ -162,3 +162,9 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .or-line::before,.or-line::after{content:"";flex:1;height:1px;background:#dbe3ee}
 .otp-in{letter-spacing:.4em;font-size:20px;text-align:center}
 .req{color:#c62828}
+
+/* password with show/hide */
+.pw-wrap { position: relative; }
+.pw-wrap .input { padding-right: 42px; width: 100%; }
+.pw-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; padding: 6px; border-radius: 8px; color: #4a5a78; cursor: pointer; display: inline-flex; }
+.pw-eye:hover { background: #EDF5FF; color: #051C46; }

@@ -34,7 +34,7 @@ const DONUT: Array<{ key: BucketKey; color: string }> = [
   { key: "delivered", color: "#4f9cf9" }, { key: "rto_in_transit", color: "#f4845f" }, { key: "rto_delivered", color: "#b5d334" }, { key: "ndr", color: "#f5a623" },
 ];
 const PIPE: BucketKey[] = ["new", "assigned", "scheduled", "in_transit", "ofd", "delivered", "ndr", "rto"];
-type SP = { tab?: string; from?: string; to?: string; stage?: string; welcome?: string };
+type SP = { tab?: string; from?: string; to?: string; stage?: string; welcome?: string; password?: string; google?: string };
 const dt = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
 
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SP> }) {
@@ -66,6 +66,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   return (
     <>
       {/* phone: search, then wallet + notification credits */}
+      {(sp.password === "changed" || sp.google === "linked") && <p className="note small mb12" role="status">{sp.password === "changed" ? "Your password has been changed. Other devices were signed out." : "Your Google account is now linked — next time you can use Continue with Google."}</p>}
       <div className="dash-m">
         {kycNote /* activation step first, so cards → Analytics stay together */}
         <DashSearch />

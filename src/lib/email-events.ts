@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -41,6 +41,22 @@ Your Vishwaship verification code is:
 It is valid for {{otp_validity}}. Do not share this code with anyone — Vishwaship will never ask for it.
 
 If you did not try to create a Vishwaship account, you can ignore this email.
+
+Team Vishwaship`,
+    defaults: { enabled: true, toClient: true, toRecipient: false },
+  },
+  {
+    key: "password_reset_otp", label: "Forgot password code (OTP)", audience: "signup", placeholders: ["customer_name", "otp", "otp_validity"], secret: ["otp"],
+    subject: "{{otp}} is your Vishwaship password reset code",
+    body: `Hello {{customer_name}},
+
+Use this code to reset your Vishwaship password:
+
+{{otp}}
+
+It is valid for {{otp_validity}}. Do not share this code with anyone — Vishwaship will never ask for it.
+
+If you did not ask to reset your password, you can ignore this email; your password stays the same.
 
 Team Vishwaship`,
     defaults: { enabled: true, toClient: true, toRecipient: false },

@@ -79,6 +79,24 @@ describe("email OTP signup", () => {
   });
 });
 
+describe("forgot password code", () => {
+  it("only for an existing account; separate from signup codes; single use; never logged", async () => {
+    const { requestResetOtp, consumeResetOtp } = await import("@/server/auth/signup-otp");
+    expect(await requestResetOtp("nobody@example.com", "3.3.3.3")).toMatchObject({ ok: false, code: "no_account" });
+    const email = "new.seller@example.com"; // created in the signup test above
+    expect(await requestResetOtp(email, "3.3.3.3")).toMatchObject({ ok: true });
+    const mail = devOutbox.find((m) => m.to === email)!;
+    expect(mail.subject).toMatch(/password reset code/);
+    const code = lastCode(email);
+    expect(await consumeSignupOtp(email, code)).toMatchObject({ ok: false }); // a reset code is not a signup code
+    expect(await consumeResetOtp(email, code)).toEqual({ ok: true });
+    expect(await consumeResetOtp(email, code)).toMatchObject({ ok: false });
+    const [log] = await db.select().from(schema.emailLogs).where(and(eq(schema.emailLogs.event, "password_reset_otp"), eq(schema.emailLogs.toEmail, email)));
+    expect(log).toMatchObject({ retryable: false });
+    expect(JSON.stringify(log)).not.toContain(code);
+  });
+});
+
 describe("Google account and onboarding", () => {
   it("a Google identity maps to exactly one account", async () => {
     const id = await createCustomerAccount({ name: "Ravi G", email: "ravi.g@gmail.com", googleSub: "g-123", via: "google" });
@@ -174,7 +192,8 @@ describe("shipment Picked Up emails", () => {
     await db.update(schema.emailLogs).set({ status: "failed" }).where(eq(schema.emailLogs.id, otp.id));
     expect(await svc.retryEmail(otp.id)).toMatchObject({ ok: false, message: expect.stringMatching(/one-time code/) });
     const m = svc.renderEmail("shipment_picked_up", await svc.template("shipment_picked_up"), SAMPLE_VARS);
-    expect(m.html).toContain("vishwaship-logo-transparent.png");
+    expect(m.html).toContain("vishwaship-logo-on-dark.png");
+    expect(m.html).toContain('bgcolor="#051C46"');
     expect(m.subject).toContain(SAMPLE_VARS.order_id);
     const o = svc.renderEmail("signup_otp", { subject: "Code {{otp}}", body: "<b>{{customer_name}}</b> {{otp}}" }, { ...SAMPLE_VARS, customer_name: "<script>x</script>" });
     expect(o.html).toContain("123456");
