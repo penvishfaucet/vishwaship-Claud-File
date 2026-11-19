@@ -13,6 +13,7 @@ import { canTakeBookings, noteCapability } from "@/server/carriers/verification"
 import { registerWarehouseAt } from "@/server/carriers/automation";
 import { hideProviders } from "@/server/customer-safe";
 import { ACTIVATION_MESSAGE, onboardingState } from "@/server/onboarding";
+import { courierEmail } from "@/server/client-email";
 
 /** Comparable view of a quote request (field order and optional defaults normalised). */
 function normReq(r: QuoteRequest) {
@@ -59,7 +60,9 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
   // A surcharge (e.g. ODA) whose amount the carrier has not confirmed: never book at an unverified rate.
   const pendingReason = (quote.priced as { pending?: string }).pending;
   if (pendingReason) return { ok: false, code: "unsupported", message: `Rate pending confirmation — ${pendingReason}. This service cannot be booked until the charge is confirmed; choose another courier or try again later.` };
-  const consignee = order.consignee as BookRequest["consignee"];
+  const entered = order.consignee as BookRequest["consignee"];
+  // couriers require a receiver email; it is optional for our customers → the client's own account email is sent instead
+  const consignee: BookRequest["consignee"] = { ...entered, email: await courierEmail(args.orgId, entered.email) };
 
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
   const pilots = ((acct?.configPublic as Record<string, unknown> | undefined)?.pilotOrgIds as string[] | undefined) ?? [];

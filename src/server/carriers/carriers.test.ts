@@ -55,6 +55,7 @@ const shipmozoHappy = (url: string, body?: unknown) => {
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
   await db.insert(schema.orgs).values([{ id: ORG, name: "A", businessName: "A Traders", kycStatus: "approved", profileCompletedAt: new Date() }, { id: OTHER, name: "B", businessName: "B Traders", kycStatus: "approved", profileCompletedAt: new Date() }]);
+  await db.insert(schema.users).values({ id: "usr_c", kind: "customer", orgId: ORG, name: "Owner A", email: "owner@atraders.test", emailVerifiedAt: new Date() });
   await db.insert(schema.wallets).values([{ id: "wal_a", orgId: ORG }, { id: "wal_b", orgId: OTHER }]);
   await withLedger((s) => credit(s, { walletId: "wal_a", amount: 10_000_00, kind: "adjustment_credit", idempotencyKey: "seed", refType: "staff", refId: STAFF, memo: "seed" }));
   const secrets = encryptJson({ live: { publicKey: "pk_test_value", privateKey: "sk_test_value" } });
@@ -217,6 +218,9 @@ describe("booking through Shipmozo", () => {
     expect(r).toMatchObject({ ok: true, awb: "SMAWB123", state: "confirmed" });
     const push = calls.find((c) => c.url.endsWith("/push-order"))!.body as Record<string, unknown>;
     expect(push).toMatchObject({ order_id: "ord1", payment_type: "PREPAID", weight: 500, length: 22, warehouse_id: "9001", consignee_pin_code: 110001 });
+    // no receiver email on the order → the client's account email goes to the courier (it rejects a blank one); the order itself is unchanged
+    expect(push.consignee_email).toBe("owner@atraders.test");
+    expect(((await db.select().from(schema.orders).where(eq(schema.orders.id, "ord_1")))[0].consignee as { email?: string }).email).toBeUndefined();
     expect(calls.find((c) => c.url.endsWith("/assign-courier"))!.body).toEqual({ order_id: "61041APord1", courier_id: 12 }) // Shipmozo's own id, not ours;
     expect(calls.some((c) => c.url.endsWith("/schedule-pickup"))).toBe(false); // pickups_automatically_scheduled = YES
     const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_1"));

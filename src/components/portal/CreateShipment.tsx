@@ -424,7 +424,8 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                     {fe.pin && <span id="cp-err" className="field-err" role="alert">{fe.pin}{fe.pinRetry && <> <button type="button" className="linkbtn" onClick={() => lookupPin(c.pincode)}><RefreshCw size={12} /> Retry</button></>}</span>}</div>
                   <div className="field"><label htmlFor="cc">City / district <span aria-hidden className="t-debit">*</span></label><input id="cc" className="input" value={c.city} onChange={(e) => setC({ ...c, city: e.target.value })} /></div>
                   <div className="field"><label htmlFor="cs">State <span aria-hidden className="t-debit">*</span></label><input id="cs" className="input" value={c.state} onChange={(e) => setC({ ...c, state: e.target.value })} /></div>
-                  <div className="field"><label htmlFor="ce">Recipient Email (Optional)</label><input id="ce" className="input" type="email" value={c.email} onChange={(e) => setC({ ...c, email: e.target.value })} /></div>
+                  <div className="field"><label htmlFor="ce">Recipient Email (Optional)</label><input id="ce" className="input" type="email" value={c.email} onChange={(e) => setC({ ...c, email: e.target.value })} aria-describedby="ce-hint" />
+                    <span id="ce-hint" className="tiny muted">Leave empty if you don&apos;t have it — the courier gets your account email instead, so booking is not blocked.</span></div>
                 </div>
               </section>
             </>

@@ -6,6 +6,7 @@ import { canTakeBookings, noteCapability } from "@/server/carriers/verification"
 import { getDb, schema } from "@/server/db/client";
 import { adapterFor, providerContext } from "@/server/providers/registry";
 import type { Result } from "@/server/providers/types";
+import { courierEmail } from "@/server/client-email";
 import { newId } from "@/server/util/ids";
 
 type Warehouse = InferSelectModel<typeof schema.warehouses>;
@@ -30,7 +31,7 @@ export async function registerWarehouseAt(wh: Warehouse, acct: Account): Promise
   if (sync?.status === "registered" && sync.providerWarehouseRef) return { ok: true, value: { ref: sync.providerWarehouseRef } };
   let reg;
   try {
-    reg = await adapter.registerWarehouse(await providerContext(acct), { code: courierCode(wh), label: wh.label, contactName: wh.contactName, mobile: wh.mobile, email: wh.email, line1: wh.line1, line2: wh.line2, pincode: wh.pincode, city: wh.city, state: wh.state });
+    reg = await adapter.registerWarehouse(await providerContext(acct), { code: courierCode(wh), label: wh.label, contactName: wh.contactName, mobile: wh.mobile, email: await courierEmail(wh.orgId, wh.email), line1: wh.line1, line2: wh.line2, pincode: wh.pincode, city: wh.city, state: wh.state });
   } catch (e) { reg = { ok: false as const, error: { category: "upstream" as const, message: (e as Error).message, retryable: true } }; }
   const row = { status: reg.ok ? "registered" : "failed", providerWarehouseRef: reg.ok ? reg.value.ref : null, lastError: reg.ok ? null : reg.error.message.slice(0, 300), updatedAt: new Date() };
   await db.insert(schema.warehouseProviderSync).values({ id: newId("wps"), warehouseId: wh.id, providerAccountId: acct.id, ...row })
