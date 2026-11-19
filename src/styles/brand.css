@@ -1,6 +1,6 @@
 /* ==========================================================================
    Vishwaship brand theme v5 (owner spec 2026-11-19, second revision).
-   Deep Navy #051C46 · Brand Orange #FE6519 (white text) · White surfaces · Link Blue #0057B8
+   Deep Navy #051C46 · Brand Orange #FE6519 (highlights) · Button Orange #E5540C (white text, 3.7:1) · White surfaces · Link Blue #0057B8
    Loaded last; selectors start with `html` so they win over older theme blocks and page CSS.
    ========================================================================== */
 html:root,html .shell,html .vs{
@@ -42,7 +42,7 @@ html:not(.dark) body .shell .side :is(a.item,button.item,summary,.grp-h,.qs-btn,
 html:not(.dark) body .shell .side :is(a.item,button.item,.grp-h,.qs-btn,.side-pin) svg{color:#fff!important;opacity:.9}
 html:not(.dark) body .shell .side .grp{color:#fff}
 html:not(.dark) body .shell .side :is(a.item,button.item):hover{background:rgba(255,255,255,.1)!important}
-html:not(.dark) body .shell .side a.item.on,html:not(.dark) body .shell .side a.item.on:hover{background:#FE6519!important;color:#fff!important;font-weight:600;box-shadow:none}
+html:not(.dark) body .shell .side a.item.on,html:not(.dark) body .shell .side a.item.on:hover{background:#E5540C!important;color:#fff!important;font-weight:600;box-shadow:none}
 html:not(.dark) body .shell .side a.item.on svg{color:#fff!important;opacity:1}
 html:not(.dark) body .shell .side .grp.has-on>.grp-h{box-shadow:inset 3px 0 0 #FE6519}
 html:not(.dark) body .shell .side kbd{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25)}
@@ -54,7 +54,7 @@ html .shell .side a.item:focus-visible,html .shell .side .grp-h:focus-visible{ou
   html body .shell .bnav{background:#051C46;border-top:0;box-shadow:0 -6px 20px rgba(5,28,70,.25)}
   html body .shell .bnav a{color:#fff!important}
   html body .shell .bnav a svg{color:#fff}
-  html body .shell .bnav a.on .bi{background:#FE6519;color:#fff}
+  html body .shell .bnav a.on .bi{background:#E5540C;color:#fff}
   html body .shell .bnav a.on{font-weight:600}
 }
 /* top header stays white with navy text */
@@ -84,11 +84,11 @@ html .vs .auth .l .awbcard .small{color:#051C46!important}
 html :is(.btn-navy,.shell .btn-navy,.wv .w-btn.sec,.tk-raise,.hw-rech,.tk-search .go,.seg-tabs a.on,.btn-sm.btn-orange,.ov-btn.sm.orange){background:#051C46!important;border-color:#051C46!important;color:#fff!important}
 html :is(.btn-navy,.shell .btn-navy,.tk-raise,.hw-rech,.tk-search .go):hover{background:#0b2a5e!important;color:#fff!important}
 /* key actions: brand orange + large bold white label */
-html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy){background:#FE6519;border-color:#FE6519;color:#fff!important;font-weight:700;font-size:16px;letter-spacing:.01em}
-html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy):hover{background:#e5540c;color:#fff!important}
-html .wv .w-btn.pri{font-size:17px;padding-inline:26px;box-shadow:0 10px 24px rgba(254,101,25,.3)}
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy){background:#E5540C;border-color:#E5540C;color:#fff!important;font-weight:700;font-size:16px;letter-spacing:.01em}
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy):hover{background:#c94a0a;color:#fff!important}
+html .wv .w-btn.pri{font-size:17px;padding-inline:26px;box-shadow:0 10px 24px rgba(229,84,12,.3)}
 /* orange surfaces / indicators: white text and icons */
-html :is(.qa-fab,.mo-fab,.dm-ic.wallet,.sc-send,.chat-input button,ol.stepper li.cur .n,.step.on .n,.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#FE6519;border-color:#FE6519;color:#fff!important}
+html :is(.qa-fab,.mo-fab,.dm-ic.wallet,.sc-send,.chat-input button,ol.stepper li.cur .n,.step.on .n,.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#E5540C;border-color:#E5540C;color:#fff!important}
 html :is(.oc-seg .on,.tk-tabs a.on){font-weight:700}
 html .tk-tabs a.on{font-size:15.5px}
 /* outline / secondary on white */
@@ -112,7 +112,7 @@ html .chat-msg.me .tk-att-doc{color:#fff}
 
 /* ---------- offers banner ---------- */
 html body .shell .vo-compact{background:#fff!important;border-color:#dbe3ee!important}
-html body .shell .vo-compact .ic{background:#FE6519!important;color:#fff!important}
+html body .shell .vo-compact .ic{background:#E5540C!important;color:#fff!important}
 
 /* ---------- forms + tables ---------- */
 html .shell :is(.input,.select,.textarea,.ov-field,.rt-input,.tk-search,.tk-box){border-color:#c9d5e6;background:#fff;color:#051C46}
