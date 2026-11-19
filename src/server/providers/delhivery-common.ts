@@ -54,18 +54,27 @@ function classify(key: string): { code: ComponentCode; label: string } | null {
   return null;
 }
 
-/** Collect numeric charge fields from the first object that looks like a breakup. */
-function collect(obj: unknown, depth = 0, out: Array<[string, number]> = []): Array<[string, number]> {
-  if (!obj || typeof obj !== "object" || depth > 3) return out;
-  if (Array.isArray(obj)) { if (obj.length) collect(obj[0], depth + 1, out); return out; }
+const CONTAINER = /^(data|result|details|price|price_breakup|breakup|break_up|charges|freight|freight_charges|meta_charges)$/i;
+type Pair = [string, number, string]; // [key, value, path]
+
+/**
+ * Collect every numeric field of the breakup, including nested charge objects. Children of a container
+ * (data / price_breakup / meta_charges …) keep their own key; children of a charge object are prefixed with it,
+ * e.g. Delhivery's `oda: { fm: 0, lm: 750 }` becomes oda_fm / oda_lm (missed before 2026-11-19 — ₹750 ODA on 768028).
+ */
+function collect(obj: unknown, depth = 0, out: Pair[] = [], prefix = "", path = ""): Pair[] {
+  if (!obj || typeof obj !== "object" || depth > 5) return out;
+  if (Array.isArray(obj)) { if (obj.length) collect(obj[0], depth + 1, out, prefix, path); return out; }
   for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))) out.push([k, Number(v)]);
-    else if (v && typeof v === "object" && /data|breakup|break_up|price|charges|details|result|freight/i.test(k)) collect(v, depth + 1, out);
+    const key = prefix ? `${prefix}_${k}` : k;
+    const at = path ? `${path}.${k}` : k;
+    if (typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v))) out.push([key, Number(v), at]);
+    else if (v && typeof v === "object") collect(v, depth + 1, out, CONTAINER.test(k) ? prefix : key, at);
   }
   return out;
 }
 
-function toComponents(pairs: Array<[string, number]>): ProviderQuoteComponent[] {
+function toComponents(pairs: Array<[string, number] | Pair>): ProviderQuoteComponent[] {
   const byCode = new Map<string, ProviderQuoteComponent>();
   for (const [k, v] of pairs) {
     if (!(v > 0)) continue;
@@ -80,9 +89,17 @@ function toComponents(pairs: Array<[string, number]>): ProviderQuoteComponent[] 
 
 /** B2B /freight/estimate → components (pre-tax, paise) + chargeable weight if returned. */
 export function b2bCharges(j: unknown): { components: ProviderQuoteComponent[]; chargeableGrams?: number } | null {
-  const pairs = collect(j);
+  const all = collect(j);
+  // Delhivery states its own pre-tax total. When it does, that total is the truth: meta_charges (to_pay, cod …) are
+  // informational and not part of it, and any charge we do not recognise is added as one line so we never quote less.
+  const preTax = all.find(([k]) => /(^|_)pre_tax(_freight)?(_charges?)?$/i.test(k))?.[1];
+  const pairs = preTax ? all.filter(([, , at]) => !/(^|\.)meta_charges\./i.test(at)) : all;
   const components = toComponents(pairs);
   if (!components.some((c) => c.code === "freight")) return null;
+  if (preTax) {
+    const diff = amountToPaise(preTax) - components.reduce((t, c) => t + c.amount, 0);
+    if (diff > 100) components.push({ code: "other", label: "Other Delhivery charges", amount: diff });
+  }
   const cw = pairs.find(([k]) => /charged_wt|chargeable_weight|charged_weight|billed_weight/i.test(k))?.[1];
   return { components, chargeableGrams: cw ? (cw < 1000 ? Math.round(cw * 1000) : Math.round(cw)) : undefined };
 }

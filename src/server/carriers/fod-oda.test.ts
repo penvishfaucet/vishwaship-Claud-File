@@ -117,3 +117,30 @@ describe("Delhivery B2B LR sync", () => {
     expect(r.value).toMatchObject({ state: "confirmed", lrNumber: "323116432" });
   });
 });
+
+describe("Delhivery B2B freight estimate — live response 2026-11-19 (249402 → 768028, 160 kg, FOD)", () => {
+  const LIVE = { success: true, data: { total: 3293.33, charged_wt: 160, min_charged_wt: 20, price_breakup: { base_freight_charge: 1588, fuel_surcharge: 223.2, fuel_hike: 29.76, insurance_rov: 100, oda: { fm: 0, lm: 750 }, fm: 0, lm: 0, green: 0, pre_tax_freight_charges: 2790.96, markup: 0, gst: 502.37, gst_percent: 18, other_handling_charges: 100, meta_charges: { cod: 0, demurrage: 0, reattempt: 0, handling: 0, pod: 0, sunday: 0, to_pay: 100, cheque: 0, csd: 0, add_cost: 0 }, appointment_charges: 0 } }, request_id: "x" };
+  it("reads the nested ODA and matches Delhivery's own pre-tax total (₹2,790.96 → ₹3,293.33 with GST)", async () => {
+    const { b2bCharges } = await import("@/server/providers/delhivery-common");
+    const r = b2bCharges(LIVE)!;
+    const by = Object.fromEntries(r.components.map((c) => [c.code, c.amount]));
+    expect(by).toMatchObject({ freight: 158_800, fuel: 25_296, fov: 10_000, oda: 75_000, handling: 10_000 });
+    expect(r.components.reduce((t, c) => t + c.amount, 0)).toBe(279_096);
+    expect(r.chargeableGrams).toBe(160_000);
+  });
+  it("customer at 10% sees Delhivery's ₹3,293.33 + 10% = ₹3,622.67 (all charges carry the margin)", async () => {
+    const { b2bCharges } = await import("@/server/providers/delhivery-common");
+    const q = { ...base, chargeableWeightGrams: 160_000, components: b2bCharges(LIVE)!.components };
+    const p = priceQuote(q, markup(1000), { gstBps: 1800, componentRules: ALL_ELIGIBLE_COMPONENT_RULES });
+    expect(p.costPreTax).toBe(279_096);
+    expect(p.sellingSubtotal).toBe(307_006);
+    expect(p.total).toBe(362_267);
+  });
+  it("a charge we do not recognise is still included, so the quote never falls below Delhivery's total", async () => {
+    const { b2bCharges } = await import("@/server/providers/delhivery-common");
+    const odd = { data: { price_breakup: { base_freight_charge: 1000, mystery_levy_xyz: { a: 1 }, pre_tax_freight_charges: 1250 } } };
+    const r = b2bCharges(odd)!;
+    expect(r.components.reduce((t, c) => t + c.amount, 0)).toBe(125_000);
+    expect(r.components.find((c) => c.label === "Other Delhivery charges")?.amount).toBe(25_000);
+  });
+});
