@@ -3,6 +3,7 @@ import { EMAIL_EVENTS, eventDef } from "@/lib/email-events";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { googleAvailable, googleRedirectUri } from "@/server/auth/google";
+import { resendKey } from "@/server/email/transport";
 import { allRules, emailLogs, getAuthSettings, senderUsage, senders, template } from "@/server/email/service";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function EmailSettingsPage() {
     <>
       <div className="page-h"><div><h1>Email &amp; Sign-in</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Signup OTP, Continue with Google, sender emails, shipment email rules, templates and the email log. Every change is recorded in the Audit Log.</p></div></div>
       <EmailSettings d={{
-        write: can(s.role, "notifications.write"), auth, googleConfigured: g.configured, redirectUri: googleRedirectUri(), providerConfigured: !!process.env.RESEND_API_KEY?.trim(),
+        write: can(s.role, "notifications.write"), auth, googleConfigured: g.configured, redirectUri: googleRedirectUri(), providerConfigured: !!(await resendKey()),
         senders: list.map((x) => ({ id: x.id, email: x.email, displayName: x.displayName, replyTo: x.replyTo, isDefault: x.isDefault, status: x.status, statusDetail: x.statusDetail, checkedAt: fmt(x.checkedAt), usedBy: (usage[x.id] ?? []).map(label) })),
         rules: rules.map((r) => ({ ...r, label: label(r.event), audience: eventDef(r.event)!.audience })),
         templates: templates.map(({ event, label: l, subject, body, custom, placeholders }) => ({ event, label: l, subject, body, custom, placeholders })),

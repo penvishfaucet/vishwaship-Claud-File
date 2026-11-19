@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { desc, eq, isNotNull, sql } from "drizzle-orm";
+import { Fragment } from "react";
+import { desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { retryWhatsapp, saveCodSettings, saveTemplateMapping } from "@/server/admin/module-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
-import { WA_EVENT_LABEL, codSettings, watiAccount, whatsappMode } from "@/server/whatsapp/service";
+import { WA_EVENT_LABEL, codSettings, whatsappAccount, whatsappMode } from "@/server/whatsapp/service";
 
 const CANCEL: Record<string, string> = { requested: "Cancellation requested", cancelled: "Cancelled", failed: "Cancellation Failed", action_required: "Action Required" };
 const fmt = (d: Date | null) => d?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "short" }) ?? "—";
@@ -15,7 +16,8 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
   const write = can(s.role, "notifications.write");
   const db = await getDb();
   const mode = await whatsappMode();
-  const acct = await watiAccount();
+  const acct = await whatsappAccount();
+  const isMeta = acct?.adapter === "meta_whatsapp";
   const cfg = await codSettings();
   const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const templates = await db.select().from(schema.notificationTemplates).where(eq(schema.notificationTemplates.channel, "whatsapp"));
@@ -25,7 +27,7 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
   const cancellations = await db.select({ c: schema.codConfirmations, o: schema.orders, org: schema.orgs.businessName }).from(schema.codConfirmations)
     .innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId))
     .where(isNotNull(schema.codConfirmations.cancellationStatus)).orderBy(desc(schema.codConfirmations.cancellationAt)).limit(30);
-  const inbound = await db.select().from(schema.inboundEvents).where(eq(schema.inboundEvents.provider, "wati")).orderBy(desc(schema.inboundEvents.createdAt)).limit(15);
+  const inbound = await db.select().from(schema.inboundEvents).where(inArray(schema.inboundEvents.provider, ["wati", "meta_whatsapp"])).orderBy(desc(schema.inboundEvents.createdAt)).limit(15);
   const hints = (acct?.secretsHint as Record<string, string> | null) ?? {};
   const unmatched = inbound.filter((i) => i.error && i.error !== null && !i.error.startsWith("ignored")).length;
   return (
@@ -38,17 +40,15 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
         <section className="card" style={{ padding: 18 }}>
           <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Provider connection</h2>
           <dl className="kv-list">
-            <dt>Status</dt><dd><span className={`chip ${mode === "live" ? "c-active" : mode === "demo" ? "c-pending" : "c-failed"}`}>{mode === "live" ? "Connected (WATI)" : mode === "demo" ? "Demo mode (local only)" : "Not connected"}</span></dd>
+            <dt>Status</dt><dd><span className={`chip ${mode === "live" ? "c-active" : mode === "demo" ? "c-pending" : "c-failed"}`}>{mode === "live" ? (isMeta ? "Connected (Meta Cloud API)" : "Connected (WATI)") : mode === "demo" ? "Demo mode (local only)" : "Not connected"}</span></dd>
             <dt>Account</dt><dd className="small">{acct ? `${acct.label} · ${acct.mode}` : "—"}</dd>
-            <dt>API endpoint</dt><dd className="small mono">{hints.apiEndpoint ?? "—"}</dd>
-            <dt>Access token</dt><dd className="small mono">{hints.accessToken ?? "—"}</dd>
-            <dt>Webhook token</dt><dd className="small mono">{hints.webhookToken ?? "—"}</dd>
+            {Object.entries(hints).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd className="small mono">{v}</dd></Fragment>)}
             <dt>Last test</dt><dd className="small">{acct?.lastTestAt ? `${fmt(acct.lastTestAt)} · ${acct.lastTestOk ? "OK" : acct.lastTestMessage ?? "failed"}` : "—"}</dd>
             <dt>Last send</dt><dd className="small">{fmt(acct?.lastSuccessAt ?? null)}</dd>
           </dl>
-          <p className="small mt8">Webhook URL to paste in WATI → Webhooks (events: message received, sent message status):</p>
-          <p className="small mono" style={{ wordBreak: "break-all" }}>{appUrl}/api/webhooks/wati?token=&lt;webhookToken&gt;</p>
-          <p className="tiny muted">Secrets are stored encrypted and never shown again. Add or rotate them in <Link className="link" href="/admin/integrations/">Integrations → WATI</Link>.</p>
+          <p className="small mt8">Webhook URL for the provider:</p>
+          <p className="small mono" style={{ wordBreak: "break-all" }}>{isMeta ? `${appUrl}/api/webhooks/meta-whatsapp` : `${appUrl}/api/webhooks/wati?token=<webhookToken>`}</p>
+          <p className="tiny muted">Keys are stored encrypted and never shown again. Add, change or switch provider (WATI / Meta) in <Link className="link" href="/admin/services/">API Keys &amp; Services</Link>.</p>
           {unmatched > 0 && <p className="small t-debit">{unmatched} recent inbound event(s) could not be matched — see below.</p>}
         </section>
 

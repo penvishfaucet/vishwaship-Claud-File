@@ -30,6 +30,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/reports/", label: "Reports", icon: FileDown, perm: "reports.export" },
   ] },
   { group: "SETTINGS", items: [
+    { href: "/admin/services/", label: "API Keys & Services", icon: KeyRound, perm: "integrations.read" },
     { href: "/admin/integrations/", label: "Integrations", icon: Plug, perm: "integrations.read" },
     { href: "/admin/payments/", label: "Payment Settings", icon: CreditCard, perm: "integrations.read" },
     { href: "/admin/carriers/", label: "Courier Integrations", icon: TruckIcon, perm: "integrations.read" },

@@ -152,3 +152,15 @@
 .em-check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
 .em-ph { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 6px; background: var(--surface-2, #EDF5FF); font-size: 12px; }
 .em-preview { width: 100%; min-height: 520px; border: 1px solid var(--line, #D7E4F3); border-radius: 10px; background: #fff; }
+
+/* Admin → API Keys & Services */
+.svc-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 6px 24px; margin: 0 0 14px; padding-left: 18px; }
+.svc-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); align-items: start; }
+.svc-card { padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.svc-card h2 { font-size: 16px; margin: 2px 0 0; font-weight: 700; }
+.svc-guide { border: 1px solid var(--line, #D7E4F3); border-radius: 10px; padding: 10px 12px; background: var(--surface-2, #EDF5FF); }
+.svc-guide summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.svc-guide ol { margin: 10px 0 6px; padding-left: 20px; display: grid; gap: 6px; font-size: 13.5px; }
+.svc-info { display: grid; gap: 8px; }
+.svc-copy code { font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2, #EDF5FF); word-break: break-all; flex: 1; min-width: 0; }
+.svc-form { display: grid; gap: 10px; }

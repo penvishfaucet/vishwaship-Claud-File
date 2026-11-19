@@ -1,8 +1,14 @@
 import "server-only";
 import { safeFetch } from "@/server/security/safe-fetch";
+import { activeService } from "@/server/integrations/services";
+
+/** Resend key: Admin → API Keys & Services (when switched ON), else the server's RESEND_API_KEY. */
+export async function resendKey() {
+  return (await activeService("resend"))?.apiKey?.trim() || process.env.RESEND_API_KEY?.trim() || "";
+}
 
 /**
- * Email provider (server-side only). Production: Resend (https://resend.com) with RESEND_API_KEY.
+ * Email provider (server-side only). Production: Resend (https://resend.com), key set in Admin → API Keys & Services.
  * Without a key, development keeps an outbox (nothing leaves the machine) and production reports a clear failure.
  */
 export type OutgoingEmail = { from: string; replyTo?: string | null; to: string; subject: string; html: string; text: string };
@@ -13,9 +19,9 @@ export const devOutbox: Array<OutgoingEmail & { at: string }> = [];
 const devFailed = new Set<string>();
 
 export async function deliver(m: OutgoingEmail): Promise<DeliveryResult> {
-  const key = process.env.RESEND_API_KEY?.trim();
+  const key = await resendKey();
   if (!key) {
-    if (process.env.NODE_ENV === "production") return { ok: false, error: "Email provider not configured — set RESEND_API_KEY on the server", retryable: true };
+    if (process.env.NODE_ENV === "production") return { ok: false, error: "Email provider not configured — add the Resend API key in Admin → Settings → API Keys & Services", retryable: true };
     const k = `${m.to}|${m.subject}`;
     if (/\+fail@/i.test(m.to) && !devFailed.has(k)) { devFailed.add(k); return { ok: false, error: "Development: simulated provider failure for a +fail address", retryable: true }; }
     devOutbox.unshift({ ...m, at: new Date().toISOString() }); devOutbox.splice(50);
@@ -39,12 +45,12 @@ export async function deliver(m: OutgoingEmail): Promise<DeliveryResult> {
 
 /** Provider verification of a sender's domain: verified | pending | failed (Resend GET /domains). */
 export async function senderVerification(email: string): Promise<{ status: "verified" | "pending" | "failed"; detail: string }> {
-  const key = process.env.RESEND_API_KEY?.trim();
+  const key = await resendKey();
   const domain = email.split("@")[1]?.toLowerCase() ?? "";
   if (!key) {
     // local development has no provider: simulate verification so the admin flow can be exercised; production never does this
     if (process.env.NODE_ENV !== "production") return /\.(test|in)$/.test(domain) ? { status: "verified", detail: `Development: simulated verification of ${domain} (no provider configured)` } : { status: "pending", detail: `Development: ${domain} not verified (only .test / .in domains are simulated)` };
-    return { status: "pending", detail: "Email provider not configured on the server (RESEND_API_KEY) — verification cannot be checked yet" };
+    return { status: "pending", detail: "Email provider not configured — add the Resend API key in Admin → API Keys & Services" };
   }
   try {
     const r = await safeFetch("https://api.resend.com/domains", { allowedHosts: ["api.resend.com"], timeoutMs: 15_000, headers: { authorization: `Bearer ${key}` } });

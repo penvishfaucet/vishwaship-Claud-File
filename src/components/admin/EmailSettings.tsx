@@ -47,8 +47,8 @@ export function EmailSettings({ d }: { d: EmailSettingsData }) {
         <form className="card em-card" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void call({ op: "auth_settings", ...d.auth, googleEnabled: f.get("google") === "on" }); }}>
           <h2>Signup &amp; Login</h2>
           <label className="em-check"><input type="checkbox" name="google" defaultChecked={d.auth.googleEnabled} disabled={ro} /> Show <b>Continue with Google</b> on the login and signup pages</label>
-          <p className="small muted">Google sign-in status: {d.googleConfigured ? <span className="chip c-active">Configured</span> : <span className="chip c-pending">Not configured on the server</span>}. Redirect URI to add in Google Cloud → OAuth client: <span className="mono">{d.redirectUri}</span></p>
-          {!d.googleConfigured && <p className="small muted">Until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set on the server, the Google button stays hidden even when switched on.</p>}
+          <p className="small muted">Google sign-in keys: {d.googleConfigured ? <span className="chip c-active">Connected</span> : <span className="chip c-pending">Not connected</span>}. Redirect URI for the Google OAuth client: <span className="mono">{d.redirectUri}</span></p>
+          {!d.googleConfigured && <p className="small muted">Add the Google Client ID and secret in <a className="link" href="/admin/services/">API Keys &amp; Services</a> and turn it ON. Until then the Google button stays hidden even when this box is ticked.</p>}
           <label className="em-check"><input type="checkbox" checked readOnly disabled /> Email OTP verification is mandatory for email signup (always on)</label>
           <div><button className="btn btn-orange" disabled={ro}>Save</button></div>
         </form>
@@ -73,7 +73,7 @@ export function EmailSettings({ d }: { d: EmailSettingsData }) {
 
       {tab === "senders" && (
         <div className="em-grid">
-          {!d.providerConfigured && <p className="note small">Email provider is not configured on the server (RESEND_API_KEY). {process.env.NODE_ENV === "production" ? "Emails will fail and appear in Email Logs until it is set." : "Development: emails go to a local outbox and verification is simulated."}</p>}
+          {!d.providerConfigured && <p className="note small">Email provider is not connected yet — add the Resend API key in <a className="link" href="/admin/services/">API Keys &amp; Services</a>. {process.env.NODE_ENV === "production" ? "Until then emails fail (and show in Email Logs), so new customers cannot receive their signup code." : "Development: emails go to a local outbox and verification is simulated."}</p>}
           <div className="table-wrap card"><table className="table">
             <thead><tr><th>Sender</th><th>Reply-to</th><th>Status</th><th>Used by</th><th></th></tr></thead>
             <tbody>{d.senders.map((s) => <SenderRow key={s.id} s={s} all={d.senders} ro={ro} call={call} />)}</tbody>
@@ -141,7 +141,7 @@ function SenderRow({ s, all, ro, call }: { s: Sender; all: Sender[]; ro: boolean
             : <>
                 {needsRep && <select className="select" aria-label={`Replacement for ${s.email}`} value={rep} onChange={(e) => setRep(e.target.value)} disabled={ro} style={{ maxWidth: 200 }}>
                   <option value="">Replacement sender…</option>{options.map((o) => <option key={o.id} value={o.id}>{o.email}</option>)}</select>}
-                <button type="button" className="btn btn-sm btn-danger" disabled={ro || (needsRep && !rep)} title={needsRep && !rep ? "Choose a replacement sender first" : undefined}
+                <button type="button" className="btn btn-sm btn-red" disabled={ro || (needsRep && !rep)} title={needsRep && !rep ? "Choose a replacement sender first" : undefined}
                   onClick={() => void call({ op: "sender_disable", id: s.id, replacementId: rep || undefined })}>Disable</button>
               </>}
         </div>

@@ -11,6 +11,7 @@ import { ensurePublicRef, refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
 import { enqueue } from "@/server/jobs/runner";
 import { decisionFromReply, parseWatiWebhook, watiSendTemplate } from "./wati";
+import { type InboundWa, metaSendTemplate, parseMetaWebhook } from "./meta";
 
 export type WaEvent = "out_for_delivery" | "cod_confirmation";
 export const WA_EVENT_LABEL: Record<WaEvent, string> = { out_for_delivery: "Out for Delivery", cod_confirmation: "COD Confirmation" };
@@ -23,7 +24,7 @@ export const codSettings = async () => ({ ...COD_DEFAULTS, ...(await getSetting<
 export const PRE_PICKUP = ["booked", "pickup_pending"];
 
 const maskPhone = (e164: string) => `${e164.slice(0, 3)}••••••${e164.slice(-4)}`;
-const appUrl = () => (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const appUrl = () => (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/$/, "");
 
 /** The enabled WATI account, or null. */
 export async function watiAccount() {
@@ -32,9 +33,16 @@ export async function watiAccount() {
   return a ?? null;
 }
 
-/** Demo mode = no WATI account and not production. Never active in production. */
+/** The WhatsApp provider switched ON in Admin → API Keys & Services (WATI or Meta Cloud API; only one at a time). */
+export async function whatsappAccount() {
+  const db = await getDb();
+  const [a] = await db.select().from(schema.providerAccounts).where(and(inArray(schema.providerAccounts.adapter, ["wati", "meta_whatsapp"]), eq(schema.providerAccounts.status, "enabled"))).limit(1);
+  return a ?? null;
+}
+
+/** Demo mode = no WhatsApp provider and not production. Never active in production. */
 export async function whatsappMode(): Promise<"live" | "demo" | "unconfigured"> {
-  if (await watiAccount()) return "live";
+  if (await whatsappAccount()) return "live";
   return process.env.NODE_ENV === "production" ? "unconfigured" : "demo";
 }
 
@@ -126,8 +134,11 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
 
   if (mode === "demo") return finish("sent", { templateName, providerMessageId: `demo_${msg.id}`, isDemo: true });
 
-  const acct = (await watiAccount())!;
-  const r = await watiSendTemplate(await providerContext(acct), { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
+  const acct = (await whatsappAccount())!;
+  const ctx = await providerContext(acct);
+  const r = acct.adapter === "meta_whatsapp"
+    ? await metaSendTemplate(ctx, { toE164, templateName, language: tpl?.language ?? "en", body: tpl?.body ?? "", params })
+    : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
   if (r.ok) {
     await db.update(schema.providerAccounts).set({ lastSuccessAt: new Date() }).where(eq(schema.providerAccounts.id, acct.id));
     return finish("sent", { templateName, providerMessageId: r.providerMessageId ?? null, creditsCharged: cost });
@@ -326,10 +337,20 @@ export async function sweepNoResponse() {
  * message id, else the buyer's phone when exactly one confirmation is open for it.
  */
 export async function handleWatiWebhook(body: Record<string, unknown>): Promise<{ result: string }> {
-  const db = await getDb();
   const p = parseWatiWebhook(body);
-  const key = `wati:${p.eventType}:${p.msgId || JSON.stringify(body).length}`;
-  const ins = await db.insert(schema.inboundEvents).values({ id: newId("ie"), provider: "wati", dedupeKey: key, verified: true, payloadRedacted: { eventType: p.eventType, waId: p.waId ? `••••${p.waId.slice(-4)}` : null, msgId: p.msgId, reply: p.replyText.slice(0, 40) } }).onConflictDoNothing().returning({ id: schema.inboundEvents.id });
+  return handleInbound("wati", p, `wati:${p.eventType}:${p.msgId || JSON.stringify(body).length}`);
+}
+
+/** Meta Cloud API webhook: one payload can carry several messages / statuses. */
+export async function handleMetaWebhook(body: Record<string, unknown>): Promise<{ result: string }> {
+  const results: string[] = [];
+  for (const p of parseMetaWebhook(body)) results.push((await handleInbound("meta_whatsapp", p, `meta:${p.eventType}:${p.msgId}`)).result);
+  return { result: results.join(",") || "ignored:empty" };
+}
+
+async function handleInbound(provider: string, p: InboundWa, key: string): Promise<{ result: string }> {
+  const db = await getDb();
+  const ins = await db.insert(schema.inboundEvents).values({ id: newId("ie"), provider, dedupeKey: key, verified: true, payloadRedacted: { eventType: p.eventType, waId: p.waId ? `••••${p.waId.slice(-4)}` : null, msgId: p.msgId, reply: p.replyText.slice(0, 40) } }).onConflictDoNothing().returning({ id: schema.inboundEvents.id });
   if (!ins.length) return { result: "duplicate" };
   const done = async (result: string) => { await db.update(schema.inboundEvents).set({ processedAt: new Date(), error: result.startsWith("ok") ? null : result }).where(eq(schema.inboundEvents.id, ins[0].id)); return { result }; };
 

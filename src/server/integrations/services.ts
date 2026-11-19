@@ -1,0 +1,251 @@
+import "server-only";
+import { and, eq, inArray, ne } from "drizzle-orm";
+import { audit } from "@/server/audit";
+import { getDb, schema } from "@/server/db/client";
+import { secretsFor } from "@/server/providers/registry";
+import { encryptJson, maskSecret } from "@/server/security/crypto";
+import { safeFetch } from "@/server/security/safe-fetch";
+
+/**
+ * Admin → Settings → API Keys & Services.
+ * Every third-party service the platform talks to (email, Google sign-in, WhatsApp) is configured here:
+ * the admin pastes the keys, tests the connection and switches the service ON — no server env vars, no deploy.
+ * Values are stored AES-GCM encrypted (provider_accounts.secrets_enc); secret fields are write-only
+ * (only a masked hint is shown again). Public values (IDs, endpoints) are also kept readable in config_public.
+ */
+
+export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
+export type ServiceDef = {
+  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp";
+  group: "Email" | "Sign-in" | "WhatsApp";
+  name: string; purpose: string; fields: ServiceField[];
+  /** How to get the keys — shown on the page so anyone on the team can set it up. */
+  guide: string[]; links: Array<{ label: string; url: string }>;
+  /** One provider per group is active at a time (WhatsApp: WATI or Meta). */
+  exclusive?: boolean;
+};
+
+const appUrl = () => (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/+$/, "");
+
+export const SERVICES: ServiceDef[] = [
+  {
+    adapter: "resend", group: "Email", name: "Resend (email)",
+    purpose: "Sends the signup OTP and shipment emails (Picked Up, In Transit, Delivered …).",
+    fields: [{ key: "apiKey", label: "API key", secret: true, required: true, placeholder: "re_…", help: "Resend → API Keys → Create API Key (Sending access)" }],
+    guide: [
+      "Open resend.com and sign in (or sign up) with the company email.",
+      "Domains → Add Domain → enter vishwaship.in. Resend shows DNS records (TXT / MX / DKIM).",
+      "Add those records in Hostinger → Domains → vishwaship.in → DNS records, exactly as shown. Then click Verify in Resend (can take a few minutes to a few hours).",
+      "API Keys → Create API Key → permission “Sending access” → copy the key (it is shown only once).",
+      "Paste the key below → Save → Test connection → Turn ON.",
+      "Then open Email & Sign-in → Sender Emails → Check verification: contact@vishwaship.in should show “verified”.",
+    ],
+    links: [{ label: "Resend dashboard", url: "https://resend.com/domains" }, { label: "Hostinger DNS", url: "https://hpanel.hostinger.com/domains" }],
+  },
+  {
+    adapter: "google_oauth", group: "Sign-in", name: "Google sign-in",
+    purpose: "Shows “Continue with Google” on the login and signup pages.",
+    fields: [
+      { key: "clientId", label: "Client ID", secret: false, required: true, placeholder: "…apps.googleusercontent.com" },
+      { key: "clientSecret", label: "Client secret", secret: true, required: true, placeholder: "GOCSPX-…" },
+    ],
+    guide: [
+      "Open console.cloud.google.com → create a project (e.g. “Vishwaship”).",
+      "APIs & Services → OAuth consent screen (Google Auth Platform): app name Vishwaship, support email, logo; Audience: External; then Publish app.",
+      "Clients (Credentials) → Create OAuth client → Application type: Web application.",
+      "Authorized JavaScript origin and Authorized redirect URI: copy both from the boxes below.",
+      "Create → copy the Client ID and Client secret → paste below → Save → Test connection → Turn ON.",
+    ],
+    links: [{ label: "Google Cloud console", url: "https://console.cloud.google.com/apis/credentials" }],
+  },
+  {
+    adapter: "wati", group: "WhatsApp", name: "WATI (WhatsApp)", exclusive: true,
+    purpose: "Out for Delivery and COD Confirmation WhatsApp messages through WATI.",
+    fields: [
+      { key: "apiEndpoint", label: "API endpoint", secret: false, required: true, placeholder: "https://live-mt-server.wati.io/123456", help: "WATI → API Docs: the URL shown above your access token" },
+      { key: "accessToken", label: "Access token", secret: true, required: true, placeholder: "eyJhbGciOi… (without “Bearer”)" },
+      { key: "webhookToken", label: "Webhook token", secret: true, required: true, placeholder: "Any long random text you choose", help: "Make up a long random text; it goes in the webhook URL below" },
+    ],
+    guide: [
+      "Open app.wati.io and sign in → API Docs (left menu).",
+      "Copy the API Endpoint URL and the Access Token (copy the token without the word “Bearer”).",
+      "Choose a Webhook token: any long random text (at least 24 characters). Paste all three below → Save → Test connection → Turn ON.",
+      "In WATI → Webhooks → Add webhook: paste the Webhook URL from below (with your token at the end); events: Message received and Sent message status.",
+      "Map your approved WATI template names in WhatsApp Ops → Template mapping.",
+    ],
+    links: [{ label: "WATI", url: "https://app.wati.io" }],
+  },
+  {
+    adapter: "meta_whatsapp", group: "WhatsApp", name: "Meta WhatsApp Cloud API", exclusive: true,
+    purpose: "The same WhatsApp messages sent directly through Meta (instead of WATI).",
+    fields: [
+      { key: "phoneNumberId", label: "Phone number ID", secret: false, required: true, placeholder: "1234567890…", help: "Meta → WhatsApp → API Setup" },
+      { key: "wabaId", label: "WhatsApp Business Account ID", secret: false, required: false, placeholder: "Optional" },
+      { key: "accessToken", label: "Permanent access token", secret: true, required: true, placeholder: "EAA…", help: "System user token with whatsapp_business_messaging" },
+      { key: "appSecret", label: "App secret", secret: true, required: true, help: "App settings → Basic → App secret (checks webhook signatures)" },
+      { key: "verifyToken", label: "Webhook verify token", secret: true, required: true, help: "Any long random text you choose" },
+    ],
+    guide: [
+      "Open developers.facebook.com → My Apps → Create app (type Business) → add the WhatsApp product.",
+      "WhatsApp → API Setup: copy the Phone number ID (and the WhatsApp Business Account ID).",
+      "business.facebook.com → Settings → Users → System users → add one (Admin) → Generate token for this app with whatsapp_business_messaging and whatsapp_business_management, never expiring. Copy it.",
+      "App settings → Basic → App secret → Show → copy.",
+      "Choose a Webhook verify token (any long random text). Paste everything below → Save → Test connection → Turn ON.",
+      "WhatsApp → Configuration → Webhook: Callback URL and Verify token from below → Verify and save → subscribe to “messages”.",
+      "Create and get approval for your templates in WhatsApp Manager (use named variables like {{buyer_name}}), then map them in WhatsApp Ops.",
+    ],
+    links: [{ label: "Meta for Developers", url: "https://developers.facebook.com/apps" }, { label: "WhatsApp Manager", url: "https://business.facebook.com/wa/manage/home" }],
+  },
+];
+
+export const serviceDef = (adapter: string) => SERVICES.find((s) => s.adapter === adapter);
+
+/** Values to copy into the provider's dashboard (redirect / webhook URLs). Never secret. */
+export function serviceInfo(adapter: string): Array<{ label: string; value: string }> {
+  const u = appUrl();
+  if (adapter === "google_oauth") return [{ label: "Authorized JavaScript origin", value: u }, { label: "Authorized redirect URI", value: `${u}/api/auth/google/callback` }];
+  if (adapter === "wati") return [{ label: "Webhook URL", value: `${u}/api/webhooks/wati?token=<your webhook token>` }];
+  if (adapter === "meta_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
+  return [];
+}
+
+const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging" };
+
+/** The account row for a service (created on first use; an older WATI row is reused). */
+export async function serviceRow(adapter: ServiceDef["adapter"]) {
+  const db = await getDb();
+  const [r] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, adapter), ne(schema.providerAccounts.status, "archived"))).limit(1);
+  if (r) return r;
+  const id = `svc_${adapter}`;
+  await db.insert(schema.providerAccounts).values({ id, adapter, category: CATEGORY[adapter], label: serviceDef(adapter)!.name, mode: "live", status: "disabled" }).onConflictDoNothing();
+  const [n] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, id));
+  return n;
+}
+
+type Row = Awaited<ReturnType<typeof serviceRow>>;
+const valuesOf = (r: Row) => secretsFor(r.secretsEnc, r.mode as "test" | "live");
+
+/** Decrypted values of a service that is switched ON, else null. Server-side only. */
+export async function activeService(adapter: ServiceDef["adapter"]): Promise<Record<string, string> | null> {
+  const db = await getDb();
+  const [r] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, adapter), eq(schema.providerAccounts.status, "enabled"))).limit(1);
+  if (!r?.secretsEnc) return null;
+  const v = valuesOf(r);
+  return serviceDef(adapter)!.fields.every((f) => !f.required || v[f.key]) ? v : null;
+}
+
+/** Hosts a service may call — fixed in code; WATI's tenant host must be a wati.io host. */
+function hostsFor(adapter: string, v: Record<string, string>): string[] {
+  if (adapter === "resend") return ["api.resend.com"];
+  if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
+  if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
+  if (adapter === "wati") { try { const h = new URL(v.apiEndpoint).hostname.toLowerCase(); return /(^|\.)wati\.io$/.test(h) ? [h] : []; } catch { return []; } }
+  return [];
+}
+
+export type SaveResult = { ok: true; message: string } | { ok: false; message: string };
+
+/** Save keys. A blank secret field keeps the value already saved. Saving new keys needs a fresh test before going live. */
+export async function saveService(adapter: ServiceDef["adapter"], input: Record<string, string>, by: string): Promise<SaveResult> {
+  const def = serviceDef(adapter); if (!def) return { ok: false, message: "Unknown service" };
+  const r = await serviceRow(adapter);
+  const old = r.secretsEnc ? valuesOf(r) : {};
+  const v: Record<string, string> = {};
+  for (const f of def.fields) {
+    const raw = String(input[f.key] ?? "").trim().replace(/^Bearer\s+/i, "");
+    v[f.key] = raw || (f.secret ? old[f.key] ?? "" : "");
+    if (raw.length > 4000) return { ok: false, message: `${f.label} is too long` };
+  }
+  const missing = def.fields.filter((f) => f.required && !v[f.key]).map((f) => f.label);
+  if (missing.length) return { ok: false, message: `Fill in: ${missing.join(", ")}` };
+  if (adapter === "resend" && !/^re_[\w-]{8,}$/.test(v.apiKey)) return { ok: false, message: "A Resend API key starts with re_" };
+  if (adapter === "google_oauth" && !/\.apps\.googleusercontent\.com$/.test(v.clientId)) return { ok: false, message: "The Client ID ends with .apps.googleusercontent.com" };
+  if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
+  if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
+  if ((adapter === "wati" && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
+  const changed = def.fields.some((f) => (old[f.key] ?? "") !== v[f.key]);
+  const cleaned = Object.fromEntries(Object.entries(v).filter(([, x]) => x));
+  const db = await getDb();
+  await db.update(schema.providerAccounts).set({
+    mode: "live", secretsEnc: encryptJson(cleaned),
+    secretsHint: Object.fromEntries(def.fields.filter((f) => f.secret && v[f.key]).map((f) => [f.key, maskSecret(v[f.key])])),
+    configPublic: { ...((r.configPublic as object) ?? {}), allowedHosts: hostsFor(adapter, v), values: Object.fromEntries(def.fields.filter((f) => !f.secret).map((f) => [f.key, v[f.key]])) },
+    ...(changed ? { lastTestOk: null, lastTestAt: null, lastTestMessage: null } : {}),
+  }).where(eq(schema.providerAccounts.id, r.id));
+  await audit({ actorUserId: by, actorKind: "staff", action: "service.keys_saved", targetType: "provider_account", targetId: r.id, details: { adapter, fields: def.fields.filter((f) => input[f.key]).map((f) => f.key) } });
+  return { ok: true, message: changed ? "Saved (encrypted). Now click Test connection." : "Saved — nothing changed" };
+}
+
+/** Real call to the provider with the saved keys. */
+export async function testService(adapter: ServiceDef["adapter"], by: string): Promise<SaveResult> {
+  const r = await serviceRow(adapter);
+  if (!r.secretsEnc) return { ok: false, message: "Save the keys first" };
+  const v = valuesOf(r);
+  const allowedHosts = hostsFor(adapter, v);
+  const call = (url: string, init: RequestInit = {}) => safeFetch(url, { ...init, allowedHosts, timeoutMs: 15_000 });
+  let res: SaveResult;
+  try {
+    if (adapter === "resend") {
+      const x = await call("https://api.resend.com/domains", { headers: { authorization: `Bearer ${v.apiKey}` } });
+      const j = (await x.json().catch(() => ({}))) as { data?: Array<{ name: string; status: string }>; message?: string; name?: string };
+      const restricted = j.name === "restricted_api_key" || /restricted|only send/i.test(j.message ?? "");
+      res = x.ok ? { ok: true, message: `Connected. Domains: ${(j.data ?? []).map((d) => `${d.name} (${d.status})`).join(", ") || "none added yet — add vishwaship.in in Resend"}` }
+        : restricted ? { ok: true, message: "Connected (Sending access key). Domain verification status can only be read with a Full access key — sending works." }
+        : x.status === 401 || x.status === 403 ? { ok: false, message: "Resend rejected the API key — copy it again" }
+        : { ok: false, message: `Resend HTTP ${x.status}${j.message ? `: ${j.message}` : ""}` };
+    } else if (adapter === "google_oauth") {
+      // an intentionally invalid code: Google answers invalid_grant when the client ID + secret are right, invalid_client when not
+      const x = await call("https://oauth2.googleapis.com/token", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ grant_type: "authorization_code", code: "vishwaship-connection-test", client_id: v.clientId, client_secret: v.clientSecret, redirect_uri: `${appUrl()}/api/auth/google/callback` }) });
+      const j = (await x.json().catch(() => ({}))) as { error?: string; error_description?: string };
+      res = j.error === "invalid_grant" ? { ok: true, message: "Client ID and secret accepted by Google" }
+        : j.error === "invalid_client" ? { ok: false, message: "Google rejected the Client ID / secret — copy them again from the OAuth client" }
+        : j.error === "redirect_uri_mismatch" ? { ok: false, message: "Add the Authorized redirect URI shown above to the OAuth client" }
+        : { ok: false, message: `Google answered: ${j.error ?? x.status} ${j.error_description ?? ""}`.trim() };
+    } else if (adapter === "wati") {
+      const base = v.apiEndpoint.replace(/\/+$/, "");
+      const x = await call(`${base}/api/v1/getMessageTemplates?pageSize=1`, { headers: { authorization: `Bearer ${v.accessToken}` } });
+      res = x.ok ? { ok: true, message: "Connected to WATI (templates readable)" } : { ok: false, message: x.status === 401 || x.status === 403 ? "WATI rejected the access token" : `WATI HTTP ${x.status}` };
+    } else {
+      const x = await call(`https://graph.facebook.com/v21.0/${encodeURIComponent(v.phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`, { headers: { authorization: `Bearer ${v.accessToken}` } });
+      const j = (await x.json().catch(() => ({}))) as { display_phone_number?: string; verified_name?: string; error?: { message?: string } };
+      res = x.ok ? { ok: true, message: `Connected: ${j.verified_name ?? "WhatsApp number"} ${j.display_phone_number ?? ""}`.trim() } : { ok: false, message: `Meta: ${j.error?.message ?? `HTTP ${x.status}`}`.slice(0, 200) };
+    }
+  } catch (e) {
+    res = { ok: false, message: `Could not reach the provider: ${(e as Error).message}`.slice(0, 200) };
+  }
+  const db = await getDb();
+  await db.update(schema.providerAccounts).set({ lastTestAt: new Date(), lastTestOk: res.ok, lastTestMessage: res.message.slice(0, 300) }).where(eq(schema.providerAccounts.id, r.id));
+  await audit({ actorUserId: by, actorKind: "staff", action: "service.tested", targetType: "provider_account", targetId: r.id, details: { adapter, ok: res.ok } });
+  return res;
+}
+
+/** Turn a service ON (only after a passing test) or OFF. WhatsApp: turning one provider ON turns the other OFF. */
+export async function setServiceOn(adapter: ServiceDef["adapter"], on: boolean, by: string): Promise<SaveResult> {
+  const def = serviceDef(adapter)!;
+  const r = await serviceRow(adapter);
+  if (on && !r.lastTestOk) return { ok: false, message: "Run Test connection successfully before turning it ON" };
+  const db = await getDb();
+  if (on && def.exclusive) {
+    const others = SERVICES.filter((s) => s.group === def.group && s.adapter !== adapter).map((s) => s.adapter);
+    await db.update(schema.providerAccounts).set({ status: "disabled" }).where(and(inArray(schema.providerAccounts.adapter, others), eq(schema.providerAccounts.status, "enabled")));
+  }
+  await db.update(schema.providerAccounts).set({ status: on ? "enabled" : "disabled" }).where(eq(schema.providerAccounts.id, r.id));
+  await audit({ actorUserId: by, actorKind: "staff", action: on ? "service.enabled" : "service.disabled", targetType: "provider_account", targetId: r.id, details: { adapter } });
+  return { ok: true, message: on ? `${def.name} is ON` : `${def.name} is OFF` };
+}
+
+/** Page data: status per service, masked hints only — never a secret value. */
+export async function servicesOverview() {
+  return Promise.all(SERVICES.map(async (d) => {
+    const r = await serviceRow(d.adapter);
+    const pub = ((r.configPublic as { values?: Record<string, string> } | null)?.values) ?? {};
+    const hint = (r.secretsHint as Record<string, string> | null) ?? {};
+    return {
+      adapter: d.adapter, group: d.group, name: d.name, purpose: d.purpose, guide: d.guide, links: d.links, info: serviceInfo(d.adapter),
+      fields: d.fields.map((f) => ({ ...f, value: f.secret ? "" : pub[f.key] ?? "", hint: f.secret ? hint[f.key] ?? null : null })),
+      saved: !!r.secretsEnc, on: r.status === "enabled",
+      lastTest: r.lastTestAt ? { ok: !!r.lastTestOk, message: r.lastTestMessage ?? "", at: r.lastTestAt.toISOString() } : null,
+    };
+  }));
+}
