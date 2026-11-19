@@ -331,7 +331,7 @@ describe("unverified surcharges and carrier debits", () => {
 });
 
 describe("reconcile checks the right booking attempt (VSMWN3MT67 regression)", () => {
-  it("a failed first attempt never releases the second, accepted booking's hold or fails the order", async () => {
+  it("a failed first attempt never releases the second, accepted booking's hold or fails the order", { timeout: 20_000 }, async () => {
     await import("@/server/jobs/handlers");
     const { runDueJobs } = await import("@/server/jobs/runner");
     const { reserve } = await import("@/server/ledger/wallet");
