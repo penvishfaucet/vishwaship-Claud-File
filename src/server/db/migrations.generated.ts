@@ -361,5 +361,16 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795074493023,
   "hash": "acce49bf01a1a6dac5c3bc5f4fec640fe90998b0be177007129219b51040b681"
+ },
+ {
+  "tag": "0017_manifests",
+  "sql": [
+   "CREATE TABLE \"manifests\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"manifest_no\" text NOT NULL,\n\t\"scope\" text NOT NULL,\n\t\"booking_date\" text NOT NULL,\n\t\"filters\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n\t\"groups\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"awb_count\" integer NOT NULL,\n\t\"box_count\" integer NOT NULL,\n\t\"pdf_key\" text NOT NULL,\n\t\"signed_copy\" jsonb,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"manifests_manifest_no_unique\" UNIQUE(\"manifest_no\")\n);\n",
+   "\nALTER TABLE \"manifests\" ADD CONSTRAINT \"manifests_org_id_orgs_id_fk\" FOREIGN KEY (\"org_id\") REFERENCES \"public\".\"orgs\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"manifests_org_created\" ON \"manifests\" USING btree (\"org_id\",\"created_at\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795078608636,
+  "hash": "2742fa53d5513f5216d167097c0489b83a965e05a08433c542d5e776334cb664"
  }
 ];

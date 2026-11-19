@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive, ArchiveRestore, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileText, Filter,
   MessageCircle, PlusCircle, RefreshCw, Settings, Settings2, Tag, Truck, Upload, XCircle,
-  CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, SlidersHorizontal, Undo2, UserRound,
+  ClipboardList, CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, SlidersHorizontal, Undo2, UserRound,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/order-view";
 import type { OrderFilters, OrderRow } from "@/server/orders/view";
 import { BreakdownDialog, CodDialog, PickupDialog, TrackDialog } from "./dialogs";
+import { DailyManifest, openManifest } from "@/components/portal/ManifestActions";
 import { CodStatusText, CopyBtn, ago, inr, istDate, istTime, kg, useDismiss } from "./ui";
 
 interface Props {
@@ -170,6 +171,7 @@ export function OrdersView(p: Props) {
           <button type="button" className={`oc-opt${tools ? " on" : ""}`} aria-label="Filters and options" aria-expanded={tools} onClick={() => setTools((t) => !t)}><SlidersHorizontal size={22} aria-hidden /></button>
         </div>
       </div>
+      <DailyManifest couriers={p.options.couriers} warehouses={p.options.warehouses} />
       {/* status tabs: one scrollable row with counts */}
       <nav className="oc-tabs" aria-label="Order status">
         {TAB_GROUPS.flatMap((g) => g.tabs).map((t) => {
@@ -779,6 +781,11 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
   );
 }
 
+function alertBox(text: string) {
+  const d = document.createElement("div"); d.className = "ov-toast bad"; d.setAttribute("role", "alert"); d.textContent = text;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 7000);
+}
+
 function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: { r: OrderRow; open: (d: DialogState) => void; onLabel: (f: PrintFormat) => void; onCancel: () => void; onClone: () => void; onArchive: (on: boolean) => void; onMenu: (o: boolean) => void }) {
   const m = useFixedMenu(onMenu);
   const s = r.shipment;
@@ -803,6 +810,7 @@ function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: 
             : <button role="menuitem" type="button" disabled><Pencil size={14} aria-hidden /><span>Edit order<span className="why">Not possible after the courier is assigned</span></span></button>}
           <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone order</button>
           <Link role="menuitem" href={`/portal/orders/${r.id}/`}><Eye size={14} aria-hidden /> View details</Link>
+          {s?.awb && s.status !== "cancelled" && <button role="menuitem" type="button" onClick={go(() => { void openManifest({ shipmentId: s.id }).then((r) => { if (!r.ok) alertBox(r.message); }); })}><ClipboardList size={14} aria-hidden /> Download manifest</button>}
           <Link role="menuitem" href={ticket}><LifeBuoy size={14} aria-hidden /> Raise ticket</Link>
           {r.archived
             ? <button role="menuitem" type="button" onClick={go(() => onArchive(false))}><ArchiveRestore size={14} aria-hidden /> Restore from archive</button>

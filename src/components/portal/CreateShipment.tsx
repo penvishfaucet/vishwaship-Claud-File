@@ -1,4 +1,5 @@
 "use client";
+import { ShipmentDocs } from "@/components/portal/ManifestActions";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
@@ -293,6 +294,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
               <dt>Pickup</dt><dd>Requested for {new Date(pickupDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</dd>
             </dl>
             {chosen?.isDemo && <p className="mt8"><span className="demo-badge">DEMO BOOKING — not sent to a real courier</span></p>}
+            {done.awb && done.shipmentId ? <ShipmentDocs shipmentId={done.shipmentId} awb={done.awb} /> : <p className="small muted mt8">Download Label and Download Manifest appear on the order once the courier assigns the AWB.</p>}
           </>
         )}
         <div className="row wrap mt16" style={{ gap: 8 }}>

@@ -955,3 +955,24 @@ export const siteAssets = pgTable("site_assets", {
   createdBy: text("created_by"),
   createdAt: created(),
 });
+
+// ---------- pickup manifests ----------
+/**
+ * A generated pickup handover manifest. The AWB list (groups) and the PDF are frozen at generation, so a re-download
+ * is always the original even after shipment statuses change. A new generation always gets a new Manifest ID.
+ */
+export const manifests = pgTable("manifests", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  manifestNo: text("manifest_no").notNull().unique(),
+  scope: text("scope").notNull(), // daily | shipment
+  bookingDate: text("booking_date").notNull(), // YYYY-MM-DD (IST)
+  filters: jsonb("filters").notNull().default({}),
+  groups: jsonb("groups").notNull().default([]), // [{ carrier, pickup, rows: [{ shipmentId, awb, orderNumber, receiver, city, pincode, boxes }] }]
+  awbCount: integer("awb_count").notNull(),
+  boxCount: integer("box_count").notNull(),
+  pdfKey: text("pdf_key").notNull(),
+  signedCopy: jsonb("signed_copy"), // { key, name, mime, size, uploadedAt }
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [index("manifests_org_created").on(t.orgId, t.createdAt)]);

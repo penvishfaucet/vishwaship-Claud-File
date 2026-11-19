@@ -1,4 +1,5 @@
 import { CopyBtn } from "@/components/portal/orders/ui";
+import { ShipmentDocs } from "@/components/portal/ManifestActions";
 import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import { SchedulePickup } from "@/components/portal/SchedulePickup";
 import { OrderTagsEditor } from "@/components/portal/OrderTagsEditor";
@@ -50,7 +51,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           {shipment?.provider === "demo" && <span className="demo-badge">DEMO</span>}
         </div>
         <div className="actions">
-          {shipment?.awb && <a className="btn btn-orange" href={`/api/portal/shipments/${shipment.id}/label`}><Download size={16} /> Download Label</a>}
+
           {shipment && <a className="btn btn-outline" href={`/api/portal/shipments/${shipment.id}/invoice`}><FileText size={16} /> Invoice</a>}
           {shipment && shipment.bookingStatus === "confirmed" && shipment.pickupStatus === "not_scheduled" && <SchedulePickup shipmentId={shipment.id} defaultDate={new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10)} />}
           {shipment?.pickupRef && <span className="pill2">Pickup {shipment.pickupDate?.toLocaleDateString("en-IN")} · ref {shipment.pickupRef}</span>}
@@ -58,6 +59,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <Link className="btn btn-outline" href={`/portal/support/new/?awb=${shipment?.awb ?? ""}&order=${order.orderNumber}`}><Ticket size={16} /> Raise Ticket</Link>
         </div>
       </div>
+      {shipment?.awb && shipment.status !== "cancelled" && <section className="card mb12" style={{ padding: 14 }} aria-label="Label and manifest"><ShipmentDocs shipmentId={shipment.id} awb={shipment.awb} /></section>}
 
       {(order.status === "booking" || order.status === "needs_reconcile" || (shipment && !["delivered", "rto_delivered", "cancelled", "lost"].includes(shipment.status))) && <AutoRefresh active everyMs={60_000} />}
       {shipment && (
