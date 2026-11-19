@@ -304,3 +304,28 @@ describe("automatic warehouse sync and pickup request", () => {
     await db.update(schema.providerAccounts).set({ configPublic: saved.configPublic }).where(eq(schema.providerAccounts.id, SM_B2C));
   });
 });
+
+describe("unverified surcharges and carrier debits", () => {
+  it("a rate pending confirmation (e.g. ODA amount unknown) is never booked or charged", async () => {
+    const quoteId = await newOrder("ord_pending");
+    const [q] = await db.select().from(schema.quotes).where(eq(schema.quotes.id, quoteId));
+    await db.update(schema.quotes).set({ priced: { ...(q.priced as object), pending: "ODA destination: charge not confirmed" } }).where(eq(schema.quotes.id, quoteId));
+    const before = calls.length;
+    const r = await bookOrder({ orgId: ORG, orderId: "ord_pending", quoteId, actorUserId: "usr_c" });
+    expect(r).toMatchObject({ ok: false, code: "unsupported" });
+    expect(calls.slice(before).some((c) => c.url.endsWith("/push-order"))).toBe(false);
+    expect(await debits("ord_pending")).toBe(0);
+    const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, "ord_pending"));
+    expect(o.status).toBe("ready");
+  });
+  it("a higher carrier charge after booking is flagged for Admin; the customer charge stays as approved", async () => {
+    const { recordCarrierCharge } = await import("@/server/booking/service");
+    const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_1"));
+    await recordCarrierCharge(sh.id, sh.costPaise + 20_000, sh.costPaise);
+    const [after] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, sh.id));
+    expect(after).toMatchObject({ chargeCheck: "higher", carrierChargePaise: sh.costPaise + 20_000, sellPaise: sh.sellPaise });
+    expect(await debits("ord_1")).toBe(1);
+    await recordCarrierCharge(sh.id, sh.costPaise, sh.costPaise);
+    expect((await db.select().from(schema.shipments).where(eq(schema.shipments.id, sh.id)))[0].chargeCheck).toBe("ok");
+  });
+});

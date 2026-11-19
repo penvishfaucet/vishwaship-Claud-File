@@ -333,5 +333,15 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795032939140,
   "hash": "98f81474e43793ac483f82353d8b84135bc53ef13437d12a5b873c0b5d62e98b"
+ },
+ {
+  "tag": "0014_carrier_charge_check",
+  "sql": [
+   "ALTER TABLE \"shipments\" ADD COLUMN \"carrier_charge_paise\" bigint;",
+   "\nALTER TABLE \"shipments\" ADD COLUMN \"charge_check\" text;"
+  ],
+  "bps": true,
+  "folderMillis": 1795067182560,
+  "hash": "51438ecf6f7f41365c930b0db495f3ec93beb8379604a1d40f488ee367fbf455"
  }
 ];

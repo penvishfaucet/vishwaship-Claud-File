@@ -4,7 +4,7 @@ import { useState } from "react";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 
-type Offer = { quoteId: string; carrierCode: string; carrierName: string; serviceName: string; mode: string; etaDays?: number; chargeableWeightGrams: number; total: number; isDemo: boolean; isPilot?: boolean; partnerCode?: string | null };
+type Offer = { quoteId: string; carrierCode: string; carrierName: string; serviceName: string; mode: string; etaDays?: number; chargeableWeightGrams: number; total: number; isDemo: boolean; isPilot?: boolean; partnerCode?: string | null; pending?: string | null };
 
 export function BookExisting({ orderId, held, autoAssign = false }: { orderId: string; held: boolean; autoAssign?: boolean }) {
   const router = useRouter();
@@ -57,9 +57,9 @@ Book at ${formatINR(j.error.newTotal)}?`)) return book(j.error.newQuoteId);
           <div className="col mt12" style={{ gap: 8 }} role="radiogroup" aria-label="Courier options">
             {offers.map((o) => (
               <label key={o.quoteId} className={`ropt${sel === o.quoteId ? " on" : ""}`} style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 0 }}>
-                <input type="radio" name="q" checked={sel === o.quoteId} onChange={() => setSel(o.quoteId)} />
+                <input type="radio" name="q" checked={sel === o.quoteId} onChange={() => setSel(o.quoteId)} disabled={!!o.pending} />
                 {carrierLogo(o.carrierCode) && <img className="clogo-sm" src={carrierLogo(o.carrierCode)!} alt="" />}
-                <span style={{ flex: 1 }}><b className="small">{o.carrierName} · {o.serviceName}</b><span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{o.isDemo ? " · demo" : ""}{o.isPilot ? " · verification" : ""}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</span></span>
+                <span style={{ flex: 1 }}><b className="small">{o.carrierName} · {o.serviceName}</b><span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{o.isDemo ? " · demo" : ""}{o.isPilot ? " · verification" : ""}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</span>{o.pending && <span className="tiny" role="note" style={{ display: "block", color: "#a83a00", fontWeight: 600 }}>Rate pending confirmation — {o.pending}. Not bookable yet.</span>}</span>
                 <b>{formatINR(o.total)}</b>
               </label>
             ))}

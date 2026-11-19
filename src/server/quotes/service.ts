@@ -128,7 +128,9 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
 
     const markup = pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
     const partnerCode = partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>);
-    const provRules = await getSetting(`component_rules:${acct.adapter}`, defaultRules(acct.adapter, rules.value));
+    // Owner rule (2026-11-19): margin on the whole verified carrier subtotal (freight + fuel + docket + ODA + FOD + other)
+    // for every courier and service; GST once on the result. Older per-provider overrides are no longer applied.
+    const provRules = { value: ALL_ELIGIBLE_COMPONENT_RULES, version: 2 };
     for (const q of res.value) {
       if (!allowed(q.carrierCode)) continue; // switched off by Admin or by this customer (Manage Courier)
       const priced = priceQuote(q, markup, { gstBps: gst.value, componentRules: provRules.value, componentRulesVersion: provRules.version });

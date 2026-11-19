@@ -6,7 +6,7 @@ export const presentOffer = (o: QuoteOffer) => ({
   etaDays: o.etaDays, chargeableWeightGrams: o.chargeableWeightGrams, isPilot: !!o.isPilot, partnerCode: o.partnerCode ?? null,
   lines: o.lines.map((l) => ({ code: l.code, label: l.label, sellPreTax: l.sellPreTax })),
   sellingSubtotal: o.sellingSubtotal, gst: o.gst, total: o.total, expiresAt: o.expiresAt, isDemo: o.isDemo,
-  paymentMode: o.paymentMode, payer: { sender: o.payer.sender, receiver: o.payer.receiver },
+  pending: o.pending ?? null, paymentMode: o.paymentMode, payer: { sender: o.payer.sender, receiver: o.payer.receiver },
 });
 
 /** Reasons a service gave no rate, safe to show to the customer (no secrets; provider text trimmed). */

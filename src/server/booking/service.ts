@@ -52,6 +52,9 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
 
   const [quote] = await db.select().from(schema.quotes).where(and(eq(schema.quotes.id, args.quoteId), eq(schema.quotes.orgId, args.orgId)));
   if (!quote) return { ok: false, code: "not_found", message: "Quote not found" };
+  // A surcharge (e.g. ODA) whose amount the carrier has not confirmed: never book at an unverified rate.
+  const pendingReason = (quote.priced as { pending?: string }).pending;
+  if (pendingReason) return { ok: false, code: "unsupported", message: `Rate pending confirmation — ${pendingReason}. This service cannot be booked until the charge is confirmed; choose another courier or try again later.` };
   const consignee = order.consignee as BookRequest["consignee"];
 
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
@@ -76,6 +79,7 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
     const rows = await quotesByIds(fresh.offers.map((o) => o.quoteId));
     const matchRow = rows.find((r) => sameService(prev, { carrierCode: r.carrierCode, serviceName: r.serviceName, providerQuoteRef: (r.priced as { providerQuoteRef?: string }).providerQuoteRef }));
     if (!matchRow) return { ok: false, code: "quote_expired", message: `${quote.serviceName} is no longer available for this shipment — refresh rates and choose again.` };
+    if ((matchRow.priced as { pending?: string }).pending) return { ok: false, code: "unsupported", message: `Rate pending confirmation — ${(matchRow.priced as { pending?: string }).pending}. Choose another courier or try again later.` };
     if (matchRow.totalPaise !== quote.totalPaise) {
       return { ok: false, code: "price_changed", message: `The rate for ${quote.serviceName} changed from ₹${(quote.totalPaise / 100).toFixed(2)} to ₹${(matchRow.totalPaise / 100).toFixed(2)}. Confirm the new price to book.`, newQuoteId: matchRow.id, oldTotal: quote.totalPaise, newTotal: matchRow.totalPaise };
     }
@@ -165,6 +169,7 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
     freightPayer: order.paymentType === "fod" ? "receiver" : "sender", receiverFreightPaise: receiverPays, fodStatus: order.paymentType === "fod" ? "pending_collection" : null,
     chargeableWeightGrams: priced.chargeableWeightGrams, etaDate: priced.etaDays ? new Date(Date.now() + priced.etaDays * 86400_000) : null,
   });
+  if (b.carrierChargePaise != null) await recordCarrierCharge(shipmentId, b.carrierChargePaise, priced.costPreTax);
   if (b.state === "confirmed") {
     if (reservationId) await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber}${b.awb ? ` · ${b.awb}` : ""}` }));
   } else {
@@ -185,4 +190,16 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
   if (b.pickupRef) await noteCapability(acct.id, "pickup", true, { evidence: `pickup ${b.pickupRef}` });
   await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.created", targetType: "shipment", targetId: shipmentId, details: { quoteId: quote.id, totalPaise: quote.totalPaise, senderPays, receiverPays, paymentMode: order.paymentType, provider: acct.adapter, providerRef: b.providerOrderRef } });
   return { ok: true, shipmentId, awb: b.awb, state: b.state };
+}
+
+/**
+ * The carrier reported what it actually charges for a shipment. A charge above the quoted carrier cost is flagged
+ * for Admin (Order Exceptions); the customer is never charged above the amount they approved.
+ */
+export async function recordCarrierCharge(shipmentId: string, chargePaise: number, quotedCostPaise: number) {
+  if (!Number.isFinite(chargePaise) || chargePaise < 0) return;
+  const db = await getDb();
+  const check = chargePaise > quotedCostPaise ? "higher" : "ok";
+  await db.update(schema.shipments).set({ carrierChargePaise: Math.round(chargePaise), chargeCheck: check }).where(eq(schema.shipments.id, shipmentId));
+  if (check === "higher") await audit({ actorKind: "system", action: "shipment.carrier_charge_higher", targetType: "shipment", targetId: shipmentId, details: { chargePaise, quotedCostPaise, differencePaise: chargePaise - quotedCostPaise } });
 }

@@ -285,6 +285,9 @@ export const shipments = pgTable("shipments", {
   quoteId: text("quote_id").notNull(),
   sellPaise: paise("sell_paise").notNull(),
   costPaise: paise("cost_paise").notNull(),
+  /** Carrier-confirmed pre-tax charge (when the carrier reports it) and the check against the quoted cost: ok / higher / resolved. */
+  carrierChargePaise: paise("carrier_charge_paise"),
+  chargeCheck: text("charge_check"),
   reservationId: text("reservation_id"),
   /** sender (Prepaid/COD) | receiver (FOD: freight collected from the receiver at delivery) */
   freightPayer: text("freight_payer").notNull().default("sender"),

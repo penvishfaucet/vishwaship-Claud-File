@@ -45,7 +45,7 @@ function bookingBadge(r: OrderRow): { text: string; cls: string } {
     const [text, cls] = m[r.orderStatus] ?? ["New", "gray"];
     return { text, cls };
   }
-  if (s.bookingStatus !== "confirmed") return { text: "Booking Pending", cls: "orange" };
+  if (s.bookingStatus !== "confirmed") return { text: s.awb || s.lr ? "Booking Pending" : "Booked · LR/AWB pending", cls: "orange" };
   if (s.status === "booked") return s.pickupStatus === "not_scheduled" ? { text: "Courier Assigned", cls: "navy" } : { text: "Scheduled", cls: "blue" };
   if (s.status === "pickup_pending") return { text: "Scheduled", cls: "blue" };
   return { text: "Picked Up", cls: "green" };

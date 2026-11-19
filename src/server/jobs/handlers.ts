@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lte, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lte, lt, ne } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { hasFeature } from "@/server/features";
@@ -43,6 +43,7 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
         status: "booked", quoteId, sellPaise: quote.totalPaise, costPaise: priced.costPreTax, reservationId, chargeableWeightGrams: priced.chargeableWeightGrams,
       });
     }
+    if (r.value.carrierChargePaise != null) await (await import("@/server/booking/service")).recordCarrierCharge(shipmentId, r.value.carrierChargePaise, priced.costPreTax);
     if (reservationId) await withLedger((s) => settle(s, { walletId: wallet.id, reservationId, idempotencyKey: `settle:${reservationId}`, refType: "shipment", refId: shipmentId, memo: `Shipping charge ${order.orderNumber} (reconciled)` }));
     await db.update(schema.orders).set({ status: "booked" }).where(eq(schema.orders.id, orderId));
     await audit({ actorKind: "system", orgId: order.orgId, action: "booking.reconciled_confirmed", targetType: "order", targetId: orderId });
@@ -209,4 +210,11 @@ export async function scheduleTrackingPolls() {
       inArray(schema.shipments.status, ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "ndr", "rto_initiated", "rto_in_transit"])))
     .limit(500);
   for (const s of live) await enqueue("tracking.poll", { shipmentId: s.id }, { dedupeKey: `track:${s.id}:${slot}` });
+  // Bookings the carrier accepted but has not numbered yet (LR/AWB pending), and timed-out attempts: keep asking the
+  // carrier every slot for up to 14 days, even after the first reconcile job ran out of attempts. lookupBooking only
+  // reads — it never creates a second booking.
+  const since = new Date(Date.now() - 14 * 86400_000);
+  const pending = await db.select({ id: schema.shipments.id, orderId: schema.shipments.orderId, quoteId: schema.shipments.quoteId, reservationId: schema.shipments.reservationId }).from(schema.shipments)
+    .where(and(eq(schema.shipments.bookingStatus, "pending"), ne(schema.shipments.provider, "demo"), gte(schema.shipments.createdAt, since))).limit(200);
+  for (const s of pending) await enqueue("booking.reconcile", { orderId: s.orderId, quoteId: s.quoteId, reservationId: s.reservationId, shipmentId: s.id }, { dedupeKey: `reconcile-sweep:${s.id}:${slot}` });
 }

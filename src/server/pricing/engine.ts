@@ -38,6 +38,8 @@ export interface ProviderQuote {
   taxRateBps: Bps;
   chargeableWeightGrams: number;
   providerQuoteRef?: string;
+  /** Set when a surcharge (e.g. ODA) may apply but its amount is not confirmed: shown, never bookable. */
+  pending?: string;
 }
 
 export interface ComponentRule {
@@ -77,6 +79,8 @@ export interface PricedLine {
 }
 
 export interface PricedQuote {
+  /** Copied from the provider quote: rate not confirmed (booking blocked). */
+  pending?: string;
   provider: string;
   carrierCode: string;
   carrierName: string;
@@ -144,6 +148,7 @@ export function priceQuote(
   const gst = pctOf(sellingSubtotal, opts.gstBps);
 
   return {
+    ...(q.pending ? { pending: q.pending } : {}),
     provider: q.provider,
     carrierCode: q.carrierCode,
     carrierName: q.carrierName,

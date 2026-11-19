@@ -521,11 +521,12 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                   const logo = carrierLogo(o.carrierCode);
                   return (
                     <label key={o.quoteId} className={`ropt${selected === o.quoteId ? " on" : ""}`} style={{ display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}>
-                      <input type="radio" name="quote" checked={selected === o.quoteId} onChange={() => setSelected(o.quoteId)} />
+                      <input type="radio" name="quote" checked={selected === o.quoteId} onChange={() => setSelected(o.quoteId)} disabled={!!o.pending} />
                       {logo ? <img className="clogo-sm" src={logo} alt="" /> : null}
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span className="b small">{o.carrierName} · {o.serviceName}</span>
                         <span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg · {o.lines.map((l) => `${l.label} ${formatINR(l.sellPreTax)}`).join(" · ")} · GST {formatINR(o.gst)}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</span>
+                        {o.pending && <span className="tiny" role="note" style={{ display: "block", color: "#a83a00", fontWeight: 600 }}>Rate pending confirmation — {o.pending}. Not bookable yet.</span>}
                       </span>
                       <span style={{ textAlign: "right" }}>
                         {o.payer && o.payer.receiver > 0 ? <>

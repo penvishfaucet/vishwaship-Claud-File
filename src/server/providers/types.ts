@@ -69,6 +69,8 @@ export interface BookRequest {
 }
 
 export interface BookResult {
+  /** Carrier-confirmed pre-tax charge for this shipment, when the carrier reports it (compared with the quote). */
+  carrierChargePaise?: number;
   providerOrderRef: string;
   awb: string | null;          // may be null while async manifestation is pending
   lrNumber?: string | null;

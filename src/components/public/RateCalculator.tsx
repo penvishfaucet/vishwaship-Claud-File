@@ -16,6 +16,8 @@ export interface OfferView {
   gst: number;
   total: number;
   expiresAt: string;
+  /** Surcharge not confirmed by the carrier (e.g. ODA): shown, not bookable. */
+  pending?: string | null;
   provider?: string;
   paymentMode?: "prepaid" | "cod" | "fod";
   /** sender = charged to the seller's wallet; receiver = collected from the receiver at delivery (FOD) */

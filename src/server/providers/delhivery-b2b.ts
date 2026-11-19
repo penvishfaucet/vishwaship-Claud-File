@@ -91,13 +91,16 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const sj = svc.value.json as Record<string, unknown> | null;
     const explicit = (sj?.serviceable ?? (sj?.data as Record<string, unknown> | undefined)?.serviceable) as boolean | undefined;
     if (explicit === false) return { ok: false, error: { category: "not_serviceable", message: `Delhivery B2B does not deliver to ${req.destinationPincode}`, retryable: false } };
+    if (req.paymentType === "fod" && fodFlag(sj) === false) return { ok: false, error: { category: "not_serviceable", message: `Delhivery B2B does not offer FOD (freight on delivery) to ${req.destinationPincode}`, retryable: false } };
+    const oda = odaFlag(sj);
+    let pending: string | undefined;
 
     const divisor = Number(ctx.config.volDivisor ?? 5000);
     const volG = req.packages.reduce((t, p) => t + Math.ceil(((p.lengthMm / 10) * (p.breadthMm / 10) * (p.heightMm / 10) * 1000) / divisor) * p.count, 0);
     let components: ProviderQuoteComponent[]; let chargeable = Math.max(totalG, volG); let source: string;
 
     if (ctx.config.rateSource === "rate_card") {
-      const rc = (ctx.config.rateCard ?? {}) as { perKgPaise?: number; minKg?: number; docketPaise?: number; fuelPct?: number; codFeePaise?: number; codPct?: number; fodFeePaise?: number };
+      const rc = (ctx.config.rateCard ?? {}) as { perKgPaise?: number; minKg?: number; docketPaise?: number; fuelPct?: number; codFeePaise?: number; codPct?: number; fodFeePaise?: number; odaPerKgPaise?: number; odaMinPaise?: number };
       if (!rc.perKgPaise) return { ok: false, error: { category: "unsupported", message: "Delhivery B2B contract rate card is not configured", retryable: false } };
       const kg = Math.max(rc.minKg ?? 20, Math.ceil(chargeable / 1000)); chargeable = kg * 1000;
       const freight = kg * rc.perKgPaise;
@@ -106,6 +109,10 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       if (rc.docketPaise) components.push({ code: "docket", label: "Docket charge", amount: rc.docketPaise });
       if (req.paymentType === "cod") components.push({ code: "cod_fee", label: "COD charge", amount: Math.max(rc.codFeePaise ?? 0, Math.round(((req.codAmount ?? 0) * (rc.codPct ?? 0)) / 100)) });
       if (req.paymentType === "fod" && rc.fodFeePaise) components.push({ code: "other", label: "FOD charge", amount: rc.fodFeePaise });
+      if (oda) {
+        if (rc.odaPerKgPaise || rc.odaMinPaise) components.push({ code: "oda", label: "ODA charge", amount: Math.max(rc.odaMinPaise ?? 0, kg * (rc.odaPerKgPaise ?? 0)) });
+        else pending = "ODA destination: the ODA charge is not in the contract rate card yet";
+      }
       source = "contract_rate_card";
     } else {
       const est = await call(ctx, "/freight/estimate", {
@@ -122,6 +129,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       if (!parsed) return { ok: false, error: { category: "upstream", message: "Delhivery returned no freight breakup for this route — rate unavailable (not ₹0). Retry, or configure a contract rate card.", retryable: true } };
       components = parsed.components;
       if (parsed.chargeableGrams) chargeable = parsed.chargeableGrams;
+      // ODA destination but the estimate carries no ODA line: the amount is unconfirmed, so this rate must not be booked.
+      if (oda && !components.some((c) => c.code === "oda")) pending = "ODA destination: Delhivery has not confirmed the ODA charge for this route";
       source = "freight_estimate_api";
     }
     if (!components.some((c) => c.code === "freight" && c.amount > 0)) return { ok: false, error: { category: "upstream", message: "Delhivery base freight unavailable for this route", retryable: true } };
@@ -132,7 +141,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
 
     const q: ProviderQuote = {
       provider: "delhivery_b2b", carrierCode: "delhivery", carrierName: "Delhivery", serviceName: "Delhivery B2B Surface (LTL)", mode: "B2B", etaDays,
-      components, taxInclusive: false, taxRateBps: 1800, chargeableWeightGrams: chargeable, providerQuoteRef: `${source}:${req.paymentType}`,
+      components, taxInclusive: false, taxRateBps: 1800, chargeableWeightGrams: chargeable, providerQuoteRef: `${source}:${req.paymentType}`, ...(pending ? { pending } : {}),
     };
     return { ok: true, value: [q] };
   },
@@ -197,15 +206,17 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     if (!r.ok) return r.error.category === "timeout" ? { ok: false, error: { ...r.error, category: "ambiguous" } } : r;
     const jobId = firstString(r.value.json, ["job_id", "data.job_id", "request_id", "data.request_id", "jobId"]);
     if (!jobId) return { ok: false, error: { category: "ambiguous", message: "Delhivery accepted the manifest but returned no job ID", retryable: false } };
-    const res: BookResult = { providerOrderRef: jobId, awb: null, lrNumber: null, state: "pending_async", labelAvailable: false };
+    const res: BookResult = { providerOrderRef: `job:${jobId}`, awb: null, lrNumber: null, state: "pending_async", labelAvailable: false };
     return { ok: true, value: res };
   },
 
   async lookupBooking(ctx, ref) {
     if (!ref.providerOrderRef) return { ok: false, error: { category: "ambiguous", message: "No Delhivery job ID stored — manual check in Delhivery ONE needed", retryable: true } };
-    if (/^\d{6,}$/.test(ref.providerOrderRef)) return { ok: true, value: { providerOrderRef: ref.providerOrderRef, awb: ref.providerOrderRef, lrNumber: ref.providerOrderRef, state: "confirmed", labelAvailable: true } };
-    const r = await call(ctx, `/manifest?job_id=${encodeURIComponent(ref.providerOrderRef)}`);
-    if (!r.ok) return r;
+    const isJob = ref.providerOrderRef.startsWith("job:");
+    const jobId = isJob ? ref.providerOrderRef.slice(4) : ref.providerOrderRef;
+    const r = await call(ctx, `/manifest?job_id=${encodeURIComponent(jobId)}`);
+    // Older rows stored the bare job id; a bare number Delhivery does not know as a job is an LR saved after reconcile.
+    if (!r.ok) return !isJob && /^\d{6,}$/.test(jobId) ? { ok: true, value: { providerOrderRef: jobId, awb: jobId, lrNumber: jobId, state: "confirmed", labelAvailable: true } } : r;
     const j = r.value.json;
     const status = (firstString(j, ["status", "data.status", "job_status", "data.job_status"]) ?? "").toLowerCase();
     const lrn = firstString(j, ["lrn", "data.lrn", "lr_number", "data.lr_number", "data.lrnum", "lrnum"]);
@@ -264,3 +275,20 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
 };
 
 export { amountToPaise };
+
+/** ODA (out of delivery area) flag from the pincode-serviceability response: true / false / null (not stated). */
+export function odaFlag(j: unknown): boolean | null { return yesNo(j, /(^|_)(oda|is_oda|oda_flag|odc|remote)(_|$)/i); }
+/** FOD support flag from the pincode-serviceability response (null when Delhivery does not say). */
+export function fodFlag(j: unknown): boolean | null { return yesNo(j, /(^|_)(fod|is_fod|fod_available|freight_on_delivery|topay|to_pay)(_|$)/i); }
+function yesNo(j: unknown, key: RegExp, depth = 0): boolean | null {
+  if (!j || typeof j !== "object" || depth > 4) return null;
+  if (Array.isArray(j)) { for (const x of j) { const r = yesNo(x, key, depth + 1); if (r !== null) return r; } return null; }
+  for (const [k, v] of Object.entries(j as Record<string, unknown>)) {
+    if (!key.test(k)) continue;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v > 0;
+    if (typeof v === "string") { if (/^(y|yes|true|1)$/i.test(v.trim())) return true; if (/^(n|no|false|0)$/i.test(v.trim())) return false; }
+  }
+  for (const v of Object.values(j as Record<string, unknown>)) if (v && typeof v === "object") { const r = yesNo(v, key, depth + 1); if (r !== null) return r; }
+  return null;
+}

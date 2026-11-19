@@ -46,6 +46,17 @@ export default async function OrderExceptions({ searchParams }: { searchParams: 
     .innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId))
     .where(inArray(schema.codConfirmations.cancellationStatus, ["failed", "action_required", "requested"])).orderBy(desc(schema.codConfirmations.cancellationAt)).limit(200);
   const labelDefault = (await getSetting<PrintFormat>("orders_label_default", "thermal_4x4")).value;
+  // Carrier charged more than the quoted carrier cost (customer is never charged above the approved amount).
+  const chargeRows = await db.select({ s: schema.shipments, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.shipments)
+    .innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
+    .where(eq(schema.shipments.chargeCheck, "higher")).orderBy(desc(schema.shipments.createdAt)).limit(200);
+  // Accepted by the carrier but no LR/AWB yet, and attempts that timed out (waiting for the carrier check).
+  const pendingRows = await db.select({ s: schema.shipments, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.shipments)
+    .innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
+    .where(eq(schema.shipments.bookingStatus, "pending")).orderBy(desc(schema.shipments.createdAt)).limit(200);
+  const unsureOrders = await db.select({ id: schema.orders.id, n: schema.orders.orderNumber, pay: schema.orders.paymentType, at: schema.orders.createdAt, o: schema.orgs.businessName }).from(schema.orders)
+    .innerJoin(schema.orgs, eq(schema.orgs.id, schema.orders.orgId)).where(eq(schema.orders.status, "needs_reconcile")).orderBy(desc(schema.orders.createdAt)).limit(200);
+  const inr = (p: number | null) => (p == null ? "—" : `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   return (
     <>
       <div className="page-h"><div><h1>Order Exceptions</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Tracking sync failures and WhatsApp COD cancellation problems across all customers.</p></div></div>
@@ -61,6 +72,31 @@ export default async function OrderExceptions({ searchParams }: { searchParams: 
           {canWrite && <button className="btn btn-navy btn-sm">Save</button>}
         </form>
         <p className="tiny muted mt8">Tab names and the COD line text are edited in <Link className="link-navy" href="/admin/content/?group=pages">Portal Text</Link> (keys “Orders – …”). WhatsApp COD rules are in <Link className="link-navy" href="/admin/notifications/">Notifications</Link>; feature access per plan in <Link className="link-navy" href="/admin/plans/">Plans &amp; Features</Link>.</p>
+      </section>
+
+      <section className="mb16">
+        <h2 className="b mb12" style={{ fontSize: 16 }}>Carrier charged more than quoted ({chargeRows.length})</h2>
+        {chargeRows.length === 0 ? <div className="card empty"><p className="muted">No carrier charge above the quoted cost.</p></div> : (
+          <div className="card p0 tbl-wrap"><table className="tbl">
+            <thead><tr><th>Customer</th><th>Order / LR</th><th>Quoted carrier cost</th><th>Carrier charge</th><th>Difference</th><th>Customer approved</th></tr></thead>
+            <tbody>{chargeRows.map(({ s: x, o, n }) => (
+              <tr key={x.id}><td className="small">{o.businessName}</td><td><Link className="id-link" href={`/admin/shipments/${x.id}/`}>{n}</Link><div className="mono tiny">{x.lrNumber ?? x.awb ?? "LR pending"}</div></td>
+                <td>{inr(x.costPaise)}</td><td><b>{inr(x.carrierChargePaise)}</b></td><td className="t-bad"><b>{inr((x.carrierChargePaise ?? 0) - x.costPaise)}</b></td><td>{inr(x.sellPaise)}{x.receiverFreightPaise ? <div className="tiny muted">+ {inr(x.receiverFreightPaise)} FOD from receiver</div> : null}</td></tr>
+            ))}</tbody></table></div>
+        )}
+      </section>
+
+      <section className="mb16">
+        <h2 className="b mb12" style={{ fontSize: 16 }}>Booked · LR/AWB pending ({pendingRows.length}) and courier check after timeout ({unsureOrders.length})</h2>
+        <p className="small muted" style={{ marginTop: -6 }}>Checked with the courier every 30 minutes for 14 days. Nothing here is ever booked again automatically.</p>
+        {pendingRows.length + unsureOrders.length === 0 ? <div className="card empty"><p className="muted">Nothing waiting for the courier.</p></div> : (
+          <div className="card p0 tbl-wrap"><table className="tbl">
+            <thead><tr><th>Customer</th><th>Order</th><th>State</th><th>Carrier reference</th><th>Since</th></tr></thead>
+            <tbody>
+              {pendingRows.map(({ s: x, o, n }) => <tr key={x.id}><td className="small">{o.businessName}</td><td><Link className="id-link" href={`/admin/shipments/${x.id}/`}>{n}</Link></td><td><span className="chip c-pending">Booked · LR/AWB pending</span></td><td className="mono tiny">{x.providerOrderRef ?? "—"}</td><td className="small">{fmt(x.createdAt)}</td></tr>)}
+              {unsureOrders.map((u) => <tr key={u.id}><td className="small">{u.o}</td><td className="small">{u.n}</td><td><span className="chip c-pending">Timed out — checking courier</span></td><td className="tiny muted">{u.pay.toUpperCase()}</td><td className="small">{fmt(u.at)}</td></tr>)}
+            </tbody></table></div>
+        )}
       </section>
 
       <section className="mb16">
