@@ -1,29 +1,31 @@
 /* ==========================================================================
-   Vishwaship brand theme (owner spec 2026-11-19). Loaded last; selectors are
-   prefixed with `html` so they win over older theme blocks and page CSS.
-   Navy #051C46 · Orange #FE6519 · White · Light Blue #EDF5FF · Link #0057B8 · Border #D7E4F3
+   Vishwaship brand theme v5 (owner spec 2026-11-19, second revision).
+   Deep Navy #051C46 · Brand Orange #FE6519 (white text) · White surfaces · Link Blue #0057B8
+   Loaded last; selectors start with `html` so they win over older theme blocks and page CSS.
    ========================================================================== */
 html:root,html .shell,html .vs{
   --navy:#051C46;--navy-2:#0b2a5e;--navy-3:#163a78;
-  --orange:#FE6519;--orange-2:#e5540c;--orange-soft:#EDF5FF;--orange-line:#D7E4F3;--peach:#EDF5FF;
-  --bg:#EDF5FF;--card:#FFFFFF;--line:#D7E4F3;--line-2:#e4edf8;--gray-soft:#f3f7fc;
+  --orange:#FE6519;--orange-2:#e5540c;--orange-soft:#fff3ec;--orange-line:#ffd2bb;--peach:#fff3ec;
+  --bg:#FFFFFF;--card:#FFFFFF;--line:#dbe3ee;--line-2:#e9eef5;--gray-soft:#f4f6fa;
   --text:#051C46;--muted:#4a5a78;--muted-2:#7d8aa3;
-  --link:#0057B8;--brand-blue:#EDF5FF;--brand-border:#D7E4F3;
+  --link:#0057B8;
 }
-html .wv{--n:#051C46;--n2:#0b2a5e;--n3:#163a78;--o:#FE6519;--o2:#e5540c;--os:#EDF5FF;--ink:#051C46;--mut:#4a5a78;--ln:#D7E4F3;--bg:#EDF5FF}
-html .shell{font-family:var(--font-roboto,Roboto),Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-html:not(.dark) .shell,html:not(.dark) .shell .main,html:not(.dark) .shell .content{background:#EDF5FF}
-html .shell .card,html .shell .oc,html .shell .tk-card,html .shell .rt-card,html .shell .dcard,html .shell .dm-card{background:#fff;border-color:#D7E4F3}
+html .wv{--n:#051C46;--n2:#0b2a5e;--n3:#163a78;--o:#FE6519;--o2:#e5540c;--os:#fff3ec;--ink:#051C46;--mut:#4a5a78;--ln:#dbe3ee;--bg:#FFFFFF}
+html .shell,html .wv,html .vs{font-family:var(--font-roboto,Roboto),Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+html:not(.dark) .shell,html:not(.dark) .shell .main,html:not(.dark) .shell .content{background:#FFFFFF;color:#051C46}
+html .shell :is(.card,.oc,.tk-card,.rt-card,.dcard,.dm-card,.dsearch,.tk-empty){background:#fff;border-color:#dbe3ee;box-shadow:0 1px 2px rgba(5,28,70,.05),0 6px 18px rgba(5,28,70,.05)}
+html .shell :is(h1,h2,h3){color:#051C46;letter-spacing:-.01em}
+html .shell .page-h h1,html .shell .tk-top h1{font-size:22px;font-weight:600}
+html .shell :is(label,.rt-label,.field label){color:#051C46;font-weight:500}
 
-/* ---------- logo ---------- */
+/* ---------- logo (original file, full, proportional; white plate on navy) ---------- */
 .brand-logo{display:block;max-width:100%;object-fit:contain}
 .logo-plate{display:inline-flex;align-items:center;justify-content:center;background:#fff;border-radius:12px;padding:2px 6px;line-height:0}
 .brand-logo-link{display:block;text-decoration:none}
 .brand-logo-link:focus-visible{outline:3px solid #FE6519;outline-offset:3px;border-radius:12px}
-html .shell .side .brand{padding:12px 0 10px;margin:0 10px}
-html .shell .side .brand .logo-plate{width:100%;border:1px solid #D7E4F3}
-html .shell .side .brand .portal{color:#051C46;margin-top:8px}
-/* collapsed rail: the whole logo, scaled to the rail width */
+html .shell .side .brand{padding:12px 0 10px;margin:0 10px;border-bottom:1px solid rgba(255,255,255,.14)!important}
+html .shell .side .brand .logo-plate{width:100%}
+html .shell .side .brand .portal{color:#fff;opacity:.85;margin-top:8px;letter-spacing:.12em}
 @media (min-width:901px){
   html .shell.rail:not(.pinned) .side:not(:hover):not(:focus-within) .brand{margin:0 6px;padding:12px 0 8px}
   html .shell.rail:not(.pinned) .side:not(:hover):not(:focus-within) .brand .logo-plate{padding:2px}
@@ -31,73 +33,115 @@ html .shell .side .brand .portal{color:#051C46;margin-top:8px}
 }
 html .shell .m-brand .brand-logo{height:46px!important}
 html .wv .w-logo img.brand-logo{height:60px!important;width:auto}
-html .wv .w-foot .logo{padding:4px 8px}
+html .wv .w-foot .logo{padding:4px 8px;background:#fff}
 html .wv .w-foot .logo img.brand-logo{height:56px!important;width:auto}
-html .vs .auth .l .logo-plate{padding:2px 8px}
 
-/* ---------- contrast: white on navy, navy inside white / light-blue cards ---------- */
-html .wv .w-hero,html .wv .w-hero h1,html .wv .w-hero p,html .wv .w-hero .w-lead,html .wv .w-hero-checks,html .wv .w-sec.dark,html .wv .w-sec.dark :is(h1,h2,h3,p,li,span):not(.w-card *,.w-offer *,.card *){color:#fff}
-html .wv .w-hero::after{background:linear-gradient(100deg,rgba(5,28,70,.97) 0%,rgba(5,28,70,.88) 45%,rgba(5,28,70,.6) 100%)}
-html .wv .w-hero2{background:radial-gradient(1200px 600px at 85% 10%,#0e2d63 0%,#051C46 60%)}
-html .wv .w-foot,html .wv .w-foot a,html .wv .w-foot p,html .wv .w-foot li,html .wv .w-foot span{color:#fff}
+/* ---------- portal navigation: deep navy, white text, orange active ---------- */
+html:not(.dark) body .shell .side{background:#051C46!important;color:#fff;border-right:0}
+html:not(.dark) body .shell .side :is(a.item,button.item,summary,.grp-h,.qs-btn,.side-pin,.lbl,kbd,small,b){color:#fff!important}
+html:not(.dark) body .shell .side :is(a.item,button.item,.grp-h,.qs-btn,.side-pin) svg{color:#fff!important;opacity:.9}
+html:not(.dark) body .shell .side .grp{color:#fff}
+html:not(.dark) body .shell .side :is(a.item,button.item):hover{background:rgba(255,255,255,.1)!important}
+html:not(.dark) body .shell .side a.item.on,html:not(.dark) body .shell .side a.item.on:hover{background:#FE6519!important;color:#fff!important;font-weight:600;box-shadow:none}
+html:not(.dark) body .shell .side a.item.on svg{color:#fff!important;opacity:1}
+html:not(.dark) body .shell .side .grp.has-on>.grp-h{box-shadow:inset 3px 0 0 #FE6519}
+html:not(.dark) body .shell .side kbd{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25)}
+html:not(.dark) body .shell .side .side-support{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff}
+html:not(.dark) body .shell .side .side-support svg{color:#fff}
+html .shell .side a.item:focus-visible,html .shell .side .grp-h:focus-visible{outline:2px solid #fff;outline-offset:-2px}
+/* mobile bottom navigation */
+@media (max-width:900px){
+  html body .shell .bnav{background:#051C46;border-top:0;box-shadow:0 -6px 20px rgba(5,28,70,.25)}
+  html body .shell .bnav a{color:#fff!important}
+  html body .shell .bnav a svg{color:#fff}
+  html body .shell .bnav a.on .bi{background:#FE6519;color:#fff}
+  html body .shell .bnav a.on{font-weight:600}
+}
+/* top header stays white with navy text */
+html .shell .top{background:#fff;border-bottom:1px solid #dbe3ee}
+
+/* ---------- white text on every navy surface ---------- */
+html .wv :is(.w-hero,.w-hero2,.w-sec.dark),html .wv :is(.w-hero,.w-hero2,.w-sec.dark) :is(h1,h2,h3,p,li,span,small,b,.w-lead,.w-hero-checks){color:#fff}
+html .wv .w-hero .w-slogan .o{color:#FE6519}
+html .wv .w-hero::after{background:linear-gradient(100deg,rgba(5,28,70,.97) 0%,rgba(5,28,70,.9) 45%,rgba(5,28,70,.62) 100%)}
+html .wv .w-hero2{background:#051C46}
+html .wv .w-foot{background:#051C46}
+html .wv .w-foot,html .wv .w-foot :is(a,p,li,span,b,small){color:#fff}
 html .wv .w-foot a:hover{color:#fff;text-decoration:underline}
 html .wv .w-foot .bottom{border-top-color:rgba(255,255,255,.25)}
-html .wv .w-sec.alt{background:#EDF5FF}
-html :is(.w-hero,.w-sec.dark,.w-foot,.auth .l) :is(.card,.w-card,.w-offer,.awbcard,[class*="-card"]){color:#051C46}
-html .vs .auth .l,html .vs .auth .l h2,html .vs .auth .l li{color:#fff}
+/* public content sections are white */
+html .wv .w-sec,html .wv .w-sec.alt{background:#fff}
+html .wv .w-sec.dark{background:#051C46}
+/* cards inside navy areas keep navy text */
+html :is(.w-hero,.w-hero2,.w-sec.dark,.w-foot,.auth .l) :is(.card,.w-card,.w-offer,.awbcard,[class*="-card"]){color:#051C46}
+html .vs .auth .l{background:#051C46}
+html .vs .auth .l,html .vs .auth .l :is(h2,h2 span,li,li svg){color:#fff}
 html .vs .auth .l .awbcard{background:#fff;color:#051C46}
 html .vs .auth .l .awbcard .small{color:#051C46!important}
 
 /* ---------- buttons ---------- */
-/* primary: navy + white */
-html .btn-navy,html .shell .btn-navy,html .wv .w-btn.sec,html .tk-raise{background:#051C46;border-color:#051C46;color:#fff}
-html .btn-navy:hover,html .shell .btn-navy:hover,html .tk-raise:hover{background:#0b2a5e;color:#fff}
-/* high-emphasis: orange + navy text */
-html :is(.btn-orange,.shell .btn-orange,.shell .ov-btn.orange,.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.tk-search .go,.qa-fab,.hw-rech,.sc-send,.chat-input button,.dm-ic.wallet,.mo-fab,ol.stepper li.cur .n,.step.on .n,.shell .ov-split .ov-btn.navy){background:#FE6519;border-color:#FE6519;color:#051C46!important}
-html :is(.btn-orange,.shell .btn-orange,.shell .ov-btn.orange,.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.tk-search .go,.qa-fab,.hw-rech,.shell .ov-split .ov-btn.navy):hover{background:#e5540c;color:#051C46!important}
-html .wv .w-btn.pri{box-shadow:0 8px 20px rgba(254,101,25,.28)}
-/* selected pills / counters on orange */
-html :is(.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#FE6519;border-color:#FE6519;color:#051C46}
-/* outline / secondary */
-html .shell .btn-outline,html .oc-btn.ghost,html .tk-comment,html .rt-dismiss{background:#fff;border:1px solid #D7E4F3;color:#051C46!important}
-html .shell .btn-outline:hover,html .oc-btn.ghost:hover,html .tk-comment:hover,html .rt-dismiss:hover{background:#EDF5FF;border-color:#0057B8}
-/* focus + disabled, every button-like control */
+/* compact / primary: navy + white */
+html :is(.btn-navy,.shell .btn-navy,.wv .w-btn.sec,.tk-raise,.hw-rech,.tk-search .go,.seg-tabs a.on,.btn-sm.btn-orange,.ov-btn.sm.orange){background:#051C46!important;border-color:#051C46!important;color:#fff!important}
+html :is(.btn-navy,.shell .btn-navy,.tk-raise,.hw-rech,.tk-search .go):hover{background:#0b2a5e!important;color:#fff!important}
+/* key actions: brand orange + large bold white label */
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy){background:#FE6519;border-color:#FE6519;color:#fff!important;font-weight:700;font-size:16px;letter-spacing:.01em}
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy):hover{background:#e5540c;color:#fff!important}
+html .wv .w-btn.pri{font-size:17px;padding-inline:26px;box-shadow:0 10px 24px rgba(254,101,25,.3)}
+/* orange surfaces / indicators: white text and icons */
+html :is(.qa-fab,.mo-fab,.dm-ic.wallet,.sc-send,.chat-input button,ol.stepper li.cur .n,.step.on .n,.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#FE6519;border-color:#FE6519;color:#fff!important}
+html :is(.oc-seg .on,.tk-tabs a.on){font-weight:700}
+html .tk-tabs a.on{font-size:15.5px}
+/* outline / secondary on white */
+html :is(.shell .btn-outline,.oc-btn.ghost,.tk-comment,.rt-dismiss){background:#fff;border:1px solid #c9d5e6;color:#051C46!important}
+html :is(.shell .btn-outline,.oc-btn.ghost,.tk-comment,.rt-dismiss):hover{background:#f4f7fb;border-color:#051C46}
+/* focus + disabled */
 html :is(button,.btn,a.btn,.oc-btn,.rt-save,.rt-dismiss,.tk-comment,.tk-raise,.ov-btn,.w-btn):focus-visible{outline:3px solid #0057B8;outline-offset:2px}
-html :is(button,.btn,.oc-btn,.rt-save,.rt-dismiss,.ov-btn,.w-btn):disabled,html :is(.btn,.ov-btn)[aria-disabled=true]{background:#e4ebf4!important;border-color:#D7E4F3!important;color:#5d6b85!important;box-shadow:none!important;cursor:not-allowed;opacity:1}
+html :is(button,.btn,.oc-btn,.rt-save,.rt-dismiss,.ov-btn,.w-btn):disabled,html :is(.btn,.ov-btn)[aria-disabled=true]{background:#e6ebf2!important;border-color:#d3dbe7!important;color:#4f5d78!important;box-shadow:none!important;cursor:not-allowed;opacity:1}
+
+/* ---------- tabs and pills on white ---------- */
+html .tk-tabs a:not(.on){background:#fff;border:1px solid #c9d5e6;color:#051C46}
+html .tk-tabs a:not(.on):hover{border-color:#051C46}
+html :is(.shell .tabs a.on,.shell .ov-tabs a.on,.oc-tabs a.on){color:#051C46;border-bottom-color:#FE6519;font-weight:600}
+html .wv :is(.w-nav a[aria-current=page],.w-drawer a.lnk[aria-current=page]){color:#051C46;background:#fff3ec;box-shadow:inset 0 -3px 0 #FE6519}
+html :is(.oc-tabs,.oc-seg,.oc-opt){border-color:#dbe3ee}
 
 /* ---------- chat bubbles ---------- */
 html .chat-msg.me span{background:#051C46;color:#fff}
-html .chat-msg.them span{background:#fff;color:#051C46;border:1px solid #D7E4F3}
+html .chat-msg.them span{background:#fff;color:#051C46;border:1px solid #dbe3ee}
 html .chat-msg.me .tk-att-doc{color:#fff}
 
-/* ---------- navigation: orange indicator, navy text ---------- */
-html:not(.dark) .shell .side a.item.on,html:not(.dark) .shell .side a.item.on:hover{background:#EDF5FF!important;color:#051C46!important;box-shadow:inset 4px 0 0 #FE6519;font-weight:500}
-html:not(.dark) .shell .side a.item.on svg{color:#FE6519!important}
-html:not(.dark) .shell .side a.item:hover{background:#EDF5FF}
-html .shell .bnav a.on{color:#051C46}
-html .shell .bnav a.on .bi{background:#EDF5FF;box-shadow:inset 0 -3px 0 #FE6519}
-html .shell .tabs a.on,html .shell .ov-tabs a.on,html .oc-tabs a.on{color:#051C46;border-bottom-color:#FE6519}
-html .wv .w-nav a[aria-current=page],html .wv .w-drawer a.lnk[aria-current=page]{color:#051C46;background:#EDF5FF;box-shadow:inset 0 -3px 0 #FE6519}
-html .seg-tabs a.on{background:#051C46;color:#fff}
+/* ---------- offers banner ---------- */
+html body .shell .vo-compact{background:#fff!important;border-color:#dbe3ee!important}
+html body .shell .vo-compact .ic{background:#FE6519!important;color:#fff!important}
 
 /* ---------- forms + tables ---------- */
-html .shell :is(.input,.select,.textarea,.ov-field,.rt-input,.dsearch,.tk-search,.tk-box){border-color:#D7E4F3}
-html .shell :is(.input,.select,.textarea,.ov-field,.rt-input):focus{border-color:#0057B8;box-shadow:0 0 0 3px #EDF5FF;outline:none}
-html .shell .tbl th{background:#EDF5FF;color:#051C46}
-html .shell .tbl td,html .shell .tbl th{border-color:#D7E4F3}
-html .shell .tbl tbody tr:hover,html .shell .tbl tr.sel{background:#f5f9ff}
+html .shell :is(.input,.select,.textarea,.ov-field,.rt-input,.tk-search,.tk-box){border-color:#c9d5e6;background:#fff;color:#051C46}
+html .shell :is(.input,.select,.textarea,.ov-field,.rt-input):focus{border-color:#0057B8;box-shadow:0 0 0 3px rgba(0,87,184,.15);outline:none}
+html .shell .tbl th{background:#051C46;color:#fff;font-weight:600}
+html .shell .tbl td{vertical-align:middle}
+html .shell .tbl td,html .shell .tbl th{border-color:#e3e9f2}
+html .shell .tbl tbody tr:nth-child(even){background:#fafbfd}
+html .shell .tbl tbody tr:hover{background:#f2f6fb}
 
 /* ---------- Order ID / AWB links ---------- */
-html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy,.tk-awbv,.ro-l b a){color:#0057B8!important;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;font-weight:500}
+html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy,.tk-awbv){color:#0057B8!important;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;font-weight:500}
 html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy):hover{color:#003f87!important;text-decoration-thickness:2px}
 html :is(.id-link,.oc-id,.oc-link,.ov-link,.link-navy):focus-visible{outline:3px solid #0057B8;outline-offset:2px;border-radius:4px}
-/* identifiers inside navy areas sit on a light chip so they stay blue */
-html :is(.w-hero,.w-sec.dark,.w-foot,.auth .l) .id-link{background:#fff;padding:1px 6px;border-radius:6px}
+/* identifiers inside navy or orange areas sit on a white chip so they stay blue */
+html :is(.w-hero,.w-hero2,.w-sec.dark,.w-foot,.auth .l,.side,.bnav,[data-surface=navy],[data-surface=orange]) .id-link{background:#fff;padding:1px 6px;border-radius:6px}
 .id-row{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
 
-/* offers banner icons: orange chip with navy icon */
-html body .shell .vo-compact .ic{background:#FE6519!important;color:#051C46!important}
-html body .shell .vo-compact{background:#fff!important;border-color:#D7E4F3!important}
-html .tk-tabs a:not(.on){background:#fff;border:1px solid #D7E4F3;color:#051C46}
-html .tk-tabs a:not(.on):hover{border-color:#0057B8}
-html .oc-tabs,html .oc-seg,html .oc-opt{border-color:#D7E4F3}
+/* hero v4 + navy service card: pure white text */
+html .wv .w-hero4,html .wv .w-hero4 :is(h1,h2,p,li,span,small,b,.w-lead){color:#fff}
+html .wv .w-hero4 .w-slogan .o,html .wv .w-hero4 h1 .o{color:#FE6519}
+html .wv .w-hero4 :is(.w-btn,.w-btn *){color:inherit}
+html .wv .w-card.navy,html .wv .w-card.navy :is(h2,h3,p,li,span,small,b,a:not(.id-link)){color:#fff}
+html .wv .w-card.navy{background:#051C46}
+html body .auth .l :is(h2,li,li *,p:not(.awbcard *),span:not(.awbcard *)){color:#fff!important}
+html body .auth .l h2 span{color:#FE6519!important}
+html .tk-st.open{background:#fff3ec;color:#a83a00;border:1px solid #ffd2bb;font-weight:600}
+html .shell .dcard{color:#051C46!important}
+html .shell .dcard :is(.dl,.dn){color:#051C46!important}
+html .shell .dcard .dn{font-weight:700}
+html .shell .dcard svg{color:#FE6519!important}
+html .shell .dcard:hover{border-color:#051C46}
