@@ -1,4 +1,5 @@
 import "server-only";
+import { collectsCod } from "@/lib/payment";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
@@ -32,6 +33,7 @@ export const OrderInput = z.object({
 }).superRefine((v, ctx) => {
   if (v.saveAs !== "draft" && !(v.declaredValueRupees > 0)) ctx.addIssue({ code: "custom", path: ["declaredValueRupees"], message: "Enter the declared (invoice) value" });
   if (v.paymentType === "cod" && v.codAmountRupees <= 0) ctx.addIssue({ code: "custom", path: ["codAmountRupees"], message: "COD amount is required" });
+  if (v.paymentType === "fod" && v.mode !== "B2B") ctx.addIssue({ code: "custom", path: ["paymentType"], message: "FOD is only for B2B orders" });
   if (v.declaredValueRupees > 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments above ₹50,000" });
 });
 
@@ -47,12 +49,12 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
 
   // COD confirmation hold applies to every source (manual, bulk, store, API) when subscribed.
   const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codHold = input.saveAs !== "draft" && input.paymentType === "cod" && input.direction === "forward" && !!codSetting?.enabled;
+  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && !!codSetting?.enabled;
 
   await db.insert(schema.orders).values({
     id, orgId, orderNumber, source, externalStoreId: external?.storeId, externalOrderId: external?.orderId,
     status: input.saveAs === "draft" ? "draft" : codHold ? "cod_hold" : "ready", mode: input.mode, direction: input.direction, paymentType: input.paymentType,
-    codAmountPaise: input.paymentType === "cod" ? rupeesToPaise(input.codAmountRupees) : 0,
+    codAmountPaise: collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) ? rupeesToPaise(input.codAmountRupees) : 0,
     declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, pickupSnapshot: pickupSnapshot(wh), consignee: input.consignee,
     products: input.products.map((p) => ({ name: p.name, sku: p.sku, qty: p.qty, unitPrice: rupeesToPaise(p.unitPriceRupees), hsn: p.hsn })),
     invoiceNumber: input.invoiceNumber, ewayBill: input.ewayBill || null, buyerGstin: input.buyerGstin || null,
@@ -93,11 +95,11 @@ export async function updateOrder(orgId: string, orderId: string, input: z.infer
     if (dup.length) return { ok: false as const, message: `Order ID ${orderNumber} already exists` };
   }
   const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codHold = input.saveAs !== "draft" && input.paymentType === "cod" && input.direction === "forward" && !!codSetting?.enabled;
+  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && !!codSetting?.enabled;
   await db.update(schema.orders).set({
     orderNumber, mode: input.mode, direction: input.direction, paymentType: input.paymentType,
     status: input.saveAs === "draft" ? "draft" : codHold ? "cod_hold" : "ready",
-    codAmountPaise: input.paymentType === "cod" ? rupeesToPaise(input.codAmountRupees) : 0,
+    codAmountPaise: collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) ? rupeesToPaise(input.codAmountRupees) : 0,
     declaredValuePaise: rupeesToPaise(input.declaredValueRupees), warehouseId: wh.id, pickupSnapshot: pickupSnapshot(wh), consignee: input.consignee,
     products: input.products.map((p) => ({ name: p.name, sku: p.sku, qty: p.qty, unitPrice: rupeesToPaise(p.unitPriceRupees), hsn: p.hsn })),
     invoiceNumber: input.invoiceNumber, ewayBill: input.ewayBill || null, buyerGstin: input.buyerGstin || null,

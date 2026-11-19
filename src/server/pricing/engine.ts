@@ -61,7 +61,7 @@ export const DEFAULT_COMPONENT_RULES: Record<ComponentCode, ComponentRule> = {
   other: { markupEligible: false },
 };
 
-export type MarkupSource = "global" | "provider_default" | "customer_override";
+export type MarkupSource = "global" | "provider_default" | "customer_override" | "non_kyc";
 
 export interface MarkupRule {
   bps: Bps;

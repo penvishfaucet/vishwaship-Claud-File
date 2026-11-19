@@ -18,7 +18,8 @@ export const QuoteInput = z.object({
     heightCm: z.number().positive().max(500),
     weightKg: z.number().positive().max(5000),
   })).min(1).max(50),
-}).refine((v) => v.paymentType !== "cod" || (v.codAmountRupees ?? 0) > 0, { message: "COD amount is required for COD", path: ["codAmountRupees"] });
+}).refine((v) => v.paymentType !== "cod" || (v.codAmountRupees ?? 0) > 0, { message: "COD amount is required for COD", path: ["codAmountRupees"] })
+  .refine((v) => v.paymentType !== "fod" || v.mode === "B2B", { message: "FOD is only for B2B orders", path: ["paymentType"] });
 
 export function toQuoteRequest(v: z.infer<typeof QuoteInput>): QuoteRequest {
   return {
@@ -26,7 +27,7 @@ export function toQuoteRequest(v: z.infer<typeof QuoteInput>): QuoteRequest {
     originPincode: v.originPincode,
     destinationPincode: v.destinationPincode,
     paymentType: v.paymentType,
-    codAmount: v.paymentType === "cod" ? rupeesToPaise(v.codAmountRupees ?? 0) : 0,
+    codAmount: v.paymentType === "cod" || v.paymentType === "fod" ? rupeesToPaise(v.codAmountRupees ?? 0) : 0, // FOD + COD keeps its amount
     declaredValue: rupeesToPaise(v.declaredValueRupees ?? v.codAmountRupees ?? 0),
     packages: v.packages.map((p) => ({
       count: p.count,

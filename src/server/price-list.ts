@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
-import { getQuotes, getSetting, loadMarkupSettings } from "@/server/quotes/service";
+import { getQuotes, getSetting, loadMarkupSettings, nonKycRule } from "@/server/quotes/service";
 import { resolveMarkup } from "@/server/pricing/engine";
 import { orgSetting, saveOrgSetting } from "@/server/couriers";
 
@@ -19,11 +19,13 @@ export const DEFAULT_ZONES = [
 export const SLABS_GRAMS = [500, 1000, 2000, 5000, 10000];
 
 export interface PriceRow { carrierCode: string; carrierName: string; serviceName: string; mode: string; zone: string; cells: Record<number, number | null>; codFee: number | null; eta: number | null }
-export interface PriceList { generatedAt: string; origin: string; zones: typeof DEFAULT_ZONES; rows: PriceRow[]; markupPct: number; personalized: boolean; effectiveFrom: string | null; gstPct: number }
+export interface PriceList { generatedAt: string; origin: string; zones: typeof DEFAULT_ZONES; rows: PriceRow[]; markupPct: number; personalized: boolean; effectiveFrom: string | null; gstPct: number; nonKyc?: boolean }
 
 export async function priceList(orgId: string, refresh = false): Promise<PriceList | { error: string }> {
   const cached = await orgSetting<PriceList>(orgId, "price_list_cache");
-  if (!refresh && cached && Date.now() - new Date(cached.generatedAt).getTime() < 12 * 3600_000) return cached;
+  const nonKyc = await nonKycRule(orgId);
+  // the margin changes when KYC is approved: a list cached under the other margin is rebuilt
+  if (!refresh && cached && Date.now() - new Date(cached.generatedAt).getTime() < 12 * 3600_000 && !!cached.nonKyc === !!nonKyc) return cached;
   const db = await getDb();
   const [wh] = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, orgId), eq(schema.warehouses.active, true), eq(schema.warehouses.isDefault, true)));
   const [anyWh] = wh ? [wh] : await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, orgId), eq(schema.warehouses.active, true)));
@@ -51,12 +53,12 @@ export async function priceList(orgId: string, refresh = false): Promise<PriceLi
     }
   }
   const settings = await loadMarkupSettings();
-  const m = resolveMarkup(settings, orgId);
+  const m = nonKyc ?? resolveMarkup(settings, orgId);
   const ov = settings.overrides.filter((o) => o.orgId === orgId && !o.clearedAt).sort((a, b) => b.version - a.version)[0];
   const gst = await getSetting<number>("gst_bps", 1800);
   const list: PriceList = {
     generatedAt: new Date().toISOString(), origin, zones, rows: [...rows.values()].sort((a, b) => a.carrierName.localeCompare(b.carrierName) || a.zone.localeCompare(b.zone)),
-    markupPct: m.bps / 100, personalized: m.source === "customer_override", effectiveFrom: ov ? ov.effectiveFrom.toISOString() : null, gstPct: gst.value / 100,
+    markupPct: m.bps / 100, personalized: m.source === "customer_override", nonKyc: !!nonKyc, effectiveFrom: ov ? ov.effectiveFrom.toISOString() : null, gstPct: gst.value / 100,
   };
   await saveOrgSetting(orgId, "price_list_cache", list);
   return list;

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, sql, type SQL, gt } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { STATUS_GROUPS, statusLabel } from "@/lib/status";
 
@@ -106,7 +106,7 @@ export async function runReport(orgId: string, key: ReportKey, f: ReportFilters,
     conds.push(eq(schema.shipments.orgId, orgId), gte(schema.shipments.createdAt, from), lte(schema.shipments.createdAt, to));
     if (key === "delivery") conds.push(eq(schema.shipments.status, "delivered"));
     if (key === "rto") conds.push(inArray(schema.shipments.status, ["rto_initiated", "rto_in_transit", "rto_delivered"]));
-    if (key === "cod") conds.push(eq(schema.orders.paymentType, "cod"));
+    if (key === "cod") conds.push(gt(schema.orders.codAmountPaise, 0));
     if (f.carrier) conds.push(eq(schema.shipments.carrierCode, f.carrier));
     raw = (await db.select({ s: schema.shipments, o: schema.orders }).from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId)).where(and(...conds)).orderBy(desc(schema.shipments.createdAt)).limit(limit)) as Row[];
     if (key === "delivery" && raw.length) {

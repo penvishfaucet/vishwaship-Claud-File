@@ -53,7 +53,8 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
   if (order.status === "needs_reconcile") return { ok: false, code: "ambiguous", message: "A previous booking attempt is being reconciled with the courier. Please wait." };
   // Account must be Active (profile complete + KYC approved by Admin) before any booking.
   const ob = await onboardingState(args.orgId);
-  if (ob.step !== "active") return { ok: false, code: "unsupported", message: ACTIVATION_MESSAGE[ob.step] };
+  // KYC is not needed to book (accounts without approved KYC see the non-KYC margin); the business profile is
+  if (ob.step === "profile") return { ok: false, code: "unsupported", message: ACTIVATION_MESSAGE.profile };
 
   const [quote] = await db.select().from(schema.quotes).where(and(eq(schema.quotes.id, args.quoteId), eq(schema.quotes.orgId, args.orgId)));
   if (!quote) return { ok: false, code: "not_found", message: "Quote not found" };

@@ -144,3 +144,54 @@ describe("Delhivery B2B freight estimate — live response 2026-11-19 (249402 �
     expect(r.components.find((c) => c.label === "Other Delhivery charges")?.amount).toBe(25_000);
   });
 });
+
+describe("FOD + Cash on Delivery (Delhivery B2B)", () => {
+  const rateCard = { rateSource: "rate_card", rateCard: { perKgPaise: 1000, minKg: 20, codFeePaise: 5000, codPct: 2, fodFeePaise: 10000 } };
+  it("a FOD + COD quote carries both the COD charge and the FOD charge", async () => {
+    const { ctx } = ctxFor({ "/pincode-service/": { data: { serviceable: true, fod: "Y" } } }, rateCard);
+    const r = await delhiveryB2bAdapter.quote(ctx, { ...req("fod"), codAmount: 300_000, direction: "forward" } as never);
+    if (!r.ok) throw new Error(r.error.message);
+    const codes = r.value[0].components.map((c) => c.label);
+    expect(codes).toEqual(expect.arrayContaining(["COD charge", "FOD charge"]));
+    expect(r.value[0].components.find((c) => c.label === "COD charge")!.amount).toBe(6000); // max(₹50, 2 % of ₹3,000)
+  });
+  it("plain FOD (no COD amount) has no COD charge", async () => {
+    const { ctx } = ctxFor({ "/pincode-service/": { data: { serviceable: true, fod: "Y" } } }, rateCard);
+    const r = await delhiveryB2bAdapter.quote(ctx, { ...req("fod"), codAmount: 0, direction: "forward" } as never);
+    if (!r.ok) throw new Error(r.error.message);
+    expect(r.value[0].components.map((c) => c.label)).not.toContain("COD charge");
+  });
+  it("the booking sends payment_mode cod + cod_amount together with freight_mode fod", async () => {
+    let sent: FormData | null = null;
+    const ctx = { accountId: `pa_${Math.random()}`, mode: "live" as const, config: {}, secrets: { username: "u", password: "p" },
+      fetch: async (url: string, init?: RequestInit) => {
+        if (url.includes("/ums/login")) return new Response(JSON.stringify({ jwt: "t" }));
+        if (url.includes("/manifest")) { sent = init?.body as FormData; return new Response(JSON.stringify({ job_id: "J1" })); }
+        return new Response("{}");
+      } } as unknown as ProviderContext;
+    const r = await delhiveryB2bAdapter.book(ctx, { vishwashipOrderId: "ord_fc", orderNumber: "VS-FC", quote: { carrierCode: "delhivery", serviceName: "B2B" }, mode: "B2B", paymentType: "fod", codAmount: 300_000, declaredValue: 500_000,
+      pickup: { name: "A", mobile: "9876543210", line1: "x", pincode: "249402", city: "H", state: "U", providerWarehouseRef: "WH1" },
+      consignee: { name: "B", mobile: "9123456780", line1: "y", pincode: "793001", city: "S", state: "M" },
+      packages: [{ count: 1, lengthMm: 300, breadthMm: 300, heightMm: 300, actualWeightGrams: 20_000 }], products: [{ name: "Goods", qty: 1 }] } as never);
+    expect(r.ok).toBe(true);
+    expect(sent!.get("payment_mode")).toBe("cod");
+    expect(sent!.get("cod_amount")).toBe("3000");
+    expect(sent!.get("freight_mode")).toBe("fod");
+  });
+});
+
+describe("payment rules", () => {
+  it("FOD only for B2B; FOD + COD keeps its COD amount", async () => {
+    const { QuoteInput, toQuoteRequest } = await import("@/server/quotes/input");
+    const base = { originPincode: "249402", destinationPincode: "110024", packages: [{ count: 1, lengthCm: 10, breadthCm: 10, heightCm: 10, weightKg: 12 }] };
+    expect(QuoteInput.safeParse({ ...base, mode: "B2C", paymentType: "fod" }).success).toBe(false);
+    const ok = QuoteInput.parse({ ...base, mode: "B2B", paymentType: "fod", codAmountRupees: 2500 });
+    expect(toQuoteRequest(ok).codAmount).toBe(250_000);
+    const { collectsCod, paymentLabel, paymentTypeOf } = await import("@/lib/payment");
+    expect(paymentTypeOf("prepaid", true)).toBe("cod");
+    expect(paymentTypeOf("fod", true)).toBe("fod");
+    expect(collectsCod("fod", 250_000)).toBe(true);
+    expect(collectsCod("fod", 0)).toBe(false);
+    expect(paymentLabel("fod", 250_000)).toBe("FOD + COD");
+  });
+});

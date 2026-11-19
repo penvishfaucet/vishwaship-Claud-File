@@ -1,4 +1,5 @@
 "use client";
+import { paymentLabel } from "@/lib/payment";
 import { fetchLabels } from "@/components/labels/LabelDownload";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -516,8 +517,8 @@ function PaymentCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void 
     <div>
       <div>Invoice: {inr(r.invoicePaise)}</div>
       {r.payment === "cod" && <div>COD: {inr(r.codPaise)}</div>}
-      {r.payment === "fod" && <div>Receiver pays: {inr(r.receiverFreightPaise)}</div>}
-      <span className={`ov-badge ${r.payment === "cod" ? "navy" : r.payment === "fod" ? "orange" : "green"}`}>{r.payment === "cod" ? "COD" : r.payment === "fod" ? "FOD" : "Prepaid"}</span>
+      {r.payment === "fod" && <div>Receiver pays freight: {inr(r.receiverFreightPaise)}</div>}{r.payment === "fod" && r.codPaise > 0 && <div>COD to collect: {inr(r.codPaise)}</div>}
+      <span className={`ov-badge ${r.payment === "cod" ? "navy" : r.payment === "fod" ? "orange" : "green"}`}>{paymentLabel(r.payment, r.codPaise)}</span>
       {r.chargedPaise != null && <div style={{ marginTop: 4 }}>Shipping:<br /><button type="button" className="ov-amt" onClick={() => open({ kind: "breakdown", row: r })} aria-label={`Shipping charge ${inr(r.chargedPaise)} — show breakdown`}>{inr(r.chargedPaise)}</button></div>}
     </div>
   );
@@ -633,7 +634,7 @@ function MobileCard({ r, selected, onToggle, open, defaultLabel, codLabel, onLab
       {s && <div className="r small"><span>{s.carrierName}</span><b>{statusLabel(s.status)}</b></div>}
       <div className="grid2">
         <div><span>Recipient</span>{r.consignee.name}</div>
-        <div><span>{r.payment === "cod" ? "COD value" : "Payment"}</span>{r.payment === "cod" ? inr(r.codPaise) : r.payment === "fod" ? `FOD · ${inr(r.receiverFreightPaise)}` : "Prepaid"}</div>
+        <div><span>{r.payment === "cod" ? "COD value" : "Payment"}</span>{r.payment === "cod" ? inr(r.codPaise) : r.payment === "fod" ? `FOD · ${inr(r.receiverFreightPaise)}${r.codPaise > 0 ? ` + COD ${inr(r.codPaise)}` : ""}` : "Prepaid"}</div>
         <div><span>Shipping charged</span>{r.chargedPaise != null ? <button type="button" className="ov-amt" onClick={() => open({ kind: "breakdown", row: r })}>{inr(r.chargedPaise)}</button> : "—"}</div>
         <div><span>{codLabel}</span>{(() => { const c = codDisplay(r.cod); return c.buyer === "setup_required" ? <Link className="ov-link" href="/portal/notifications/cod/">Setup</Link> : <button type="button" className="ov-codbtn" style={{ padding: 0 }} onClick={() => open({ kind: "cod", row: r })}><CodStatusText s={c.buyer} />{c.cancellation ? <> · <CodStatusText s={c.cancellation} /></> : null}</button>; })()}</div>
       </div>
@@ -683,7 +684,7 @@ function SimpleCard({ r, selected, onToggle, onCancel, onClone, busy }: { r: Ord
   const s = r.shipment;
   const b = bookingBadge(r);
   const canCancel = s ? s.cancellable : r.cancellableOrder;
-  const pay = r.payment === "cod" ? <>COD <b>{inr(r.codPaise)}</b></> : r.payment === "fod" ? <>FOD <b>{inr(r.receiverFreightPaise)}</b></> : <>Prepaid</>;
+  const pay = r.payment === "cod" ? <>COD <b>{inr(r.codPaise)}</b></> : r.payment === "fod" ? <>FOD <b>{inr(r.receiverFreightPaise)}</b>{r.codPaise > 0 && <> + COD <b>{inr(r.codPaise)}</b></>}</> : <>Prepaid</>;
   const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
   return (
     <article className="ov-sc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
@@ -742,7 +743,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
       <div className="oc-row">
         <UserRound size={30} aria-hidden className="oc-ico" />
         <div className="oc-who"><b>{r.consignee.name || "—"}</b><span>{r.consignee.mobile ?? ""}</span></div>
-        <span className={`oc-pay ${r.payment}`}>{r.payment === "cod" ? "COD" : r.payment === "fod" ? "FOD" : "Prepaid"}</span>
+        <span className={`oc-pay ${r.payment}`}>{paymentLabel(r.payment, r.codPaise)}</span>
         <b className="oc-amt">{inr(amount)}</b>
       </div>
       <footer className="oc-foot">

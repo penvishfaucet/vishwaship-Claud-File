@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { hasFeature } from "@/server/features";
 import { getSetting } from "@/server/quotes/service";
@@ -17,7 +17,7 @@ export async function earlyCodState(orgId: string) {
   const delivered = await db.select({ s: schema.shipments, o: schema.orders, item: schema.codRemittanceItems }).from(schema.shipments)
     .innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
     .leftJoin(schema.codRemittanceItems, eq(schema.codRemittanceItems.shipmentId, schema.shipments.id))
-    .where(and(eq(schema.shipments.orgId, orgId), eq(schema.orders.paymentType, "cod"), eq(schema.shipments.status, "delivered")));
+    .where(and(eq(schema.shipments.orgId, orgId), gt(schema.orders.codAmountPaise, 0), eq(schema.shipments.status, "delivered")));
   const reasons: string[] = [];
   if (!terms.enabled) reasons.push("Early COD is not open for new subscriptions right now.");
   if (!(await hasFeature(orgId, "early_cod"))) reasons.push("Early COD is not enabled for your account.");

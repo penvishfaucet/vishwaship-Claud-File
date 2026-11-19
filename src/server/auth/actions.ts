@@ -76,7 +76,7 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp" });
   if (!userId) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
   await createSession(userId, "customer", m);
-  redirect("/portal/onboarding/");
+  redirect("/portal/");
 }
 
 const ResetSchema = z.object({

@@ -9,6 +9,9 @@ import { NAV_LABEL_DEFAULTS } from "@/components/portal/nav";
 import { resolveFeatures } from "@/server/features";
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
+import { KycReminder } from "@/components/portal/KycReminder";
+import { onboardingState } from "@/server/onboarding";
+import { sha256 } from "@/server/security/crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +26,10 @@ export default async function PortalLayout({ children }: { children: React.React
     last: sql<string | null>`(select max(${schema.ticketMessages.createdAt}) from ${schema.ticketMessages} where ${schema.ticketMessages.ticketId} = ${schema.tickets.id})` })
     .from(schema.tickets).where(eq(schema.tickets.orgId, ctx.org.id)).orderBy(desc(schema.tickets.createdAt)).limit(30);
   const tickets = { open: tk.filter((x) => !["resolved", "closed"].includes(x.status)).length, recent: tk.slice(0, 5).map((x) => ({ id: x.id, number: x.number, subject: x.subject, status: x.status, updatedAt: new Date(x.last ?? x.createdAt).toISOString() })) };
+  const ob = await onboardingState(ctx.org.id);
+  const kycPending = ob.step !== "active";
+  // reminder in the bell until KYC is approved (not stored: disappears by itself once approved)
+  const kycAlert = kycPending ? [{ id: "kyc-reminder", title: ob.step === "review" ? "KYC under review — the best (bulk) rates apply once it is approved" : "Complete KYC to unlock the best (bulk) shipping rates", href: ob.step === "profile" ? "/portal/onboarding/" : "/portal/kyc/", createdAt: new Date().toISOString() }] : [];
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell
@@ -30,7 +37,7 @@ export default async function PortalLayout({ children }: { children: React.React
       walletPaise={ctx.walletAvailable}
       credits={ctx.credits}
       tickets={tickets}
-      unreadAlerts={ctx.alerts.map((a) => ({ id: a.id, title: a.title, href: a.href, createdAt: a.createdAt.toISOString() }))}
+      unreadAlerts={[...kycAlert, ...ctx.alerts.map((a) => ({ id: a.id, title: a.title, href: a.href, createdAt: a.createdAt.toISOString() }))]}
       logout={viewingAsAdmin ? exitCustomerView : customerLogout}
       modules={modules}
       labels={labels}
@@ -43,6 +50,7 @@ export default async function PortalLayout({ children }: { children: React.React
           <form action={exitCustomerView}><button className="btn btn-sm btn-navy">Exit to Admin</button></form>
         </div>
       )}
+      {kycPending && !viewingAsAdmin && <KycReminder step={ob.step as "profile" | "kyc" | "review" | "resubmit"} sessionKey={sha256(ctx.session.sessionId).slice(0, 16)} />}
       {children}
     </PortalShell>
   );

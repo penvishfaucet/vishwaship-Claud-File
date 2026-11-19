@@ -11,6 +11,7 @@ import { CARRIER_LOGOS, type LabelLogo, VISHWASHIP_LOGO } from "./logos.generate
 import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
 import { orgSetting } from "@/server/couriers";
+import { paymentLabel } from "@/lib/payment";
 
 const PT = 72 / 25.4;
 /** Narrowest printable bar: 0.19 mm ≈ 1.5 dots at 203 dpi. */
@@ -115,7 +116,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       for (let i = 0; i < cartons; i++) {
         const l: BrandedLabel = {
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
-          payment: o.paymentType === "cod" ? "COD" : o.paymentType === "fod" ? "FOD" : "PREPAID",
+          payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
           idLabel: isB2B ? "LRN" : "AWB", parentId: s.lrNumber && isB2B ? s.lrNumber : s.awb, carton: i + 1, cartons,
           cartonId: pieceIds[i] && pieceIds[i] !== (s.lrNumber ?? s.awb) ? pieceIds[i] : null,
           to: o.consignee as Addr,

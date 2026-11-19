@@ -49,16 +49,17 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
   // Onboarding: a new account finishes its profile first; then KYC → admin review → Active.
   const ob = await onboardingState(ctx.org.id);
-  if (ob.step === "profile") redirect("/portal/onboarding/");
+  // no forced redirect: a new account sees the whole portal; the card below and the KYC reminder show the next step
   const step = STEP_TEXT[ob.step];
   const kycNote = ob.step !== "active" ? (
     <div className="ob-card" role="status">
       <ShieldAlert size={22} aria-hidden />
       <div className="grow">
         <b>{step.title}</b>
-        <p>{ob.step === "kyc" ? "Upload your KYC documents to activate the account. Booking unlocks after Vishwaship approves them."
-          : ob.step === "review" ? "Your KYC is under review. We will notify you as soon as it is approved — booking unlocks then."
-          : <>Admin asked for changes{ob.reasons.length ? <>: <b>{ob.reasons.join(" · ")}</b></> : null}. Resubmit to activate your account.</>}</p>
+        <p>{ob.step === "profile" ? "Add your business name and address to start booking shipments. Then approve KYC for the best rates."
+          : ob.step === "kyc" ? "You can book shipments now at standard rates. Upload your KYC documents and get the best (bulk) rates once Vishwaship approves them."
+          : ob.step === "review" ? "Your KYC is under review. The best rates apply as soon as it is approved — keep shipping meanwhile."
+          : <>Admin asked for changes{ob.reasons.length ? <>: <b>{ob.reasons.join(" · ")}</b></> : null}. Resubmit KYC to get the best rates.</>}</p>
       </div>
       {step.action && <Link className="btn btn-orange" href={step.action.href}>{step.action.label}</Link>}
     </div>

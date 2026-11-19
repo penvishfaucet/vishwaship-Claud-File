@@ -8,7 +8,9 @@ import { getDb, schema } from "@/server/db/client";
 import { GLOBAL_MARKUP_KEY, pickMarkup, serviceMarkupKey } from "@/server/pricing/engine";
 import { clearProviderDefault, setMarkup } from "@/server/pricing/rules";
 import { CARRIER_SPECS } from "@/server/carriers/specs";
-import { loadMarkupRows } from "@/server/quotes/service";
+import { NON_KYC_DEFAULT, type NonKycMarkup, getSetting, loadMarkupRows } from "@/server/quotes/service";
+import { audit } from "@/server/audit";
+import { count, eq, ne } from "drizzle-orm";
 
 /** Provider + service pairs that can carry their own default (Delhivery Direct adapters are already one service each). */
 const SERVICE_KEYS: Array<{ key: string; label: string }> = [
@@ -40,6 +42,22 @@ async function saveDefault(fd: FormData) {
   redirect("/admin/pricing/?saved=default");
 }
 
+/** Accounts without approved KYC: one margin on every rate (replaces their usual margin until KYC is approved). */
+async function saveNonKyc(fd: FormData) {
+  "use server";
+  const s = await requireStaff("pricing.write");
+  const pct = Number(fd.get("pct"));
+  if (!(pct >= 0 && pct <= 500)) redirect("/admin/pricing/?err=range");
+  const value: NonKycMarkup = { enabled: fd.get("enabled") === "on", bps: Math.round(pct * 100) };
+  const db = await getDb();
+  const [row] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "non_kyc_markup"));
+  if (row) await db.update(schema.pricingSettings).set({ value, version: row.version + 1, updatedAt: new Date() }).where(eq(schema.pricingSettings.key, "non_kyc_markup"));
+  else await db.insert(schema.pricingSettings).values({ key: "non_kyc_markup", value });
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "pricing.non_kyc_markup", targetType: "setting", targetId: "non_kyc_markup", details: value });
+  revalidatePath("/admin/pricing/");
+  redirect("/admin/pricing/?saved=nonkyc");
+}
+
 export default async function PricingPage({ searchParams }: { searchParams: Promise<{ q?: string; saved?: string; err?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("pricing.read");
@@ -50,13 +68,25 @@ export default async function PricingPage({ searchParams }: { searchParams: Prom
   const global = pickMarkup(rows.filter((r) => r.provider === GLOBAL_MARKUP_KEY), "-", "B2C", null, now);
   const activeDefault = (key: string) => rows.filter((r) => r.provider === key && r.orgId === null && !r.clearedAt).sort((a, b) => b.version - a.version)[0];
   const orgs = await db.select({ id: schema.orgs.id, businessName: schema.orgs.businessName }).from(schema.orgs);
+  const nk = { ...NON_KYC_DEFAULT, ...(await getSetting<NonKycMarkup>("non_kyc_markup", NON_KYC_DEFAULT)).value };
+  const [{ n: nonKycAccounts }] = await db.select({ n: count() }).from(schema.orgs).where(ne(schema.orgs.kycStatus, "approved"));
   const list = orgs.filter((o) => !sp.q || o.businessName.toLowerCase().includes(sp.q.toLowerCase())).map((o) => {
     const ov = rows.filter((x) => x.orgId === o.id && x.provider === GLOBAL_MARKUP_KEY && !x.clearedAt && x.effectiveFrom <= now).sort((a, b) => b.version - a.version)[0];
     return { o, ov };
   }).sort((a, b) => Number(!!b.ov) - Number(!!a.ov));
   return (
     <>
-      <div className="page-h"><div><h1>Pricing</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Customer price = verified provider rate × (1 + markup ÷ 100), rounded to the paisa. One markup per quote, chosen in this order: <b>customer</b> → <b>provider / service default</b> → <b>global default</b>.</p></div></div>
+      <div className="page-h"><div><h1>Pricing</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Customer price = verified provider rate × (1 + markup ÷ 100), rounded to the paisa. One markup per quote, chosen in this order: <b>KYC not approved</b> → <b>customer</b> → <b>provider / service default</b> → <b>global default</b>.</p></div></div>
+      <section className="card mb16" style={{ padding: 18 }} id="non-kyc">
+        <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>0 · Accounts without approved KYC</h2>
+        <p className="small muted">Customers can book before their KYC is approved. While it is not approved, every rate they see uses this margin (instead of their customer / provider / global markup). As soon as KYC is approved, their usual margin applies. {Number(nonKycAccounts)} account(s) are without approved KYC now.</p>
+        <form action={saveNonKyc} className="row wrap" style={{ gap: 12, alignItems: "end" }}>
+          <label className="check small" style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" name="enabled" defaultChecked={nk.enabled} disabled={!canWrite} /> Apply a separate margin until KYC is approved</label>
+          <div className="field"><label htmlFor="nkpct">Non-KYC margin (%)</label><input id="nkpct" name="pct" type="number" step="0.01" min="0" max="500" className="input" defaultValue={nk.bps / 100} disabled={!canWrite} style={{ maxWidth: 120 }} /></div>
+          {canWrite && <button className="btn btn-orange">Save</button>}
+        </form>
+        <p className="tiny muted mt8">Example: provider rate ₹1,000 → ₹{(1000 * (1 + nk.bps / 10000)).toLocaleString("en-IN", { minimumFractionDigits: 2 })} before GST for an account without approved KYC.</p>
+      </section>
       {sp.saved && <p className="note small" role="status">Saved. New quotes use it immediately; booked shipments keep the price they were confirmed at.</p>}
       {sp.err && <p className="small err" role="alert">{sp.err === "range" ? "Enter a percentage between 0 and 500." : "Unknown provider."}</p>}
       <div className="split" style={{ gap: 16, alignItems: "start" }}>

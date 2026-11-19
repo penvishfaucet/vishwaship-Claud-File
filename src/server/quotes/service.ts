@@ -1,4 +1,5 @@
 import { modeAllowed, paymentConfig, payerSplit, type PayerSplit } from "@/server/payment-modes";
+import { FOD_COD_ADAPTERS } from "@/lib/payment";
 import type { PaymentMode } from "@/server/providers/types";
 import "server-only";
 import type { InferSelectModel } from "drizzle-orm";
@@ -26,9 +27,24 @@ export async function loadMarkupRows(): Promise<MarkupRow[]> {
   return (await db.select().from(schema.markupRules)).map((r) => ({ id: r.id, provider: r.provider, orgId: r.orgId, bps: r.bps, version: r.version, effectiveFrom: r.effectiveFrom, clearedAt: r.clearedAt }));
 }
 
+/** Accounts whose KYC is not approved yet: one margin on every rate (Admin → Pricing → Non-KYC margin). */
+export type NonKycMarkup = { enabled: boolean; bps: number };
+export const NON_KYC_DEFAULT: NonKycMarkup = { enabled: true, bps: 3000 };
+
+/** The non-KYC margin rule for this account, or null when its KYC is approved (or the rule is off / public). */
+export async function nonKycRule(orgId: string | null): Promise<MarkupRule | null> {
+  if (!orgId) return null;
+  const db = await getDb();
+  const [o] = await db.select({ kyc: schema.orgs.kycStatus }).from(schema.orgs).where(eq(schema.orgs.id, orgId));
+  if (!o || o.kyc === "approved") return null;
+  const s = await getSetting<NonKycMarkup>("non_kyc_markup", NON_KYC_DEFAULT);
+  const v = { ...NON_KYC_DEFAULT, ...s.value };
+  return v.enabled ? { bps: v.bps, source: "non_kyc", ruleId: "non_kyc_markup", ruleVersion: s.version } : null;
+}
+
 /** The markup a quote from this provider/service gets for this customer (null = public). */
 export async function effectiveMarkup(adapter: string, mode: "B2C" | "B2B", orgId: string | null): Promise<MarkupRule> {
-  return pickMarkup(await loadMarkupRows(), adapter, mode, orgId);
+  return (await nonKycRule(orgId)) ?? pickMarkup(await loadMarkupRows(), adapter, mode, orgId);
 }
 
 /** Legacy shape (global + customer rows) used by the customer pricing card and price list. */
@@ -106,6 +122,7 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
   const gst = await getSetting<number>("gst_bps", 1800);
   const rules = await getSetting("component_rules", DEFAULT_COMPONENT_RULES);
   const markupRows = await loadMarkupRows();
+  const nonKyc = await nonKycRule(orgId);
   const now = new Date();
 
   const results = await Promise.all(accounts.map(async (acct) => {
@@ -118,6 +135,8 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     const pay = paymentConfig(acct, adapter);
     const allowedMode = modeAllowed(pay, req.paymentType);
     if (!allowedMode.ok) return { offers, error: pay.fodStatus === "not_supported" && req.paymentType === "fod" ? null : `${label}: ${allowedMode.reason}` };
+    // FOD + COD: only couriers that collect cash on a FOD shipment (Delhivery B2B — Shipmozo does not)
+    if (req.paymentType === "fod" && (req.codAmount ?? 0) > 0 && (!FOD_COD_ADAPTERS.includes(acct.adapter) || !pay.cod)) return { offers, error: null };
     let res;
     try {
       res = await withTimeout(adapter.quote(await providerContext(acct), req), QUOTE_TIMEOUT_MS, label);
@@ -126,7 +145,8 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     }
     if (!res.ok) return { offers, error: res.error.category === "unsupported" ? null : `${label}: ${res.error.message}` };
 
-    const markup = pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
+    // KYC not approved yet → the non-KYC margin on every courier and service; approved → the normal rules
+    const markup = nonKyc ?? pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
     const partnerCode = partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>);
     // Owner rule (2026-11-19): margin on the whole verified carrier subtotal (freight + fuel + docket + ODA + FOD + other)
     // for every courier and service; GST once on the result. Older per-provider overrides are no longer applied.

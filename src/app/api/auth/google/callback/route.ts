@@ -37,5 +37,5 @@ export async function GET(req: Request) {
   const userId = await createCustomerAccount({ name: r.id.name, email: r.id.email, googleSub: r.id.sub, via: "google" });
   if (!userId) return to("/login/?err=google");
   await createSession(userId, "customer", meta);
-  return to("/portal/onboarding/");
+  return to("/portal/");
 }

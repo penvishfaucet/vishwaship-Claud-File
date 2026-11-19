@@ -12,7 +12,7 @@ import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { clearOverride, setMarkup } from "@/server/pricing/rules";
-import { loadMarkupSettings } from "@/server/quotes/service";
+import { loadMarkupSettings, nonKycRule } from "@/server/quotes/service";
 import { withLedger } from "@/server/ledger/db-store";
 import { credit, debit } from "@/server/ledger/wallet";
 import { newId } from "@/server/util/ids";
@@ -86,6 +86,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
     redirect(`/admin/customers/${id}/`);
   }
 
+  const nk = await nonKycRule(id);
   const perms = { docs: can(s.role, "kyc.documents.read"), wallet: can(s.role, "finance.read"), adjust: can(s.role, "finance.adjust"), ship: can(s.role, "shipments.read") };
   const ob = await onboardingState(id);
   const users = await db.select().from(schema.users).where(and(eq(schema.users.orgId, id), eq(schema.users.kind, "customer"))).orderBy(asc(schema.users.createdAt));
@@ -119,7 +120,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
       <nav className="tabs">{TABS.filter((t) => t !== "wallet" || perms.wallet).map((t) => <Link key={t} href={`/admin/customers/${id}/?tab=${t}`} className={tab === t ? "on" : ""} aria-current={tab === t ? "page" : undefined}>{TAB_LABEL[t]}</Link>)}</nav>
       {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" || sp.msg.includes(" ") ? "small t-credit mb12" : "small err mb12"} role="status">{{ nouser: "This customer has no active login user to open.", saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
 
-      {tab === "overview" && <Overview org={org} addr={addr} users={users} showFull={perms.docs} markup={`${(ov?.bps ?? settings.global.bps) / 100}% (${ov ? "customer override" : "global default"})`} />}
+      {tab === "overview" && <Overview org={org} addr={addr} users={users} showFull={perms.docs} markup={nk ? `${nk.bps / 100}% (non-KYC margin until KYC is approved)` : `${(ov?.bps ?? settings.global.bps) / 100}% (${ov ? "customer override" : "global default"})`} />}
       {tab === "shipments" && <ShipmentsTab orgId={id} />}
       {tab === "wallet" && perms.wallet && (
         <>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { AddressForm, type SavedWarehouse } from "@/components/portal/AddressForm";
 import { formatINR } from "@/lib/money";
+import { paymentTypeOf } from "@/lib/payment";
 import { carrierLogo } from "@/lib/site";
 import type { OfferView } from "@/components/public/RateCalculator";
 
@@ -59,15 +60,20 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const [pickupDate, setPickupDate] = useState(new Date(Date.now() + 86400_000).toISOString().slice(0, 10));
   const [c, setC] = useState(dr ? dr.consignee : { name: "", mobile: "", email: "", line1: "", line2: "", pincode: props.initial.destination ?? "", city: "", state: "" });
   const [orderNumber, setOrderNumber] = useState(dr?.orderNumber ?? "");
-  const [payment, setPayment] = useState<"prepaid" | "cod" | "fod">(dr?.payment ?? props.initial.payment ?? "prepaid");
+  const initPay = dr?.payment ?? props.initial.payment ?? "prepaid";
+  const initCod = dr?.cod ?? props.initial.codAmount ?? "";
+  const [freight, setFreight] = useState<"prepaid" | "fod">(initPay === "fod" ? "fod" : "prepaid");
+  const [codOn, setCodOn] = useState(initPay === "cod" || (initPay === "fod" && Number(initCod) > 0));
+  const [fodNote, setFodNote] = useState<string | null>(null);
+  const payment = paymentTypeOf(freight, codOn);
   const [notices, setNotices] = useState<string[]>([]);
-  const [cod, setCod] = useState(dr?.cod ?? props.initial.codAmount ?? "");
+  const [cod, setCod] = useState(initCod);
   const [declared, setDeclared] = useState(dr?.declared ?? "");
   const [invoice, setInvoice] = useState(dr?.invoice ?? "");
   const [eway, setEway] = useState(dr?.eway ?? "");
   const [products, setProducts] = useState<Prod[]>(dr?.products.length ? dr.products : [{ name: "", qty: "1", price: "", hsn: "" }]);
   const [pkgs, setPkgs] = useState<Pkg[]>(dr?.pkgs.length ? dr.pkgs : props.initial.packages?.length ? props.initial.packages : [defBox && !props.initial.weightKg ? { ...defBox.pkg } : { count: "1", l: "20", b: "15", h: "10", w: props.initial.weightKg ?? "0.5" }]);
-  const [modeOverride, setModeOverride] = useState<"B2C" | "B2B" | null>(dr?.mode ?? props.initial.mode ?? null);
+
   const [offers, setOffers] = useState<OfferView[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,7 +94,9 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     return { actual, vol, boxes, per };
   }, [pkgs]);
   const suggested: "B2C" | "B2B" = Math.max(weights.actual, weights.vol) * 1000 >= props.b2bThresholdGrams ? "B2B" : "B2C";
-  const mode = modeOverride ?? suggested;
+  const mode = suggested; // fixed by weight: the customer cannot switch it
+  // FOD is only for B2B orders: switching to B2C moves the freight back to Prepaid (COD stays as chosen)
+  useEffect(() => { if (mode !== "B2B" && freight === "fod") { setFreight("prepaid"); setFodNote("FOD is only for B2B orders, so freight is set to Prepaid."); } }, [mode, freight]);
   const declaredValue = Number(declared) || products.reduce((s, p) => s + (Number(p.qty) || 0) * (Number(p.price) || 0), 0);
   const chosen = offers?.find((o) => o.quoteId === selected) ?? null;
 
@@ -173,9 +181,10 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     }
     if (i === 1) {
       if (products.some((p) => !p.name.trim() || !(Number(p.qty) > 0))) return "Each product needs a name and quantity.";
-      if (pkgs.some((p) => !(Number(p.count) > 0 && Number(p.l) > 0 && Number(p.b) > 0 && Number(p.h) > 0 && Number(p.w) > 0))) return "Each package row needs count, L × B × H and weight.";
+      if (pkgs.some((p) => !(Number(p.count) > 0 && Number(p.l) > 0 && Number(p.b) > 0 && Number(p.h) > 0 && Number(p.w) > 0))) return "Each box needs length, breadth, height and weight.";
       if (!(declaredValue > 0)) return "Enter the declared (invoice) value.";
-      if (payment === "cod" && !(Number(cod) > 0)) return "Enter the COD amount to collect.";
+      if (codOn && !(Number(cod) > 0)) return "Enter the COD amount to collect.";
+      if (freight === "fod" && mode !== "B2B") return "FOD is only for B2B orders.";
       if (mode === "B2B" && declaredValue >= 50000 && !/^\d{12}$/.test(eway)) return "E-way bill (12 digits) is required for ₹50,000 or more.";
     }
     return null;
@@ -194,7 +203,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     try {
       const r = await fetch("/api/portal/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         mode, originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: payment,
-        codAmountRupees: payment === "cod" ? Number(cod) : 0, declaredValueRupees: declaredValue,
+        codAmountRupees: codOn ? Number(cod) : 0, declaredValueRupees: declaredValue,
         packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
       }) });
       const j = await r.json();
@@ -211,7 +220,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     const named = products.filter((p) => p.name.trim());
     const body = {
       orderNumber: orderNumber.trim() || undefined, mode, direction: props.direction, paymentType: payment, saveAs: as,
-      codAmountRupees: payment === "cod" ? Number(cod) || 0 : 0, declaredValueRupees: declaredValue, warehouseId,
+      codAmountRupees: codOn ? Number(cod) || 0 : 0, declaredValueRupees: declaredValue, warehouseId,
       consignee: { ...c, mobile: c.mobile, email: c.email || undefined, line2: c.line2 || undefined },
       products: (as === "draft" && !named.length ? [{ name: "Item", qty: "1", price: "", hsn: "" }] : as === "draft" ? named : products)
         .map((p) => ({ name: p.name, qty: Number(p.qty) || 1, unitPriceRupees: Number(p.price) || 0, hsn: p.hsn || undefined })),
@@ -311,7 +320,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
       <dl className="kv-list">
         <dt>From</dt><dd>{wh.label}, {wh.pincode}</dd>
         <dt>To</dt><dd>{c.pincode ? `${c.city || ""} ${c.pincode}` : "—"}</dd>
-        <dt>Type</dt><dd>{mode} · {payment === "cod" ? `COD ${formatINR(Math.round(Number(cod || 0) * 100))}` : payment === "fod" ? "FOD (receiver pays freight)" : "Prepaid"}</dd>
+        <dt>Type</dt><dd>{mode} · {freight === "fod" ? "FOD (receiver pays freight)" : "Prepaid"}{codOn ? ` · COD ${formatINR(Math.round(Number(cod || 0) * 100))}` : ""}</dd>
         <dt>Boxes</dt><dd>{weights.boxes}</dd>
         <dt>Actual wt.</dt><dd>{weights.actual.toFixed(2)} kg</dd>
         <dt>Volumetric</dt><dd>{weights.vol.toFixed(2)} kg</dd>
@@ -437,9 +446,22 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                 <div className="grid2" style={{ gap: 12 }}>
                   <div className="field"><label htmlFor="on">Order ID (optional)</label><input id="on" className="input" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Auto-generated if empty" /></div>
                   {lib.tags.length > 0 && <fieldset style={{ border: 0, padding: 0, margin: 0, gridColumn: "1 / -1" }}><legend className="small b">Tags</legend><div className="row wrap" style={{ gap: 6 }}>{lib.tags.map((t) => { const on = tagIds.includes(t.id); return <button key={t.id} type="button" className="chip" aria-pressed={on} onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])} style={{ background: on ? t.color : "transparent", color: on ? "#fff" : t.color, border: `1px solid ${t.color}`, cursor: "pointer" }}>{t.name}</button>; })}</div></fieldset>}
-                  <div className="field"><label htmlFor="pt">Payment</label><select id="pt" className="select" value={payment} onChange={(e) => setPayment(e.target.value as "prepaid" | "cod" | "fod")}><option value="prepaid">Prepaid — you pay freight</option><option value="cod">COD — receiver pays goods value</option><option value="fod">FOD — receiver pays freight</option></select></div>
-                  {payment === "cod" && <div className="field"><label htmlFor="ca">COD amount to collect (₹)</label><input id="ca" className="input" type="number" min="1" value={cod} onChange={(e) => setCod(e.target.value)} /></div>}
                   <div className="field"><label htmlFor="dv">Declared / invoice value (₹)</label><input id="dv" className="input" type="number" min="1" value={declared} onChange={(e) => setDeclared(e.target.value)} placeholder={declaredValue ? String(declaredValue) : ""} /></div>
+                  <div className="cod-box" style={{ gridColumn: "1 / -1" }}>
+                    <label className="cod-toggle">
+                      <input type="checkbox" role="switch" aria-label="Cash on Delivery" aria-checked={codOn} checked={codOn} onChange={(e) => setCodOn(e.target.checked)} />
+                      <span className="cod-toggle-track" aria-hidden><span className="cod-toggle-knob" /></span>
+                      <span>{codOn ? "Cash on Delivery is ON" : "Click to choose 'Cash on Delivery'"}</span>
+                    </label>
+                    {codOn && (
+                      <div className="field" style={{ marginTop: 8 }}>
+                        <label htmlFor="ca">COD amount to collect (₹) <span aria-hidden className="t-debit">*</span></label>
+                        <input id="ca" className="input" type="number" min="1" inputMode="decimal" value={cod} onChange={(e) => setCod(e.target.value)} placeholder="e.g. 2500" style={{ maxWidth: 220 }} />
+                        <span className="tiny muted">The receiver pays exactly this amount to the courier, and it is remitted to you. The courier&apos;s COD fee, if any, is shown with the courier rates in the next step — it is not taken from this amount.</span>
+                        {freight === "fod" && <span className="tiny" style={{ color: "#0057B8" }}>FOD + COD is delivered by Delhivery B2B only.</span>}
+                      </div>
+                    )}
+                  </div>
                   <div className="field"><label htmlFor="inv">Invoice number</label><input id="inv" className="input" value={invoice} onChange={(e) => setInvoice(e.target.value)} /></div>
                   {mode === "B2B" && <div className="field"><label htmlFor="ew">E-way bill</label><input id="ew" className="input" inputMode="numeric" maxLength={12} value={eway} onChange={(e) => setEway(e.target.value.replace(/\D/g, ""))} /></div>}
                 </div>
@@ -471,24 +493,30 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                     <select id="preset" className="select" style={{ maxWidth: 200 }} value="" onChange={(e) => { const p = allPresets[Number(e.target.value)]; if (p) setPkgs([...pkgs, { ...p.pkg }]); }}>
                       <option value="">Add from preset…</option>{allPresets.map((p, i) => <option key={p.label + i} value={i}>{i < myPresets.length ? "★ " : ""}{p.label}</option>)}
                     </select>
-                    <button type="button" className="btn btn-sm btn-outline" onClick={() => setPkgs([...pkgs, { count: "1", l: "", b: "", h: "", w: "" }])}><Plus size={14} /> Add package type</button>
+                    
                   </div>
                 </div>
-                <div className="tbl-wrap mt12">
-                  <table className="tbl">
-                    <thead><tr><th>Boxes</th><th>L cm</th><th>B cm</th><th>H cm</th><th>Weight / box kg</th><th>Vol. / box</th><th><span className="sr-only">Remove</span></th></tr></thead>
-                    <tbody>
-                      {pkgs.map((p, i) => (
-                        <tr key={i}>
-                          {(["count", "l", "b", "h", "w"] as const).map((k) => (
-                            <td key={k}><input aria-label={`${k} for package ${i + 1}`} className="input" style={{ minWidth: 64 }} type="number" min="0" step={k === "w" ? "0.01" : "1"} value={p[k]} onChange={(e) => setPkgs(pkgs.map((x, j) => j === i ? { ...x, [k]: e.target.value } : x))} /></td>
-                          ))}
-                          <td className="small">{weights.per[i]?.v.toFixed(2)} kg</td>
-                          <td>{pkgs.length > 1 && <button type="button" className="icon-btn" aria-label={`Remove package ${i + 1}`} onClick={() => setPkgs(pkgs.filter((_, j) => j !== i))}><Trash2 size={16} /></button>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="box-list mt12">
+                  {pkgs.map((p, i) => {
+                    const set = (k: "count" | "l" | "b" | "h" | "w", v: string) => setPkgs(pkgs.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+                    return (
+                      <div key={i} className="box-card" aria-label={`Box ${i + 1}`}>
+                        <div className="box-card-h"><b>Box {i + 1}</b>{pkgs.length > 1 && <button type="button" className="icon-btn" aria-label={`Remove box ${i + 1}`} onClick={() => setPkgs(pkgs.filter((_, j) => j !== i))}><Trash2 size={16} /></button>}</div>
+                        <div className="box-dims">
+                          <div className="field"><label htmlFor={`bl${i}`}>Length (cm)</label><input id={`bl${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.l} onChange={(e) => set("l", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bb${i}`}>Breadth (cm)</label><input id={`bb${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.b} onChange={(e) => set("b", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bh${i}`}>Height (cm)</label><input id={`bh${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.h} onChange={(e) => set("h", e.target.value)} /></div>
+                        </div>
+                        <div className="box-dims">
+                          <div className="field"><label htmlFor={`bw${i}`}>Weight of this box (kg)</label><input id={`bw${i}`} className="input" type="number" min="0" step="0.01" inputMode="decimal" value={p.w} onChange={(e) => set("w", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bc${i}`}>Same boxes</label><input id={`bc${i}`} className="input" type="number" min="1" inputMode="numeric" value={p.count} onChange={(e) => set("count", e.target.value)} /></div>
+                          <div className="box-vol tiny muted">Volumetric {weights.per[i]?.v.toFixed(2) ?? "0.00"} kg</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button type="button" className="btn btn-outline box-add" onClick={() => setPkgs([...pkgs, { count: "1", l: "", b: "", h: "", w: "" }])}><Plus size={16} /> Add box</button>
+                  <p className="tiny muted" style={{ margin: 0 }}>Different size or weight? Add another box. Several identical boxes? Set “Same boxes”.</p>
                 </div>
                 <div className="row wrap mt12" style={{ gap: 16 }}>
                   <span className="small">Boxes <b>{weights.boxes}</b></span>
@@ -497,11 +525,20 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                 </div>
                 <div className="seg2 mt12" role="radiogroup" aria-label="Shipment type">
                   {(["B2C", "B2B"] as const).map((m) => (
-                    <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} onClick={() => setModeOverride(m)}>
-                      <b>{m}</b><span>{m === suggested ? "Suggested for this weight" : m === "B2C" ? `Under ${props.b2bThresholdGrams / 1000} kg` : `${props.b2bThresholdGrams / 1000} kg and above`}</span>
+                    <button key={m} type="button" role="radio" aria-checked={mode === m} className={mode === m ? "on" : ""} disabled={mode !== m} aria-disabled={mode !== m}>
+                      <b>{m}</b><span>{m === "B2C" ? `Under ${props.b2bThresholdGrams / 1000} kg` : `${props.b2bThresholdGrams / 1000} kg and above`}</span>
                     </button>
                   ))}
                 </div>
+                <p className="tiny muted" style={{ margin: "6px 0 0" }}>Set automatically from the weight: {Math.max(weights.actual, weights.vol).toFixed(2)} kg{weights.vol > weights.actual ? " (volumetric — higher than the actual weight)" : ""} → <b>{mode}</b>.</p>
+                <fieldset className="pay-box mt12">
+                  <legend className="small b">Freight payment</legend>
+                  <div className="seg2" role="radiogroup" aria-label="Who pays the freight">
+                    <button type="button" role="radio" aria-checked={freight === "prepaid"} className={freight === "prepaid" ? "on" : ""} onClick={() => { setFreight("prepaid"); setFodNote(null); }}><b>Prepaid</b><span>You pay the freight</span></button>
+                    <button type="button" role="radio" aria-checked={freight === "fod"} aria-disabled={mode !== "B2B"} className={freight === "fod" ? "on" : ""} disabled={mode !== "B2B"} onClick={() => { setFreight("fod"); setFodNote(null); }}><b>FOD</b><span>{mode === "B2B" ? "Receiver pays the freight" : "Only for B2B orders"}</span></button>
+                  </div>
+                  {fodNote && <p className="tiny muted" role="status" style={{ margin: "6px 0 0" }}>{fodNote}</p>}
+                </fieldset>
               </section>
             </>
           )}
@@ -509,7 +546,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
             <section className="card" style={{ padding: 18 }} aria-busy={busy}>
               <div className="row between"><h2 className="b" style={{ fontSize: 15, margin: 0 }}>Choose courier</h2><button type="button" className="btn btn-sm btn-outline" onClick={fetchQuotes} disabled={busy}>Refresh rates</button></div>
               {busy && !offers && <p className="muted mt12">Fetching live rates…</p>}
-              {offers && offers.length === 0 && <p className="muted mt12">{payment === "fod" ? "FOD (freight paid by the receiver) is not available yet for this route. It is offered only on Delhivery B2B once Vishwaship has activated it — choose Prepaid or COD for now." : "No courier services this route for these details. Try changing payment type, weight or B2C/B2B."}</p>}
+              {offers && offers.length === 0 && <p className="muted mt12">{payment === "fod" ? (codOn ? "FOD + COD is not available for this route — it is offered only on Delhivery B2B. Choose Prepaid with Cash on Delivery, or FOD without it." : "FOD (freight paid by the receiver) is not available for this route. It is offered only on Delhivery B2B — choose Prepaid for now.") : "No courier services this route for these details. Try changing payment, weight or B2C/B2B."}</p>}
               {offers && notices.length > 0 && <details className="mt8 small"><summary className="muted">{notices.length} service{notices.length === 1 ? "" : "s"} gave no rate — why?</summary><ul className="tiny muted" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{notices.map((n) => <li key={n}>{n}</li>)}</ul><button type="button" className="btn btn-sm btn-outline mt8" onClick={fetchQuotes} disabled={busy}>Retry</button></details>}
               {offers?.some((o) => o.isDemo) && <p className="mt8"><span className="demo-badge">DEMO RATES</span></p>}
               {offers && props.initial.calc && (() => {
@@ -519,24 +556,42 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                 if (same.total === k.totalPaise) return <p className="note small mt8" role="status">Same price as in the Rate Calculator: <b>{formatINR(same.total)}</b> for {same.carrierName} · {same.serviceName}.</p>;
                 return <p className="note small mt8" role="alert"><b>Price updated:</b> {same.carrierName} · {same.serviceName} was {formatINR(k.totalPaise)} in the Rate Calculator and is now <b>{formatINR(same.total)}</b> for your account and pickup address. Check before booking.</p>;
               })()}
-              <div className="col mt12" style={{ gap: 10 }} role="radiogroup" aria-label="Courier options">
+              {offers && offers.length > 0 && (codOn || freight === "fod") && (
+                <p className="rate-tip" role="note">
+                  {freight === "fod" && codOn ? "FOD and COD add courier charges to every rate below." : freight === "fod" ? "FOD adds a courier charge to every rate below." : "Cash on Delivery adds a courier charge to every rate below."}
+                  {" "}<b>Ship Prepaid{codOn ? " without COD" : ""} to avoid {freight === "fod" && codOn ? "these charges" : "this charge"}.</b>
+                </p>
+              )}
+              <div className="rate-list mt12" role="radiogroup" aria-label="Courier options">
                 {offers?.map((o) => {
                   const logo = carrierLogo(o.carrierCode);
+                  // extra charges shown with the same GST as the rate (so they add up with the total the customer pays)
+                  const gstRate = o.total > o.gst ? o.gst / (o.total - o.gst) : 0;
+                  const withGst = (paise: number) => Math.round(paise * (1 + gstRate));
+                  const codLine = o.lines.filter((l) => l.code === "cod_fee").reduce((t, l) => t + l.sellPreTax, 0);
+                  const fodLine = o.lines.filter((l) => /\bfod\b/i.test(l.label)).reduce((t, l) => t + l.sellPreTax, 0);
+                  const fod = o.payer && o.payer.receiver > 0;
                   return (
-                    <label key={o.quoteId} className={`ropt${selected === o.quoteId ? " on" : ""}`} style={{ display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}>
+                    <label key={o.quoteId} className={`rate-card${selected === o.quoteId ? " on" : ""}${o.pending ? " off" : ""}`}>
                       <input type="radio" name="quote" checked={selected === o.quoteId} onChange={() => setSelected(o.quoteId)} disabled={!!o.pending} />
-                      {logo ? <img className="clogo-sm" src={logo} alt="" /> : null}
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span className="b small">{o.carrierName} · {o.serviceName}</span>
-                        <span className="tiny muted" style={{ display: "block" }}>{o.mode}{o.etaDays ? ` · ETA ${o.etaDays}d` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg · {o.lines.map((l) => `${l.label} ${formatINR(l.sellPreTax)}`).join(" · ")} · GST {formatINR(o.gst)}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</span>
-                        {o.pending && <span className="tiny" role="note" style={{ display: "block", color: "#a83a00", fontWeight: 600 }}>Rate pending confirmation — {o.pending}. Not bookable yet.</span>}
-                      </span>
-                      <span style={{ textAlign: "right" }}>
-                        {o.payer && o.payer.receiver > 0 ? <>
-                          <span className="b" style={{ display: "block" }}>{formatINR(o.payer.receiver)}</span>
-                          <span className="tiny" style={{ display: "block", color: "var(--orange)" }}>Freight payable by receiver</span>
-                          <span className="tiny muted" style={{ display: "block" }}>{o.payer.sender > 0 ? `+ ${formatINR(o.payer.sender)} charged to you` : "Nothing charged to you"}</span>
-                        </> : <span className="b">{formatINR(o.total)}</span>}
+                      <span className="rate-main">
+                        <span className="rate-top">
+                          {logo ? <img className="rate-logo" src={logo} alt="" /> : null}
+                          <span className="rate-name">{o.carrierName}<small>{o.serviceName}</small></span>
+                          <span className="rate-price">{formatINR(fod ? o.payer!.receiver : o.total)}{fod && <small>paid by receiver</small>}</span>
+                        </span>
+                        <span className="rate-meta">{o.mode}{o.etaDays ? ` · ${o.etaDays} day${o.etaDays === 1 ? "" : "s"}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{fod && o.payer!.sender > 0 ? ` · ${formatINR(o.payer!.sender)} charged to you` : fod ? " · nothing charged to you" : " · incl. GST"}</span>
+                        {(codOn || freight === "fod") && (
+                          <span className="rate-extra">
+                            {codOn && (codLine > 0 ? <span className="chip-x">+ {formatINR(withGst(codLine))} COD charge</span> : <span className="chip-x soft">COD charge included in the rate</span>)}
+                            {freight === "fod" && (fodLine > 0 ? <span className="chip-x">+ {formatINR(withGst(fodLine))} FOD charge</span> : <span className="chip-x soft">FOD charge included in the rate</span>)}
+                          </span>
+                        )}
+                        {o.pending && <span className="rate-pending" role="note">Rate pending confirmation — {o.pending}. Not bookable yet.</span>}
+                        <details className="rate-break" onClick={(e) => e.stopPropagation()}>
+                          <summary>Price breakup</summary>
+                          <span className="rate-lines">{o.lines.map((l, i) => <span key={i}><span>{l.label}</span><span>{formatINR(l.sellPreTax)}</span></span>)}<span><span>GST</span><span>{formatINR(o.gst)}</span></span><span className="b"><span>Total</span><span>{formatINR(o.total)}</span></span>{o.partnerCode ? <span className="muted"><span>Partner code</span><span>{o.partnerCode}</span></span> : null}</span>
+                        </details>
                       </span>
                     </label>
                   );

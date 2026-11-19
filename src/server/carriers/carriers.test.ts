@@ -202,13 +202,13 @@ async function newOrder(id: string) {
 const debits = async (orderId: string) => (await db.select().from(schema.ledgerEntries).where(eq(schema.ledgerEntries.refType, "shipment"))).filter((e) => e.memo?.includes(orderId)).length;
 
 describe("booking through Shipmozo", () => {
-  it("an account that is not Active (KYC not approved) cannot book — nothing is sent to the courier and nothing is charged", async () => {
+  it("an account without a completed profile cannot book — nothing is sent to the courier and nothing is charged", async () => {
     const quoteId = await newOrder("ord_gate");
-    await db.update(schema.orgs).set({ kycStatus: "pending" }).where(eq(schema.orgs.id, ORG));
+    await db.update(schema.orgs).set({ profileCompletedAt: null }).where(eq(schema.orgs.id, ORG));
     const before = calls.length;
     const r = await bookOrder({ orgId: ORG, orderId: "ord_gate", quoteId, actorUserId: "usr_c" });
-    await db.update(schema.orgs).set({ kycStatus: "approved" }).where(eq(schema.orgs.id, ORG));
-    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/KYC is under review/) });
+    await db.update(schema.orgs).set({ profileCompletedAt: new Date() }).where(eq(schema.orgs.id, ORG));
+    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/Complete your profile/) });
     expect(calls.length).toBe(before);
     expect(await debits("ord_gate")).toBe(0);
   });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, gt } from "drizzle-orm";
 import { formatINR } from "@/lib/money";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -43,7 +43,7 @@ export default async function Finance({ searchParams }: { searchParams: Promise<
         return rows.length === 0 ? <div className="card empty"><p className="muted">No manual adjustments. Post them from a customer’s Wallet tab (Finance role).</p></div> : <div className="card p0 tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Kind</th><th>Memo</th><th>By</th><th className="r">Amount</th></tr></thead><tbody>{rows.map((l) => <tr key={l.id}><td className="small">{l.createdAt.toLocaleString("en-IN")}</td><td className="small">{l.kind}</td><td className="small">{l.memo}</td><td className="mono tiny">{l.refId}</td><td className="r">{formatINR(l.amountPaise)}</td></tr>)}</tbody></table></div>;
       })()}
       {tab === "cod" && await (async () => {
-        const rows = await db.select({ o: schema.orders, s: schema.shipments, org: schema.orgs }).from(schema.orders).innerJoin(schema.shipments, eq(schema.shipments.orderId, schema.orders.id)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.orders.orgId)).where(eq(schema.orders.paymentType, "cod"));
+        const rows = await db.select({ o: schema.orders, s: schema.shipments, org: schema.orgs }).from(schema.orders).innerJoin(schema.shipments, eq(schema.shipments.orderId, schema.orders.id)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.orders.orgId)).where(gt(schema.orders.codAmountPaise, 0));
         const delivered = rows.filter((r) => r.s.status === "delivered");
         return <>
           <div className="stats mb12"><div className="stat bl-blue"><div className="t">Expected (delivered COD)</div><div className="v">{formatINR(delivered.reduce((t, r) => t + r.o.codAmountPaise, 0))}</div></div><div className="stat bl-green"><div className="t">Received from carriers</div><div className="v">{formatINR(0)}</div></div><div className="stat bl-yellow"><div className="t">Remitted to customers</div><div className="v">{formatINR(0)}</div></div></div>

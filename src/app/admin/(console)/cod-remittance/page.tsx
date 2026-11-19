@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql, gt } from "drizzle-orm";
 import { AdminOpForm } from "@/components/admin/AdminOpForm";
 import { formatINR } from "@/lib/money";
 import { can } from "@/server/auth/rbac";
@@ -16,7 +16,7 @@ export default async function AdminCodRemittance() {
   const pending = await db.select({ orgId: schema.shipments.orgId, name: schema.orgs.businessName, n: sql<number>`count(*)::int`, cod: sql<number>`coalesce(sum(${schema.orders.codAmountPaise}),0)::bigint` })
     .from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId))
     .leftJoin(schema.codRemittanceItems, eq(schema.codRemittanceItems.shipmentId, schema.shipments.id))
-    .where(and(eq(schema.orders.paymentType, "cod"), eq(schema.shipments.status, "delivered"), isNull(schema.codRemittanceItems.shipmentId)))
+    .where(and(gt(schema.orders.codAmountPaise, 0), eq(schema.shipments.status, "delivered"), isNull(schema.codRemittanceItems.shipmentId)))
     .groupBy(schema.shipments.orgId, schema.orgs.businessName);
   const subs = await db.select({ e: schema.earlyCodSubscriptions, name: schema.orgs.businessName }).from(schema.earlyCodSubscriptions).innerJoin(schema.orgs, eq(schema.orgs.id, schema.earlyCodSubscriptions.orgId)).orderBy(desc(schema.earlyCodSubscriptions.startedAt)).limit(100);
   const batches = await db.select({ r: schema.codRemittances, name: schema.orgs.businessName }).from(schema.codRemittances).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codRemittances.orgId)).orderBy(desc(schema.codRemittances.createdAt)).limit(100);

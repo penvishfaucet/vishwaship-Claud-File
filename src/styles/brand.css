@@ -173,3 +173,66 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .side a.item.side-cta{background:#E5540C;color:#fff!important;border-radius:10px;margin:4px 8px 8px;font-weight:700}
 .side a.item.side-cta svg{color:#fff!important}
 .side a.item.side-cta:hover,.side a.item.side-cta.on{background:#c94606}
+
+/* KYC reminder popup (each login until KYC is approved) */
+.kyc-nudge-bg { position: fixed; inset: 0; background: rgba(5, 28, 70, .55); display: grid; place-items: center; z-index: 1000; padding: 16px; }
+.kyc-nudge { position: relative; background: #fff; color: #051C46; border-radius: 18px; max-width: 420px; width: 100%; padding: 26px 22px 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); text-align: center; outline: none; }
+.kyc-nudge h2 { font-size: 20px; margin: 10px 0 8px; }
+.kyc-nudge p { font-size: 14.5px; line-height: 1.5; margin: 0 0 18px; color: #2b3a57; }
+.kyc-nudge-ico { display: inline-grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: #FFF1E8; color: #E5540C; }
+.kyc-nudge-x { position: absolute; top: 10px; right: 10px; border: 0; background: transparent; padding: 6px; border-radius: 8px; cursor: pointer; color: #4a5a78; }
+.kyc-nudge-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* Create Order — freight payment + Cash on Delivery switch */
+.pay-box { border: 1px solid #D7E4F3; border-radius: 12px; padding: 12px; margin: 0; display: grid; gap: 8px; min-width: 0; }
+.pay-box legend { padding: 0 4px; }
+.pay-box .seg2 button[disabled] { opacity: .55; cursor: not-allowed; }
+.cod-switch { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: #FFF6EF; border: 1px solid #F8D5BD; cursor: pointer; }
+.cod-switch input { width: 20px; height: 20px; margin-top: 2px; accent-color: #E5540C; flex: 0 0 auto; }
+.cod-switch span { display: grid; gap: 2px; }
+.cod-switch small { color: #4a5a78; font-size: 12.5px; }
+
+/* Create Order — one card per box: size, then that box's weight */
+.box-list { display: grid; gap: 10px; }
+.box-card { border: 1px solid #D7E4F3; border-radius: 12px; padding: 12px; display: grid; gap: 8px; background: #fff; min-width: 0; }
+.box-card-h { display: flex; align-items: center; justify-content: space-between; }
+.box-dims { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.box-dims .field { min-width: 0; }
+.box-dims .input { width: 100%; min-width: 0; }
+.box-vol { align-self: center; }
+.box-add { justify-self: start; }
+@media (max-width: 420px) { .box-dims { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Create Order — "Click to choose 'Cash on Delivery'" toggle switch */
+.cod-toggle { display: flex; align-items: center; justify-content: flex-end; gap: 10px; cursor: pointer; font-size: 14.5px; color: #051C46; padding: 4px 0; user-select: none; }
+.cod-toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.cod-toggle-track { position: relative; width: 38px; height: 22px; border-radius: 999px; background: #5f6b7d; transition: background .15s; flex: 0 0 auto; }
+.cod-toggle-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.cod-toggle input:checked + .cod-toggle-track { background: #E5540C; }
+.cod-toggle input:checked + .cod-toggle-track .cod-toggle-knob { transform: translateX(16px); }
+.cod-toggle input:focus-visible + .cod-toggle-track { outline: 2px solid #0057B8; outline-offset: 2px; }
+
+/* Create Order — courier rates: compact cards that read well on phones and desktop */
+.rate-tip { margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: #FFF6EF; border: 1px solid #F8D5BD; font-size: 13px; color: #6b2a00; }
+.rate-list { display: grid; gap: 8px; }
+.rate-card { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1.5px solid #D7E4F3; border-radius: 12px; background: #fff; cursor: pointer; min-width: 0; }
+.rate-card.on { border-color: #E5540C; background: #FFF9F5; }
+.rate-card.off { opacity: .65; cursor: not-allowed; }
+.rate-card > input { margin-top: 4px; accent-color: #E5540C; flex: 0 0 auto; }
+.rate-main { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.rate-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.rate-logo { height: 22px; width: auto; max-width: 70px; object-fit: contain; flex: 0 0 auto; }
+.rate-name { flex: 1; min-width: 0; font-weight: 700; font-size: 14px; color: #051C46; overflow-wrap: anywhere; line-height: 1.2; }
+.rate-name small { display: block; font-weight: 500; font-size: 12px; color: #4a5a78; }
+.rate-price { font-weight: 800; font-size: 16px; color: #051C46; text-align: right; white-space: nowrap; flex: 0 0 auto; line-height: 1.15; }
+.rate-price small { display: block; font-weight: 600; font-size: 11px; color: #E5540C; }
+.rate-meta { font-size: 12px; color: #4a5a78; }
+.rate-extra { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-x { font-size: 12px; font-weight: 700; color: #b3261e; background: #FDECEA; border-radius: 999px; padding: 2px 8px; }
+.chip-x.soft { color: #6b2a00; background: #FFF1E8; font-weight: 600; }
+.rate-pending { font-size: 12px; color: #a83a00; font-weight: 600; }
+.rate-break summary { font-size: 12px; color: #0057B8; cursor: pointer; list-style: none; }
+.rate-break summary::-webkit-details-marker { display: none; }
+.rate-lines { display: grid; gap: 2px; margin-top: 4px; font-size: 12px; }
+.rate-lines > span { display: flex; justify-content: space-between; gap: 10px; }
+@media (min-width: 900px) { .rate-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

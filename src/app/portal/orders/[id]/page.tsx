@@ -1,4 +1,5 @@
 import { CopyBtn } from "@/components/portal/orders/ui";
+import { paymentLabel } from "@/lib/payment";
 import { ShipmentDocs } from "@/components/portal/ManifestActions";
 import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import { SchedulePickup } from "@/components/portal/SchedulePickup";
@@ -127,7 +128,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <section className="card" style={{ padding: 16 }}>
             <h2 className="b small" style={{ marginTop: 0 }}>Payment &amp; charges</h2>
             <dl className="kv-list">
-              <dt>Payment</dt><dd>{order.paymentType === "cod" ? `COD · collect ${formatINR(order.codAmountPaise)}` : "Prepaid"}</dd>
+              <dt>Payment</dt><dd>{paymentLabel(order.paymentType, order.codAmountPaise)}{order.codAmountPaise > 0 ? ` · collect ${formatINR(order.codAmountPaise)}` : ""}</dd>
               <dt>Declared value</dt><dd>{formatINR(order.declaredValuePaise)}</dd>
               {priced?.lines?.map((l) => <><dt key={`${l.label}-t`}>{l.label}</dt><dd key={`${l.label}-v`}>{formatINR(l.sellPreTax)}</dd></>)}
               {priced?.gst !== undefined && <><dt>GST</dt><dd>{formatINR(priced.gst)}</dd></>}

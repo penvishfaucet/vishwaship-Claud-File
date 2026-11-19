@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lt, lte, sql, gt } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import type { PricedQuote } from "@/server/pricing/engine";
 
@@ -66,7 +66,7 @@ export async function codOverview(orgId: string) {
     .from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
     .leftJoin(schema.codRemittanceItems, eq(schema.codRemittanceItems.shipmentId, schema.shipments.id))
     .leftJoin(schema.codRemittances, eq(schema.codRemittances.id, schema.codRemittanceItems.remittanceId))
-    .where(and(eq(schema.shipments.orgId, orgId), eq(schema.orders.paymentType, "cod"))).orderBy(desc(schema.shipments.createdAt)).limit(1000);
+    .where(and(eq(schema.shipments.orgId, orgId), gt(schema.orders.codAmountPaise, 0))).orderBy(desc(schema.shipments.createdAt)).limit(1000);
   const batches = await db.select().from(schema.codRemittances).where(eq(schema.codRemittances.orgId, orgId)).orderBy(desc(schema.codRemittances.cycleDate));
   const live = batches.filter((b) => b.status !== "cancelled");
   const delivered = ships.filter((x) => x.s.status === "delivered");

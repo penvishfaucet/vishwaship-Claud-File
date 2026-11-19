@@ -4,6 +4,7 @@ import {
   type BookResult, type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type WarehouseInput, unsupported,
 } from "./types";
 import { labelStrings } from "@/server/labels/strings";
+import { collectsCod } from "@/lib/payment";
 import { pickupAgent, amountToPaise, b2bCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
 
 /**
@@ -108,7 +109,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       components = [{ code: "freight", label: "Base freight", amount: freight }];
       if (rc.fuelPct) components.push({ code: "fuel", label: "Fuel surcharge", amount: Math.round((freight * rc.fuelPct) / 100) });
       if (rc.docketPaise) components.push({ code: "docket", label: "Docket charge", amount: rc.docketPaise });
-      if (req.paymentType === "cod") components.push({ code: "cod_fee", label: "COD charge", amount: Math.max(rc.codFeePaise ?? 0, Math.round(((req.codAmount ?? 0) * (rc.codPct ?? 0)) / 100)) });
+      if (collectsCod(req.paymentType, req.codAmount)) components.push({ code: "cod_fee", label: "COD charge", amount: Math.max(rc.codFeePaise ?? 0, Math.round(((req.codAmount ?? 0) * (rc.codPct ?? 0)) / 100)) });
       if (req.paymentType === "fod" && rc.fodFeePaise) components.push({ code: "other", label: "FOD charge", amount: rc.fodFeePaise });
       if (oda) {
         if (rc.odaPerKgPaise || rc.odaMinPaise) components.push({ code: "oda", label: "ODA charge", amount: Math.max(rc.odaMinPaise ?? 0, kg * (rc.odaPerKgPaise ?? 0)) });
@@ -156,8 +157,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const fd = new FormData();
     fd.set("lrn", "");
     fd.set("pickup_location_name", req.pickup.providerWarehouseRef);
-    fd.set("payment_mode", req.paymentType === "cod" ? "cod" : "prepaid");
-    if (req.paymentType === "cod") fd.set("cod_amount", String(rupees(req.codAmount)));
+    fd.set("payment_mode", collectsCod(req.paymentType, req.codAmount) ? "cod" : "prepaid");
+    if (collectsCod(req.paymentType, req.codAmount)) fd.set("cod_amount", String(rupees(req.codAmount)));
     fd.set("weight", String(totalG));
     fd.set("dropoff_location", JSON.stringify({ consignee_name: req.consignee.name, address: [req.consignee.line1, req.consignee.line2].filter(Boolean).join(", "), city: req.consignee.city, state: req.consignee.state, zip: req.consignee.pincode, phone: req.consignee.mobile, email: req.consignee.email ?? "" }));
     const shipments = req.packages.map((p, i) => ({ order_id: `${req.vishwashipOrderId.replace(/[^A-Za-z0-9]/g, "")}${i + 1}`, box_count: p.count, description: req.products.map((x) => x.name).join(", ").replace(/[^A-Za-z0-9 ,]/g, " ").slice(0, 100) || "Goods", weight: p.actualWeightGrams * p.count }));
@@ -183,8 +184,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     // Still rejected: send the whole manifest as JSON, where shipment_details / dimensions are real lists.
     if (!r.ok && /shipment_details.{0,40}not a valid list/i.test(r.error.message)) {
       const json: Record<string, unknown> = {
-        lrn: "", pickup_location_name: req.pickup.providerWarehouseRef, payment_mode: req.paymentType === "cod" ? "cod" : "prepaid",
-        ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount) } : {}), weight: totalG,
+        lrn: "", pickup_location_name: req.pickup.providerWarehouseRef, payment_mode: collectsCod(req.paymentType, req.codAmount) ? "cod" : "prepaid",
+        ...(collectsCod(req.paymentType, req.codAmount) ? { cod_amount: rupees(req.codAmount) } : {}), weight: totalG,
         dropoff_location: { consignee_name: req.consignee.name, address: [req.consignee.line1, req.consignee.line2].filter(Boolean).join(", "), city: req.consignee.city, state: req.consignee.state, zip: req.consignee.pincode, phone: req.consignee.mobile, email: req.consignee.email ?? "" },
         shipment_details: shipments,
         dimensions: req.packages.map((p) => ({ box_count: p.count, length: p.lengthMm / 10, width: p.breadthMm / 10, height: p.heightMm / 10 })),
@@ -308,7 +309,7 @@ function estimateBody(ctx: ProviderContext, req: import("./types").QuoteRequest)
   return {
     dimensions: req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count })),
     weight_g: totalG, cheque_payment: false, source_pin: req.originPincode, consignee_pin: req.destinationPincode,
-    payment_mode: req.paymentType === "cod" ? "cod" : "prepaid", ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount ?? 0) } : {}),
+    payment_mode: collectsCod(req.paymentType, req.codAmount) ? "cod" : "prepaid", ...(collectsCod(req.paymentType, req.codAmount) ? { cod_amount: rupees(req.codAmount ?? 0) } : {}),
     inv_amount: rupees(req.declaredValue ?? 0), ...freightMode(ctx, req.paymentType), rov_insurance: !!ctx.config.rovInsurance,
   };
 }
