@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CalendarDays, ChevronDown, ChevronLeft, ClipboardList, FileText, MapPinned, Minus, Package, Plus, Search, Shuffle, Trash2, UserRound, Weight,
+  CalendarDays, ChevronDown, ChevronLeft, ClipboardList, MapPinned, Minus, Package, Plus, Search, Shuffle, Trash2, UserRound, Weight,
 } from "lucide-react";
 import { CreateOrderForm as Schema, crossIssues } from "@/lib/order-form-schema";
 import { EWAY_THRESHOLD_PAISE, PACKAGE_TYPES, ROV_TYPES, dimensionLimitCm, ewayEnabled, invoiceTotals, toPaise, totalWeightKg } from "@/lib/order-form";
@@ -16,7 +16,7 @@ type Box = { key: string; count: string; weightKg: string; lengthCm: string; bre
 type Form = {
   buyer: Buyer; billingSame: boolean; billing: Billing;
   orderNumber: string; orderDate: string; referenceId: string; invoiceNumber: string;
-  products: Product[]; paymentType: "" | "prepaid" | "cod"; shipping: string;
+  products: Product[]; paymentType: "" | "prepaid" | "cod" | "fod";
   warehouseId: string; packageType: "" | "parcel" | "heavy"; rovType: "owner" | "carrier"; boxes: Box[]; ewayBill: string;
 };
 export type WarehouseOpt = { id: string; label: string; code: string | null; line1: string; line2: string | null; city: string; state: string; pincode: string; contactName: string; mobile: string; isDefault: boolean };
@@ -29,12 +29,11 @@ const SECTIONS = [
   { key: "product", title: "Product Details", icon: Package },
   { key: "warehouse", title: "Warehouse / Pickup Address", icon: MapPinned },
   { key: "weight", title: "Weight & Dimensions", icon: Weight },
-  { key: "other", title: "Other Details", icon: FileText },
 ] as const;
 type SectionKey = (typeof SECTIONS)[number]["key"];
 const sectionOf = (path: string): SectionKey =>
   /^(buyer|billing)/.test(path) ? "buyer" : /^(orderNumber|orderDate|referenceId|invoiceNumber)/.test(path) ? "order"
-    : /^(products|paymentType|shipping)/.test(path) ? "product" : /^warehouseId/.test(path) ? "warehouse" : /^(packageType|rovType|boxes)/.test(path) ? "weight" : "other";
+    : /^(products|paymentType|ewayBill)/.test(path) ? "product" : /^warehouseId/.test(path) ? "warehouse" : "weight";
 
 const STORE = "vs-create-order-v1";
 const k = () => Math.random().toString(36).slice(2, 9);
@@ -51,7 +50,7 @@ function initial(warehouses: WarehouseOpt[]): Form {
   return {
     buyer: { mobile: "", name: "", altMobile: "", email: "", gstin: "", ...emptyAddr }, billingSame: true, billing: { name: "", mobile: "", ...emptyAddr },
     orderNumber: newOrderId(), orderDate: today(), referenceId: "", invoiceNumber: "",
-    products: [emptyProduct()], paymentType: "", shipping: "0",
+    products: [emptyProduct()], paymentType: "",
     warehouseId: def?.id ?? "", packageType: "", rovType: "owner", boxes: [emptyBox()], ewayBill: "",
   };
 }
@@ -96,7 +95,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
   const err = (path: string) => errs[path];
 
   // live totals (same maths as the server)
-  const totals = useMemo(() => invoiceTotals(f.products.map((p) => ({ qty: Number(p.qty) || 0, unitPricePaise: toPaise(p.unitPrice), discountPaise: toPaise(p.discount), taxBps: Math.round((Number(p.taxPct) || 0) * 100) })), toPaise(f.shipping)), [f.products, f.shipping]);
+  const totals = useMemo(() => invoiceTotals(f.products.map((p) => ({ qty: Number(p.qty) || 0, unitPricePaise: toPaise(p.unitPrice), discountPaise: toPaise(p.discount), taxBps: Math.round((Number(p.taxPct) || 0) * 100) }))), [f.products]);
   const eway = ewayEnabled(totals.grandTotal);
   const boxes = f.boxes.map((b) => ({ count: Number(b.count) || 0, weightKg: Number(b.weightKg) || 0, lengthCm: Number(b.lengthCm) || 0, breadthCm: Number(b.breadthCm) || 0, heightCm: Number(b.heightCm) || 0 }));
   const weight = totalWeightKg(boxes);
@@ -154,7 +153,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
       orderNumber: f.orderNumber, orderDate: f.orderDate, referenceId: f.referenceId, invoiceNumber: f.invoiceNumber,
       buyer: f.buyer, billingSame: f.billingSame, billing: f.billingSame ? undefined : f.billing,
       products: f.products.map((p) => ({ name: p.name, qty: p.qty, unitPriceRupees: p.unitPrice, hsn: p.hsn, category: p.category, sku: p.sku, discountRupees: p.discount || 0, taxPct: p.taxPct || 0 })),
-      paymentType: f.paymentType || undefined, shippingChargesRupees: f.shipping || 0, warehouseId: f.warehouseId, packageType: f.packageType || undefined,
+      paymentType: f.paymentType || undefined, warehouseId: f.warehouseId, packageType: f.packageType || undefined,
       rovType: pkg?.rov ? f.rovType : undefined, boxes: f.boxes.map((b) => ({ count: b.count, weightKg: b.weightKg, lengthCm: b.lengthCm, breadthCm: b.breadthCm, heightCm: b.heightCm })),
       ewayBill: eway ? f.ewayBill : "", // at or below ₹50,000 the number is never sent
     };
@@ -339,18 +338,21 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
           </fieldset>
         ))}
         <button type="button" className="co-add" onClick={() => set("products", [...f.products, emptyProduct()])}><Plus size={18} aria-hidden /> Add Product</button>
-        <p className="co-total">Grand Total: <b>{inr(totals.grandTotal)}</b></p>
-        <div className="co-grid">
-          <Field id="pay" label="Payment Type" req error={err("paymentType")}>
-            <div className="co-radio" role="radiogroup" aria-labelledby="pay" aria-invalid={!!err("paymentType")}>
-              {(["prepaid", "cod"] as const).map((t) => <label key={t}><input type="radio" name="pay" checked={f.paymentType === t} onChange={() => set("paymentType", t)} /> {t === "cod" ? "COD" : "Prepaid"}</label>)}
-            </div>
-          </Field>
-          <Field id="ship" label="Shipping Charges" error={err("shippingChargesRupees")}>
-            <div className="co-row"><span className="co-pre">₹</span><input {...inputProps("ship", "shippingChargesRupees")} value={f.shipping} inputMode="decimal" onChange={(e) => set("shipping", e.target.value.replace(/[^\d.]/g, ""))} /></div>
-          </Field>
-        </div>
-        {f.paymentType === "cod" && <p className="co-hint">COD amount to collect: <b>{inr(totals.grandTotal)}</b> (the Grand Total)</p>}
+        <p className="co-total">Invoice value (Grand Total): <b>{inr(totals.grandTotal)}</b></p>
+        <Field id="pay" label="Payment Type" req error={err("paymentType")} wide>
+          <div className="co-radio" role="radiogroup" aria-labelledby="pay" aria-invalid={!!err("paymentType")}>
+            {(["prepaid", "cod", "fod"] as const).map((t) => <label key={t}><input type="radio" name="pay" checked={f.paymentType === t} onChange={() => set("paymentType", t)} /> {t === "cod" ? "COD" : t === "fod" ? "FOD" : "Prepaid"}</label>)}
+          </div>
+        </Field>
+        {f.paymentType === "cod" && <p className="co-hint">COD amount to collect from the receiver: <b>{inr(totals.grandTotal)}</b> (the invoice value)</p>}
+        {f.paymentType === "fod" && <p className="co-hint">FOD (freight on delivery): the receiver pays the freight to the courier at delivery. Mostly offered for heavy (B2B) shipments.</p>}
+        {eway && (
+          <div className="co-eway">
+            <Field id="ewb" label="E-Way Bill Number" req={pkg?.mode === "B2B"} error={err("ewayBill")} hint={`Invoice value ${inr(totals.grandTotal)} is above ₹50,000${pkg?.mode === "B2B" ? " — required for heavy shipments" : ""}.`}>
+              <input {...inputProps("ewb", "ewayBill")} value={f.ewayBill} inputMode="numeric" maxLength={12} placeholder="12-digit E-Way Bill number" onChange={(e) => set("ewayBill", e.target.value.replace(/\D/g, "").slice(0, 12))} />
+            </Field>
+          </div>
+        )}
       </>)}
 
       {section("warehouse", warehouses.length === 0 ? (
@@ -389,6 +391,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
         {f.boxes.map((b, i) => (
           <fieldset key={b.key} className="co-group">
             <legend><span className="co-num">{i + 1}</span></legend>
+            {f.boxes.length > 1 && <p className="co-hint co-gtitle">Box group {i + 1}: {b.count || "?"} box{b.count === "1" ? "" : "es"} × {b.weightKg || "?"} kg</p>}
             {f.boxes.length > 1 && <button type="button" className="co-remove" aria-label={`Remove box group ${i + 1}`} onClick={() => set("boxes", f.boxes.filter((_, j) => j !== i))}><Trash2 size={16} /></button>}
             <div className="co-grid">
               <Field id={`x${i}-n`} label="No. of box" req error={err(`boxes.${i}.count`)}><input {...inputProps(`x${i}-n`, `boxes.${i}.count`)} value={b.count} inputMode="numeric" placeholder="No. of box" onChange={(e) => setBox(i, { count: e.target.value.replace(/\D/g, "").slice(0, 3) })} /></Field>
@@ -404,15 +407,10 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
             <p className="co-hint">Length, width or height can&apos;t be greater than {limit} cm{limit === 306 ? " for each multi-box package" : ""}</p>
           </fieldset>
         ))}
-        <button type="button" className="co-add" onClick={() => set("boxes", [...f.boxes, emptyBox()])}><Plus size={18} aria-hidden /> Add boxes with a different weight or size</button>
+        <p className="co-hint">Boxes with the same weight and size go in one group (set No. of box). A box with a different weight or size needs its own group:</p>
+        <button type="button" className="co-add" onClick={() => set("boxes", [...f.boxes, emptyBox()])}><Plus size={18} aria-hidden /> Add another box (different weight / size)</button>
       </>)}
 
-      {section("other", <div className="co-grid">
-        <Field id="ewb" label="E-Way Bill Number" req={eway && pkg?.mode === "B2B"} error={err("ewayBill")}
-          hint={eway ? `Invoice value ${inr(totals.grandTotal)} is above ₹50,000.` : `Needed only above ₹50,000 — current invoice value ${inr(totals.grandTotal)}.`}>
-          <input {...inputProps("ewb", "ewayBill")} value={eway ? f.ewayBill : ""} disabled={!eway} inputMode="numeric" maxLength={12} placeholder={eway ? "12-digit E-Way Bill number" : "Not required"} onChange={(e) => set("ewayBill", e.target.value.replace(/\D/g, "").slice(0, 12))} />
-        </Field>
-      </div>)}
 
       <div className="co-bar">
         <div className="co-bar-t"><span className="tiny">Grand Total</span><b>{inr(totals.grandTotal)}</b></div>

@@ -48,12 +48,12 @@ describe("invoice maths (same on the form and the server)", () => {
 
 describe("Create Order submission", () => {
   it("creates a ready order from the required fields only, with server-side totals", async () => {
-    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFREQ1", shippingChargesRupees: 50 }));
+    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFREQ1" }));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, r.orderId));
-    expect(o).toMatchObject({ status: "ready", mode: "B2C", paymentType: "prepaid", declaredValuePaise: 105_000, ewayBill: null });
-    expect(o.meta).toMatchObject({ orderDate: "2026-11-19", billingSame: true, shippingChargesPaise: 5_000, grandTotalPaise: 105_000, packageType: "parcel", totalWeightKg: 1, minChargeableKg: 0.5 });
+    expect(o).toMatchObject({ status: "ready", mode: "B2C", paymentType: "prepaid", declaredValuePaise: 100_000, ewayBill: null });
+    expect(o.meta).toMatchObject({ orderDate: "2026-11-19", billingSame: true, grandTotalPaise: 100_000, packageType: "parcel", totalWeightKg: 1, minChargeableKg: 0.5 });
   });
   it("a repeated submit with the same Order ID never creates a second order", async () => {
     const body = base({ orderNumber: "CFDUP1" });
@@ -90,9 +90,15 @@ describe("Create Order submission", () => {
     expect(paths).toEqual(expect.arrayContaining(["buyer.mobile", "buyer.name", "buyer.line1", "buyer.pincode", "products.0.name", "products.0.qty", "products.0.unitPriceRupees", "paymentType", "boxes.0.lengthCm", "billing.line1"]));
   });
   it("COD collects the grand total", async () => {
-    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFCOD1", paymentType: "cod", products: [{ name: "A", qty: 3, unitPriceRupees: 200 }], shippingChargesRupees: 40 }));
+    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFCOD1", paymentType: "cod", products: [{ name: "A", qty: 3, unitPriceRupees: 200 }] }));
     if (!r.ok) throw new Error(r.message);
     const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, r.orderId));
-    expect(o).toMatchObject({ paymentType: "cod", codAmountPaise: 64_000, declaredValuePaise: 64_000 });
+    expect(o).toMatchObject({ paymentType: "cod", codAmountPaise: 60_000, declaredValuePaise: 60_000 });
+  });
+  it("FOD saves as freight-on-delivery with nothing to collect as COD", async () => {
+    const r = await createOrderFromForm(ORG, base({ orderNumber: "CFFOD1", paymentType: "fod", packageType: "heavy", products: [{ name: "Tiles", qty: 1, unitPriceRupees: 8000 }], boxes: [{ count: 2, weightKg: 40, lengthCm: 80, breadthCm: 50, heightCm: 40 }] }));
+    if (!r.ok) throw new Error(r.message);
+    const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, r.orderId));
+    expect(o).toMatchObject({ paymentType: "fod", codAmountPaise: 0, declaredValuePaise: 800_000, mode: "B2B" });
   });
 });

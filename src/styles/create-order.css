@@ -78,3 +78,5 @@ select.co-in{appearance:auto}
 @media (min-width:901px){.co-pick{position:fixed!important;left:50%!important;top:20%!important;right:auto!important;bottom:auto!important;transform:translateX(-50%);width:min(520px,92vw);max-height:60vh}.co-pick h2{display:block!important}}
 /* the floating Quick Actions button would cover the bottom Create Order bar */
 .shell:has(.co) .qa-fab{display:none!important}
+.co-eway{background:#fff7f2;border:1px solid #ffd2bb;border-radius:14px;padding:12px}
+.co-gtitle{text-align:center;font-weight:600;color:#051C46}

@@ -9,7 +9,7 @@ import { createOrder } from "./create";
 
 /** Server-side totals (the saved order always uses these, never the browser's numbers). */
 export function formTotals(v: z.infer<typeof CreateOrderForm>) {
-  const t = invoiceTotals(v.products.map((p) => ({ qty: p.qty, unitPricePaise: toPaise(p.unitPriceRupees), discountPaise: toPaise(p.discountRupees), taxBps: Math.round(p.taxPct * 100) })), toPaise(v.shippingChargesRupees));
+  const t = invoiceTotals(v.products.map((p) => ({ qty: p.qty, unitPricePaise: toPaise(p.unitPriceRupees), discountPaise: toPaise(p.discountRupees), taxBps: Math.round(p.taxPct * 100) })));
   const eway = ewayEnabled(t.grandTotal);
   return { ...t, eway, weightKg: totalWeightKg(v.boxes) };
 }
@@ -45,7 +45,7 @@ export async function createOrderFromForm(orgId: string, raw: unknown):
     products: v.products.map((x, i) => ({ name: x.name, sku: x.sku || undefined, qty: x.qty, unitPrice: toPaise(x.unitPriceRupees), hsn: x.hsn || undefined, category: x.category || undefined, discount: toPaise(x.discountRupees) || undefined, taxBps: Math.round(x.taxPct * 100) || undefined, lineTotal: t.rows[i].total })),
     meta: {
       referenceId: v.referenceId || undefined, orderDate: v.orderDate, billingSame: v.billingSame, billing: v.billingSame ? undefined : v.billing,
-      shippingChargesPaise: t.shipping, productsTotalPaise: t.products, grandTotalPaise: t.grandTotal, packageType: v.packageType, rovType: pkg.rov ? v.rovType ?? "owner" : undefined,
+      productsTotalPaise: t.products, grandTotalPaise: t.grandTotal, packageType: v.packageType, rovType: pkg.rov ? v.rovType ?? "owner" : undefined,
       totalWeightKg: t.weightKg, minChargeableKg: pkg.minChargeKg,
     },
   }).where(eq(schema.orders.id, r.orderId));
