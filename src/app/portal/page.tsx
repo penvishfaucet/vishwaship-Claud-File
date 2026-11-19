@@ -17,6 +17,7 @@ import { DEFAULTS } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
 import { DashSearch } from "@/components/portal/DashSearch";
+import { DASH_ICONS } from "@/components/portal/DashIcons";
 import { Bell, Wallet } from "lucide-react";
 
 const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
@@ -88,7 +89,7 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
       <section className="dash-cards mb16" aria-label="Order summary">
         {CARDS.map((c) => (
           <Link key={c.key} href={href(c.key)} className={`dcard t-${c.tone}`} aria-label={`${BUCKETS[c.key].label}: ${counts[c.key]} — open list`}>
-            <c.icon size={34} strokeWidth={1.6} aria-hidden />
+            {(() => { const I = DASH_ICONS[c.key as keyof typeof DASH_ICONS]; return I ? <I size={56} /> : <c.icon size={34} strokeWidth={1.6} aria-hidden />; })()}
             <span className="dl">{BUCKETS[c.key].label}</span>
             <span className="dn">{counts[c.key].toLocaleString("en-IN")}</span>
           </Link>
