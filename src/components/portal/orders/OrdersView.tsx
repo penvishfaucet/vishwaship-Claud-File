@@ -12,7 +12,7 @@ import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
 import { statusLabel } from "@/lib/status";
 import {
-  COD_FILTERS, OPTIONAL_COLUMNS, type OptionalColumn, PAGE_SIZES, type PrintFormat, PRINT_FORMATS, PRINT_HINT, TAB_GROUPS, type TabKey, codDisplay,
+  COD_FILTERS, OPTIONAL_COLUMNS, type OptionalColumn, PAGE_SIZES, type PrintFormat, PRINT_FORMATS, PRINT_HINT, TAB_GROUPS, bookingStage, orderStatusText, type TabKey, codDisplay,
 } from "@/lib/order-view";
 import type { OrderFilters, OrderRow } from "@/server/orders/view";
 import { BreakdownDialog, CodDialog, PickupDialog, TrackDialog } from "./dialogs";
@@ -38,20 +38,8 @@ type Toast = null | { text: string; bad?: boolean; retry?: { ids: string[]; form
 const SOURCE: Record<string, string> = { manual: "Custom", bulk: "Bulk Import", api: "API", shopify: "Shopify", woocommerce: "WooCommerce", custom: "Custom" };
 const SHIP_STATUSES = ["not_booked", "booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr", "rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"];
 
-/** Booking badge in "Order Details". */
-function bookingBadge(r: OrderRow): { text: string; cls: string } {
-  const s = r.shipment;
-  if (r.orderStatus === "cancelled" || s?.status === "cancelled") return { text: "Cancelled", cls: "red" };
-  if (!s || s.bookingStatus === "failed") {
-    const m: Record<string, [string, string]> = { draft: ["Draft", "gray"], ready: ["Ready — assign courier", "navy"], cod_hold: ["COD Hold", "yellow"], booking_failed: ["Booking Failed", "red"], booking: ["Booking…", "orange"], needs_reconcile: ["Confirming with courier", "orange"] };
-    const [text, cls] = m[r.orderStatus] ?? ["New", "gray"];
-    return { text, cls };
-  }
-  if (s.bookingStatus !== "confirmed") return { text: s.awb || s.lr ? "Booking Pending" : "Booked · LR/AWB pending", cls: "orange" };
-  if (s.status === "booked") return s.pickupStatus === "not_scheduled" ? { text: "Courier Assigned", cls: "navy" } : { text: "Scheduled", cls: "blue" };
-  if (s.status === "pickup_pending") return { text: "Scheduled", cls: "blue" };
-  return { text: "Picked Up", cls: "green" };
-}
+/** Booking badge in "Order Details" (shared with Admin: lib/order-view bookingStage). */
+const bookingBadge = (r: OrderRow) => bookingStage(r);
 
 export function OrdersView(p: Props) {
   const router = useRouter();
@@ -720,10 +708,6 @@ function SimpleCard({ r, selected, onToggle, onCancel, onClone, busy }: { r: Ord
 
 // ---------------------------------------------------------------- order card (mobile + desktop)
 
-const STATUS_TONE: Record<string, string> = {
-  booked: "amber", pickup_pending: "amber", picked_up: "blue", in_transit: "blue", at_delivery_center: "blue", out_for_delivery: "orange",
-  delivered: "green", ndr: "red", rto_initiated: "red", rto_in_transit: "red", rto_delivered: "red", cancelled: "gray", lost: "red",
-};
 
 function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel, onClone, onArchive, busy, onMenu }: {
   r: OrderRow; selected: boolean; onToggle: () => void; open: (d: DialogState) => void; defaultLabel: PrintFormat;
@@ -733,7 +717,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
   const b = bookingBadge(r);
   const fmt = s?.labelFormats.find((x) => x.key === defaultLabel && x.ok) ?? s?.labelFormats.find((x) => x.ok);
   const kind = r.isMps ? "MPS" : r.mode;
-  const status = s && s.bookingStatus === "confirmed" && s.status !== "booked" ? { text: statusLabel(s.status), tone: STATUS_TONE[s.status] ?? "gray" } : { text: b.text, tone: b.cls === "red" ? "red" : b.cls === "green" ? "green" : "amber" };
+  const status = orderStatusText(r);
   const amount = r.payment === "cod" ? r.codPaise : r.payment === "fod" ? r.receiverFreightPaise : r.invoicePaise;
   const detail = !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (

@@ -17,6 +17,10 @@ export interface OrderFilters {
   ref?: string; awb?: string; q?: string;
   courier?: string; type?: "B2C" | "B2B" | "MPS"; payment?: "prepaid" | "cod" | "fod";
   warehouse?: string; status?: string; cod?: string; tag?: string; bucket?: string;
+  /** Admin only: one customer account (org id). Ignored in the Customer Portal, which is always its own org. */
+  customer?: string;
+  /** Admin quick filters: bookings still being confirmed, or in-transit shipments without a scan for 72 h. */
+  exception?: "booking" | "stale";
   page: number; pageSize: number;
 }
 
@@ -44,7 +48,7 @@ export function parseOrderFilters(sp: Record<string, string | undefined>): Order
     from: from > to ? to : from, to,
     ref: clean(sp.ref), awb: clean(sp.awb), q: clean(sp.q),
     courier: clean(sp.courier, 40), type: pick(sp.type, ["B2C", "B2B", "MPS"] as const), payment: pick(sp.payment, ["prepaid", "cod", "fod"] as const),
-    warehouse: clean(sp.warehouse, 40), status: clean(sp.status, 30), cod: clean(sp.cod, 30), tag: clean(sp.tag, 40), bucket: sp.bucket === "rto" ? "rto" : undefined,
+    warehouse: clean(sp.warehouse, 40), status: clean(sp.status, 30), customer: clean(sp.customer, 64), exception: pick(sp.exception, ["booking", "stale"] as const), cod: clean(sp.cod, 30), tag: clean(sp.tag, 40), bucket: sp.bucket === "rto" ? "rto" : undefined,
     page: Math.max(1, Math.min(10_000, Number(sp.page) || 1)),
     pageSize: (PAGE_SIZES as readonly number[]).includes(size) ? size : 25,
   };
@@ -79,9 +83,14 @@ const COD_SQL: Record<string, SQL> = {
   cancellation_failed: sql`c.cancellation_status in ('failed','action_required')`,
 };
 
-/** Every condition except the tab (counts use these too, so tab numbers match the filtered list). */
-function baseConditions(orgId: string, f: OrderFilters): SQL[] {
-  const c: SQL[] = [eq(O.orgId, orgId), eq(O.direction, f.direction)];
+/**
+ * Every condition except the tab (counts use these too, so tab numbers match the filtered list).
+ * orgId null = every account (Admin All Shipments only — callers check staff permission); f.customer narrows it.
+ */
+function baseConditions(orgId: string | null, f: OrderFilters): SQL[] {
+  const c: SQL[] = [eq(O.direction, f.direction)];
+  if (orgId) c.push(eq(O.orgId, orgId));
+  else if (f.customer) c.push(eq(O.orgId, f.customer));
   const from = new Date(`${f.from}T00:00:00+05:30`), to = new Date(`${f.to}T23:59:59.999+05:30`);
   const col = f.dateType === "booked" ? S.createdAt : f.dateType === "delivered" ? S.deliveredAt : O.createdAt;
   c.push(gte(col, from), lte(col, to));
@@ -89,7 +98,8 @@ function baseConditions(orgId: string, f: OrderFilters): SQL[] {
   const like = (v: string) => `%${v.replace(/[%_\\]/g, "")}%`;
   if (f.ref) c.push(or(ilike(O.orderNumber, like(f.ref)), ilike(O.externalOrderId, like(f.ref)), ilike(O.invoiceNumber, like(f.ref)))!);
   if (f.awb) c.push(or(ilike(S.awb, like(f.awb)), ilike(S.lrNumber, like(f.awb)))!);
-  if (f.q) c.push(or(ilike(O.orderNumber, like(f.q)), ilike(S.awb, like(f.q)), ilike(S.lrNumber, like(f.q)), sql`${O.consignee}->>'mobile' ilike ${like(f.q)}`)!);
+  if (f.q) c.push(or(ilike(O.orderNumber, like(f.q)), ilike(S.awb, like(f.q)), ilike(S.lrNumber, like(f.q)), sql`${O.consignee}->>'mobile' ilike ${like(f.q)}`,
+    ...(orgId ? [] : [sql`exists (select 1 from ${schema.orgs} g where g.id = ${O.orgId} and (g.business_name ilike ${like(f.q)} or g.id = ${f.q}))`]))!);
   if (f.courier) c.push(eq(S.carrierCode, f.courier));
   if (f.type === "B2B") c.push(eq(O.mode, "B2B"));
   if (f.type === "B2C") c.push(and(eq(O.mode, "B2C"), sql`${boxesSql} <= 1`)!);
@@ -98,7 +108,9 @@ function baseConditions(orgId: string, f: OrderFilters): SQL[] {
   if (f.warehouse) c.push(eq(O.warehouseId, f.warehouse));
   if (f.status) c.push(f.status === "not_booked" ? isNull(S.id) : eq(S.status, f.status));
   if (f.cod && COD_SQL[f.cod]) c.push(sql`exists (select 1 from ${schema.codConfirmations} c where c.order_id = ${O.id} and ${COD_SQL[f.cod]})`);
-  if (f.tag) c.push(sql`exists (select 1 from ${schema.orderTagLinks} l join ${schema.orderTags} t on t.id = l.tag_id where l.order_id = ${O.id} and t.id = ${f.tag} and t.org_id = ${orgId})`);
+  if (f.exception === "booking") c.push(inArray(S.bookingStatus, ["pending", "ambiguous"]));
+  if (f.exception === "stale") c.push(and(inArray(S.status, ["in_transit", "picked_up"]), lte(S.lastEventAt, new Date(Date.now() - 72 * 3600_000)))!);
+  if (f.tag && orgId) c.push(sql`exists (select 1 from ${schema.orderTagLinks} l join ${schema.orderTags} t on t.id = l.tag_id where l.order_id = ${O.id} and t.id = ${f.tag} and t.org_id = ${orgId})`);
   return c;
 }
 
@@ -108,7 +120,7 @@ function tabCondition(tab: TabKey): SQL | undefined {
   return sql`${tabSql()} = ${tab}`;
 }
 
-export async function tabCounts(orgId: string, f: OrderFilters): Promise<Record<TabKey, number>> {
+export async function tabCounts(orgId: string | null, f: OrderFilters): Promise<Record<TabKey, number>> {
   const db = await getDb();
   // group in an outer query: the CASE carries bound parameters, so Postgres cannot match it in GROUP BY directly
   const inner = db.select({ tab: sql<string>`${tabSql()}`.as("tab") }).from(O).leftJoin(S, latestShipment).where(and(...baseConditions(orgId, f))).as("t");
@@ -206,6 +218,43 @@ export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limi
   return { rows, total: Number(total), page: f.page, pageSize: f.pageSize };
 }
 export type OrderRow = Awaited<ReturnType<typeof listOrderRows>>["rows"][number];
+
+/**
+ * Admin → All Shipments: every account's orders with the Customer Portal's tabs, filters and status logic
+ * (same baseConditions / tabSql / tabOf), plus the customer. Callers must hold shipments.read (staff).
+ */
+export async function adminOrderRows(f: OrderFilters) {
+  const db = await getDb();
+  const conds = baseConditions(null, f);
+  const tc = tabCondition(f.tab); if (tc) conds.push(tc);
+  const where = and(...conds);
+  const base = await db.select({ o: O, s: S, org: { id: schema.orgs.id, name: schema.orgs.businessName } }).from(O).leftJoin(S, latestShipment)
+    .innerJoin(schema.orgs, eq(schema.orgs.id, O.orgId)).where(where).orderBy(desc(O.createdAt)).limit(f.pageSize).offset((f.page - 1) * f.pageSize);
+  const [{ total }] = await db.select({ total: count() }).from(O).leftJoin(S, latestShipment).where(where);
+  const ids = base.map((r) => r.o.id);
+  const boxes = ids.length ? await db.select({ orderId: schema.packages.orderId, n: sql<number>`sum(${schema.packages.count})::int` }).from(schema.packages).where(inArray(schema.packages.orderId, ids)).groupBy(schema.packages.orderId) : [];
+  const rows = base.map(({ o, s: raw, org }) => {
+    const s = raw?.bookingStatus === "failed" ? null : raw;
+    const n = boxes.find((b) => b.orderId === o.id)?.n ?? 1;
+    return {
+      id: o.id, orderNumber: o.orderNumber, createdAt: o.createdAt, customer: org,
+      type: o.mode === "B2B" ? "B2B" : n > 1 ? "MPS" : "B2C", payment: o.paymentType, orderStatus: o.status, archived: !!o.archivedAt,
+      shipment: s ? { id: s.id, awb: s.awb, lr: s.lrNumber && s.lrNumber !== s.awb ? s.lrNumber : null, carrierCode: s.carrierCode, carrierName: s.carrierName, provider: s.provider, bookedAt: s.createdAt, status: s.status, bookingStatus: s.bookingStatus, pickupStatus: s.pickupStatus } : null,
+    };
+  });
+  return { rows, total: Number(total), page: f.page, pageSize: f.pageSize };
+}
+
+/** Courier and customer options for the Admin filters. */
+export async function adminFilterOptions() {
+  const db = await getDb();
+  const [couriers, customers] = await Promise.all([
+    db.selectDistinct({ code: S.carrierCode, name: S.carrierName }).from(S).limit(200),
+    db.select({ id: schema.orgs.id, name: schema.orgs.businessName }).from(schema.orgs).orderBy(schema.orgs.businessName).limit(2000),
+  ]);
+  const seen = new Set<string>();
+  return { couriers: couriers.filter((c) => !seen.has(c.code) && seen.add(c.code)).sort((a, b) => a.name.localeCompare(b.name)), customers };
+}
 
 /** Filter dropdown options (only this org's own data). */
 export async function filterOptions(orgId: string) {

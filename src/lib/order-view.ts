@@ -167,3 +167,35 @@ export const OPTIONAL_COLUMNS = [
 ] as const;
 export type OptionalColumn = (typeof OPTIONAL_COLUMNS)[number]["key"];
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
+
+// ---------------------------------------------------------------- status text (Customer Portal Orders + Admin All Shipments)
+import { statusLabel } from "@/lib/status";
+
+export const STATUS_TONE: Record<string, string> = {
+  booked: "amber", pickup_pending: "amber", picked_up: "blue", in_transit: "blue", at_delivery_center: "blue", out_for_delivery: "orange",
+  delivered: "green", ndr: "red", rto_initiated: "red", rto_in_transit: "red", rto_delivered: "red", cancelled: "gray", lost: "red",
+};
+type StatusInput = { orderStatus: string; shipment: null | { bookingStatus: string; status: string; pickupStatus: string; awb: string | null; lr: string | null } };
+
+/** Booking stage text (before the courier picks up). */
+export function bookingStage(r: StatusInput): { text: string; cls: string } {
+  const s = r.shipment;
+  if (r.orderStatus === "cancelled" || s?.status === "cancelled") return { text: "Cancelled", cls: "red" };
+  if (!s || s.bookingStatus === "failed") {
+    const m: Record<string, [string, string]> = { draft: ["Draft", "gray"], ready: ["Ready — assign courier", "navy"], cod_hold: ["COD Hold", "yellow"], booking_failed: ["Booking Failed", "red"], booking: ["Booking…", "orange"], needs_reconcile: ["Confirming with courier", "orange"] };
+    const [text, cls] = m[r.orderStatus] ?? ["New", "gray"];
+    return { text, cls };
+  }
+  if (s.bookingStatus !== "confirmed") return { text: s.awb || s.lr ? "Booking Pending" : "Booked · LR/AWB pending", cls: "orange" };
+  if (s.status === "booked") return s.pickupStatus === "not_scheduled" ? { text: "Courier Assigned", cls: "navy" } : { text: "Scheduled", cls: "blue" };
+  if (s.status === "pickup_pending") return { text: "Scheduled", cls: "blue" };
+  return { text: "Picked Up", cls: "green" };
+}
+
+/** The one status an order shows — the same in the Customer Portal and in Admin. */
+export function orderStatusText(r: StatusInput): { text: string; tone: string } {
+  const s = r.shipment;
+  if (s && s.bookingStatus === "confirmed" && s.status !== "booked") return { text: statusLabel(s.status), tone: STATUS_TONE[s.status] ?? "gray" };
+  const b = bookingStage(r);
+  return { text: b.text, tone: b.cls === "red" ? "red" : b.cls === "green" ? "green" : "amber" };
+}

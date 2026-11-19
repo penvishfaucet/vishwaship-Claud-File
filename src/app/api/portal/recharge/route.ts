@@ -25,14 +25,15 @@ export async function POST(req: Request) {
   if (!s) return apiError(401, "unauthorized", "Please log in");
   const rl = await rateLimit(`recharge:${s.orgId}`, 10, 600);
   if (!rl.ok) return apiError(429, "rate_limited", "Too many recharge attempts — try again in a few minutes");
-  const p = await parseJson(req, z.object({ amountRupees: z.number().int().positive().max(10_000_000) }));
+  const p = await parseJson(req, z.object({ amountRupees: z.number().int().positive().max(10_000_000), gateway: z.enum(["razorpay", "cashfree"]).optional() }));
   if (!p.ok) return p.res;
   const settings = await getPaymentSettings();
   const amountPaise = p.data.amountRupees * 100;
   if (amountPaise < settings.onlineMinPaise || amountPaise > settings.onlineMaxPaise) return apiError(422, "validation_error", `Enter an amount between ${formatINR(settings.onlineMinPaise)} and ${formatINR(settings.onlineMaxPaise)}`);
   const db = await getDb();
   const rechargeId = newId("rch");
-  const gw = await activeGateway();
+  const gw = await activeGateway(p.data.gateway);
+  if (p.data.gateway && gw && gw.gateway !== p.data.gateway) return apiError(409, "conflict", `${p.data.gateway === "razorpay" ? "Razorpay" : "Cashfree"} is not available right now. Refresh the page and choose another method.`);
 
   if (!gw) {
     // DEMO ONLY (no gateway connected, never in production): credits immediately and is labelled demo.

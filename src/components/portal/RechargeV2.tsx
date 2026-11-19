@@ -16,7 +16,8 @@ declare global {
 
 export interface RechargeProps {
   balancePaise: number;
-  gateway: "razorpay" | "cashfree" | null;
+  /** Online gateways Admin has enabled (with keys saved), preferred first. */
+  gateways: Array<"razorpay" | "cashfree">;
   demo: boolean;
   online: { minPaise: number; maxPaise: number };
   manual: null | { upiId: string; payeeName: string; hasQr: boolean; instructions: string; discountBps: number; minPaise: number; maxPaise: number; reviewMessage: string };
@@ -37,7 +38,8 @@ type Step = "form" | "manual-pay" | "manual-submit" | "manual-done" | "online-re
 export function RechargeV2(p: RechargeProps) {
   const router = useRouter();
   const [amount, setAmount] = useState("1000");
-  const [method, setMethod] = useState<"online" | "manual">(p.gateway || p.demo ? "online" : "manual");
+  type Method = "razorpay" | "cashfree" | "demo" | "manual";
+  const [method, setMethod] = useState<Method>(p.gateways[0] ?? (p.demo ? "demo" : "manual"));
   const [step, setStep] = useState<Step>("form");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -55,8 +57,10 @@ export function RechargeV2(p: RechargeProps) {
   const q = useMemo(() => manualQuote(paise, p.manual?.discountBps ?? 0), [paise, p.manual?.discountBps]);
   const limits = method === "manual" && p.manual ? { min: p.manual.minPaise, max: p.manual.maxPaise } : { min: p.online.minPaise, max: p.online.maxPaise };
   const amountOk = paise >= limits.min && paise <= limits.max && Number(amount) === rupees;
-  const gwName = p.gateway === "cashfree" ? "Cashfree" : p.gateway === "razorpay" ? "Razorpay" : "Online (demo)";
-  const onlineAvailable = !!p.gateway || p.demo;
+  const GW_NAME: Record<string, string> = { razorpay: "Razorpay", cashfree: "Cashfree", demo: "Online (demo)" };
+  const gwName = GW_NAME[method] ?? "Online";
+  const onlineAvailable = p.gateways.length > 0 || p.demo;
+  const online = method !== "manual";
 
   async function status(id: string): Promise<Receipt | null> {
     const r = await fetch(`/api/portal/recharge/${id}/`, { cache: "no-store" });
@@ -71,7 +75,7 @@ export function RechargeV2(p: RechargeProps) {
   async function payOnline() {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch("/api/portal/recharge/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ amountRupees: rupees }) });
+      const r = await fetch("/api/portal/recharge/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ amountRupees: rupees, ...(method === "razorpay" || method === "cashfree" ? { gateway: method } : {}) }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.message ?? "Could not start the payment");
       if (j.mode === "demo") { await finishOnline(j.rechargeId); return; }
@@ -83,7 +87,8 @@ export function RechargeV2(p: RechargeProps) {
             await fetch("/api/portal/recharge/verify/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(resp) });
             await finishOnline(j.rechargeId);
           },
-          modal: { ondismiss: () => { void finishOnline(j.rechargeId); } },
+          // closed without paying: the server re-checks with Razorpay, then marks it Cancelled (never credited)
+          modal: { ondismiss: () => { void fetch(`/api/portal/recharge/${j.rechargeId}/cancel/`, { method: "POST" }).finally(() => finishOnline(j.rechargeId)); } },
         });
         rz.on("payment.failed", () => { /* Razorpay shows the reason; the result screen re-checks */ });
         rz.open();
@@ -138,11 +143,17 @@ export function RechargeV2(p: RechargeProps) {
 
   if (step === "online-result" && receipt) {
     const ok = receipt.status === "credited";
+    const st = receipt.status;
+    const head = ok ? "Wallet recharged" : st === "payment_pending" ? "Payment pending" : st === "cancelled" ? "Payment cancelled" : st === "failed" ? "Payment failed" : "Payment not completed";
+    const body = ok ? `${formatINR(receipt.creditPaise)} has been credited to your wallet.`
+      : st === "payment_pending" ? "We have not received a confirmation from the payment gateway yet. If money was debited, your wallet updates automatically — check All Recharges in a few minutes."
+      : st === "cancelled" ? "You closed the payment window before paying. Nothing was charged and nothing was added to your wallet."
+      : "No money was credited. If your account was debited, it is usually reversed by the bank, or the gateway confirms it shortly.";
     return (
       <section className="card rc" aria-live="polite">
-        <div className={`rc-result ${ok ? "ok" : receipt.status === "payment_pending" ? "wait" : "bad"}`}>
-          <h2>{ok ? "Wallet recharged" : receipt.status === "payment_pending" ? "Payment pending" : "Payment not completed"}</h2>
-          <p>{ok ? `${formatINR(receipt.creditPaise)} has been credited to your wallet.` : receipt.status === "payment_pending" ? "We have not received a confirmation from the payment gateway yet. If money was debited, your wallet updates automatically — check All Recharges in a few minutes." : "No money was credited. If your account was debited, it is usually reversed by the bank, or the gateway confirms it shortly."}</p>
+        <div className={`rc-result ${ok ? "ok" : st === "payment_pending" ? "wait" : "bad"}`}>
+          <h2>{head}</h2>
+          <p>{body}</p>
           <dl className="kv-list">
             <dt>Status</dt><dd>{receipt.statusLabel}</dd>
             <dt>Amount</dt><dd>{formatINR(receipt.creditPaise)}</dd>
@@ -239,19 +250,19 @@ export function RechargeV2(p: RechargeProps) {
           <div className="pills mt8">{[500, 1000, 2500, 5000, 10000].map((v) => <button type="button" key={v} className={`pill${rupees === v ? " on" : ""}`} onClick={() => setAmount(String(v))}>₹{v.toLocaleString("en-IN")}</button>)}</div>
           <fieldset className="rc-methods">
             <legend>Payment method</legend>
-            {onlineAvailable && (
-              <label className={`rc-m${method === "online" ? " on" : ""}`}><input type="radio" name="m" checked={method === "online"} onChange={() => setMethod("online")} />
-                <CreditCard size={22} aria-hidden /><span><b>{gwName}</b><small>UPI, cards, net banking, wallets — credited instantly after payment</small></span></label>
-            )}
+            {(p.gateways.length ? p.gateways : p.demo ? (["demo"] as const) : []).map((g) => (
+              <label key={g} className={`rc-m${method === g ? " on" : ""}`}><input type="radio" name="m" value={g} checked={method === g} onChange={() => setMethod(g)} />
+                <CreditCard size={22} aria-hidden /><span><b>{GW_NAME[g]}</b><small>UPI, cards, net banking, wallets — credited instantly after payment</small></span></label>
+            ))}
             {p.manual && (
               <label className={`rc-m${method === "manual" ? " on" : ""}`}><input type="radio" name="m" checked={method === "manual"} onChange={() => setMethod("manual")} />
                 <QrCode size={22} aria-hidden /><span><b>Manual UPI / QR <em className="rc-save">Save {bpsLabel(p.manual.discountBps)}</em></b><small>Pay {paise ? formatINR(q.payablePaise) : "less"} by UPI · credited after verification</small></span></label>
             )}
             {!onlineAvailable && !p.manual && <p className="small muted">Recharge is temporarily unavailable. Please contact support.</p>}
           </fieldset>
-          {p.demo && method === "online" && <p className="tiny muted"><span className="demo-badge">DEMO</span> No payment gateway is connected, so online recharges are simulated and marked as demo.</p>}
+          {method === "demo" && <p className="tiny muted"><span className="demo-badge">DEMO</span> No payment gateway is connected, so online recharges are simulated and marked as demo.</p>}
           {err && <p className="small err" role="alert">{err}</p>}
-          <button className="btn btn-orange btn-lg rc-cta" disabled={busy || !amountOk || (method === "online" && !onlineAvailable) || (method === "manual" && !p.manual)}>
+          <button className="btn btn-orange btn-lg rc-cta" disabled={busy || !amountOk || (online && !onlineAvailable) || (method === "manual" && !p.manual)}>
             {busy ? "Opening payment…" : method === "manual" ? `Continue — pay ${formatINR(q.payablePaise)} by UPI` : `Pay ${formatINR(paise)}`}
           </button>
         </form>

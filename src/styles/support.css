@@ -164,3 +164,65 @@
 .svc-info { display: grid; gap: 8px; }
 .svc-copy code { font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--surface-2, #EDF5FF); word-break: break-all; flex: 1; min-width: 0; }
 .svc-form { display: grid; gap: 10px; }
+
+/* Wallet passbook (Customer Portal + Admin) — table on desktop, cards on phones */
+.pb { display: grid; gap: 12px; min-width: 0; }
+.pb-bal { display: grid; gap: 2px; padding: 14px 16px; border-radius: 14px; background: #051C46; color: #fff; }
+.pb-bal-t { font-size: 12px; opacity: .85; }
+.pb-bal-v { font-size: 26px; line-height: 1.15; overflow-wrap: anywhere; }
+.pb-bal-s { font-size: 12px; opacity: .85; }
+.pb-amt.credit { color: #137333; }
+.pb-amt.debit { color: #b3261e; }
+.pb-amt.none { color: #4a5a78; }
+.pb-refs { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.pb-cards { display: none; list-style: none; margin: 0; padding: 0; gap: 8px; }
+.pb-card { background: #fff; border: 1px solid #D7E4F3; border-left: 4px solid #4a5a78; border-radius: 12px; min-width: 0; }
+.pb-card.credit { border-left-color: #137333; }
+.pb-card.debit { border-left-color: #b3261e; }
+.pb-card summary { list-style: none; cursor: pointer; padding: 10px 12px; display: grid; gap: 4px; }
+.pb-card summary::-webkit-details-marker { display: none; }
+.pb-l1 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.pb-title { font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+.pb-l1 .pb-amt { font-size: 15px; white-space: nowrap; flex: 0 0 auto; }
+.pb-l2 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: #4a5a78; }
+.pb-dir { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .02em; padding: 1px 6px; border-radius: 6px; border: 1px solid currentColor; }
+.pb-dir.credit { color: #137333; } .pb-dir.debit { color: #b3261e; } .pb-dir.none { color: #4a5a78; }
+.pb-desc { font-size: 12.5px; color: #4a5a78; overflow-wrap: anywhere; }
+.pb-more { margin: 0; padding: 0 12px 12px; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12.5px; }
+.pb-more dt { color: #4a5a78; } .pb-more dd { margin: 0; overflow-wrap: anywhere; }
+.pb-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 12px; }
+.pb-filter .field { min-width: 0; flex: 1 1 140px; }
+@media (max-width: 720px) {
+  .pb-table { display: none; }
+  .pb-cards { display: grid; }
+  .pb-bal-v { font-size: 22px; }
+}
+
+/* Admin → All Shipments */
+.as-filters { padding: 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: end; }
+.as-filters .as-q { grid-column: span 2; }
+@media (max-width: 520px) { .as-filters .as-q { grid-column: auto; } }
+.as-tabs { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0 0 12px; }
+.as-tabg { display: grid; gap: 4px; }
+.as-tabh { font-size: 11px; font-weight: 700; color: #4a5a78; text-transform: uppercase; letter-spacing: .03em; }
+.as-tabr { display: flex; flex-wrap: wrap; gap: 6px; }
+.as-tabr a { padding: 5px 10px; border-radius: 999px; border: 1px solid #D7E4F3; background: #fff; font-size: 13px; color: #051C46; text-decoration: none; white-space: nowrap; }
+.as-tabr a.on { background: #051C46; color: #fff; border-color: #051C46; }
+.as-tabr a .n { font-weight: 700; margin-left: 2px; opacity: .8; }
+.as-tbl td { vertical-align: top; }
+
+/* Admin → Customers */
+.cu-filters { padding: 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); align-items: end; }
+.cu-filters .cu-q { grid-column: span 2; }
+@media (max-width: 520px) { .cu-filters .cu-q { grid-column: auto; } }
+.cu-tbl td { vertical-align: top; }
+.cu-sum { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.cu-fig { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid #D7E4F3; border-radius: 12px; background: #fff; color: #051C46; text-decoration: none; min-width: 0; }
+.cu-fig:hover { border-color: #0057B8; }
+.cu-fig span { font-size: 12px; color: #4a5a78; display: flex; align-items: center; gap: 4px; }
+.cu-fig b { font-size: 20px; overflow-wrap: anywhere; }
+.cu-fig small { font-size: 11.5px; color: #0057B8; }
+.cu-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.cu-card { padding: 16px; min-width: 0; }
+.cu-card h2 { font-size: 15px; margin: 0 0 8px; font-weight: 700; }
+.cu-wide { grid-column: 1 / -1; }

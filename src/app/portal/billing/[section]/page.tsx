@@ -4,12 +4,14 @@ import { and, asc, eq } from "drizzle-orm";
 import { Download, Printer, Wallet } from "lucide-react";
 import { BuyCredits } from "@/components/portal/BuyCredits";
 import { RechargeV2 } from "@/components/portal/RechargeV2";
-import { activeGateway, getPaymentSettings } from "@/server/payments/settings";
+import { getPaymentSettings, usableGateways } from "@/server/payments/settings";
 import { METHOD_LABEL, rechargeStatus } from "@/lib/recharge";
 import { formatINR } from "@/lib/money";
 import { codOverview, creditHistory, documentsOf, ledgerStatement, range, rechargesOf, shippingCharges } from "@/server/billing";
 import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
+import { PassbookView } from "@/components/billing/PassbookView";
+import { PASSBOOK_TYPES, type PassbookType, passbookHistory } from "@/server/passbook";
 import { portalContext } from "@/server/portal/context";
 
 const SECTIONS = {
@@ -29,7 +31,7 @@ const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN", { t
 const dt = (x: Date) => x.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const amt = (p: number | null | undefined) => (p == null ? "—" : formatINR(p));
 const R = { textAlign: "right" as const };
-type SP = { from?: string; to?: string; recharge?: string; q?: string };
+type SP = { from?: string; to?: string; recharge?: string; q?: string; type?: string };
 
 export default async function BillingSection({ params, searchParams }: { params: Promise<{ section: string }>; searchParams: Promise<SP> }) {
   const { section } = await params;
@@ -40,11 +42,12 @@ export default async function BillingSection({ params, searchParams }: { params:
   const db = await getDb();
   const showRecharge = ["passbook", "recharges"].includes(key);
   const pay = showRecharge ? await getPaymentSettings() : null;
-  const gw = showRecharge ? await activeGateway() : null;
+  const gws = showRecharge ? await usableGateways() : [];
   const meta = SECTIONS[key];
   const dated = ["passbook", "shipping-charges", "ledgers"].includes(key);
   const { from, to } = range(sp, key === "ledgers" ? 30 : 90);
   const qs = new URLSearchParams(Object.entries({ from: sp.from, to: sp.to }).filter(([, v]) => v) as [string, string][]).toString();
+  const pbType = (PASSBOOK_TYPES.find((t) => t.key === sp.type)?.key ?? "all") as PassbookType | "all";
   return (
     <>
       <div className="page-h">
@@ -63,8 +66,8 @@ export default async function BillingSection({ params, searchParams }: { params:
           </div>
           <RechargeV2
             balancePaise={ctx.walletAvailable}
-            gateway={gw?.gateway ?? null}
-            demo={!gw && process.env.NODE_ENV !== "production"}
+            gateways={gws.map((g) => g.gateway)}
+            demo={!gws.length && process.env.NODE_ENV !== "production"}
             online={{ minPaise: pay.onlineMinPaise, maxPaise: pay.onlineMaxPaise }}
             manual={pay.manual.enabled && pay.manual.upiId && pay.manual.qrKey ? { upiId: pay.manual.upiId, payeeName: pay.manual.payeeName, hasQr: !!pay.manual.qrKey, instructions: pay.manual.instructions, discountBps: pay.manual.discountBps, minPaise: pay.manual.minPaise, maxPaise: pay.manual.maxPaise, reviewMessage: pay.manual.reviewMessage } : null}
             autoFocus={!!sp.recharge}
@@ -72,14 +75,15 @@ export default async function BillingSection({ params, searchParams }: { params:
         </div>
       )}
       {dated && (
-        <form className="card row wrap mb12" style={{ padding: 12, gap: 8, alignItems: "end" }}>
+        <form className="card mb12 pb-filter">
           <div className="field"><label htmlFor="bf">From</label><input id="bf" type="date" name="from" className="input" defaultValue={sp.from ?? from.toISOString().slice(0, 10)} /></div>
           <div className="field"><label htmlFor="bt">To</label><input id="bt" type="date" name="to" className="input" defaultValue={sp.to ?? to.toISOString().slice(0, 10)} /></div>
+          {key === "passbook" && <div className="field"><label htmlFor="btype">Transaction type</label><select id="btype" name="type" className="select" defaultValue={pbType}>{PASSBOOK_TYPES.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}</select></div>}
           <button className="btn btn-navy">Apply</button>
           <Link className="btn btn-outline" href={`/portal/billing/${key}/`}>Reset</Link>
         </form>
       )}
-      {key === "passbook" && <Passbook orgId={ctx.org.id} from={from} to={to} />}
+      {key === "passbook" && <PassbookView items={await passbookHistory(ctx.org.id, { from, to, type: pbType })} links={{ order: (id) => `/portal/orders/${id}/`, recharge: (id) => `/portal/billing/recharges/${id}/` }} />}
       {key === "ledgers" && <Ledger orgId={ctx.org.id} from={from} to={to} />}
       {key === "shipping-charges" && <Charges orgId={ctx.org.id} from={from} to={to} />}
       {key === "cod-remittance" && <Cod orgId={ctx.org.id} />}
@@ -93,32 +97,6 @@ export default async function BillingSection({ params, searchParams }: { params:
 }
 
 const Empty = ({ text }: { text: string }) => <div className="card empty"><p className="muted">{text}</p></div>;
-
-async function Passbook({ orgId, from, to }: { orgId: string; from: Date; to: Date }) {
-  const st = await ledgerStatement(orgId, from, to);
-  if (!st.entries.length) return <Empty text="No wallet transactions in this period." />;
-  return (
-    <div className="card p0 tbl-wrap">
-      <table className="tbl">
-        <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Reference</th><th style={R}>Credit</th><th style={R}>Debit</th><th style={R}>Balance</th><th style={R}>On hold</th></tr></thead>
-        <tbody>
-          {[...st.entries].reverse().map((r) => (
-            <tr key={r.id}>
-              <td className="small">{dt(r.createdAt)}</td>
-              <td className="small">{r.memo ?? r.kind.replace(/_/g, " ")}</td>
-              <td className="tiny">{r.kind.replace(/_/g, " ")}</td>
-              <td className="tiny mono muted">{r.refId ?? "—"}</td>
-              <td style={R} className="small t-credit">{r.amountPaise > 0 ? formatINR(r.amountPaise) : ""}</td>
-              <td style={R} className="small t-debit">{r.amountPaise < 0 ? formatINR(-r.amountPaise) : r.amountPaise === 0 ? <span className="muted">{r.holdDeltaPaise > 0 ? "hold" : "released"}</span> : ""}</td>
-              <td style={R} className="small b">{formatINR(r.balanceAfterPaise)}</td>
-              <td style={R} className="small muted">{formatINR(r.reservedAfterPaise)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 async function Ledger({ orgId, from, to }: { orgId: string; from: Date; to: Date }) {
   const st = await ledgerStatement(orgId, from, to);

@@ -1,76 +1,94 @@
 import Link from "next/link";
-import { and, desc, eq, ilike, inArray, lt, or, type SQL } from "drizzle-orm";
 import { Download } from "lucide-react";
-import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
-import { STATUS_GROUPS, StatusChip } from "@/lib/status";
-import { can } from "@/server/auth/rbac";
+import { statusLabel } from "@/lib/status";
+import { PAGE_SIZES, TAB_GROUPS, orderStatusText } from "@/lib/order-view";
 import { requireStaff } from "@/server/auth/session";
-import { getDb, schema } from "@/server/db/client";
+import { adminFilterOptions, adminOrderRows, parseOrderFilters, tabCounts } from "@/server/orders/view";
 
-type SP = { q?: string; status?: string; mode?: string; payment?: string; exception?: string; page?: string };
+export const dynamic = "force-dynamic";
+type SP = Record<string, string | undefined>;
+const TONE_CHIP: Record<string, string> = { green: "c-delivered", red: "c-ndr", blue: "c-in_transit", orange: "c-out_for_delivery", amber: "c-pending", gray: "c-cancelled", navy: "c-pending" };
+const SHIP_STATUSES = ["not_booked", "booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr", "rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"];
+const when = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+/**
+ * Admin → All Shipments: every customer's orders with the Customer Portal's status tabs, definitions and filters
+ * (shared code: same tab / status for an order in both portals). Staff with shipments.read only.
+ */
 export default async function AdminShipments({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
-  const s = await requireStaff("shipments.read");
-  const showCost = can(s.role, "shipments.cost.read");
-  const db = await getDb();
-  const conds: SQL[] = [];
-  const grp = STATUS_GROUPS.find((g) => g.key === sp.status);
-  if (grp) conds.push(inArray(schema.shipments.status, grp.statuses));
-  else if (sp.status) conds.push(eq(schema.shipments.status, sp.status));
-  if (sp.mode === "B2B" || sp.mode === "B2C") conds.push(eq(schema.orders.mode, sp.mode));
-  if (sp.payment === "cod" || sp.payment === "prepaid") conds.push(eq(schema.orders.paymentType, sp.payment));
-  if (sp.exception === "stale") conds.push(and(inArray(schema.shipments.status, ["in_transit", "picked_up"]), lt(schema.shipments.lastEventAt, new Date(Date.now() - 72 * 3600_000)))!);
-  if (sp.exception === "booking") conds.push(inArray(schema.shipments.bookingStatus, ["pending", "ambiguous"]));
-  if (sp.q) {
-    const q = `%${sp.q.trim().replace(/[%_]/g, "")}%`;
-    conds.push(or(ilike(schema.shipments.awb, q), ilike(schema.shipments.lrNumber, q), ilike(schema.orders.orderNumber, q), ilike(schema.shipments.id, q), ilike(schema.shipments.orderId, q), ilike(schema.shipments.providerOrderRef, q), ilike(schema.orders.externalOrderId, q), ilike(schema.orgs.businessName, q), ilike(schema.shipments.carrierName, q), ilike(schema.shipments.provider, q))!);
-  }
-  const page = Math.max(1, Number(sp.page ?? 1));
-  const rows = await db.select({ s: schema.shipments, o: schema.orders, org: schema.orgs }).from(schema.shipments)
-    .innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId))
-    .where(conds.length ? and(...conds) : undefined).orderBy(desc(schema.shipments.createdAt)).limit(50).offset((page - 1) * 50);
-  const qs = (p: Partial<SP>) => `/admin/shipments/?${new URLSearchParams(Object.entries({ ...sp, ...p }).filter(([, v]) => v) as [string, string][])}`;
+  await requireStaff("shipments.read");
+  const f = parseOrderFilters(sp);
+  const [list, counts, opts] = await Promise.all([adminOrderRows(f), tabCounts(null, { ...f, tab: "all" }), adminFilterOptions()]);
+  const qs = (p: SP) => `/admin/shipments/?${new URLSearchParams(Object.entries({ ...sp, ...p }).filter(([, v]) => v) as [string, string][])}`;
+  const pages = Math.max(1, Math.ceil(list.total / f.pageSize));
+  const customer = opts.customers.find((c) => c.id === f.customer);
   return (
     <>
-      <div className="page-h"><h1>All Shipments</h1><div className="actions"><a className="btn btn-outline" href={`/api/admin/export/shipments?${new URLSearchParams(Object.entries(sp).filter(([, v]) => v) as [string, string][])}`}><Download size={16} /> Export</a></div></div>
-      <form className="row wrap mb12" style={{ gap: 8 }} role="search">
-        <label htmlFor="sq" className="sr-only">Search</label>
-        <input id="sq" name="q" className="input" defaultValue={sp.q} placeholder="Vishwaship ID, order, external order ID, AWB / LR, customer" style={{ maxWidth: 320 }} />
-        <select aria-label="Type" name="mode" className="select" defaultValue={sp.mode ?? ""} style={{ maxWidth: 130 }}><option value="">B2B + B2C</option><option>B2C</option><option>B2B</option></select>
-        <select aria-label="Payment" name="payment" className="select" defaultValue={sp.payment ?? ""} style={{ maxWidth: 140 }}><option value="">Paid + COD</option><option value="prepaid">Prepaid</option><option value="cod">COD</option></select>
-        <select aria-label="Exceptions" name="exception" className="select" defaultValue={sp.exception ?? ""} style={{ maxWidth: 190 }}><option value="">All</option><option value="booking">Pending booking</option><option value="stale">Tracking gaps</option></select>
-        {sp.status && <input type="hidden" name="status" value={sp.status} />}
-        <button className="btn btn-navy">Apply</button>
+      <div className="page-h">
+        <div><h1>All Shipments</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Every customer&apos;s B2B and B2C orders with the same statuses customers see. {list.total.toLocaleString("en-IN")} match.</p></div>
+        <div className="actions"><a className="btn btn-outline" href={`/api/admin/export/shipments?${new URLSearchParams(Object.entries({ org: f.customer, from: f.from, to: f.to }).filter(([, v]) => v) as [string, string][])}`}><Download size={16} /> Export</a></div>
+      </div>
+
+      <form className="card as-filters mb12" role="search">
+        <input type="hidden" name="tab" value={f.tab} />
+        <div className="field as-q"><label htmlFor="q">Search</label><input id="q" name="q" className="input" defaultValue={f.q} placeholder="Order ID, AWB / LR, customer name or ID" /></div>
+        <div className="field"><label htmlFor="customer">Customer</label><select id="customer" name="customer" className="select" defaultValue={f.customer ?? ""}><option value="">All customers</option>{opts.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        <div className="field"><label htmlFor="from">From</label><input id="from" type="date" name="from" className="input" defaultValue={f.from} /></div>
+        <div className="field"><label htmlFor="to">To</label><input id="to" type="date" name="to" className="input" defaultValue={f.to} /></div>
+        <div className="field"><label htmlFor="dateType">Date of</label><select id="dateType" name="dateType" className="select" defaultValue={f.dateType}><option value="created">Order created</option><option value="booked">Booking</option><option value="delivered">Delivery</option></select></div>
+        <div className="field"><label htmlFor="courier">Courier</label><select id="courier" name="courier" className="select" defaultValue={f.courier ?? ""}><option value="">All couriers</option>{opts.couriers.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></div>
+        <div className="field"><label htmlFor="type">Type</label><select id="type" name="type" className="select" defaultValue={f.type ?? ""}><option value="">B2B + B2C</option><option value="B2C">B2C</option><option value="MPS">B2C multi-box (MPS)</option><option value="B2B">B2B</option></select></div>
+        <div className="field"><label htmlFor="status">Shipment status</label><select id="status" name="status" className="select" defaultValue={f.status ?? ""}><option value="">Any status</option>{SHIP_STATUSES.map((s) => <option key={s} value={s}>{s === "not_booked" ? "Not booked yet" : statusLabel(s)}</option>)}</select></div>
+        <div className="field"><label htmlFor="payment">Payment</label><select id="payment" name="payment" className="select" defaultValue={f.payment ?? ""}><option value="">Any</option><option value="prepaid">Prepaid</option><option value="cod">COD</option><option value="fod">FOD</option></select></div>
+        <div className="field"><label htmlFor="exception">Exceptions</label><select id="exception" name="exception" className="select" defaultValue={f.exception ?? ""}><option value="">None</option><option value="booking">Booking being confirmed</option><option value="stale">No scan for 72 h</option></select></div>
+        <div className="field"><label htmlFor="direction">Direction</label><select id="direction" name="direction" className="select" defaultValue={f.direction}><option value="forward">Forward</option><option value="reverse">Returns</option></select></div>
+        <div className="row" style={{ gap: 8, alignItems: "end" }}><button className="btn btn-navy">Apply</button><Link className="btn btn-outline" href="/admin/shipments/">Reset</Link></div>
       </form>
-      <nav className="tabs" aria-label="Status">
-        <Link href={qs({ status: undefined, page: undefined })} className={!sp.status ? "on" : ""}>All</Link>
-        {STATUS_GROUPS.map((g) => <Link key={g.key} href={qs({ status: g.key, page: undefined })} className={sp.status === g.key ? "on" : ""}>{g.label}</Link>)}
+      {customer && <p className="small mb8">Showing <b>{customer.name}</b> only · <Link className="link-navy" href={`/admin/customers/${customer.id}/`}>Open customer profile</Link> · <Link className="link-navy" href={qs({ customer: undefined, page: undefined })}>All customers</Link></p>}
+
+      <nav className="as-tabs" aria-label="Status">
+        {TAB_GROUPS.map((g) => (
+          <div key={g.title || "all"} className="as-tabg">
+            {g.title && <span className="as-tabh">{g.title}</span>}
+            <div className="as-tabr">{g.tabs.map((t) => <Link key={t.key} href={qs({ tab: t.key, page: undefined })} className={f.tab === t.key ? "on" : ""} aria-current={f.tab === t.key ? "page" : undefined}>{t.label} <span className="n">{counts[t.key].toLocaleString("en-IN")}</span></Link>)}</div>
+          </div>
+        ))}
+        <div className="as-tabg"><span className="as-tabh">Closed</span><div className="as-tabr"><Link href={qs({ tab: "all", status: "cancelled", page: undefined })} className={f.status === "cancelled" ? "on" : ""}>Cancelled</Link><Link href={qs({ tab: "all", status: "lost", page: undefined })} className={f.status === "lost" ? "on" : ""}>Lost</Link></div></div>
       </nav>
+
       <div className="card p0 tbl-wrap">
-        <table className="tbl">
-          <thead><tr><th>Customer</th><th>Order / AWB</th><th>Carrier</th><th>Provider</th><th>Boxes / wt</th><th>Type</th><th>Status</th><th>Tracking synced</th>{showCost && <th className="r">Cost</th>}<th className="r">Selling</th></tr></thead>
+        <table className="tbl as-tbl">
+          <thead><tr><th>Order ID</th><th>AWB / LR</th><th>Customer</th><th>Booking date</th><th>Courier</th><th>Type</th><th>Status</th></tr></thead>
           <tbody>
-            {rows.length === 0 && <tr><td colSpan={10} className="center muted small">No shipments match.</td></tr>}
-            {rows.map(({ s: x, o, org }) => (
-              <tr key={x.id}>
-                <td><Link className="link-navy small" href={`/admin/customers/${org.id}/`}>{org.businessName}</Link></td>
-                <td><Link className="b link-navy" href={`/admin/shipments/${x.id}/`}>{o.orderNumber}</Link><div className="mono tiny muted">{x.awb ? <Link className="id-link" href={`/admin/shipments/${x.id}/#tracking`} aria-label={`Tracking for AWB ${x.awb}`}>{x.awb}</Link> : "—"}{x.lrNumber && x.lrNumber !== x.awb ? ` · LR ${x.lrNumber}` : ""}</div><div className="mono tiny muted">{x.id}{x.providerOrderRef && x.providerOrderRef !== x.orderId ? ` · ext ${x.providerOrderRef}` : ""}</div></td>
-                <td>{carrierLogo(x.carrierCode) ? <img className="clogo-sm" src={carrierLogo(x.carrierCode)!} alt={x.carrierName} title={x.carrierName} /> : x.carrierName}</td>
-                <td className="small">{x.provider}{x.provider === "demo" && <span className="demo-badge" style={{ marginLeft: 4 }}>DEMO</span>}</td>
-                <td className="small">{(x.chargeableWeightGrams / 1000).toFixed(1)} kg{x.carrierWeightGrams ? ` / ${(x.carrierWeightGrams / 1000).toFixed(1)}` : ""}</td>
-                <td className="small">{o.mode} · {o.paymentType}</td>
-                <td><StatusChip status={x.status} /></td>
-                <td className="small">{x.lastSyncAt ? x.lastSyncAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}{x.lastSyncError ? <div className="tiny t-debit" title={x.lastSyncError}>sync error</div> : null}</td>
-                {showCost && <td className="r small">{formatINR(x.costPaise)}</td>}
-                <td className="r small">{formatINR(x.sellPaise)}</td>
-              </tr>
-            ))}
+            {list.rows.length === 0 && <tr><td colSpan={7} className="center muted small">No shipments match these filters.</td></tr>}
+            {list.rows.map((r) => {
+              const st = orderStatusText(r);
+              const s = r.shipment;
+              return (
+                <tr key={r.id}>
+                  <td>{s ? <Link className="b link-navy" href={`/admin/shipments/${s.id}/`}>{r.orderNumber}</Link> : <span className="b">{r.orderNumber}</span>}<div className="tiny muted">{r.payment.toUpperCase()}</div></td>
+                  <td className="mono small">{s?.awb ? <Link className="id-link" href={`/admin/shipments/${s.id}/#tracking`}>{s.awb}</Link> : <span className="muted">—</span>}{s?.lr && <div className="tiny muted">LR {s.lr}</div>}</td>
+                  <td className="small"><Link className="link-navy" href={`/admin/customers/${r.customer.id}/`}>{r.customer.name}</Link><div className="tiny muted mono">{r.customer.id}</div></td>
+                  <td className="small nowrap">{s ? when(s.bookedAt) : <span className="muted">Not booked · {when(r.createdAt)}</span>}</td>
+                  <td className="small">{s ? (carrierLogo(s.carrierCode) ? <img className="clogo-sm" src={carrierLogo(s.carrierCode)!} alt={s.carrierName} title={s.carrierName} /> : s.carrierName) : "—"}{s?.provider === "demo" && <span className="demo-badge" style={{ marginLeft: 4 }}>DEMO</span>}</td>
+                  <td className="small">{r.type}</td>
+                  <td><span className={`chip ${TONE_CHIP[st.tone] ?? "c-pending"}`}>{st.text}</span></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <nav className="row between mt12"><span className="small muted">Page {page}</span><span className="row" style={{ gap: 8 }}>{page > 1 && <Link className="btn btn-sm btn-outline" href={qs({ page: String(page - 1) })}>Previous</Link>}{rows.length === 50 && <Link className="btn btn-sm btn-outline" href={qs({ page: String(page + 1) })}>Next</Link>}</span></nav>
+      <nav className="row between wrap mt12" style={{ gap: 8 }} aria-label="Pages">
+        <span className="small muted">Page {f.page} of {pages} · {list.total.toLocaleString("en-IN")} orders</span>
+        <span className="row" style={{ gap: 8 }}>
+          <form className="row" style={{ gap: 6 }}>{Object.entries(sp).filter(([k, v]) => v && k !== "size" && k !== "page").map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}<label htmlFor="size" className="small muted">Rows</label><select id="size" name="size" className="select" defaultValue={String(f.pageSize)} style={{ width: 80 }}>{PAGE_SIZES.map((n) => <option key={n}>{n}</option>)}</select><button className="btn btn-sm btn-outline">Set</button></form>
+          {f.page > 1 && <Link className="btn btn-sm btn-outline" href={qs({ page: String(f.page - 1) })}>Previous</Link>}
+          {f.page < pages && <Link className="btn btn-sm btn-outline" href={qs({ page: String(f.page + 1) })}>Next</Link>}
+        </span>
+      </nav>
     </>
   );
 }

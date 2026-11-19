@@ -9,7 +9,7 @@ import { getDb, schema } from "@/server/db/client";
 import { testCashfree } from "@/server/payments/cashfree";
 import { sniffQr } from "@/server/payments/files";
 import { testRazorpay } from "@/server/payments/razorpay";
-import { GATEWAY_SECRETS, gatewayAccount, getPaymentSettings, savePaymentSettings, webhookUrl } from "@/server/payments/settings";
+import { GATEWAY_SECRETS, gatewayAccount, gatewayAvailability, getPaymentSettings, savePaymentSettings, webhookUrl } from "@/server/payments/settings";
 import { pendingManualCount } from "@/server/payments/recharge";
 import { decryptJson, encryptJson, maskSecret } from "@/server/security/crypto";
 import { newKey, putPrivate } from "@/server/storage";
@@ -76,7 +76,7 @@ async function setActive(fd: FormData) {
   st.onlineMaxPaise = Math.max(st.onlineMinPaise, rupees(fd.get("onlineMax")) || st.onlineMaxPaise);
   await savePaymentSettings(st);
   await audit({ actorUserId: s.userId, actorKind: "staff", action: "payments.active_gateway", targetType: "setting", targetId: "payment_settings", details: { active } });
-  redirect(`/admin/payments/?ok=${encodeURIComponent(active === "none" ? "Online payments switched off." : `Customers now pay online with ${active === "razorpay" ? "Razorpay" : "Cashfree"}.`)}`);
+  redirect(`/admin/payments/?ok=${encodeURIComponent(active === "none" ? "Saved." : `${active === "razorpay" ? "Razorpay" : "Cashfree"} is pre-selected for customers (when enabled).`)}`);
 }
 
 async function saveManual(fd: FormData) {
@@ -118,6 +118,7 @@ export default async function PaymentSettingsPage({ searchParams }: { searchPara
   const write = can(s.role, "integrations.write");
   const st = await getPaymentSettings();
   const accts = { razorpay: await gatewayAccount("razorpay"), cashfree: await gatewayAccount("cashfree") };
+  const avail = await Promise.all((["razorpay", "cashfree"] as const).map(async (g) => { const a = await gatewayAvailability(g); return { g, usable: a.usable, reason: a.reason }; }));
   const pending = await pendingManualCount();
   const ex = manualQuote(1000_00, st.manual.discountBps);
   const card = (g: G) => {
@@ -125,13 +126,13 @@ export default async function PaymentSettingsPage({ searchParams }: { searchPara
     const hint = (a.secretsHint ?? {}) as Record<string, string>;
     const configured = GATEWAY_SECRETS[g].filter((f) => g !== "razorpay" || f.key !== "webhookSecret").every((f) => hint[f.key]);
     const name = g === "razorpay" ? "Razorpay" : "Cashfree";
-    const isActive = st.activeGateway === g;
+    const isActive = st.activeGateway === g && avail.find((x) => x.g === g)?.usable;
     return (
       <section key={g} id={g} className="card pay-card" style={{ padding: 18 }}>
         <div className="row between wrap" style={{ gap: 8 }}>
           <h2 style={{ fontSize: 17, margin: 0, display: "flex", gap: 8, alignItems: "center" }}><CreditCard size={18} aria-hidden />{name}</h2>
           <span className="row" style={{ gap: 6 }}>
-            {isActive && <span className="chip c-active">Active gateway</span>}
+            {avail.find((x) => x.g === g)?.usable ? <span className="chip c-active">Shown to customers</span> : null}{isActive && <span className="chip c-pending">Preferred</span>}
             <span className={`chip ${a.status === "enabled" ? "c-active" : "c-draft"}`}>{a.status === "enabled" ? "Enabled" : "Disabled"}</span>
             <span className={`chip ${a.mode === "live" ? "c-pending" : "c-draft"}`}>{a.mode === "live" ? "Live" : "Test"}</span>
           </span>
@@ -189,19 +190,25 @@ export default async function PaymentSettingsPage({ searchParams }: { searchPara
       {sp.err && <p className="note small mb12 t-debit" role="alert">{sp.err}</p>}
 
       <section className="card mb16" style={{ padding: 18 }}>
-        <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>Online payment gateway</h2>
+        <h2 style={{ fontSize: 16, margin: "0 0 8px" }}>Online payment gateways</h2>
+        <div className="pay-visible mb12" aria-label="What customers see">
+          <b className="small">What customers see in Wallet → Recharge</b>
+          <ul className="plain-list small" style={{ margin: "6px 0 0" }}>
+            {avail.map((a) => <li key={a.g} className="row" style={{ gap: 8 }}><span className={`chip ${a.usable ? "c-active" : "c-draft"}`}>{a.usable ? "Shown" : "Hidden"}</span>{a.reason}</li>)}
+            <li className="row" style={{ gap: 8 }}><span className={`chip ${st.manual.enabled ? "c-active" : "c-draft"}`}>{st.manual.enabled ? "Shown" : "Hidden"}</span>Manual UPI / QR {st.manual.enabled ? "is shown" : "is off"}</li>
+          </ul>
+        </div>
         <form action={setActive} className="row wrap" style={{ gap: 12, alignItems: "end" }}>
-          <div className="field"><label htmlFor="active">Active gateway for customers</label>
-            <select id="active" name="active" className="select" defaultValue={st.activeGateway} disabled={!write}>
+          <div className="field"><label htmlFor="active">Preferred gateway (pre-selected when both are on)</label>
+            <select id="active" name="active" className="select" defaultValue={st.activeGateway === "none" ? "razorpay" : st.activeGateway} disabled={!write}>
               <option value="razorpay">Razorpay{accts.razorpay.status === "enabled" ? "" : " (disabled)"}</option>
               <option value="cashfree">Cashfree{accts.cashfree.status === "enabled" ? "" : " (disabled)"}</option>
-              <option value="none">None — online payment off</option>
             </select></div>
           <div className="field"><label htmlFor="onlineMin">Online minimum (₹)</label><input id="onlineMin" name="onlineMin" className="input" inputMode="numeric" defaultValue={st.onlineMinPaise / 100} disabled={!write} /></div>
           <div className="field"><label htmlFor="onlineMax">Online maximum (₹)</label><input id="onlineMax" name="onlineMax" className="input" inputMode="numeric" defaultValue={st.onlineMaxPaise / 100} disabled={!write} /></div>
           {write && <button className="btn btn-navy btn-sm">Save</button>}
         </form>
-        <p className="tiny muted" style={{ margin: "8px 0 0" }}>Only one online gateway is offered at a time. Manual UPI is independent and can be on together with it. Orders already started on the other gateway still settle through its webhook.</p>
+        <p className="tiny muted" style={{ margin: "8px 0 0" }}>Each gateway is shown to customers when it is <b>Enabled</b> and its keys are saved — use Enable / Disable on its card to control it. Manual UPI is independent. Orders already started on a gateway that was switched off still settle through its webhook.</p>
       </section>
 
       <div className="grid2 mb16" style={{ gap: 16, alignItems: "start" }}>{card("razorpay")}{card("cashfree")}</div>
