@@ -17,7 +17,7 @@ import { DEFAULTS } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
 import { DashSearch } from "@/components/portal/DashSearch";
-import { DASH_ICONS } from "@/components/portal/DashIcons";
+import { DASH_ICONS, IcoCoin, IcoWallet } from "@/components/portal/DashIcons";
 import { Bell, Wallet } from "lucide-react";
 
 const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
@@ -45,22 +45,26 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const counts = await bucketCounts(ctx.org.id, r, [...new Set<BucketKey>([...CARDS.map((c) => c.key), ...DONUT.map((d) => d.key), ...PIPE])]);
   const announcement = await t("portal.dashboard.announcement");
   const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
+  const kycNote = ctx.org.kycStatus !== "approved" ? (
+    <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
+      <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>
+  ) : null;
   return (
     <>
       {/* phone: search, then wallet + notification credits */}
       <div className="dash-m">
         <DashSearch />
         <div className="dash-m-cards">
-          <Link href="/portal/billing/passbook/" className="dm-card"><span className="dm-ic wallet"><Wallet size={24} aria-hidden /></span><b>{formatINR(ctx.walletAvailable)}</b><span>Wallet Balance</span></Link>
-          <Link href="/portal/billing/notification-credits/" className="dm-card"><span className="dm-ic credit"><Bell size={24} aria-hidden /></span><b>{ctx.credits.toLocaleString("en-IN")}</b><span>Notification Credits</span></Link>
+          <Link href="/portal/billing/passbook/" className="dm-card"><IcoWallet size={56} /><b>{formatINR(ctx.walletAvailable)}</b><span>Wallet Balance</span></Link>
+          <Link href="/portal/billing/notification-credits/" className="dm-card"><IcoCoin size={56} /><b>{ctx.credits.toLocaleString("en-IN")}</b><span>Notification Credits</span></Link>
         </div>
       </div>
-      {announcement && <p className="note small mb12">{announcement}</p>}
-      <div className="mb12"><OfferStrip offers={offers} where="dashboard" variant="compact" /></div>
-      {ctx.org.kycStatus !== "approved" && (
-        <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
-          <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>
-      )}
+      {/* desktop only — on phones Analytics follows the balance cards directly (owner request 2026-11-19) */}
+      <div className="dash-desk">
+        {announcement && <p className="note small mb12">{announcement}</p>}
+        <div className="mb12"><OfferStrip offers={offers} where="dashboard" variant="compact" /></div>
+        {kycNote}
+      </div>
       <div className="row between wrap mb12 dash-desk" style={{ gap: 12 }}>
         <nav className="seg-tabs" aria-label="Dashboard view">
           <Link href={`/portal/?${rq}`} className={tab === "analytics" ? "on" : ""} aria-current={tab === "analytics" ? "page" : undefined}>Analytics</Link>
@@ -70,6 +74,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </div>
 
       {tab === "analytics" ? <Analytics orgId={ctx.org.id} walletId={ctx.walletId} counts={counts} href={href} r={r} rq={rq} /> : <OrderStatus orgId={ctx.org.id} counts={counts} stage={isBucket(sp.stage) ? sp.stage : "new"} r={r} rq={rq} />}
+      {kycNote && <div className="dm-only mt12">{kycNote}</div>}
     </>
   );
 }

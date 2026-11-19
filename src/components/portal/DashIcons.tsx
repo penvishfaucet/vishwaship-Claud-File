@@ -98,3 +98,30 @@ export function IcoRto(p: P) {
 export const DASH_ICONS = {
   new: IcoNewOrders, assigned: IcoCourierAssigned, scheduled: IcoScheduled, all: IcoAllOrders, returns: IcoReturns, rto: IcoRto,
 } as const;
+
+/** Wallet Balance card: filled orange wallet with a white clasp and card slot (Vishwaship artwork). */
+export function IcoWallet({ size = 56 }: P) {
+  return (
+    <svg className="dash-ill" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="6" y="14" width="46" height="10" rx="4" fill="#C24A0C" />
+      <rect x="9" y="9" width="34" height="9" rx="3" fill="#fff" stroke="#051C46" strokeWidth={1.6} />
+      <rect x="6" y="18" width="52" height="38" rx="9" fill="#FE6519" stroke="#051C46" strokeWidth={1.6} />
+      <path d="M6 27 h52" stroke="#E5540C" strokeWidth={2} />
+      <rect x="38" y="31" width="20" height="14" rx="7" fill="#fff" stroke="#051C46" strokeWidth={1.6} />
+      <circle cx="46" cy="38" r="3" fill="#FE6519" stroke="#051C46" strokeWidth={1.2} />
+    </svg>
+  );
+}
+
+/** Notification Credits card: gold-and-orange credit coin with a rim and an embossed star. */
+export function IcoCoin({ size = 56 }: P) {
+  return (
+    <svg className="dash-ill" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <ellipse cx="32" cy="35" rx="25" ry="25" fill="#E5540C" />
+      <circle cx="32" cy="31" r="25" fill="#F7B733" stroke="#051C46" strokeWidth={1.6} />
+      <circle cx="32" cy="31" r="18.5" fill="#FFD25A" stroke="#E39A12" strokeWidth={2.2} />
+      <path d="M32 19.5 l3.4 7.2 7.8 0.9 -5.8 5.3 1.6 7.7 -7-4 -7 4 1.6-7.7 -5.8-5.3 7.8-0.9 Z" fill="#FE6519" stroke="#C24A0C" strokeWidth={1.2} strokeLinejoin="round" />
+      <path d="M17 22 a17 17 0 0 1 9 -7" fill="none" stroke="#fff" strokeOpacity=".7" strokeWidth={2.4} strokeLinecap="round" />
+    </svg>
+  );
+}
