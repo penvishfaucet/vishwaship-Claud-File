@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -36,6 +36,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/oms/", label: "OMS Requests", icon: Boxes, perm: "integrations.read" },
     { href: "/admin/notifications/", label: "Notifications", icon: Bell, perm: "notifications.read" },
     { href: "/admin/whatsapp/", label: "WhatsApp Ops", icon: MessageCircle, perm: "notifications.read" },
+    { href: "/admin/settings/email/", label: "Email & Sign-in", icon: Mail, perm: "notifications.read" },
     { href: "/admin/website/", label: "Website Content", icon: Palette, perm: "customers.read" },
     { href: "/admin/content/", label: "Portal Text", icon: FileText, perm: "customers.read" },
     { href: "/admin/api-credentials/", label: "API Credentials", icon: KeyRound, perm: "api_keys.manage" },

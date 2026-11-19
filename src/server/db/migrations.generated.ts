@@ -372,5 +372,23 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795078608636,
   "hash": "2742fa53d5513f5216d167097c0489b83a965e05a08433c542d5e776334cb664"
+ },
+ {
+  "tag": "0018_email_onboarding",
+  "sql": [
+   "CREATE TABLE \"email_logs\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"event\" text NOT NULL,\n\t\"dedupe_key\" text,\n\t\"org_id\" text,\n\t\"shipment_id\" text,\n\t\"to_email\" text NOT NULL,\n\t\"to_kind\" text NOT NULL,\n\t\"sender_email\" text NOT NULL,\n\t\"subject\" text NOT NULL,\n\t\"vars\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n\t\"status\" text DEFAULT 'queued' NOT NULL,\n\t\"error\" text,\n\t\"provider_id\" text,\n\t\"attempts\" integer DEFAULT 0 NOT NULL,\n\t\"retryable\" boolean DEFAULT true NOT NULL,\n\t\"sent_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"email_logs_dedupe_key_unique\" UNIQUE(\"dedupe_key\")\n);\n",
+   "\nCREATE TABLE \"email_rules\" (\n\t\"event\" text PRIMARY KEY NOT NULL,\n\t\"enabled\" boolean DEFAULT true NOT NULL,\n\t\"sender_id\" text,\n\t\"to_client\" boolean DEFAULT true NOT NULL,\n\t\"to_recipient\" boolean DEFAULT false NOT NULL,\n\t\"updated_by\" text,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"email_senders\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"email\" text NOT NULL,\n\t\"display_name\" text NOT NULL,\n\t\"reply_to\" text,\n\t\"is_default\" boolean DEFAULT false NOT NULL,\n\t\"status\" text DEFAULT 'pending' NOT NULL,\n\t\"status_detail\" text,\n\t\"checked_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"email_senders_email_unique\" UNIQUE(\"email\")\n);\n",
+   "\nCREATE TABLE \"email_templates\" (\n\t\"event\" text PRIMARY KEY NOT NULL,\n\t\"subject\" text NOT NULL,\n\t\"body\" text NOT NULL,\n\t\"updated_by\" text,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"orgs\" ADD COLUMN \"address\" jsonb;",
+   "\nALTER TABLE \"orgs\" ADD COLUMN \"profile_completed_at\" timestamp with time zone;",
+   "\nALTER TABLE \"users\" ADD COLUMN \"google_sub\" text;",
+   "\nCREATE INDEX \"email_logs_created\" ON \"email_logs\" USING btree (\"created_at\");",
+   "\nCREATE UNIQUE INDEX \"users_google_sub\" ON \"users\" USING btree (\"google_sub\");",
+   "\n-- customers who signed up with the full form before onboarding existed already gave name, business and mobile\nUPDATE \"orgs\" SET \"profile_completed_at\" = \"created_at\" WHERE \"profile_completed_at\" IS NULL;\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795092907545,
+  "hash": "2b6b772fdd35fdf6b57b8e502d9f7f30aeea5da5b882149824ab320a846393ce"
  }
 ];

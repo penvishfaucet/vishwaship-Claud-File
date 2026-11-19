@@ -54,7 +54,7 @@ const shipmozoHappy = (url: string, body?: unknown) => {
 
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
-  await db.insert(schema.orgs).values([{ id: ORG, name: "A", businessName: "A Traders" }, { id: OTHER, name: "B", businessName: "B Traders" }]);
+  await db.insert(schema.orgs).values([{ id: ORG, name: "A", businessName: "A Traders", kycStatus: "approved", profileCompletedAt: new Date() }, { id: OTHER, name: "B", businessName: "B Traders", kycStatus: "approved", profileCompletedAt: new Date() }]);
   await db.insert(schema.wallets).values([{ id: "wal_a", orgId: ORG }, { id: "wal_b", orgId: OTHER }]);
   await withLedger((s) => credit(s, { walletId: "wal_a", amount: 10_000_00, kind: "adjustment_credit", idempotencyKey: "seed", refType: "staff", refId: STAFF, memo: "seed" }));
   const secrets = encryptJson({ live: { publicKey: "pk_test_value", privateKey: "sk_test_value" } });
@@ -201,6 +201,16 @@ async function newOrder(id: string) {
 const debits = async (orderId: string) => (await db.select().from(schema.ledgerEntries).where(eq(schema.ledgerEntries.refType, "shipment"))).filter((e) => e.memo?.includes(orderId)).length;
 
 describe("booking through Shipmozo", () => {
+  it("an account that is not Active (KYC not approved) cannot book — nothing is sent to the courier and nothing is charged", async () => {
+    const quoteId = await newOrder("ord_gate");
+    await db.update(schema.orgs).set({ kycStatus: "pending" }).where(eq(schema.orgs.id, ORG));
+    const before = calls.length;
+    const r = await bookOrder({ orgId: ORG, orderId: "ord_gate", quoteId, actorUserId: "usr_c" });
+    await db.update(schema.orgs).set({ kycStatus: "approved" }).where(eq(schema.orgs.id, ORG));
+    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/KYC is under review/) });
+    expect(calls.length).toBe(before);
+    expect(await debits("ord_gate")).toBe(0);
+  });
   it("books the exact service behind the quote: push-order → assign-courier (courier_id) → AWB, one charge", async () => {
     const quoteId = await newOrder("ord_1");
     const r = await bookOrder({ orgId: ORG, orderId: "ord_1", quoteId, actorUserId: "usr_c" });

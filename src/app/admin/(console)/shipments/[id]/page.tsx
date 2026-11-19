@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { formatINR } from "@/lib/money";
 import { StatusChip, statusLabel } from "@/lib/status";
 import { can } from "@/server/auth/rbac";
@@ -25,6 +25,8 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
   } | undefined;
   const qreq = q?.request as { originPincode?: string; destinationPincode?: string; paymentType?: string; packages?: Array<{ count: number; lengthMm: number; breadthMm: number; heightMm: number; actualWeightGrams: number }> } | undefined;
   const showCost = can(s.role, "shipments.cost.read");
+  const [cu] = await db.select({ email: schema.users.email }).from(schema.users).where(and(eq(schema.users.orgId, org.id), eq(schema.users.kind, "customer"))).orderBy(asc(schema.users.createdAt)).limit(1);
+  const clientEmail = cu?.email ?? null;
   return (
     <>
       <div className="page-h">
@@ -51,6 +53,8 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
               <dt>Markup applied</dt><dd>{priced?.markup ? `${priced.markup.bps / 100}% (${priced.markup.source}, v${priced.markup.ruleVersion})` : "—"}</dd>
               <dt>Margin (pre-tax)</dt><dd>{priced?.sellingSubtotal !== undefined ? formatINR(priced.sellingSubtotal - x.costPaise) : "—"}</dd>
             </> : <><dt>Cost &amp; margin</dt><dd className="muted">Restricted</dd></>}
+            <dt>Vishwaship Client Email</dt><dd>{clientEmail ?? "—"}</dd>
+            <dt>Recipient Email (Optional)</dt><dd>{(o.consignee as { email?: string }).email || "—"}</dd>
             <dt>Payment</dt><dd>{o.paymentType === "cod" ? `COD ${formatINR(o.codAmountPaise)}` : o.paymentType === "fod" ? "FOD (freight on delivery)" : "Prepaid"}</dd>
             {showCost && x.carrierChargePaise != null && <><dt>Carrier-confirmed charge</dt><dd className={x.chargeCheck === "higher" ? "t-bad" : undefined}>{formatINR(x.carrierChargePaise)}{x.chargeCheck === "higher" ? " — above quote" : ""}</dd></>}
           </dl>

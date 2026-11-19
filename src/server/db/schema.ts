@@ -28,6 +28,9 @@ export const orgs = pgTable("orgs", {
   kycStatus: kycStatus("kyc_status").notNull().default("not_started"),
   bankAccountMasked: text("bank_account_masked"),
   bankIfsc: text("bank_ifsc"),
+  /** Complete Your Profile: { line1, line2, city, state, pincode }. */
+  address: jsonb("address"),
+  profileCompletedAt: ts("profile_completed_at"),
   createdAt: created(),
 });
 
@@ -40,6 +43,8 @@ export const users = pgTable("users", {
   mobile: text("mobile"),
   emailVerifiedAt: ts("email_verified_at"),
   mobileVerifiedAt: ts("mobile_verified_at"),
+  /** Google account id (OpenID "sub") once Continue with Google is linked. */
+  googleSub: text("google_sub"),
   passwordHash: text("password_hash"),
   mustResetPassword: boolean("must_reset_password").notNull().default(false),
   staffRole: staffRole("staff_role"),
@@ -52,6 +57,7 @@ export const users = pgTable("users", {
 }, (t) => [
   uniqueIndex("users_email_kind").on(t.kind, t.email),
   uniqueIndex("users_mobile_kind").on(t.kind, t.mobile),
+  uniqueIndex("users_google_sub").on(t.googleSub),
 ]);
 
 export const sessions = pgTable("sessions", {
@@ -976,3 +982,53 @@ export const manifests = pgTable("manifests", {
   createdBy: text("created_by"),
   createdAt: created(),
 }, (t) => [index("manifests_org_created").on(t.orgId, t.createdAt)]);
+
+// ---------- transactional email (Admin → Settings → Email) ----------
+export const emailSenders = pgTable("email_senders", {
+  id: id(),
+  email: text("email").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  replyTo: text("reply_to"),
+  isDefault: boolean("is_default").notNull().default(false),
+  /** pending | verified | failed (provider domain verification) · disabled */
+  status: text("status").notNull().default("pending"),
+  statusDetail: text("status_detail"),
+  checkedAt: ts("checked_at"),
+  createdAt: created(),
+});
+export const emailTemplates = pgTable("email_templates", {
+  event: text("event").primaryKey(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(), // plain text with {{placeholders}}; wrapped in the branded layout when sent
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+});
+export const emailRules = pgTable("email_rules", {
+  event: text("event").primaryKey(),
+  enabled: boolean("enabled").notNull().default(true),
+  senderId: text("sender_id"), // null = default sender
+  toClient: boolean("to_client").notNull().default(true),
+  toRecipient: boolean("to_recipient").notNull().default(false),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+});
+export const emailLogs = pgTable("email_logs", {
+  id: id(),
+  event: text("event").notNull(),
+  dedupeKey: text("dedupe_key").unique(), // event + subject + address: a repeated courier update never sends twice
+  orgId: text("org_id"),
+  shipmentId: text("shipment_id"),
+  toEmail: text("to_email").notNull(),
+  toKind: text("to_kind").notNull(), // client | recipient | signup | test
+  senderEmail: text("sender_email").notNull(),
+  subject: text("subject").notNull(),
+  /** Placeholder values with secrets (OTP) masked — used for retry and shown to Admin. */
+  vars: jsonb("vars").notNull().default({}),
+  status: text("status").notNull().default("queued"), // queued | sent | failed | skipped
+  error: text("error"),
+  providerId: text("provider_id"),
+  attempts: integer("attempts").notNull().default(0),
+  retryable: boolean("retryable").notNull().default(true),
+  sentAt: ts("sent_at"),
+  createdAt: created(),
+}, (t) => [index("email_logs_created").on(t.createdAt)]);

@@ -97,6 +97,8 @@ async function amendDestination(orderId: string, shipmentId: string, next: Parti
 }
 
 async function onStatusChange(orgId: string, orderId: string, shipmentId: string, status: NormalizedStatus) {
+  // Email updates (Admin → Settings → Email rules): one job per shipment + status; the email log dedupes per address.
+  await enqueue("email.shipment", { shipmentId, status }, { dedupeKey: `email:${shipmentId}:${status}` });
   if (status === "out_for_delivery") {
     // dedupe per shipment+day so a re-attempt next day can notify again, but retries never double-send
     const day = new Date().toISOString().slice(0, 10);

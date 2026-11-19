@@ -127,6 +127,13 @@
       "when": 1795078608636,
       "tag": "0017_manifests",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795092907545,
+      "tag": "0018_email_onboarding",
+      "breakpoints": true
     }
   ]
 }

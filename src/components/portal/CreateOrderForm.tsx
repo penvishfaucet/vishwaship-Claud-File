@@ -265,7 +265,7 @@ export function CreateOrderForm({ warehouses, products: saved, internationalEnab
           <Field id="b-alt" label="Alternative Phone" error={err("buyer.altMobile")}>
             <div className="co-row"><span className="co-pre">+91</span><input {...inputProps("b-alt", "buyer.altMobile")} value={f.buyer.altMobile} inputMode="numeric" maxLength={10} placeholder="Enter alternative phone" onChange={(e) => setBuyer({ altMobile: e.target.value.replace(/\D/g, "").slice(0, 10) })} /></div>
           </Field>
-          <Field id="b-email" label="Email ID" error={err("buyer.email")}>
+          <Field id="b-email" label="Recipient Email (Optional)" error={err("buyer.email")} hint="The delivery recipient gets pickup updates here when that email is switched on. Leave empty if not needed — you always get updates on your Vishwaship account email.">
             <input {...inputProps("b-email", "buyer.email")} type="email" value={f.buyer.email} placeholder="Enter email" autoComplete="email" onChange={(e) => setBuyer({ email: e.target.value })} />
           </Field>
           <Field id="b-gst" label="GSTIN" error={err("buyer.gstin")}>

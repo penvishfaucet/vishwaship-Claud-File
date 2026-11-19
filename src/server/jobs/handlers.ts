@@ -201,6 +201,13 @@ registerHandler("pickup.auto", async (p, attempt): Promise<JobResult> => {
  * inside provider rate limits). Paused accounts keep syncing: pausing only stops new quotes and bookings.
  * Demo shipments are refreshed on demand only.
  */
+/** email.shipment — status emails to the Vishwaship client / delivery recipient. A failed email never touches the shipment. */
+registerHandler("email.shipment", async (p): Promise<JobResult> => {
+  const { sendShipmentStatusEmails } = await import("@/server/email/shipment-emails");
+  await sendShipmentStatusEmails(String(p.shipmentId), String(p.status)).catch(() => null);
+  return { done: true };
+});
+
 registerHandler("tracking.poll", async (p): Promise<JobResult> => {
   const { refreshFromCarrier } = await import("@/server/tracking/service");
   await refreshFromCarrier(String(p.shipmentId)).catch(() => null);

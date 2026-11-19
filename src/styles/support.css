@@ -126,3 +126,29 @@
 .mf-item{background:#fff;border:1px solid #dbe3ee;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
 .mf-item-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .mf-item-h b{font-size:16px}
+
+/* ---------- onboarding ---------- */
+.ob-steps{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.ob-steps li{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid #dbe3ee;background:#fff;font-size:13.5px;color:#4a5a78}
+.ob-steps li span{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#e9eef5;font-size:12px;font-weight:700;color:#051C46}
+.ob-steps li.now{border-color:#E5540C;color:#051C46;font-weight:600}
+.ob-steps li.now span{background:#E5540C;color:#fff}
+.ob-steps li.done{border-color:#9fd9c1;color:#11684a}
+.ob-form{padding:18px;display:flex;flex-direction:column;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.grid3{grid-template-columns:1fr}}
+.ob-card{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid #dbe3ee;border-left:5px solid #E5540C;border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.ob-card.active{border-left-color:#1e7b3a}
+.ob-card b{font-size:15.5px}
+.ob-card p{margin:2px 0 0;font-size:13px;color:#4a5a78}
+.ob-card .grow{flex:1;min-width:200px}
+
+/* Admin → Email & Sign-in */
+.em-set { display: grid; gap: 14px; }
+.em-set .pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.em-grid { display: grid; gap: 14px; }
+.em-card { padding: 18px; display: grid; gap: 12px; }
+.em-card h2 { font-size: 15px; margin: 0; font-weight: 700; }
+.em-check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.em-ph { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 6px; background: var(--surface-2, #EDF5FF); font-size: 12px; }
+.em-preview { width: 100%; min-height: 520px; border: 1px solid var(--line, #D7E4F3); border-radius: 10px; background: #fff; }

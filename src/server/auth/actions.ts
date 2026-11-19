@@ -9,6 +9,9 @@ import { hashPassword, verifyPassword } from "@/server/security/crypto";
 import { rateLimit } from "@/server/security/rate-limit";
 import { newId } from "@/server/util/ids";
 import { createSession, destroySession, readSession, revokeAllSessions } from "./session";
+import { consumeSignupOtp } from "./signup-otp";
+import { linkPendingGoogle } from "./google";
+import { createCustomerAccount } from "./accounts";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -42,17 +45,16 @@ export async function customerLogin(_: FormState, fd: FormData): Promise<FormSta
   if (!u || !ok || !u.active) return { error: "Incorrect email/mobile or password." };
   await createSession(u.id, "customer", m);
   await audit({ actorUserId: u.id, actorKind: "customer", orgId: u.orgId, action: "auth.login" });
+  const linked = await linkPendingGoogle(u.id, u.email);
+  if (linked) redirect("/portal/?google=linked");
   redirect(safeNext(fd.get("next"), "/portal/"));
 }
 
 const SignupSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  business: z.string().trim().min(2, "Business name is required").max(120),
-  mobile: z.string().transform(normalizeMobile).pipe(z.string().regex(/^[6-9]\d{9}$/, "Enter a valid 10-digit Indian mobile number")),
-  email: z.string().trim().toLowerCase().email(),
+  name: z.string().trim().min(2, "Enter your full name").max(80),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
-  volume: z.string().max(20),
-  gstin: z.string().trim().toUpperCase().regex(/^$|^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/, "GSTIN format is invalid").optional(),
   terms: z.literal("on", { errorMap: () => ({ message: "Please accept the Terms & shipping policy" }) }),
 });
 
@@ -64,18 +66,15 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   if (!p.success) return { error: p.error.issues[0].message };
   const v = p.data;
   const db = await getDb();
-  const dup = await db.select({ id: schema.users.id }).from(schema.users)
-    .where(and(eq(schema.users.kind, "customer"), or(eq(schema.users.email, v.email), eq(schema.users.mobile, v.mobile))));
-  if (dup.length) return { error: "An account with this email or mobile already exists. Try logging in." };
-  const orgId = newId("org"), userId = newId("usr");
-  await db.insert(schema.orgs).values({ id: orgId, name: v.business, businessName: v.business, gstin: v.gstin || null, expectedMonthlyVolume: v.volume });
-  await db.insert(schema.users).values({ id: userId, kind: "customer", orgId, name: v.name, email: v.email, mobile: v.mobile, passwordHash: await hashPassword(v.password) });
-  await db.insert(schema.wallets).values({ id: newId("wal"), orgId });
-  await db.insert(schema.creditBalances).values({ orgId, credits: 0 });
-  await audit({ actorUserId: userId, actorKind: "customer", orgId, action: "auth.signup" });
-  // Email/mobile verification is sent by the notification worker once a provider is configured.
+  const dup = await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.email, v.email)));
+  if (dup.length) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
+  // The account exists only after the email code is verified (single use, expiry and attempts checked on the server).
+  const otp = await consumeSignupOtp(v.email, v.otp);
+  if (!otp.ok) return { error: otp.message };
+  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp" });
+  if (!userId) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
   await createSession(userId, "customer", m);
-  redirect(safeNext(fd.get("next"), "/portal/?welcome=1"));
+  redirect("/portal/onboarding/");
 }
 
 export async function customerLogout() {

@@ -17,6 +17,8 @@ import { DEFAULTS } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
 import { DashSearch } from "@/components/portal/DashSearch";
+import { redirect } from "next/navigation";
+import { onboardingState, STEP_TEXT } from "@/server/onboarding";
 import { DASH_ICONS, IcoCoin, IcoWallet } from "@/components/portal/DashIcons";
 import { Bell, Wallet } from "lucide-react";
 
@@ -45,14 +47,27 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const counts = await bucketCounts(ctx.org.id, r, [...new Set<BucketKey>([...CARDS.map((c) => c.key), ...DONUT.map((d) => d.key), ...PIPE])]);
   const announcement = await t("portal.dashboard.announcement");
   const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
-  const kycNote = ctx.org.kycStatus !== "approved" ? (
-    <Link href="/portal/kyc/" className="note row mb12" style={{ gap: 10, alignItems: "center" }}><ShieldAlert size={18} />
-      <span><b>{ctx.org.kycStatus === "pending" ? "KYC under review" : "Complete your KYC"}</b> — {ctx.org.kycStatus === "pending" ? "we’ll notify you once approved." : await t("portal.dashboard.kyc_banner")}</span></Link>
+  // Onboarding: a new account finishes its profile first; then KYC → admin review → Active.
+  const ob = await onboardingState(ctx.org.id);
+  if (ob.step === "profile") redirect("/portal/onboarding/");
+  const step = STEP_TEXT[ob.step];
+  const kycNote = ob.step !== "active" ? (
+    <div className="ob-card" role="status">
+      <ShieldAlert size={22} aria-hidden />
+      <div className="grow">
+        <b>{step.title}</b>
+        <p>{ob.step === "kyc" ? "Upload your KYC documents to activate the account. Booking unlocks after Vishwaship approves them."
+          : ob.step === "review" ? "Your KYC is under review. We will notify you as soon as it is approved — booking unlocks then."
+          : <>Admin asked for changes{ob.reasons.length ? <>: <b>{ob.reasons.join(" · ")}</b></> : null}. Resubmit to activate your account.</>}</p>
+      </div>
+      {step.action && <Link className="btn btn-orange" href={step.action.href}>{step.action.label}</Link>}
+    </div>
   ) : null;
   return (
     <>
       {/* phone: search, then wallet + notification credits */}
       <div className="dash-m">
+        {kycNote /* activation step first, so cards → Analytics stay together */}
         <DashSearch />
         <div className="dash-m-cards">
           <Link href="/portal/billing/passbook/" className="dm-card"><IcoWallet size={56} /><b>{formatINR(ctx.walletAvailable)}</b><span>Wallet Balance</span></Link>
@@ -74,7 +89,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </div>
 
       {tab === "analytics" ? <Analytics orgId={ctx.org.id} walletId={ctx.walletId} counts={counts} href={href} r={r} rq={rq} /> : <OrderStatus orgId={ctx.org.id} counts={counts} stage={isBucket(sp.stage) ? sp.stage : "new"} r={r} rq={rq} />}
-      {kycNote && <div className="dm-only mt12">{kycNote}</div>}
     </>
   );
 }

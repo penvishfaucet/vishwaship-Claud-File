@@ -12,6 +12,7 @@ import { getQuotes, quotesByIds, sameService } from "@/server/quotes/service";
 import { canTakeBookings, noteCapability } from "@/server/carriers/verification";
 import { registerWarehouseAt } from "@/server/carriers/automation";
 import { hideProviders } from "@/server/customer-safe";
+import { ACTIVATION_MESSAGE, onboardingState } from "@/server/onboarding";
 
 /** Comparable view of a quote request (field order and optional defaults normalised). */
 function normReq(r: QuoteRequest) {
@@ -49,6 +50,9 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
   if (order.status === "cod_hold") return { ok: false, code: "cod_hold", message: "Waiting for buyer COD confirmation on WhatsApp" };
   if (["booked", "booking"].includes(order.status)) return { ok: false, code: "already_booked", message: "This order is already booked or being booked" };
   if (order.status === "needs_reconcile") return { ok: false, code: "ambiguous", message: "A previous booking attempt is being reconciled with the courier. Please wait." };
+  // Account must be Active (profile complete + KYC approved by Admin) before any booking.
+  const ob = await onboardingState(args.orgId);
+  if (ob.step !== "active") return { ok: false, code: "unsupported", message: ACTIVATION_MESSAGE[ob.step] };
 
   const [quote] = await db.select().from(schema.quotes).where(and(eq(schema.quotes.id, args.quoteId), eq(schema.quotes.orgId, args.orgId)));
   if (!quote) return { ok: false, code: "not_found", message: "Quote not found" };
