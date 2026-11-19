@@ -12,6 +12,7 @@ import { adapterFor, providerContext, secretsFor } from "@/server/providers/regi
 import { decryptJson, encryptJson, maskSecret } from "@/server/security/crypto";
 import type { QuoteRequest } from "@/server/providers/types";
 import { shipmozoRaw } from "@/server/providers/shipmozo";
+import { delhiveryB2bRaw } from "@/server/providers/delhivery-b2b";
 import { refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
 import { enqueue } from "@/server/jobs/runner";
@@ -33,7 +34,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("test_auth"), id }),
   z.object({ op: z.literal("test_serviceability"), id, from: pin, to: pin }),
   z.object({ op: z.literal("rate_check"), id, from: pin, to: pin, weightKg: z.coerce.number().positive().max(5000), lengthCm: z.coerce.number().positive().max(500), widthCm: z.coerce.number().positive().max(500), heightCm: z.coerce.number().positive().max(500),
-    boxes: z.coerce.number().int().min(1).max(500).default(1), payment: z.enum(["prepaid", "cod"]), codRupees: z.coerce.number().min(0).max(500000).default(0), valueRupees: z.coerce.number().min(0).max(5000000).default(1000),
+    boxes: z.coerce.number().int().min(1).max(500).default(1), payment: z.enum(["prepaid", "cod", "fod"]), codRupees: z.coerce.number().min(0).max(500000).default(0), valueRupees: z.coerce.number().min(0).max(5000000).default(1000),
     panel: z.string().trim().max(2000).default(""), panelIncludesGst: bool.default(true) }),
   z.object({ op: z.literal("test_track"), id, awb: z.string().trim().min(4).max(40) }),
   z.object({ op: z.literal("test_label"), id, awb: z.string().trim().min(4).max(40) }),
@@ -196,7 +197,8 @@ export async function POST(req: Request) {
         packages: [{ count: b.boxes, lengthMm: Math.round(b.lengthCm * 10), breadthMm: Math.round(b.widthCm * 10), heightMm: Math.round(b.heightCm * 10), actualWeightGrams: Math.round((b.weightKg * 1000) / b.boxes) }],
       } satisfies QuoteRequest;
       const pctx = await providerContext(acct);
-      const raw = acct.adapter === "shipmozo" ? await shipmozoRaw(pctx, req).catch((e) => ({ error: (e as Error).message })) : null;
+      const raw = acct.adapter === "shipmozo" ? await shipmozoRaw(pctx, req).catch((e) => ({ error: (e as Error).message }))
+        : acct.adapter === "delhivery_b2b" ? await delhiveryB2bRaw(pctx, req).catch((e) => ({ error: (e as Error).message })) : null;
       const r = await adapter!.quote(pctx, req);
       if (!r.ok) {
         await recordCapability(acct.id, "quote", false, { message: r.error.message });

@@ -191,7 +191,7 @@ export default async function CourierAccount({ params }: { params: Promise<{ id:
             { name: "weightKg", label: "Total weight (kg)", type: "number", step: "0.01", value: rc ? rc.inputs.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0) / 1000 : 0.5 },
             { name: "lengthCm", label: "L (cm)", type: "number", value: rc ? rc.inputs.packages[0].lengthMm / 10 : 22 }, { name: "widthCm", label: "W (cm)", type: "number", value: rc ? rc.inputs.packages[0].breadthMm / 10 : 10 }, { name: "heightCm", label: "H (cm)", type: "number", value: rc ? rc.inputs.packages[0].heightMm / 10 : 10 },
             { name: "boxes", label: "Boxes", type: "number", value: rc?.inputs.packages[0].count ?? 1 },
-            { name: "payment", label: "Payment", type: "select", value: rc?.inputs.paymentType ?? "prepaid", options: [["prepaid", "Prepaid"], ["cod", "COD"]] },
+            { name: "payment", label: "Payment", type: "select", value: rc?.inputs.paymentType ?? "prepaid", options: [["prepaid", "Prepaid"], ["cod", "COD"], ["fod", "FOD (freight on delivery)"]] },
             { name: "codRupees", label: "COD ₹", type: "number", value: 0 }, { name: "valueRupees", label: "Declared value ₹", type: "number", value: 1000 },
             { name: "panel", label: "Panel amounts (optional)", type: "textarea", placeholder: "12=118.00\nDelhivery Surface=96.40" },
             { name: "panelIncludesGst", label: "Panel amounts include GST", type: "checkbox", value: rc?.panelIncludesGst ?? true },

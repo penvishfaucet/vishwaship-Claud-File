@@ -115,15 +115,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       }
       source = "contract_rate_card";
     } else {
-      const est = await call(ctx, "/freight/estimate", {
-        method: "POST",
-        body: JSON.stringify({
-          dimensions: req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count })),
-          weight_g: totalG, cheque_payment: false, source_pin: req.originPincode, consignee_pin: req.destinationPincode,
-          payment_mode: req.paymentType === "cod" ? "cod" : "prepaid", ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount ?? 0) } : {}),
-          inv_amount: rupees(req.declaredValue ?? 0), ...freightMode(ctx, req.paymentType), rov_insurance: !!ctx.config.rovInsurance,
-        }),
-      });
+      const est = await call(ctx, "/freight/estimate", { method: "POST", body: JSON.stringify(estimateBody(ctx, req)) });
       if (!est.ok) return est;
       const parsed = b2bCharges(est.value.json);
       if (!parsed) return { ok: false, error: { category: "upstream", message: "Delhivery returned no freight breakup for this route — rate unavailable (not ₹0). Retry, or configure a contract rate card.", retryable: true } };
@@ -291,4 +283,28 @@ function yesNo(j: unknown, key: RegExp, depth = 0): boolean | null {
   }
   for (const v of Object.values(j as Record<string, unknown>)) if (v && typeof v === "object") { const r = yesNo(v, key, depth + 1); if (r !== null) return r; }
   return null;
+}
+
+/** Body of the B2B /freight/estimate request (shared by quotes and the Admin raw rate check). */
+function estimateBody(ctx: ProviderContext, req: import("./types").QuoteRequest) {
+  const totalG = req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
+  return {
+    dimensions: req.packages.map((p) => ({ length_cm: p.lengthMm / 10, width_cm: p.breadthMm / 10, height_cm: p.heightMm / 10, box_count: p.count })),
+    weight_g: totalG, cheque_payment: false, source_pin: req.originPincode, consignee_pin: req.destinationPincode,
+    payment_mode: req.paymentType === "cod" ? "cod" : "prepaid", ...(req.paymentType === "cod" ? { cod_amount: rupees(req.codAmount ?? 0) } : {}),
+    inv_amount: rupees(req.declaredValue ?? 0), ...freightMode(ctx, req.paymentType), rov_insurance: !!ctx.config.rovInsurance,
+  };
+}
+
+/** Admin rate check: the exact Delhivery responses behind a quote (serviceability + freight estimate), as text. */
+export async function delhiveryB2bRaw(ctx: ProviderContext, req: import("./types").QuoteRequest): Promise<Record<string, string>> {
+  const totalG = req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
+  const out: Record<string, string> = {};
+  const body = estimateBody(ctx, req);
+  out["request /freight/estimate"] = JSON.stringify(body);
+  const svc = await call(ctx, `/pincode-service/${req.destinationPincode}?weight=${totalG}`);
+  out["/pincode-service"] = svc.ok ? JSON.stringify(svc.value.json) : `error: ${svc.error.message}`;
+  const est = await call(ctx, "/freight/estimate", { method: "POST", body: JSON.stringify(body) });
+  out["/freight/estimate"] = est.ok ? JSON.stringify(est.value.json) : `error: ${est.error.message}`;
+  return out;
 }
