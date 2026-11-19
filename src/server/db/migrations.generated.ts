@@ -343,5 +343,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795067182560,
   "hash": "51438ecf6f7f41365c930b0db495f3ec93beb8379604a1d40f488ee367fbf455"
+ },
+ {
+  "tag": "0015_repair_booked_orders",
+  "sql": [
+   "-- Orders the courier accepted (a confirmed, not-cancelled shipment exists) but a wrong reconcile marked failed\n-- (bug found 2026-11-19 on VSMWN3MT67). Status only; no wallet entries are touched here.\nUPDATE \"orders\" o SET \"status\" = 'booked'\nWHERE o.\"status\" IN ('booking_failed', 'needs_reconcile')\n  AND EXISTS (SELECT 1 FROM \"shipments\" s WHERE s.\"order_id\" = o.\"id\" AND s.\"booking_status\" = 'confirmed' AND s.\"status\" <> 'cancelled');\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795069840976,
+  "hash": "1729c2ae627a719f1a0e590873d2119369477fd2e2873c6fbf4665e8b271a425"
  }
 ];

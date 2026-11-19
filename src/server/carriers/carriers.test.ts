@@ -329,3 +329,34 @@ describe("unverified surcharges and carrier debits", () => {
     expect((await db.select().from(schema.shipments).where(eq(schema.shipments.id, sh.id)))[0].chargeCheck).toBe("ok");
   });
 });
+
+describe("reconcile checks the right booking attempt (VSMWN3MT67 regression)", () => {
+  it("a failed first attempt never releases the second, accepted booking's hold or fails the order", async () => {
+    await import("@/server/jobs/handlers");
+    const { runDueJobs } = await import("@/server/jobs/runner");
+    const { reserve } = await import("@/server/ledger/wallet");
+    const q1 = await newOrder("ord_rc");
+    const q2 = (await getQuotes(req(), ORG)).offers.find((o) => o.providerAccountId === SM_B2C)!.quoteId;
+    const base = { orgId: ORG, orderId: "ord_rc", providerAccountId: SM_B2C, provider: "shipmozo", carrierCode: "delhivery", carrierName: "Delhivery", serviceName: "Surface", status: "booked", sellPaise: 18_739, costPaise: 100_000, chargeableWeightGrams: 500 };
+    await db.insert(schema.shipments).values([
+      { ...base, id: "shp_rc_a", quoteId: q1, providerOrderRef: "61041APdeadjob", bookingStatus: "failed", status: "cancelled" },
+      { ...base, id: "shp_rc_b", quoteId: q2, providerOrderRef: "61041APord_rc_b", bookingStatus: "pending", reservationId: "res_rc_b" },
+    ]);
+    await db.update(schema.orders).set({ status: "booked" }).where(eq(schema.orders.id, "ord_rc"));
+    await withLedger((s) => reserve(s, { walletId: "wal_a", amount: 18_739, reservationId: "res_rc_b", idempotencyKey: "reserve:res_rc_b", refType: "order", refId: "ord_rc", memo: "Hold for ord_rc" }));
+    script = (url, body) => {
+      if (url.includes("/get-order-detail/61041APord_rc_b")) return { result: "1", data: { order_id: "61041APord_rc_b", awb_number: "LR777", courier: "Delhivery" } };
+      if (url.includes("/get-order-detail/")) return new Response(JSON.stringify({ result: "0", message: "not found" }), { status: 404 });
+      return shipmozoHappy(url, body);
+    };
+    await db.insert(schema.jobs).values({ id: "job_rc", queue: "booking.reconcile", payload: { orderId: "ord_rc", quoteId: q2, reservationId: "res_rc_b", shipmentId: "shp_rc_b" }, dedupeKey: "reconcile:ord_rc:test" });
+    await runDueJobs(50);
+    const rows = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, "ord_rc"));
+    expect(rows.find((r) => r.id === "shp_rc_b")).toMatchObject({ bookingStatus: "confirmed", awb: "LR777" });
+    expect(rows.find((r) => r.id === "shp_rc_a")).toMatchObject({ bookingStatus: "failed" });
+    expect(calls.some((c) => c.url.includes("/get-order-detail/61041APdeadjob"))).toBe(false); // the old attempt is not even asked
+    const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, "ord_rc"));
+    expect(o.status).toBe("booked");
+    expect(await debits("ord_rc")).toBe(1); // the approved sender charge was taken once, not released
+  });
+});

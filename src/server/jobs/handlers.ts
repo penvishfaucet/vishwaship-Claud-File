@@ -17,7 +17,7 @@ import { type JobResult, enqueue, registerHandler } from "./runner";
  * Still unknown -> back off. Never invents an AWB.
  */
 registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
-  const { orderId, quoteId, reservationId } = p as { orderId: string; quoteId: string; reservationId: string | null };
+  const { orderId, quoteId, reservationId, shipmentId: jobShipmentId } = p as { orderId: string; quoteId: string; reservationId: string | null; shipmentId?: string };
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
   const [quote] = await db.select().from(schema.quotes).where(eq(schema.quotes.id, quoteId));
@@ -26,7 +26,12 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, quote.providerAccountId!));
   const ad = acct && adapterFor(acct);
   if (!ad) return { dead: "adapter unavailable" };
-  const [existing] = await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, orderId));
+  // The shipment THIS booking attempt created (by id, else by its quote) — never another attempt's shipment of the same
+  // order. (Bug 2026-11-19, VSMWN3MT67: the check read the first, failed attempt's job and released the second, accepted
+  // booking's wallet hold and marked the order failed.)
+  const [existing] = jobShipmentId
+    ? await db.select().from(schema.shipments).where(and(eq(schema.shipments.id, jobShipmentId), eq(schema.shipments.orderId, orderId)))
+    : await db.select().from(schema.shipments).where(and(eq(schema.shipments.orderId, orderId), eq(schema.shipments.quoteId, quoteId)));
   // async carriers (Delhivery B2B) need the job / LR reference returned at booking
   const r = await ad.lookupBooking(await providerContext(acct), { vishwashipOrderId: orderId, providerOrderRef: existing?.providerOrderRef ?? undefined });
   if (!r.ok) return { retryInSec: Math.min(3600, 60 * 2 ** attempt), error: r.error.message };
@@ -53,7 +58,10 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
     if (existing && existing.bookingStatus === "confirmed") return { dead: "shipment exists but provider reports none — manual review" };
     if (existing) await db.update(schema.shipments).set({ bookingStatus: "failed", status: "cancelled" }).where(eq(schema.shipments.id, existing.id));
     if (reservationId) await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: orderId, memo: `Released: ${order.orderNumber} not booked (reconciled)` }));
-    await db.update(schema.orders).set({ status: "booking_failed" }).where(eq(schema.orders.id, orderId));
+    // Another attempt of this order may already be booked: only then keep the order booked.
+    const [live] = await db.select({ id: schema.shipments.id }).from(schema.shipments)
+      .where(and(eq(schema.shipments.orderId, orderId), inArray(schema.shipments.bookingStatus, ["confirmed", "pending"]), ne(schema.shipments.status, "cancelled")));
+    if (!live) await db.update(schema.orders).set({ status: "booking_failed" }).where(eq(schema.orders.id, orderId));
     await audit({ actorKind: "system", orgId: order.orgId, action: "booking.reconciled_absent", targetType: "order", targetId: orderId });
     return { done: true };
   }
