@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CartLine, clearCart, readAttribution } from "./cart";
 import { useCartState } from "./StoreClient";
 
-const rupees = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+import { rupees } from "@/lib/store-themes";
 type Quote = { lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; qty: number; unitPaise: number }>; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: string | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean; codFeeIfCod: number };
 type Pay = { keyId: string; orderId: string; amount: number; name: string; prefill: { name: string; contact: string; email: string } };
 declare global { interface Window { Razorpay?: new (o: Record<string, unknown>) => { open: () => void; on: (e: string, cb: (r: unknown) => void) => void } } }

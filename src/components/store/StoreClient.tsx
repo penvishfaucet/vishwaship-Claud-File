@@ -5,7 +5,7 @@ import { type CartLine, MAX_QTY, addToCart, captureAttribution, cartCount, readC
 import type { SfVariant } from "./types";
 export { useCartState };
 
-const rupees = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+import { rupees } from "@/lib/store-themes";
 
 /** null until the browser cart has been read (avoids flashing "empty" on load). */
 function useCartState(store: string) {
@@ -78,6 +78,7 @@ export function AddToCart({ store, base, product }: { store: string; base: strin
     <>
       {hasVariants && (
         <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+          {variant && <div className="sf-price" style={{ marginTop: -8 }}><b style={{ fontSize: 24 }}>{rupees(variant.pricePaise)}</b>{variant.comparePaise && variant.comparePaise > variant.pricePaise && <s>{rupees(variant.comparePaise)}</s>}<span className="sf-note" style={{ flexBasis: "100%" }}>Inclusive of all taxes</span></div>}
           {product.options.map((opt, oi) => {
             const values = [...new Set(product.variants.map((v) => v.values[oi]).filter(Boolean))];
             return (
@@ -93,7 +94,6 @@ export function AddToCart({ store, base, product }: { store: string; base: strin
               </fieldset>
             );
           })}
-          {variant && <div className="sf-price"><b>{rupees(variant.pricePaise)}</b>{variant.comparePaise && variant.comparePaise > variant.pricePaise && <s>{rupees(variant.comparePaise)}</s>}</div>}
           {(!variant || !variant.inStock) && <p className="sf-oos" style={{ margin: 0 }}>{variant ? "This option is out of stock" : "This combination is not available"}</p>}
         </div>
       )}

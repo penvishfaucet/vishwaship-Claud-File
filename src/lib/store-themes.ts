@@ -171,4 +171,5 @@ export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
 export const RESERVED_SLUGS = new Set(["demo", "admin", "api", "app", "www", "portal", "store", "stores", "s", "help", "support", "login", "signup", "vishwaship", "track", "t", "static", "assets", "mail", "blog", "shop", "checkout", "cart"]);
 export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 
-export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+/** ₹1,299 for whole rupees, ₹219.80 when there are paise. */
+export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
