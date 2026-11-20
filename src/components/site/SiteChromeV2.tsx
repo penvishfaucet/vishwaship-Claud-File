@@ -105,7 +105,6 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
         </nav>
         <div className="w-acts">
           {!signedIn && <a className="w-hlink" href={L.login}><LogIn size={17} aria-hidden="true" />Login</a>}
-          {signedIn && <Link className="w-btn pri sm" href={L.dashboard}>Dashboard</Link>}
           {signedIn ? (
             <div className="w-acct" ref={acctRef}>
               <button type="button" className="w-acct-btn" aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}>
@@ -116,14 +115,10 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
           ) : <a className="w-btn pri sm" href={L.signup}>Sign Up</a>}
         </div>
         <div className="w-micons">
-          {signedIn ? <Link className="w-btn pri sm w-mdash" href={L.dashboard}><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
-            : <a className="w-btn out sm w-mlogin" href={L.login}>Login</a>}
-          {signedIn && (
-            <div className="w-acct" ref={acctRef2}>
-              <button type="button" className="w-ic" aria-label={`Account: ${name}`} aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}><UserCircle2 size={23} aria-hidden="true" /></button>
-              {acct && <div className="w-pop" role="menu"><AccountMenu auth={auth} logoutCustomer={logoutCustomer} logoutStaff={logoutStaff} onNavigate={() => setAcct(false)} /></div>}
-            </div>
-          )}
+          {/* profile icon: signed in → dashboard; signed out → the Login / Sign up page */}
+          <a className={`w-prof${signedIn ? " on" : ""}`} href={L.dashboard} aria-label={signedIn ? `My account (${name})` : "Login or sign up"} title={signedIn ? name : "Login / Sign up"}>
+            <UserCircle2 size={26} aria-hidden="true" />
+          </a>
           <button ref={burger} type="button" className="w-burger" aria-label="Open menu" aria-expanded={open} aria-controls="w-drawer" onClick={() => setOpen(true)}><Menu size={24} aria-hidden="true" /></button>
         </div>
       </div>

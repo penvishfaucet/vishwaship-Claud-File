@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Calculator, Headset, Home, LayoutDashboard, LogIn, PackageSearch } from "lucide-react";
+import { Calculator, Headset, Home, PackageSearch, UserCircle2 } from "lucide-react";
 import { isCurrent } from "./nav";
 
 /** Phones only: app-style bottom tab bar with the main public destinations and the account action. */
@@ -23,9 +23,9 @@ export function MobileTabBar({ accountHref, signedIn }: { accountHref: string; s
           </Link>
         );
       })}
-      <a href={accountHref} className="acct">
-        {signedIn ? <LayoutDashboard size={21} aria-hidden="true" /> : <LogIn size={21} aria-hidden="true" />}
-        <span>{signedIn ? "Dashboard" : "Login"}</span>
+      <a href={accountHref} className="acct" aria-label={signedIn ? "My account" : "Login or sign up"}>
+        <UserCircle2 size={22} aria-hidden="true" />
+        <span>Account</span>
       </a>
     </nav>
   );

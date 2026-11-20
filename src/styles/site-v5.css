@@ -120,3 +120,9 @@ html body .wv.v5 .w-strip{margin-top:28px}
   .v6-what{flex-direction:column;gap:12px;padding:20px;margin-top:-28px}
   .v6-what .ic{width:50px;height:50px}
 }
+
+/* phones: header = logo + profile icon + menu box */
+.w-prof{width:46px;height:46px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;color:var(--n);border:1.5px solid var(--ln);background:#fff;text-decoration:none;transition:border-color .15s,color .15s,background .15s}
+.w-prof:hover,.w-prof:focus-visible{border-color:var(--o2);color:var(--o2)}
+.w-prof.on{color:var(--o2);background:var(--os);border-color:var(--ol)}
+@media (max-width:420px){.w-prof{width:44px;height:44px}}
