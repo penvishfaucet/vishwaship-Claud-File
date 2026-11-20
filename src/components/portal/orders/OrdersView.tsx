@@ -533,7 +533,8 @@ function TrackingCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void
         : <span className="ov-badge orange">AWB Pending</span>}</div>
       {s.lr && <div className="ov-awb">LR Number: <span className="mono">{s.lr}</span><CopyBtn value={s.lr} label="LR number" /></div>}
       <div>Status: <b>{statusLabel(s.status)}</b></div>
-      {(s.lastLocation || s.lastEventAt) && <div className="tiny muted">{s.lastLocation ?? "—"}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
+      {(s.lastLocation || s.lastEventAt) && <div className="tiny muted">{s.lastLocation ? <b className="ovt-loc">{placeName(s.lastLocation)}</b> : "—"}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
+      <EtaLine s={s} />
       {s.awb && !["delivered", "rto_delivered", "cancelled"].includes(s.status) && (
         s.lastSyncError
           ? <button type="button" className="ov-sync bad ov-copy" style={{ padding: 0 }} onClick={() => open({ kind: "track", shipmentId: s.id })}>Sync failed{s.syncFailures > 1 ? ` (${s.syncFailures}×)` : ""} · Retry</button>
@@ -541,6 +542,16 @@ function TrackingCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void
       )}
     </div>
   );
+}
+
+/** Courier hub codes like "Noida_Gateway_UP" read as "Noida Gateway UP". */
+const placeName = (l: string) => l.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+
+/** Delivered date, or the courier's expected delivery date (when shared). */
+function EtaLine({ s }: { s: NonNullable<OrderRow["shipment"]> }) {
+  if (s.deliveredAt) return <div className="tiny ovt-eta ok">Delivered {istDate(s.deliveredAt)} {istTime(s.deliveredAt)}</div>;
+  if (!s.etaDate || ["cancelled", "lost", "rto_in_transit", "rto_delivered", "rto_initiated"].includes(s.status)) return null;
+  return <div className="tiny ovt-eta">Expected delivery: <b>{new Date(s.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" })}</b></div>;
 }
 
 function PaymentCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void }) {
@@ -773,7 +784,8 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
           </div>
         )}
         <div>Status: <span className={`oc-st ${status.tone}`}>{status.text}</span></div>
-        {s?.lastLocation && <div className="tiny muted">{s.lastLocation}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
+        {s?.lastLocation && <div className="tiny muted">{placeName(s.lastLocation)}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
+        {s && <EtaLine s={s} />}
       </div>
       <div className="oc-row">
         <UserRound size={30} aria-hidden className="oc-ico" />

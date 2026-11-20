@@ -351,3 +351,8 @@ html .oc-split .oc-btn:disabled{background:#e6ebf2!important;color:#4f5d78!impor
   /* an open Label / ⋯ menu sits above the pinned Action cells of the rows below */
   html body .ovt .ov-table td.act:has(.ov-menu){z-index:30}
 }
+
+.ovt-eta{color:#051C46;margin-top:2px}
+.ovt-eta b{color:#C2410C}
+.ovt-eta.ok{color:#15803d;font-weight:600}
+.ovt-loc{color:#051C46;font-weight:600}

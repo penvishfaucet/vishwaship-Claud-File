@@ -68,8 +68,76 @@ const STATUS: Record<string, NormalizedStatus> = {
   MANIFESTED: "booked", NOT_PICKED: "pickup_pending", PICKED_UP: "picked_up", LEFT_ORIGIN: "in_transit", REACH_DESTINATION: "at_delivery_center",
   UNDEL_REATTEMPT: "ndr", PART_DEL: "delivered", OFD: "out_for_delivery", DELIVERED: "delivered", RETURNED_INTRANSIT: "rto_in_transit",
   RECEIVED_AT_RETURN_CENTER: "rto_in_transit", RETURN_OFD: "rto_in_transit", RETURN_DELIVERED: "rto_delivered", LOST: "lost", CANCELLED: "cancelled",
+  // words seen in LTL scan lists / the tracking page
+  OPEN: "pickup_pending", SCHEDULED: "pickup_pending", PENDING: "pickup_pending", PICKUP_SCHEDULED: "pickup_pending", NOT_PICKED_UP: "pickup_pending",
+  IN_TRANSIT: "in_transit", INTRANSIT: "in_transit", DISPATCHED: "out_for_delivery", OUT_FOR_DELIVERY: "out_for_delivery",
+  REACHED_DESTINATION: "at_delivery_center", AT_DESTINATION: "at_delivery_center", UNDELIVERED: "ndr", RTO: "rto_in_transit", RETURNED: "rto_in_transit",
 };
-export const mapB2bStatus = (s: string): NormalizedStatus => STATUS[s.toUpperCase().replace(/\s+/g, "_")] ?? "in_transit";
+export const mapB2bStatus = (s: string): NormalizedStatus => STATUS[s.trim().toUpperCase().replace(/[\s-]+/g, "_")] ?? "in_transit";
+
+/**
+ * Delhivery B2B (LTL) /lrn/track answer → events + ETA. The response body is not published, so it is read defensively:
+ * the latest status at the top, plus any list of scans found anywhere in the body (status, time, location, remark),
+ * and an expected / promised delivery date if one is present. Times without a zone are IST.
+ */
+export function parseB2bTrack(json: unknown, awb: string): { status: NormalizedStatus; events: import("./types").TrackingEvent[]; etaDate?: string; raw: string } | null {
+  const T_KEYS = ["scan_timestamp", "scan_time", "scan_date_time", "scan_datetime", "status_time", "status_date_time", "timestamp", "date_time", "datetime", "updated_at", "created_at", "date"];
+  const S_KEYS = ["status", "scan_status", "scan", "status_type", "current_status", "activity", "event"];
+  const L_KEYS = ["location", "scan_location", "current_location", "location_name", "hub", "hub_name", "facility", "city", "center", "centre"];
+  const R_KEYS = ["remarks", "remark", "instructions", "status_description", "description", "reason", "message"];
+  const iso = (t: string | null) => {
+    if (!t) return null;
+    const v = /^\d{10,13}$/.test(t) ? new Date(Number(t) * (t.length === 10 ? 1000 : 1)) : new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(t) || !/\d{2}:\d{2}/.test(t) ? t : `${t.replace(" ", "T")}+05:30`);
+    return Number.isNaN(v.getTime()) ? null : v.toISOString();
+  };
+  const text = (o: Record<string, unknown>, keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+      if (typeof v === "number") return String(v);
+      if (v && typeof v === "object" && !Array.isArray(v)) { const n = text(v as Record<string, unknown>, ["name", "city", "location", "value"]); if (n) return n; }
+    }
+    return null;
+  };
+  const events: import("./types").TrackingEvent[] = [];
+  // every array of scan-like objects (has a status and a time), at any depth
+  const walk = (v: unknown, depth: number) => {
+    if (!v || typeof v !== "object" || depth > 6) return;
+    if (Array.isArray(v)) {
+      for (const x of v) {
+        if (x && typeof x === "object" && !Array.isArray(x)) {
+          const o = x as Record<string, unknown>;
+          const raw = text(o, S_KEYS), at = iso(text(o, T_KEYS));
+          if (raw && at && raw.length <= 120) events.push({ status: mapB2bStatus(raw), rawStatus: raw.slice(0, 200), location: text(o, L_KEYS)?.slice(0, 200) ?? undefined, occurredAt: at, remark: text(o, R_KEYS)?.slice(0, 300) ?? undefined });
+        }
+        walk(x, depth + 1);
+      }
+      return;
+    }
+    for (const x of Object.values(v as Record<string, unknown>)) if (x && typeof x === "object") walk(x, depth + 1);
+  };
+  walk(json, 0);
+  // the latest status (top level / data / data[0])
+  const tops = [json, (json as Record<string, unknown> | null)?.data, ((json as Record<string, unknown> | null)?.data as unknown[] | undefined)?.[0]].filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x));
+  let raw = "", at: string | null = null, loc: string | null = null, remark: string | null = null, eta: string | null = null;
+  for (const o of tops) {
+    raw ||= text(o, ["status", "current_status", "lrn_status", "shipment_status"]) ?? "";
+    at ||= iso(text(o, ["status_time", "status_date_time", "timestamp", "updated_at", "last_update", "last_updated"]));
+    loc ||= text(o, ["location", "current_location", "scan_location", "last_location", "hub_name"]);
+    remark ||= text(o, ["remarks", "remark", "status_description", "instructions"]);
+    eta ||= iso(text(o, ["edd", "expected_delivery_date", "promised_delivery_date", "estimated_delivery_date", "expected_date", "eta", "promise_date", "pdd"]));
+  }
+  if (!raw && !events.length) return null;
+  const sorted = [...events].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
+  const last = sorted.at(-1);
+  if (raw) {
+    // the headline status, unless the newest scan already says the same; without a time it is "now" (the poll dedupes repeats)
+    const when = at ?? (last && last.rawStatus.toUpperCase() === raw.toUpperCase() ? last.occurredAt : new Date().toISOString());
+    if (!events.some((e) => e.rawStatus.toUpperCase() === raw.toUpperCase() && e.occurredAt === when)) events.push({ status: mapB2bStatus(raw), rawStatus: raw.slice(0, 200), location: loc?.slice(0, 200) ?? last?.location, occurredAt: when, remark: remark?.slice(0, 300) ?? undefined });
+  }
+  const status = raw ? mapB2bStatus(raw) : last!.status;
+  return { status, events, etaDate: eta ?? undefined, raw: raw || last!.rawStatus };
+}
 
 const LABEL_SIZE: Partial<Record<LabelFormat, string>> = { a4: "a4", thermal_4x4: "md", thermal_3x4: "std", thermal_2x4: "sm" };
 
@@ -265,12 +333,9 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
   async track(ctx, awb) {
     const r = await call(ctx, `/lrn/track?lrnum=${encodeURIComponent(awb)}`);
     if (!r.ok) return r;
-    const raw = firstString(r.value.json, ["status", "data.status", "data.0.status", "current_status", "data.current_status"]) ?? "";
-    if (!raw) return { ok: false, error: { category: "not_found", message: "No tracking status yet", retryable: true } };
-    const at = firstString(r.value.json, ["timestamp", "data.timestamp", "data.0.timestamp", "status_time", "data.status_time", "updated_at", "data.updated_at", "data.0.status_time"]) ?? new Date().toISOString();
-    const loc = firstString(r.value.json, ["location", "data.location", "data.0.location"]) ?? undefined;
-    const status = mapB2bStatus(raw);
-    return { ok: true, value: { awb, carrierName: "Delhivery", status, events: [{ status, rawStatus: raw, location: loc, occurredAt: new Date(at).toISOString() }] } };
+    const t = parseB2bTrack(r.value.json, awb);
+    if (!t) return { ok: false, error: { category: "not_found", message: "No tracking status yet", retryable: true } };
+    return { ok: true, value: { awb, carrierName: "Delhivery", status: t.status, events: t.events, etaDate: t.etaDate } };
   },
 
   async cancel(ctx, ref) {

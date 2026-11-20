@@ -48,8 +48,15 @@ export async function ingestEvents(shipmentId: string, events: TrackingEvent[], 
   // shipment's status / latest location / time only move to an event at least as new as the stored one.
   const valid = events.filter((e) => e && e.status && !Number.isNaN(new Date(e.occurredAt).getTime()));
   const time = (e: TrackingEvent) => new Date(e.occurredAt).getTime();
+  // carriers that only report the latest status (no scan time) would otherwise add the same line every poll
+  const [prev] = await db.select({ status: schema.shipmentEvents.status, raw: schema.shipmentEvents.rawStatus, location: schema.shipmentEvents.location })
+    .from(schema.shipmentEvents).where(eq(schema.shipmentEvents.shipmentId, shipmentId)).orderBy(sql`${schema.shipmentEvents.occurredAt} desc`).limit(1);
+  let last = prev ? { status: prev.status, raw: prev.raw ?? "", location: prev.location ?? null } : null;
   for (const e of [...valid].sort((a, b) => time(a) - time(b))) {
     const at = new Date(e.occurredAt);
+    const same = last && last.status === e.status && last.raw === (e.rawStatus ?? "") && (last.location ?? null) === (e.location ?? null);
+    last = { status: e.status, raw: e.rawStatus ?? "", location: e.location ?? null };
+    if (same && source === "poll" && sh.lastEventAt && at >= sh.lastEventAt) continue;
     const r = await db.insert(schema.shipmentEvents).values({
       id: newId("ev"), shipmentId, dedupeKey: `${shipmentId}:${e.status}:${e.rawStatus}:${at.toISOString()}`,
       status: e.status, rawStatus: e.rawStatus, location: e.location ?? null, occurredAt: at, source, remark: e.remark?.slice(0, 300) ?? null,
