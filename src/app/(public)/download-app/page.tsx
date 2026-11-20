@@ -12,7 +12,8 @@ export default function DownloadAppPage() {
         <h1 className="vs-h2">Vishwaship for Android</h1>
         <p className="mt16">
           Book shipments, compare courier rates, print labels, recharge your wallet and track orders from your phone.
-          Sign in with your existing Vishwaship email or mobile and password. Your orders, wallet and tickets are the same as on the website.
+          The app is the Vishwaship website in a full-screen app, so everything new on the website is in the app straight away.
+          Sign in with your existing Vishwaship account. Your orders, wallet and tickets are the same as on the website.
         </p>
         <div className="card mt16" style={{ padding: 16 }}>
           <p style={{ margin: 0 }}>

@@ -1,5 +1,13 @@
 # Vishwaship Android app: handoff (2026-11-20, branch `feat/android-app`)
 
+## Update 2026-11-20 (v1.1.0): the app now shows the website
+At the owner's request the app is now the website itself, full screen: a **Trusted Web Activity**, which runs the site in the phone's Chrome without a URL bar. It opens `https://vishwaship.in/portal/`. Any change made to the website (new pages, design, features, prices, settings) appears in the app straight away, with no app update. Sign-in (including Continue with Google), wallet recharge, labels, uploads and printing behave exactly as in Chrome.
+- Manifest: `com.google.androidbrowserhelper.trusted.LauncherActivity` (androidbrowserhelper 2.5.0). Links to `https://vishwaship.in/portal/…` open in the app.
+- URL-bar-free mode needs `https://vishwaship.in/.well-known/assetlinks.json` to list the signing key. The route includes the upload-key fingerprint by default. Add the Play App Signing fingerprint through `ANDROID_CERT_SHA256` once the app is on Play. If Chrome cannot verify the site, the app still works but shows a small URL bar.
+- Phones without Chrome (or another browser that supports Trusted Web Activities) open the site in a Custom Tab.
+- A new APK is only needed to change the app icon, name or start page. Version 1.1.0 (code 2) installs over 1.0.0 because it is signed with the same key.
+- The native Compose screens and the `/api/mobile/v1` API from v1.0.0 stay in the repo, but this build does not launch them. The rest of this document describes v1.0.0.
+
 ## What was built
 - **Android app** in `android/`: Kotlin, Jetpack Compose, Material 3, Gradle 8.11 / AGP 8.7. There is no WebView: every screen is native, and only settings-type pages hand off to the website in a Chrome Custom Tab. Flavors: `staging` (`in.vishwaship.app.staging`, talks to `http://10.0.2.2:3000` by default) and `production` (`in.vishwaship.app`, `https://vishwaship.in`).
 - **Backend additions** (backward compatible; the website is unchanged for customers):
