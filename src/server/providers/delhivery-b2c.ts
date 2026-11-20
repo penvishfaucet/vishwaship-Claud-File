@@ -182,5 +182,12 @@ export const delhiveryB2cAdapter: ShippingAdapter = {
     return { ok: true, value: { acknowledged: true } };
   },
 
-  async ndrAction() { return unsupported("NDR action"); },
+  async ndrAction(ctx, ref, action) {
+    if (action.kind !== "reattempt") return unsupported(action.kind === "rto" ? "RTO request" : "Address change");
+    const r = await call(ctx, "/api/p/update", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ data: [{ waybill: ref.awb, act: "RE-ATTEMPT" }] }) });
+    if (!r.ok) return r;
+    const j = r.value.json as Record<string, unknown> | null;
+    if (j && (j.status === false || j.success === false || j.error)) return { ok: false, error: { category: "validation", message: providerError(j, "Delhivery refused the re-attempt"), retryable: false } };
+    return { ok: true, value: { acknowledged: true } };
+  },
 };

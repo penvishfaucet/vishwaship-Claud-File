@@ -104,6 +104,8 @@ async function amendDestination(orderId: string, shipmentId: string, next: Parti
 }
 
 async function onStatusChange(orgId: string, orderId: string, shipmentId: string, status: NormalizedStatus) {
+  // a failed delivery opens an NDR case (and the AI call, when the client switched it on)
+  if (status === "ndr") await (await import("@/server/ndr/service")).openNdrCase(shipmentId).catch((e) => console.error("[ndr]", (e as Error).message));
   // Email updates (Admin → Settings → Email rules): one job per shipment + status; the email log dedupes per address.
   await enqueue("email.shipment", { shipmentId, status }, { dedupeKey: `email:${shipmentId}:${status}` });
   if (status === "out_for_delivery") {

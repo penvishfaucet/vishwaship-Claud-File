@@ -16,8 +16,8 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp" | "aisensy";
-  group: "Email" | "Sign-in" | "WhatsApp";
+  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp" | "aisensy" | "bolna";
+  group: "Email" | "Sign-in" | "WhatsApp" | "AI calling";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
   guide: string[]; links: Array<{ label: string; url: string }>;
@@ -93,6 +93,24 @@ export const SERVICES: ServiceDef[] = [
     links: [{ label: "AiSensy", url: "https://app.aisensy.com" }],
   },
   {
+    adapter: "bolna", group: "AI calling", name: "Bolna (AI NDR calls)",
+    purpose: "AI voice calls to buyers when a delivery fails (NDR): asks if they still want the parcel, then re-attempt or return.",
+    fields: [
+      { key: "apiKey", label: "API key", secret: true, required: true, placeholder: "bn-…", help: "Bolna dashboard → Developers → API keys" },
+      { key: "agentId", label: "Agent ID", secret: false, required: true, placeholder: "e.g. 3c90c3cc-0d44-4b50-…", help: "The Bolna agent set up for NDR calls (Agents → copy ID)" },
+      { key: "webhookToken", label: "Webhook token", secret: true, required: true, placeholder: "Any long random text you choose", help: "Make up a long random text; it goes in the webhook URL below" },
+    ],
+    guide: [
+      "Open platform.bolna.ai and sign up (pay as you go — recharge from $10, no subscription).",
+      "Agents → New agent → language Hindi + English. Prompt: you call on behalf of {store_name} about order {order_id} (courier {courier}) that could not be delivered ({failure_reason}). Ask if the buyer still wants it; if yes, ask a convenient day and confirm the address {delivery_address}; COD {cod_amount}. Be short and polite.",
+      "In the agent’s Extraction / Analytics tab add: ndr_decision (reattempt or rto), preferred_date, new_address.",
+      "In the agent’s settings, set the Webhook URL below (with your token at the end) so call results come back to Vishwaship.",
+      "Buy a calling number in Bolna (or connect Exotel / Plivo), then copy the API key and the Agent ID here → Save → Test connection → Turn ON.",
+      "Set the price per call in Admin → NDR / RTO. Clients switch AI calling on from their NDR page.",
+    ],
+    links: [{ label: "Bolna", url: "https://platform.bolna.ai" }, { label: "Bolna docs", url: "https://www.bolna.ai/docs" }],
+  },
+  {
     adapter: "meta_whatsapp", group: "WhatsApp", name: "Meta WhatsApp Cloud API", exclusive: true,
     purpose: "The same WhatsApp messages sent directly through Meta (instead of WATI).",
     fields: [
@@ -123,11 +141,12 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   if (adapter === "google_oauth") return [{ label: "Authorized JavaScript origin", value: u }, { label: "Authorized redirect URI", value: `${u}/api/auth/google/callback` }];
   if (adapter === "wati") return [{ label: "Webhook URL", value: `${u}/api/webhooks/wati?token=<your webhook token>` }];
   if (adapter === "aisensy") return [{ label: "Webhook URL", value: `${u}/api/webhooks/aisensy?token=<your webhook token>` }];
+  if (adapter === "bolna") return [{ label: "Webhook URL", value: `${u}/api/webhooks/bolna?token=<your webhook token>` }];
   if (adapter === "meta_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -158,6 +177,7 @@ function hostsFor(adapter: string, v: Record<string, string>): string[] {
   if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
   if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
   if (adapter === "aisensy") return ["backend.aisensy.com"];
+  if (adapter === "bolna") return ["api.bolna.ai"];
   if (adapter === "wati") { try { const h = new URL(v.apiEndpoint).hostname.toLowerCase(); return /(^|\.)wati\.io$/.test(h) ? [h] : []; } catch { return []; } }
   return [];
 }
@@ -182,7 +202,7 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
   if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
   if (adapter === "aisensy" && v.apiKey.length < 20) return { ok: false, message: "Copy the full AiSensy API key (Manage → API Key)" };
-  if (((adapter === "wati" || adapter === "aisensy") && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
+  if (((adapter === "wati" || adapter === "aisensy" || adapter === "bolna") && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
   const changed = def.fields.some((f) => (old[f.key] ?? "") !== v[f.key]);
   const cleaned = Object.fromEntries(Object.entries(v).filter(([, x]) => x));
   const db = await getDb();
@@ -226,6 +246,15 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
       const base = v.apiEndpoint.replace(/\/+$/, "");
       const x = await call(`${base}/api/v1/getMessageTemplates?pageSize=1`, { headers: { authorization: `Bearer ${v.accessToken}` } });
       res = x.ok ? { ok: true, message: "Connected to WATI (templates readable)" } : { ok: false, message: x.status === 401 || x.status === 403 ? "WATI rejected the access token" : `WATI HTTP ${x.status}` };
+    } else if (adapter === "bolna") {
+      // read the agent: proves the key and the agent ID without placing a call
+      let x = await call(`https://api.bolna.ai/v2/agent/${encodeURIComponent(v.agentId)}`, { headers: { authorization: `Bearer ${v.apiKey}` } });
+      if (x.status === 404) x = await call(`https://api.bolna.ai/agent/${encodeURIComponent(v.agentId)}`, { headers: { authorization: `Bearer ${v.apiKey}` } });
+      const j = (await x.json().catch(() => ({}))) as { agent_name?: string; name?: string; message?: string };
+      res = x.ok ? { ok: true, message: `Connected to Bolna — agent “${j.agent_name ?? j.name ?? v.agentId}”` }
+        : x.status === 401 || x.status === 403 ? { ok: false, message: "Bolna rejected the API key — copy it again" }
+        : x.status === 404 ? { ok: false, message: "Bolna could not find that Agent ID — copy it from Agents" }
+        : { ok: false, message: `Bolna HTTP ${x.status}${j.message ? `: ${j.message}` : ""}` };
     } else if (adapter === "aisensy") {
       // No read-only endpoint: ask for a campaign that cannot exist — nothing is sent. A valid key gets "campaign not found".
       const x = await call("https://backend.aisensy.com/campaign/t1/api/v2", { method: "POST", headers: { "content-type": "application/json" },

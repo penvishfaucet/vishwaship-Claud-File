@@ -211,6 +211,12 @@ registerHandler("email.shipment", async (p): Promise<JobResult> => {
   return { done: true };
 });
 
+/** ndr.ai_call — AI call to the buyer about a failed delivery (server/ndr/ai-call.ts). */
+registerHandler("ndr.ai_call", async (p): Promise<JobResult> => {
+  const { placeNdrCall } = await import("@/server/ndr/ai-call");
+  return placeNdrCall(String(p.caseId));
+});
+
 registerHandler("tracking.poll", async (p): Promise<JobResult> => {
   const { refreshFromCarrier } = await import("@/server/tracking/service");
   await refreshFromCarrier(String(p.shipmentId)).catch(() => null);

@@ -33,6 +33,7 @@ export const PROVIDER_CATALOG = [
   { adapter: "cashfree", category: "payments", name: "Cashfree", status: "implemented" },
   { adapter: "wati", category: "messaging", name: "WATI (WhatsApp)", status: "implemented" },
   { adapter: "aisensy", category: "messaging", name: "AiSensy (WhatsApp)", status: "implemented" },
+  { adapter: "bolna", category: "messaging", name: "Bolna (AI NDR calls)", status: "implemented" },
   { adapter: "sms", category: "messaging", name: "SMS / OTP", status: "awaiting_provider" },
   { adapter: "resend", category: "email", name: "Resend", status: "implemented" },
   { adapter: "smtp", category: "email", name: "Custom SMTP", status: "implemented" },
