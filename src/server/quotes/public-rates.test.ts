@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/server/db/client", () => ({ getDb: async () => { throw new Error("no db in this test"); }, schema: {} }));
-const { emptyRouteMessage, MSG, PublicRatesInput, sourceName } = await import("./public-rates");
+const { emptyRouteMessage, MSG, PublicRatesInput, serviceKey, sourceName } = await import("./public-rates");
 const { boxTotals } = await import("@/components/site/RateCalcV3");
 
 const O = "249402", D = "400001";
@@ -42,6 +42,16 @@ describe("public calculator input", () => {
     expect(PublicRatesInput.safeParse({ ...ok, paymentType: "cod", codAmountRupees: 500 }).success).toBe(true);
     expect(PublicRatesInput.safeParse({ ...ok, paymentType: "fod" }).success).toBe(false);
     expect(PublicRatesInput.safeParse({ ...ok, paymentType: "fod", packages: [{ ...ok.packages[0], weightKg: 16 }] }).success).toBe(true);
+  });
+});
+
+describe("service keys", () => {
+  it("single-mode Delhivery accounts keep one key; partner networks get one per mode", () => {
+    expect(serviceKey("delhivery_b2b", "B2B")).toBe("delhivery_b2b");
+    expect(serviceKey("delhivery_b2b", "B2C")).toBe("delhivery_b2b");
+    expect(serviceKey("delhivery_b2c", "B2C")).toBe("delhivery_b2c");
+    expect(serviceKey("shipmozo", "B2B")).toBe("shipmozo_b2b");
+    expect(serviceKey("shiporax", "B2C")).toBe("shipmozo_b2c");
   });
 });
 

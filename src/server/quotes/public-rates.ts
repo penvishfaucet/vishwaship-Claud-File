@@ -64,11 +64,13 @@ const adapterOf = (a: { adapter: string; configPublic: unknown }) => {
   const proto = (a.configPublic as Record<string, unknown> | null)?.protocol;
   return typeof proto === "string" && proto ? proto : a.adapter;
 };
-const serviceKey = (adapter: string, mode: "B2C" | "B2B") =>
-  adapter === "shiporax" ? `shipmozo_${mode.toLowerCase()}` : `${adapter}_${mode.toLowerCase()}`; // Shipora X is another partner-network route
+/** Adapters that serve one shipment type only (their key already names it). */
+const FIXED_MODE: Record<string, "B2C" | "B2B"> = { delhivery_b2c: "B2C", delhivery_b2b: "B2B" };
+export const serviceKey = (adapter: string, mode: "B2C" | "B2B") =>
+  FIXED_MODE[adapter] ? adapter : adapter === "shiporax" ? `shipmozo_${mode.toLowerCase()}` : `${adapter}_${mode.toLowerCase()}`; // Shipora X is another partner-network route
 
 export function sourceName(adapter: string, mode: "B2C" | "B2B", config: Record<string, unknown> | null) {
-  if (adapter === "delhivery_b2c" || adapter === "delhivery_b2b") return `Delhivery ${mode}`;
+  if (FIXED_MODE[adapter]) return `Delhivery ${FIXED_MODE[adapter]}`;
   if (adapter === "shiprocket") return `Shiprocket ${mode}`;
   if (adapter === "demo") return `Sample network ${mode}`;
   const code = partnerCodeFor(adapter, config);
@@ -121,6 +123,7 @@ export async function publicRates(v: PublicRatesInput) {
   for (const st of statuses) {
     const a = byId.get(st.accountId);
     const ad = a ? adapterOf(a) : st.adapter;
+    if (FIXED_MODE[ad] && FIXED_MODE[ad] !== st.mode) continue; // e.g. the Delhivery B2B account asked for a B2C rate: not a B2C service
     const key = serviceKey(ad, st.mode);
     const prev = services.find((x) => x.key === key);
     const state: PublicServiceState["state"] = st.status === "ok" ? "available" : st.status === "skipped" ? "not_offered" : st.status;
