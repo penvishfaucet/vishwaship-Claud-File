@@ -1,17 +1,22 @@
 /**
- * PIN -> city/district/state lookup. Production uses the India Post all-India pincode directory
- * (data.gov.in "All India Pincode Directory", loaded into a pincodes table by scripts/import-pincodes.ts).
- * This small offline prefix map is only a fallback so the form can suggest a state; the user can correct it.
+ * PIN -> city/district/state lookup. Production uses the India Post pincode directory (src/server/pincode.ts).
+ * This offline prefix map is only a fallback for when the directory is down, so the form can still suggest a
+ * real state (the user can correct it). Later entries win, so the narrower prefixes are listed last.
  */
 const STATE_BY_PREFIX: Array<[RegExp, string]> = [
-  [/^11/, "Delhi"], [/^12|^13/, "Haryana"], [/^14|^15|^16/, "Punjab"], [/^17/, "Himachal Pradesh"], [/^18|^19/, "Jammu & Kashmir"],
-  [/^20|^21|^22|^23|^24|^25|^26|^27|^28/, "Uttar Pradesh"], [/^24[6-9]|^26[23]/, "Uttarakhand"], [/^30|^31|^32|^33|^34/, "Rajasthan"],
-  [/^36|^37|^38|^39/, "Gujarat"], [/^40|^41|^42|^43|^44/, "Maharashtra"], [/^45|^46|^47|^48/, "Madhya Pradesh"], [/^49/, "Chhattisgarh"],
-  [/^50/, "Telangana"], [/^51|^52|^53/, "Andhra Pradesh"], [/^56|^57|^58|^59/, "Karnataka"], [/^60|^61|^62|^63|^64/, "Tamil Nadu"],
-  [/^67|^68|^69/, "Kerala"], [/^70|^71|^72|^73|^74/, "West Bengal"], [/^75|^76|^77/, "Odisha"], [/^78/, "Assam"], [/^79/, "North East"],
-  [/^80|^81|^82|^83|^84|^85/, "Bihar / Jharkhand"],
+  [/^11/, "Delhi"], [/^1[23]/, "Haryana"], [/^1[456]/, "Punjab"], [/^160/, "Chandigarh"], [/^17/, "Himachal Pradesh"],
+  [/^1[89]/, "Jammu & Kashmir"], [/^1941/, "Ladakh"],
+  [/^2[0-8]/, "Uttar Pradesh"], [/^24[6-9]|^2447|^262[5-9]|^263/, "Uttarakhand"],
+  [/^3[0-4]/, "Rajasthan"], [/^3[6-9]/, "Gujarat"],
+  [/^4[0-4]/, "Maharashtra"], [/^403/, "Goa"], [/^4[5-8]/, "Madhya Pradesh"], [/^49/, "Chhattisgarh"],
+  [/^50/, "Telangana"], [/^5[1-3]/, "Andhra Pradesh"], [/^5[6-9]/, "Karnataka"],
+  [/^6[0-4]/, "Tamil Nadu"], [/^6[7-9]/, "Kerala"],
+  [/^7[0-4]/, "West Bengal"], [/^737/, "Sikkim"], [/^744/, "Andaman and Nicobar Islands"],
+  [/^7[5-7]/, "Odisha"], [/^78/, "Assam"],
+  [/^79[0-2]/, "Arunachal Pradesh"], [/^79[34]/, "Meghalaya"], [/^795/, "Manipur"], [/^796/, "Mizoram"], [/^79[78]/, "Nagaland"], [/^799/, "Tripura"],
+  [/^8[0-5]/, "Bihar"], [/^81[4-6]|^82[5-9]|^83[0-5]/, "Jharkhand"],
 ];
-const CITY: Record<string, string> = { "110": "New Delhi", "400": "Mumbai", "411": "Pune", "560": "Bengaluru", "600": "Chennai", "700": "Kolkata", "500": "Hyderabad", "380": "Ahmedabad", "302": "Jaipur", "122": "Gurugram", "781": "Guwahati", "226": "Lucknow" };
+const CITY: Record<string, string> = { "110": "New Delhi", "400": "Mumbai", "411": "Pune", "560": "Bengaluru", "600": "Chennai", "700": "Kolkata", "500": "Hyderabad", "380": "Ahmedabad", "302": "Jaipur", "122": "Gurugram", "781": "Guwahati", "226": "Lucknow", "799": "West Tripura" };
 
 export function guessPincode(pin: string): { city?: string; state?: string } {
   if (!/^[1-9]\d{5}$/.test(pin)) return {};

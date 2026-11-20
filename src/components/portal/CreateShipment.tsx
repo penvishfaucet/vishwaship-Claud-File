@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { AddressForm, type SavedWarehouse } from "@/components/portal/AddressForm";
 import { formatINR } from "@/lib/money";
+import { guessPincode } from "@/lib/pincodes";
 import { FOD_RULE_TEXT, fodAllowed, paymentTypeOf } from "@/lib/payment";
 import { carrierLogo } from "@/lib/site";
 import type { OfferView } from "@/components/public/RateCalculator";
@@ -105,14 +106,34 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   async function lookupPin(v: string) {
     latestPin.current = v;
     setPinState("loading"); setFe((x) => ({ ...x, pin: undefined, pinRetry: false }));
+    // a brief server restart or network blip should not stop the form: ask once more before giving up
+    const ask = async () => {
+      for (let i = 0; ; i++) {
+        try {
+          const r = await fetch(`/api/portal/pincode/${v}`);
+          if ((r.status >= 500 || r.status === 429) && i === 0) throw new Error(`HTTP ${r.status}`);
+          return { r, j: await r.json().catch(() => ({})) };
+        } catch (e) {
+          if (i > 0) throw e;
+          await new Promise((res) => setTimeout(res, 1500));
+          if (latestPin.current !== v) throw e;
+        }
+      }
+    };
     try {
-      const r = await fetch(`/api/portal/pincode/${v}`);
-      const j = await r.json().catch(() => ({}));
+      const { r, j } = await ask();
       if (latestPin.current !== v) return; // a newer PIN was typed — ignore this late answer
       if (r.ok) setC((s) => (s.pincode === v ? { ...s, city: j.city || s.city, state: j.state || s.state } : s));
       else if (r.status === 404 || r.status === 422) setFe((x) => ({ ...x, pin: j.error?.message ?? "No match for this PIN code" }));
-      else setFe((x) => ({ ...x, pin: "Could not look up this PIN right now.", pinRetry: true }));
-    } catch { if (latestPin.current === v) setFe((x) => ({ ...x, pin: "Could not look up this PIN right now.", pinRetry: true })); }
+      else if (r.status === 401) setFe((x) => ({ ...x, pin: "Your session has ended — log in again to look up the PIN." }));
+      else throw new Error(`HTTP ${r.status}`);
+    } catch {
+      if (latestPin.current !== v) return;
+      // still down: suggest the state from the PIN itself so the user can carry on
+      const g = guessPincode(v);
+      if (g.state) setC((s) => (s.pincode === v ? { ...s, city: s.city || g.city || "", state: s.state || g.state! } : s));
+      setFe((x) => ({ ...x, pin: g.state ? "PIN lookup is slow right now — check City and State, then continue." : "Could not look up this PIN right now.", pinRetry: true }));
+    }
     finally { if (latestPin.current === v) setPinState("idle"); }
   }
   const setPin = (pin: string) => {
