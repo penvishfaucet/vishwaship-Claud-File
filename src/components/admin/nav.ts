@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet,
+  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Tags, Ticket, Truck, Users, Wallet, TrendingUp,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
@@ -22,6 +22,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
   ] },
   { group: "FINANCE", items: [
     { href: "/admin/pricing/", label: "Pricing", icon: Tags, perm: "pricing.read" },
+    { href: "/admin/pnl/", label: "Profit & Loss", icon: TrendingUp, perm: "shipments.cost.read" },
     { href: "/admin/finance/", label: "Wallets", icon: Wallet, perm: "finance.read" },
     { href: "/admin/recharges/", label: "Wallet Recharges", icon: Banknote, perm: "finance.read" },
     { href: "/admin/cod-remittance/", label: "COD & Early COD", icon: BadgeIndianRupee, perm: "finance.read" },

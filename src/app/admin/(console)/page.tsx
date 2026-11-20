@@ -2,6 +2,7 @@ import Link from "next/link";
 import { and, count, desc, eq, gte, inArray, lt, sum } from "drizzle-orm";
 import { CustomerOverview } from "@/components/admin/CustomerOverview";
 import { formatINR } from "@/lib/money";
+import { pnlByOrg } from "@/server/finance/pnl";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -26,6 +27,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
   const activity = await db.select().from(schema.auditLog).orderBy(desc(schema.auditLog.createdAt)).limit(10);
   const showMoney = can(s.role, "shipments.cost.read");
   const sell = Number(tot.sell ?? 0), cost = Number(tot.cost ?? 0);
+  const pnl = showMoney ? (await pnlByOrg({ from: since, to: new Date() })).total : null;
 
   const Tile = ({ href, label, value, tone }: { href: string; label: string; value: string | number; tone: string }) => (
     <Link className={`stat ${tone} stat-link`} href={href}><div className="t">{label}</div><div className="v">{value}</div></Link>
@@ -46,6 +48,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         <Tile href="/admin/shipments/?status=rto" label="RTO" value={st(["rto_initiated", "rto_in_transit", "rto_delivered"])} tone="bl-purple" />
         {showMoney && <Tile href="/admin/reports/" label="Revenue (incl. GST)" value={formatINR(sell)} tone="bl-orange" />}
         {showMoney && <Tile href="/admin/reports/" label="Carrier cost (pre-tax)" value={formatINR(cost)} tone="bl-blue" />}
+        {pnl && <Tile href="/admin/pnl/" label={`${pnl.profit < 0 ? "Loss" : "Profit"} (excl. GST) · ${pnl.marginPct ?? 0}%`} value={`${pnl.profit < 0 ? "−" : ""}${formatINR(Math.abs(pnl.profit))}`} tone={pnl.profit < 0 ? "bl-red" : "bl-green"} />}
         <Tile href="/admin/customers/" label="Customers" value={Number(customers)} tone="bl-navy" />
         <Tile href="/admin/kyc/" label="KYC pending" value={Number(kyc)} tone="bl-yellow" />
       </div>

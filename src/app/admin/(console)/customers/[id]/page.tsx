@@ -25,9 +25,12 @@ import { onboardingState, STEP_TEXT } from "@/server/onboarding";
 import { adminOrderRows, parseOrderFilters, tabCounts } from "@/server/orders/view";
 import { orderStatusText } from "@/lib/order-view";
 import { orgSetting } from "@/server/couriers";
+import { PnlSummary } from "@/components/admin/PnlViews";
+import { pnlByOrg } from "@/server/finance/pnl";
+import { pnlPresets, pnlRange } from "@/server/finance/pnl-range";
 
-const TABS = ["overview", "shipments", "wallet", "kyc", "pricing", "features", "notifications"] as const;
-const TAB_LABEL: Record<(typeof TABS)[number], string> = { overview: "Overview", shipments: "Shipments", wallet: "Wallet & Passbook", kyc: "KYC & Billing", pricing: "Pricing", features: "Features", notifications: "Notifications" };
+const TABS = ["overview", "shipments", "wallet", "pnl", "kyc", "pricing", "features", "notifications"] as const;
+const TAB_LABEL: Record<(typeof TABS)[number], string> = { overview: "Overview", shipments: "Shipments", wallet: "Wallet & Passbook", pnl: "Profit & Loss", kyc: "KYC & Billing", pricing: "Pricing", features: "Features", notifications: "Notifications" };
 const KYC_LABEL: Record<string, string> = { not_started: "KYC not started", pending: "KYC under review", approved: "KYC approved", changes_requested: "KYC changes needed", rejected: "KYC rejected" };
 const KYC_CHIP: Record<string, string> = { approved: "c-active", pending: "c-pending", changes_requested: "c-awaiting_customer", rejected: "c-failed", not_started: "c-draft" };
 const TONE_CHIP: Record<string, string> = { green: "c-delivered", red: "c-ndr", blue: "c-in_transit", orange: "c-out_for_delivery", amber: "c-pending", gray: "c-cancelled" };
@@ -117,7 +120,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
         <Link className="cu-fig" href={shipLink({ tab: "ndr" })}><span>NDR / RTO</span><b>{(sc.ndr + sc.rto_in_transit + sc.rto_delivered).toLocaleString("en-IN")}</b><small>{Number(cancelled)} cancelled</small></Link>
         {perms.wallet && <Link className="cu-fig" href={`/admin/recharges/?org=${id}`}><span>Recharges</span><b>{Number(rc.n).toLocaleString("en-IN")}</b><small>{formatINR(Number(rc.credited))} credited</small></Link>}
       </div>
-      <nav className="tabs">{TABS.filter((t) => t !== "wallet" || perms.wallet).map((t) => <Link key={t} href={`/admin/customers/${id}/?tab=${t}`} className={tab === t ? "on" : ""} aria-current={tab === t ? "page" : undefined}>{TAB_LABEL[t]}</Link>)}</nav>
+      <nav className="tabs">{TABS.filter((t) => (t !== "wallet" || perms.wallet) && (t !== "pnl" || can(s.role, "shipments.cost.read"))).map((t) => <Link key={t} href={`/admin/customers/${id}/?tab=${t}`} className={tab === t ? "on" : ""} aria-current={tab === t ? "page" : undefined}>{TAB_LABEL[t]}</Link>)}</nav>
       {sp.msg && <p className={sp.msg === "saved" || sp.msg === "adjusted" || sp.msg.includes(" ") ? "small t-credit mb12" : "small err mb12"} role="status">{{ nouser: "This customer has no active login user to open.", saved: "Pricing saved.", adjusted: "Wallet adjusted.", range: "Enter 0–500%.", invalid: "Enter an amount and a reason (5+ chars).", insufficient: "Insufficient balance for that debit." }[sp.msg] ?? ""}</p>}
 
       {tab === "overview" && <Overview org={org} addr={addr} users={users} showFull={perms.docs} markup={nk ? `${nk.bps / 100}% (non-KYC margin until KYC is approved)` : `${(ov?.bps ?? settings.global.bps) / 100}% (${ov ? "customer override" : "global default"})`} />}
@@ -138,6 +141,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
           <WalletTab orgId={id} sp={sp} balance={{ availablePaise: avail, postedPaise: wallet?.postedPaise ?? 0, reservedPaise: wallet?.reservedPaise ?? 0 }} />
         </>
       )}
+      {tab === "pnl" && can(s.role, "shipments.cost.read") && <PnlTab orgId={id} sp={sp} />}
       {tab === "kyc" && <KycBilling orgId={id} org={org} showDocs={perms.docs} reasons={ob.reasons} />}
       {tab === "pricing" && (
         <div className="split" style={{ gap: 16, alignItems: "start" }}>
@@ -158,6 +162,36 @@ export default async function CustomerDetail({ params, searchParams }: { params:
       )}
       {tab === "features" && <FeaturesTab orgId={id} write={can(s.role, "modules.manage")} />}
       {tab === "notifications" && <p className="small muted">Customer channel settings and delivery logs: <Link className="link" href={`/admin/notifications/?org=${id}`}>open in Notifications</Link>.</p>}
+    </>
+  );
+}
+
+/** Profit & Loss for one customer: totals for the period and each shipment's charge, cost and profit. */
+async function PnlTab({ orgId, sp }: { orgId: string; sp: Record<string, string | undefined> }) {
+  const r = pnlRange(sp);
+  const { total, gstBps } = await pnlByOrg(r.range, orgId);
+  const db = await getDb();
+  const ships = await db.select({ s: schema.shipments, o: schema.orders.orderNumber }).from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
+    .where(and(eq(schema.shipments.orgId, orgId), eq(schema.shipments.bookingStatus, "confirmed"), sql`${schema.shipments.status} <> 'cancelled'`, r.range ? sql`${schema.shipments.createdAt} between ${r.range.from} and ${r.range.to}` : undefined))
+    .orderBy(desc(schema.shipments.createdAt)).limit(100);
+  const pre = (p: number) => Math.round((p * 10_000) / (10_000 + gstBps));
+  return (
+    <>
+      <nav className="pills mb12">{pnlPresets().map((p) => <Link key={p.label} className={p.qs === r.qs ? "pill on" : "pill"} href={`/admin/customers/${orgId}/?tab=pnl${p.qs ? `&${p.qs}` : ""}`}>{p.label}</Link>)}</nav>
+      <PnlSummary r={total} scope={r.label} />
+      <section className="card p0 mt16">
+        <h2 className="b small card-h" style={{ margin: 0 }}>Per shipment (latest 100) · amounts excl. GST</h2>
+        {ships.length === 0 ? <p className="small muted" style={{ padding: 16 }}>No booked shipments in this period.</p> : (
+          <div className="tbl-wrap"><table className="tbl pl-tbl"><thead><tr><th>Date</th><th>Order / AWB</th><th>Courier</th><th className="num">Charged</th><th className="num">Courier cost</th><th className="num">Profit</th></tr></thead>
+            <tbody>{ships.map(({ s, o }) => {
+              const charged = pre(s.sellPaise + (s.freightPayer === "receiver" ? s.receiverFreightPaise : 0));
+              const cost = s.carrierChargePaise ?? s.costPaise;
+              const p = charged - cost;
+              return <tr key={s.id}><td className="small">{s.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" })}</td><td className="small"><Link className="link-navy" href={`/admin/shipments/${s.id}/`}>{o}</Link><div className="tiny muted mono">{s.awb ?? "—"}</div></td><td className="small">{s.carrierName}<div className="tiny muted">{s.serviceName}{s.freightPayer === "receiver" ? " · FOD" : ""}</div></td><td className="num">{formatINR(charged)}</td><td className="num">{formatINR(cost)}{s.carrierChargePaise != null && s.carrierChargePaise > s.costPaise ? <div className="tiny pl-down">+{formatINR(s.carrierChargePaise - s.costPaise)} vs quote</div> : null}</td><td className={`num b ${p < 0 ? "pl-down" : "pl-up"}`}>{p < 0 ? "−" : ""}{formatINR(Math.abs(p))}</td></tr>;
+            })}</tbody></table></div>
+        )}
+      </section>
+      <p className="tiny muted mt8">FOD rows include the freight the courier collects from the receiver. Revenue in the totals above is wallet-based; WhatsApp / AI-call provider bills are not included.</p>
     </>
   );
 }
