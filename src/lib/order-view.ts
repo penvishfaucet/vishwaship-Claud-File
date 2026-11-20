@@ -128,7 +128,7 @@ export const COD_FILTERS: Array<{ key: string; label: string }> = [
  *  - mm: physical page size (exact PDF page dimensions)
  *  - slots: A4 sheets hold several labels in a grid (cols × rows), placed in order; unused slots stay blank
  */
-export type PrintFormat = "a4_1up" | "a4_fit" | "a4_doc" | "a4_2up" | "a4_4up" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "original";
+export type PrintFormat = "a4_1up" | "a4_fit" | "a4_doc" | "a4_2up" | "a4_4up" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "thermal_38x200" | "original";
 export const PRINT_FORMATS: Array<{ key: PrintFormat; name: string; group: "a4" | "thermal" | "carrier"; w?: string; h?: string; mm?: [number, number]; slots?: [number, number] }> = [
   // a4_fit (default): one shipment's labels (+ B2B document) on one sheet, 2 × 2 grid, up to 4 per sheet
   { key: "a4_fit", name: "A4 · all labels of a shipment on one page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297] },
@@ -143,6 +143,7 @@ export const PRINT_FORMATS: Array<{ key: PrintFormat; name: string; group: "a4" 
   { key: "thermal_4x4", name: "Thermal 4 × 4 inches", group: "thermal", w: "4in", h: "4in", mm: [101.6, 101.6] },
   { key: "thermal_2x4", name: "Thermal 2 × 4 inches", group: "thermal", w: "2in", h: "4in", mm: [50.8, 101.6] },
   { key: "thermal_38x100", name: "Thermal 38 × 100 mm", group: "thermal", w: "38mm", h: "100mm", mm: [38, 100] },
+  { key: "thermal_38x200", name: "Thermal 38 × 200 mm", group: "thermal", w: "38mm", h: "200mm", mm: [38, 200] },
   { key: "original", name: "Carrier label (courier's original)", group: "carrier" },
 ];
 /** Terms printed at the foot of the Vishwaship label: full text where there is room, the short line on small rolls. */

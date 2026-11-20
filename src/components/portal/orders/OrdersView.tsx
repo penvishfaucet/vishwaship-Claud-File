@@ -750,8 +750,8 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
       </div>
       <footer className="oc-foot">
         <div className="small">Order Date: {istDate(r.createdAt)} | {istTime(r.createdAt)}<br />Channel: <span className="oc-chan">{SOURCE[r.source] ?? r.source}</span></div>
-        {s?.awb && fmt
-          ? <LabelSplit formats={s.labelFormats} main={fmt.key} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
+        {s?.awb
+          ? <LabelSplit formats={s.labelFormats} main={fmt?.key ?? "a4_fit"} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
           : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
           : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
       </footer>
@@ -764,7 +764,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
 const LABEL_CHOICES: Array<{ group: string; items: Array<{ key: PrintFormat; name: string }> }> = [
   { group: "A4 print", items: [{ key: "a4_fit", name: "A4 print (up to 4 labels per sheet)" }] },
   { group: "Thermal printer", items: [
-    { key: "thermal_4x6", name: "4 × 6 in" }, { key: "thermal_3x4", name: "3 × 4 in" }, { key: "thermal_4x4", name: "4 × 4 in" }, { key: "thermal_38x100", name: "38 × 100 mm" },
+    { key: "thermal_4x6", name: "4 × 6 in" }, { key: "thermal_3x4", name: "3 × 4 in" }, { key: "thermal_38x100", name: "100 × 38 mm" }, { key: "thermal_38x200", name: "200 × 38 mm" },
   ] },
   { group: "Courier label", items: [{ key: "original", name: "Courier's original label" }] },
 ];
@@ -773,7 +773,7 @@ const LABEL_KEYS = LABEL_CHOICES.flatMap((g) => g.items.map((i) => i.key));
 /** Orange "Label" button: the main part downloads the default (A4 print); the arrow opens the sizes. */
 function LabelSplit({ formats, main, onLabel, busy, cartons, onMenu }: { formats: Array<{ key: PrintFormat; name: string; ok: boolean; reason?: string }>; main: PrintFormat; onLabel: (f: PrintFormat) => void; busy: boolean; cartons: number; onMenu: (o: boolean) => void }) {
   const m = useFixedMenu(onMenu);
-  const ok = (k: PrintFormat) => formats.find((x) => x.key === k);
+  const ok = (k: PrintFormat) => formats.find((x) => x.key === k) ?? (k === "original" ? undefined : { key: k, name: k, ok: true });
   // owner rule: the Label button always prints the A4 sheet; other sizes are in the arrow menu
   void main;
   const first = LABEL_KEYS.find((k) => ok(k)?.ok) ?? "a4_fit";

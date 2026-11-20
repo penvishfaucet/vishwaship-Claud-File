@@ -298,3 +298,9 @@ select.ov-field{padding-right:28px}
 .oc-split .oc-btn{border-radius:0;min-width:0;gap:6px}
 .oc-split .oc-btn.main{padding:10px 12px 10px 16px;border-radius:999px 0 0 999px}
 .oc-split .oc-btn.caret{padding:10px 12px 10px 9px;border-left:1px solid rgba(255,255,255,.55);border-radius:0 999px 999px 0}
+
+.oc-foot{flex-wrap:wrap;row-gap:8px}
+.oc-foot .oc-split{margin-left:auto;flex-shrink:0}
+html .oc-split .oc-btn{background:#E0550B!important;border-color:#E0550B!important;color:#fff!important;font-size:15px;min-height:40px}
+html .oc-split .oc-btn:hover{background:#C2410C!important}
+html .oc-split .oc-btn:disabled{background:#e6ebf2!important;color:#4f5d78!important}

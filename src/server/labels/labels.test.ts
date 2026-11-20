@@ -217,6 +217,18 @@ describe("print formats", { timeout: 20_000 }, () => {
   });
 });
 
+describe("thermal 38 × 200 mm", { timeout: 20_000 }, () => {
+  it("page is 38 × 200 mm, rotated so the barcode runs along the roll, and the AWB decodes", async () => {
+    const sid = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const r = await renderLabels(ORG, [sid], "thermal_38x200");
+    expect(r.skipped).toEqual([]);
+    const [p] = await pdfPages(r.pdf!);
+    expect([p.view[2], p.view[3]].map((x) => Math.round(x / PT))).toEqual([200, 38]);
+    expect(p.rotate).toBe(90);
+    expect(decodeBarcodes(p).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
   const delivers = (p: Awaited<ReturnType<typeof pdfPages>>[number]) => p.items.filter((i) => i.str === "Shipping address :");
 
