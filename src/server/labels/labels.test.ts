@@ -103,7 +103,13 @@ describe("Vishwaship B2B label", { timeout: 20_000 }, () => {
     const sid = await ship({ pieces: ["22009988776601"] });
     const r = await renderLabels(ORG, [sid], "thermal_4x6");
     expect(r.skipped).toEqual([]);
-    const [p] = await pdfPages(r.pdf!);
+    const [docPage, p] = await pdfPages(r.pdf!);
+    // B2B: the shipment document comes first (stapled with the invoice), then one label per carton
+    expect(docPage.text).toContain("SHIPMENT DOCUMENT");
+    expect(docPage.text).toContain("Staple this document with the invoice");
+    expect(docPage.text).toContain("22009988776601");
+    expect(p.text).toContain("Paste this label on carton 1 of 1");
+    expect(r.notices.join(" ")).toContain("staple the shipment document with the invoice");
     expect([p.w, p.h].map((x) => +x.toFixed(2))).toEqual([288, 432]);
     for (const t of ["DELIVER TO", "Shree Balaji Traders Pvt Ltd", "45 Ring Road, Lajpat Nagar", "PIN 110024", "SHIP FROM / PICKUP", "Penvish Bath Fittings LLP", "05ABCPZ9876K1Z2", "Plot 7, Sidcul", "249403", "INV-", "Rs. 75,000.00", "Steel Almirah x2", "Office Chair", "VS-L", "LRN 2200"]) expect(p.text).toContain(t);
     // DELIVER TO comes right after the header, above the barcode and SHIP FROM
@@ -122,9 +128,11 @@ describe("Vishwaship B2B label", { timeout: 20_000 }, () => {
     const pieces = ["22001111000101", "22001111000102", "22001111000103"];
     const sid = await ship({ boxes: 3, pieces });
     const r = await renderLabels(ORG, [sid], "thermal_4x4");
-    const pages = await pdfPages(r.pdf!);
+    const [doc, ...pages] = await pdfPages(r.pdf!);
+    expect(doc.text).toContain("SHIPMENT DOCUMENT");
+    expect(doc.text).toContain("3 CARTONS");
     expect(pages).toHaveLength(3);
-    pages.forEach((p, i) => { expect(p.text).toContain(`CARTON ${i + 1} OF 3`); expect(decodeBarcodes(p)).toContain(pieces[i]); });
+    pages.forEach((p, i) => { expect(p.text).toContain(`CARTON ${i + 1} OF 3`); expect(p.text).toContain(`carton ${i + 1} of 3`); expect(decodeBarcodes(p)).toContain(pieces[i]); });
   });
 
   it("multi-carton B2B without the carrier's carton barcodes is not guessed: skipped with Retry", async () => {
@@ -225,8 +233,10 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
       expect(r.skipped).toEqual([]);
       const pages = await pdfPages(r.pdf!);
       expect(pages).toHaveLength(1);
-      expect(delivers(pages[0])).toHaveLength(boxes);
-      if (boxes > 1) expect(decodeBarcodes(pages[0]).length).toBeGreaterThanOrEqual(boxes); // the test decoder reads standard bar widths (a full-page label draws wider bars)
+      expect(delivers(pages[0])).toHaveLength(boxes + 1); // + the B2B shipment document
+      expect(pages[0].text).toContain("SHIPMENT DOCUMENT");
+      // every stacked label has a readable LRN barcode (the test decoder cannot split two barcodes side by side in a 2 × 2 grid)
+      expect(decodeBarcodes(pages[0]).length).toBeGreaterThanOrEqual(boxes === 3 ? 2 : boxes + 1);
     }
     const a = await ship({ mode: "B2C", provider: "delhivery_b2c" }), b = await ship({ mode: "B2C", provider: "delhivery_b2c" });
     const pages = await pdfPages((await renderLabels(ORG, [a, b], "a4_fit")).pdf!);
@@ -234,7 +244,7 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
   });
 
   it("A4 · label + invoice: labels on the top half, the shipper's invoice below the cut line, no COD amount", async () => {
-    const sid = await ship({ boxes: 2, pieces: ["7700001", "7700002"], pay: "cod" });
+    const sid = await ship({ boxes: 2, pieces: ["7700001", "7700002"], pay: "cod", mode: "B2C", provider: "delhivery_b2c" });
     const r = await renderLabels(ORG, [sid], "a4_doc");
     expect(r.skipped).toEqual([]);
     const [p, ...more] = await pdfPages(r.pdf!);
@@ -246,10 +256,14 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
     expect(inv.transform[5]).toBeLessThan(p.h / 2);
     for (const t of ["cut here", "Penvish Bath Fittings LLP", "05ABCPZ9876K1Z2", "Bill / ship to", "Shree Balaji Traders Pvt Ltd", "Steel Almirah", "Office Chair", "Rs. 25,000.00", "Rs. 50,000.00", "Total Rs. 75,000.00", "COD"]) expect(p.text).toContain(t);
     expect(p.text).not.toContain("1,234.56"); // the COD amount (₹1,234.56) is never printed
-    // 3 cartons: two on the invoice sheet, the third on its own sheet
+    // B2B, 3 cartons: sheet 1 = shipment document + invoice (stapled together), sheet 2 = the 3 carton labels
     const sid3 = await ship({ boxes: 3, pieces: ["7710001", "7710002", "7710003"] });
     const p3 = await pdfPages((await renderLabels(ORG, [sid3], "a4_doc")).pdf!);
-    expect(p3.map((x) => delivers(x).length)).toEqual([2, 1]);
+    expect(p3).toHaveLength(2);
+    expect(p3[0].text).toContain("SHIPMENT DOCUMENT");
+    expect(p3[0].text).toContain("INVOICE");
+    expect(delivers(p3[1])).toHaveLength(3);
+    expect(p3[1].text).not.toContain("SHIPMENT DOCUMENT");
   });
 });
 

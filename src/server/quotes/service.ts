@@ -14,6 +14,7 @@ import { adapterFor, providerContext } from "@/server/providers/registry";
 import { canTakeBookings } from "@/server/carriers/verification";
 import { CARRIER_SPECS, partnerCodeFor } from "@/server/carriers/specs";
 import { hideProviders } from "@/server/customer-safe";
+import { isNszPin } from "@/server/carriers/nsz";
 import type { QuoteRequest } from "@/server/providers/types";
 
 export const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -146,6 +147,10 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     if (!allowedMode.ok) return { offers, error: pay.fodStatus === "not_supported" && req.paymentType === "fod" ? null : `${label}: ${allowedMode.reason}`, status: st("skipped", allowedMode.reason, "payment_mode") };
     // FOD + COD: only couriers that collect cash on a FOD shipment (Delhivery B2B — Shipmozo does not)
     if (req.paymentType === "fod" && (req.codAmount ?? 0) > 0 && (!FOD_COD_ADAPTERS.includes(acct.adapter) || !pay.cod)) return { offers, error: null, status: st("skipped", "COD on FOD is not offered", "payment_mode") };
+    // a PIN this courier rejected as a non-serviceable zone (NSZ) at booking is not offered again for a while
+    if (await isNszPin(acct.adapter, req.destinationPincode).catch(() => false)) {
+      return { offers, error: `${label}: does not deliver to ${req.destinationPincode} (non-serviceable zone)`, status: st("no_service", `does not deliver to ${req.destinationPincode} (non-serviceable zone)`, "not_serviceable") };
+    }
     let res;
     try {
       res = await withTimeout(adapter.quote(await providerContext(acct), req), QUOTE_TIMEOUT_MS, label);

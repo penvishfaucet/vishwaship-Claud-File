@@ -36,7 +36,17 @@ export interface BrandedLabel {
   idLabel: "AWB" | "LRN"; parentId: string; carton: number; cartons: number; cartonId: string | null;
   to: Addr; shipper: { company: string; gstin: string | null; pickup: Addr | null };
   orderNumber: string; invoiceNumber: string | null; invoicePaise: number; products: string; weightKg: number;
+  /** B2B only: the one shipment document (stapled with the invoice, handed to the pickup person) instead of a carton label. */
+  kind?: "document"; cartonIds?: string[]; ewayBill?: string | null;
 }
+
+/** How B2B paperwork is used: one document stapled with the invoice for the pickup person, one label on each carton. */
+export const B2B_HANDOVER = {
+  document: "Staple this document with the invoice and hand both to the pickup person. Do not paste it on a carton.",
+  label: (carton: number, cartons: number) => `Paste this label on carton ${carton} of ${cartons}. The shipment document goes with the invoice to the pickup person.`,
+  labelShort: (carton: number, cartons: number) => `Paste on carton ${carton} of ${cartons}`,
+  notice: "B2B shipment: staple the shipment document with the invoice and hand both to the pickup person; paste one label on each carton.",
+};
 
 /** Product names (with quantity); long lists end with "+N more" so the label never overflows on them. */
 function productLine(products: Product[]) {
@@ -128,6 +138,20 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           footer: look.footer, signature: look.signatureText, showHsn: look.showHsn !== false,
         });
       }
+      if (isB2B) {
+        notices.add(B2B_HANDOVER.notice);
+        const doc: BrandedLabel = {
+          demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
+          payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
+          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: null,
+          to: o.consignee as Addr,
+          shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
+          orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
+          products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
+          kind: "document", cartonIds: pieceIds.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
+        };
+        branded.push(doc); brandedOf.set(doc, s.id);
+      }
       for (let i = 0; i < cartons; i++) {
         const l: BrandedLabel = {
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
@@ -146,6 +170,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     }
 
     // ---- Carrier label (courier's original, untouched)
+    if (o.mode === "B2B" || s.provider === "delhivery_b2b") notices.add(B2B_HANDOVER.notice);
     if (o.paymentType === "cod") notices.add("Carrier labels show the COD amount because the courier prints it on its own label. The Vishwaship label never shows it.");
     const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, s.providerAccountId));
     const ad = acct && adapterFor(acct);
@@ -181,7 +206,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     const failed = new Set<string>();
     type Place = { l: BrandedLabel; page: number; box: Box };
     const plan: Place[] = [];
-    const invoicePages: Array<{ page: number; sid: string }> = [];
+    const invoicePages: Array<{ page: number; sid: string; cut: boolean }> = [];
     let pageNo = -1;
     const pm = fmt.mm!;
     const rotate = !fmt.slots && fmt.group === "thermal" && pm[0] < 60; // narrow rolls: landscape layout on a rotated page
@@ -199,10 +224,11 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         let rest = list;
         if (layoutFormat === "a4_doc") {
           pageNo++;
-          const top = rest.slice(0, 2);
+          const docItem = rest.find((l) => l.kind === "document");
+          const top = docItem ? [docItem] : rest.slice(0, 2);
           gridBoxes(top.length, 1, 0, 148.5).forEach((box, k) => plan.push({ l: top[k], page: pageNo, box }));
-          invoicePages.push({ page: pageNo, sid });
-          rest = rest.slice(2);
+          invoicePages.push({ page: pageNo, sid, cut: !docItem }); // B2B: document + invoice are stapled together, not cut apart
+          rest = rest.filter((l) => !top.includes(l));
         }
         while (rest.length) {
           const chunk = rest.slice(0, 6);
@@ -254,7 +280,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       if (invPage) {
         const data = invoices.get(invPage.sid);
         // cut line across the middle, then the invoice on the bottom half
-        cutLine(page, fonts.r);
+        if (invPage.cut) cutLine(page, fonts.r);
         if (data) drawInvoice(page, fonts, data, LOWER_HALF);
       }
     }
@@ -465,16 +491,49 @@ export function drawBranded(page: PDFPage, f: { r: PDFFont; b: PDFFont }, logos:
     c.pair("Weight", `${d.weightKg.toFixed(2)} kg${d.cartons > 1 ? ` | ${d.cartons} cartons` : ""}`, base - 0.5);
   };
 
+  const handover = (c: ReturnType<typeof flow>) => {
+    if (d.mode === "B2B" && d.kind !== "document") c.optional([B2B_HANDOVER.label(d.carton, d.cartons), B2B_HANDOVER.labelShort(d.carton, d.cartons)], Math.max(MIN_FONT, base - 1));
+  };
+  if (d.kind === "document") {
+    // B2B shipment document: no carton number, all carton ids, the handover instruction in bold at the top
+    const docDetails = (c: ReturnType<typeof flow>) => {
+      details(c);
+      if (d.ewayBill) c.optional([`E-way bill: ${d.ewayBill}`], base - 0.5);
+      if (d.cartonIds?.length) c.optional([`Carton IDs: ${d.cartonIds.join(", ")}`, `Carton IDs: ${d.cartonIds.length} (see labels)`], base - 0.5);
+    };
+    const docCodes = (c: ReturnType<typeof flow>) => {
+      c.text(`${d.mode} | ${d.payment} | ${d.service}`, base - 0.5, f.b, { maxLines: 1 });
+      c.barcode(d.parentId, small ? 6.5 : hMm > 120 ? 14 : wMm < 80 ? 9 : 11);
+      c.text(`${d.idLabel} ${d.parentId}`, base + (small ? 1 : 1.5), f.b, { center: true, maxLines: 1 });
+      c.text(`${d.cartons} CARTON${d.cartons > 1 ? "S" : ""}`, base + 1, f.b, { center: true, maxLines: 1 });
+    };
+    const title = (c: ReturnType<typeof flow>) => {
+      c.heading("SHIPMENT DOCUMENT - NOT FOR A CARTON");
+      c.optional([B2B_HANDOVER.document, "Staple with the invoice - give to the pickup person"], base);
+    };
+    if (landscape) {
+      const L = flow(cols[0]), R = flow(cols[1]);
+      L.header(); L.rule(); title(L); L.rule(); deliver(L); L.rule(); from(L);
+      docCodes(R); R.rule(); docDetails(R);
+      R.optional([LABEL_TERMS.full, LABEL_TERMS.short], MIN_FONT);
+    } else {
+      const C = flow(cols[0]);
+      C.header(); C.rule(); title(C); C.rule(); deliver(C); C.rule(); docCodes(C); C.rule(); from(C); C.rule(); docDetails(C);
+      C.optional([LABEL_TERMS.full, LABEL_TERMS.short], Math.max(MIN_FONT, base - 2.2));
+    }
+    return err;
+  }
+
   if (landscape) {
     const L = flow(cols[0]), R = flow(cols[1]);
     if (d.demo) L.text("DEMO LABEL - NOT FOR HANDOVER", base - 0.5, f.b, { maxLines: 1 });
     L.header(); L.rule(); deliver(L); L.rule(); from(L);
-    codes(R); R.rule(); details(R);
+    codes(R); R.rule(); details(R); handover(R);
     if (!R.optional([LABEL_TERMS.full, LABEL_TERMS.short], MIN_FONT)) L.optional([LABEL_TERMS.short], MIN_FONT);
   } else {
     const C = flow(cols[0]);
     if (d.demo) C.text("DEMO LABEL - NOT FOR CARRIER HANDOVER", base - 0.5, f.b, { center: true, maxLines: 1 });
-    C.header(); C.rule(); deliver(C); C.rule(); codes(C); C.rule(); from(C); C.rule(); details(C);
+    C.header(); C.rule(); deliver(C); C.rule(); codes(C); C.rule(); from(C); C.rule(); details(C); handover(C);
     C.optional([LABEL_TERMS.full, LABEL_TERMS.short], Math.max(MIN_FONT, base - 2.2));
   }
   return err;

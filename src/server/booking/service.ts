@@ -1,4 +1,5 @@
 import { modeAllowed, paymentConfig } from "@/server/payment-modes";
+import { isNszError, nszMessage, rememberNsz } from "@/server/carriers/nsz";
 import type { PaymentMode } from "@/server/providers/types";
 import "server-only";
 import { and, eq } from "drizzle-orm";
@@ -162,6 +163,13 @@ async function bookOrderInner(args: { orgId: string; orderId: string; quoteId: s
     }
     if (reservationId) await withLedger((s) => release(s, { walletId: wallet.id, reservationId, idempotencyKey: `release:${reservationId}`, refType: "order", refId: order.id, memo: `Released: ${order.orderNumber} not booked` }));
     await db.update(schema.orders).set({ status: "booking_failed" }).where(eq(schema.orders.id, order.id));
+    // "Destination Center is NSZ": the courier quoted but will not deliver to this PIN. Remember it so this
+    // courier is not offered there again for a while, and tell the customer plainly what to do.
+    if (isNszError(res.error.message)) {
+      await rememberNsz(acct.adapter, consignee.pincode).catch(() => {});
+      await audit({ actorUserId: args.actorUserId, actorKind: "customer", orgId: args.orgId, action: "booking.nsz", targetType: "order", targetId: order.id, details: { provider: acct.adapter, pin: consignee.pincode, message: res.error.message } });
+      return { ok: false, code: "provider_failed", message: nszMessage(quote.serviceName || "This courier", consignee.pincode) };
+    }
     return { ok: false, code: res.error.category === "unsupported" ? "unsupported" : "provider_failed", message: res.error.message };
   }
 

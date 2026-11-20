@@ -93,6 +93,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const sj = svc.value.json as Record<string, unknown> | null;
     const explicit = (sj?.serviceable ?? (sj?.data as Record<string, unknown> | undefined)?.serviceable) as boolean | undefined;
     if (explicit === false) return { ok: false, error: { category: "not_serviceable", message: `Delhivery B2B does not deliver to ${req.destinationPincode}`, retryable: false } };
+    if (nszFlag(sj)) return { ok: false, error: { category: "not_serviceable", message: `Delhivery B2B does not deliver to ${req.destinationPincode} (non-serviceable zone)`, retryable: false } };
     if (req.paymentType === "fod" && fodFlag(sj) === false) return { ok: false, error: { category: "not_serviceable", message: `Delhivery B2B does not offer FOD (freight on delivery) to ${req.destinationPincode}`, retryable: false } };
     const oda = odaFlag(sj);
     let pending: string | undefined;
@@ -288,6 +289,16 @@ export { amountToPaise };
 
 /** ODA (out of delivery area) flag from the pincode-serviceability response: true / false / null (not stated). */
 export function odaFlag(j: unknown): boolean | null { return yesNo(j, /(^|_)(oda|is_oda|oda_flag|odc|remote)(_|$)/i); }
+/** Non-serviceable zone (NSZ) in the pincode-serviceability response: an nsz / is_nsz flag that is set, or a value "NSZ" (e.g. a centre type). */
+export function nszFlag(j: unknown, depth = 0): boolean {
+  if (yesNo(j, /(^|_)(nsz|is_nsz|nsz_flag)(_|$)/i) === true) return true;
+  if (!j || typeof j !== "object" || depth > 5) return false;
+  for (const v of Array.isArray(j) ? j : Object.values(j as Record<string, unknown>)) {
+    if (typeof v === "string" && /^\s*nsz\s*$/i.test(v)) return true;
+    if (v && typeof v === "object" && nszFlag(v, depth + 1)) return true;
+  }
+  return false;
+}
 /** FOD support flag from the pincode-serviceability response (null when Delhivery does not say). */
 export function fodFlag(j: unknown): boolean | null { return yesNo(j, /(^|_)(fod|is_fod|fod_available|freight_on_delivery|topay|to_pay)(_|$)/i); }
 function yesNo(j: unknown, key: RegExp, depth = 0): boolean | null {
