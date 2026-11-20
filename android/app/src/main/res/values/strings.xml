@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- app_name is set per flavor in app/build.gradle.kts -->
+    <string name="channel_shipments">Shipment updates</string>
+    <string name="channel_wallet">Wallet &amp; billing</string>
+    <string name="channel_support">Support tickets</string>
+    <string name="channel_account">Account &amp; KYC</string>
+    <string name="manifest_notice">Important: Download the manifest and have your pickup agent sign it when handing over shipments.</string>
+</resources>

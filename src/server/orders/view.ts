@@ -22,6 +22,8 @@ export interface OrderFilters {
   /** Admin quick filters: bookings still being confirmed, or in-transit shipments without a scan for 72 h. */
   exception?: "booking" | "stale";
   page: number; pageSize: number;
+  /** One order by id (Android order detail): ignores the date range so older orders open too. Never parsed from URLs. */
+  orderId?: string;
 }
 
 const day = /^\d{4}-\d{2}-\d{2}$/;
@@ -93,7 +95,8 @@ function baseConditions(orgId: string | null, f: OrderFilters): SQL[] {
   else if (f.customer) c.push(eq(O.orgId, f.customer));
   const from = new Date(`${f.from}T00:00:00+05:30`), to = new Date(`${f.to}T23:59:59.999+05:30`);
   const col = f.dateType === "booked" ? S.createdAt : f.dateType === "delivered" ? S.deliveredAt : O.createdAt;
-  c.push(gte(col, from), lte(col, to));
+  if (f.orderId) c.push(eq(O.id, f.orderId));
+  else c.push(gte(col, from), lte(col, to));
   if (f.bucket && isBucket(f.bucket)) { const b = bucketCondition(f.bucket); if (b) c.push(b); }
   const like = (v: string) => `%${v.replace(/[%_\\]/g, "")}%`;
   if (f.ref) c.push(or(ilike(O.orderNumber, like(f.ref)), ilike(O.externalOrderId, like(f.ref)), ilike(O.invoiceNumber, like(f.ref)))!);
@@ -199,7 +202,7 @@ export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limi
       chargedPaise: charged, bookedPaise: s?.sellPaise ?? null, receiverFreightPaise: s?.receiverFreightPaise ?? 0,
       breakdown: s ? { lines, gst: priced?.gst ?? null, quoteTotal: q?.total ?? null, booked: s.sellPaise, adjustment: dispute ? { amount: dispute.chargePaise ?? 0, label: `Weight discrepancy (${dispute.status})`, at: dispute.createdAt.toISOString() } : null, total: charged! } : null,
       consignee: o.consignee as Addr,
-      pickup,
+      pickup, warehouseId: o.warehouseId,
       shipment: s ? {
         id: s.id, provider: s.provider, carrierCode: s.carrierCode, carrierName: s.carrierName, serviceName: s.serviceName,
         awb: s.awb, lr: s.lrNumber && s.lrNumber !== s.awb ? s.lrNumber : null, pieces: Array.isArray(s.pieceIds) ? (s.pieceIds as string[]).length : 0,

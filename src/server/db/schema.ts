@@ -618,6 +618,8 @@ export const inAppAlerts = pgTable("in_app_alerts", {
   title: text("title").notNull(),
   href: text("href"),
   readAt: ts("read_at"),
+  /** Set once the Android push for this alert was dispatched (or skipped): each alert is pushed at most once. */
+  pushedAt: ts("pushed_at"),
   createdAt: created(),
 });
 
@@ -1032,3 +1034,36 @@ export const emailLogs = pgTable("email_logs", {
   sentAt: ts("sent_at"),
   createdAt: created(),
 }, (t) => [index("email_logs_created").on(t.createdAt)]);
+
+// ---------- Android app ----------
+/** One row per signed-in app install. Push token is cleared on logout so alerts never reach a device after sign-out. */
+export const mobileDevices = pgTable("mobile_devices", {
+  id: id(),
+  userId: text("user_id").notNull().references(() => users.id),
+  orgId: text("org_id").notNull(),
+  /** sha256 of the session token this device signed in with (sessions.id). */
+  sessionId: text("session_id").notNull(),
+  installId: text("install_id").notNull(), // random per install, generated on the device
+  platform: text("platform").notNull().default("android"),
+  appVersion: text("app_version"),
+  pushToken: text("push_token"), // FCM registration token; null when push is off or after logout
+  pushEnabled: boolean("push_enabled").notNull().default(false),
+  lastSeenAt: ts("last_seen_at").notNull().default(sql`now()`),
+  revokedAt: ts("revoked_at"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("mobile_devices_install").on(t.installId), index("mobile_devices_org").on(t.orgId)]);
+
+/** In-app / web "Delete my account" requests (Google Play account-deletion requirement). Staff process them in Admin. */
+export const accountDeletionRequests = pgTable("account_deletion_requests", {
+  id: id(),
+  userId: text("user_id").references(() => users.id),
+  orgId: text("org_id"),
+  email: text("email").notNull(),
+  reason: text("reason"),
+  source: text("source").notNull(), // app | web
+  status: text("status").notNull().default("requested"), // requested | processing | completed | rejected
+  note: text("note"),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  createdAt: created(),
+}, (t) => [index("account_deletion_status").on(t.status)]);

@@ -148,6 +148,9 @@ export async function scheduleSweeps() {
   for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   await sweepNoResponse();
   await scheduleTrackingPolls();
+  // Android push for new in-app alerts (claims each alert once; no-op sends until FCM is configured)
+  try { const { dispatchPush } = await import("@/server/mobile/push"); await dispatchPush(); }
+  catch (e) { console.error("[push]", (e as Error).message); }
 }
 
 /** report.export — build a CSV/XLSX for Tools → Report Download (same filters and tenant scope as on screen). */

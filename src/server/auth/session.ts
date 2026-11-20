@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb, schema } from "@/server/db/client";
 import { sha256 } from "@/server/security/crypto";
@@ -36,8 +36,20 @@ export async function createSession(userId: string, kind: Kind, meta: { ip?: str
   });
 }
 
+/** Mobile app tokens carry this prefix and arrive as `Authorization: Bearer vsm_…` (customer sessions only). */
+export const MOBILE_TOKEN_PREFIX = "vsm_";
+
+/** The customer token from the Android app's Authorization header, if any. Never accepted for staff. */
+async function bearerToken(kind: Kind): Promise<string | null> {
+  if (kind !== "customer") return null;
+  const h = (await headers()).get("authorization") ?? "";
+  const m = /^Bearer\s+(vsm_[A-Za-z0-9_-]{20,200})$/.exec(h.trim());
+  return m ? m[1] : null;
+}
+
 export async function readSession(kind: Kind): Promise<SessionUser | null> {
-  const token = (await cookies()).get(COOKIE[kind])?.value;
+  // Browser: the httpOnly cookie. Android app: a bearer token stored in the same sessions table (same user, same rules).
+  const token = (await cookies()).get(COOKIE[kind])?.value ?? (await bearerToken(kind));
   if (!token) return null;
   const db = await getDb();
   const [row] = await db.select({ s: schema.sessions, u: schema.users }).from(schema.sessions)
