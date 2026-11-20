@@ -141,9 +141,25 @@ export function OrdersView(p: Props) {
   const colCount = 4 + ["orderDate", "product", "package", "shipping", "pickup"].filter((c) => show(c as OptionalColumn)).length + 1;
 
   return (
-    <div className="ov">
-      {/* compact top: region switch · Add Order · options icon */}
-      <div className="oc-head">
+    <div className="ov ovt">
+      {/* desktop (≥1100px): direction tabs · region switch · Sync / Bulk Import / Add Order */}
+      <div className="ovt-bar ovt-d">
+        <nav className="ovt-dir" aria-label="Shipment direction">
+          <Link href={href({ direction: undefined, tab: undefined })} className={f.direction === "forward" ? "on" : ""} aria-current={f.direction === "forward" ? "page" : undefined}>Forward</Link>
+          <Link href={href({ direction: "reverse", tab: undefined })} className={f.direction === "reverse" ? "on" : ""} aria-current={f.direction === "reverse" ? "page" : undefined}>Reverse</Link>
+        </nav>
+        <div className="oc-seg ovt-seg" role="group" aria-label="Shipment region">
+          <span className="on" aria-current="true">Domestic</span>
+          <button type="button" onClick={() => setToast({ text: L("portal.orders.international", "International shipping is not enabled for your account."), bad: true })}>International</button>
+        </div>
+        <div className="ovt-act">
+          {p.features.storeSync && <button type="button" className="ov-btn navy" onClick={syncOrders} disabled={busy === "sync"}><RefreshCw size={16} aria-hidden className={busy === "sync" ? "spin" : undefined} /> {busy === "sync" ? "Syncing…" : "Sync Orders"}</button>}
+          <Link className="ov-btn navy" href="/portal/orders/bulk/"><Upload size={16} aria-hidden /> Bulk Import</Link>
+          <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />
+        </div>
+      </div>
+      {/* phones: compact top: region switch · Add Order · options icon */}
+      <div className="oc-head ovt-m">
         <div className="oc-seg" role="group" aria-label="Shipment region">
           <span className="on" aria-current="true">Domestic</span>
           <button type="button" onClick={() => setToast({ text: L("portal.orders.international", "International shipping is not enabled for your account."), bad: true })}>International</button>
@@ -155,14 +171,28 @@ export function OrdersView(p: Props) {
       </div>
       <DailyManifest couriers={p.options.couriers} warehouses={p.options.warehouses} />
       {/* status tabs: one scrollable row with counts */}
-      <nav className="oc-tabs" aria-label="Order status">
+      <nav className="oc-tabs ovt-m" aria-label="Order status">
         {TAB_GROUPS.flatMap((g) => g.tabs).map((t) => {
           const on = f.tab === t.key;
           return <Link key={t.key} href={href({ tab: t.key === "all" ? undefined : t.key })} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>{L(`portal.orders.tab.${t.key}`, t.label)}<i>{p.counts[t.key]}</i></Link>;
         })}
       </nav>
+      <nav className="ovt-tabs ovt-d" aria-label="Order status groups">
+        {TAB_GROUPS.map((g, gi) => (
+          <div className="ovt-group" key={gi}>
+            <span className="ovt-gt">{g.title ? L(`portal.orders.group.${gi}`, g.title) : "\u00a0"}</span>
+            <div className="ovt-seg2">
+              {g.tabs.map((t) => {
+                const on = f.tab === t.key;
+                const n = p.counts[t.key];
+                return <Link key={t.key} href={href({ tab: t.key === "all" ? undefined : t.key })} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>{L(`portal.orders.tab.${t.key}`, t.label)}{n > 0 && <i aria-label={`${n} orders`}>{n}</i>}</Link>;
+              })}
+            </div>
+          </div>
+        ))}
+      </nav>
       {f.direction === "reverse" && <p className="oc-note small">Showing <b>return orders</b>. <Link href={href({ direction: undefined, tab: undefined })}>Back to forward orders</Link></p>}
-      <div className="ov-top" hidden={!tools}>
+      <div className="ov-top ovt-m" hidden={!tools}>
         <nav className="ov-dir" aria-label="Shipment direction">
           <Link href={href({ direction: undefined, tab: undefined })} className={f.direction === "forward" ? "on" : ""} aria-current={f.direction === "forward" ? "page" : undefined}>Forward</Link>
           <Link href={href({ direction: "reverse", tab: undefined })} className={f.direction === "reverse" ? "on" : ""} aria-current={f.direction === "reverse" ? "page" : undefined}>Reverse</Link>
@@ -200,7 +230,7 @@ export function OrdersView(p: Props) {
 
       {/* row 3: filters + table */}
       <section className="ov-card" aria-label="Orders list">
-        {tools && <FilterBar p={p} go={go} exportHref={exportHref} onRefresh={refresh} lastRefresh={lastRefresh} hidden={hidden} setHidden={setHidden} setToast={setToast} onMenu={(o) => { menuOpen.current = o; }} />}
+        <div className={`ovt-filters${tools ? " open" : ""}`}><FilterBar p={p} go={go} exportHref={exportHref} onRefresh={refresh} lastRefresh={lastRefresh} hidden={hidden} setHidden={setHidden} setToast={setToast} onMenu={(o) => { menuOpen.current = o; }} /></div>
 
         {selected.size > 0 && (
           <div className="ov-bulk" role="region" aria-label="Bulk actions" style={{ margin: "0 12px 12px" }}>
@@ -226,15 +256,15 @@ export function OrdersView(p: Props) {
         ) : (
           <>
             {/* One simple card per order: ID, payment, status and three actions. Everything else is inside the order. */}
-            <label className="row small oc-selall"><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
-            <div className="oc-grid">
+            <label className="row small oc-selall ovt-m"><input type="checkbox" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /> Select all on this page</label>
+            <div className="oc-grid ovt-m">
               {p.rows.map((r) => (
                 <ShipCard key={r.id} r={r} selected={selected.has(r.id)} onToggle={() => toggle(r.id)} open={setDialog} defaultLabel={p.defaultLabel}
                   onLabel={(fmt) => r.shipment && downloadLabels([r.shipment.id], fmt)} onCancel={() => cancel(r)} onArchive={(on) => archive([r.id], on)}
                   onClone={() => clone(r)} busy={busy} onMenu={(o) => { menuOpen.current = o; }} />
               ))}
             </div>
-            <div className="ov-tablewrap" hidden>
+            <div className="ov-tablewrap ovt-d">
               <table className="ov-table">
                 <thead>
                   <tr>
@@ -253,9 +283,9 @@ export function OrdersView(p: Props) {
                 <tbody>
                   {p.rows.map((r) => (
                     <DesktopRow key={r.id} r={r} show={show} colCount={colCount} selected={selected.has(r.id)} onToggle={() => toggle(r.id)}
-                      codLabel={L("portal.orders.cod_line", "WhatsApp COD order confirmation")} open={setDialog} busy={busy}
+                      codLabel={L("portal.orders.cod_line", "WhatsApp COD order confirmation")} open={setDialog} busy={busy} defaultLabel={p.defaultLabel}
                       onLabel={(fmt) => r.shipment && downloadLabels([r.shipment.id], fmt)} onCancel={() => cancel(r)} onArchive={(on) => archive([r.id], on)}
-                      onMenu={(o) => { menuOpen.current = o; }} />
+                      onClone={() => clone(r)} onMenu={(o) => { menuOpen.current = o; }} />
                   ))}
                 </tbody>
               </table>
@@ -576,12 +606,14 @@ function Addr({ a }: { a: OrderRow["consignee"] }) {
   );
 }
 
-function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, busy, onLabel, onCancel, onArchive, onMenu }: {
+function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, busy, defaultLabel, onLabel, onCancel, onClone, onArchive, onMenu }: {
   r: OrderRow; show: (c: OptionalColumn) => boolean; colCount: number; selected: boolean; onToggle: () => void; codLabel: string; open: (d: DialogState) => void; busy: string | null;
-  onLabel: (f: PrintFormat) => void; onCancel: () => void; onArchive: (on: boolean) => void; onMenu: (o: boolean) => void;
+  defaultLabel: PrintFormat; onLabel: (f: PrintFormat) => void; onCancel: () => void; onClone: () => void; onArchive: (on: boolean) => void; onMenu: (o: boolean) => void;
 }) {
   const b = bookingBadge(r);
   const s = r.shipment;
+  const fmt = s?.labelFormats.find((x) => x.key === defaultLabel && x.ok) ?? s?.labelFormats.find((x) => x.ok);
+  const detail = !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (
     <>
       <tr className={`orow${selected ? " sel" : ""}`}>
@@ -600,11 +632,12 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
         {show("shipping") && <td><Addr a={r.consignee} /></td>}
         {show("pickup") && <td>{r.pickup ? <button type="button" className="ov-pick" onClick={() => open({ kind: "pickup", row: r })}>{[r.pickup.label, r.pickup.city].filter(Boolean).join(", ")}{r.pickup.pincode ? `, ${r.pickup.pincode}` : ""}</button> : <span className="muted">—</span>}</td>}
         <td className="act">
-          <div className="ov-track">
+          <div className="ovt-actcell">
             {s?.awb
-              ? <button type="button" className="ov-btn" onClick={() => open({ kind: "track", shipmentId: s.id })}><Truck size={15} aria-hidden /> Track</button>
-              : <Link className="ov-btn" href={!s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`} style={{ background: "var(--ov-orange)" }}>{s || r.orderStatus === "cancelled" ? "View" : r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
-            <RowMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onArchive={onArchive} onMenu={onMenu} />
+              ? <LabelSplit formats={s.labelFormats} main={fmt?.key ?? "a4_fit"} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
+              : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
+              : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
+            <ActionMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onClone={onClone} onArchive={onArchive} onMenu={onMenu} />
           </div>
           {busy === `cancel:${r.id}` && <div className="tiny muted" role="status">Cancelling…</div>}
         </td>
