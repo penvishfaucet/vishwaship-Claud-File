@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { type StoreSettings, type ThemeConfig, defaultTheme, readSettings, readTheme, themeByKey } from "@/lib/store-themes";
@@ -37,16 +37,27 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     .where(and(eq(schema.storeProducts.storeId, s.id), eq(schema.storeProducts.status, "active")))
     .orderBy(desc(schema.storeProducts.featured), desc(schema.storeProducts.createdAt)).limit(500);
   const catSlug = new Map(cats.map((c) => [c.id, c.slug]));
+  const withOptions = prods.filter((p) => (p.options as string[]).length > 0).map((p) => p.id);
+  const vars = withOptions.length
+    ? await db.select().from(schema.storeProductVariants).where(and(inArray(schema.storeProductVariants.productId, withOptions), eq(schema.storeProductVariants.archived, false))).orderBy(asc(schema.storeProductVariants.sort))
+    : [];
   return {
     id: s.id, name: s.name, slug: s.slug, status: s.status, settings: readSettings(s.settings),
     theme: { ...theme, logo: theme.logo }, themeKey: s.themeKey,
     categories: cats.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
-    products: prods.map((p) => ({
-      id: p.id, title: p.title, slug: p.slug, description: p.description ?? "", pricePaise: p.pricePaise, comparePaise: p.comparePaise,
-      images: (p.images as string[]).map(mediaUrl), inStock: p.stock > 0, featured: p.featured,
-      categorySlug: p.categoryId ? catSlug.get(p.categoryId) ?? null : null,
-      seo: (p.seo as { title?: string; description?: string }) ?? {},
-    })),
+    products: prods.map((p) => {
+      const options = p.options as string[];
+      const pv = options.length ? vars.filter((v) => v.productId === p.id) : [];
+      const cheapest = pv.length ? pv.reduce((m, v) => (v.pricePaise < m.pricePaise ? v : m)) : null;
+      return {
+        id: p.id, title: p.title, slug: p.slug, description: p.description ?? "",
+        pricePaise: cheapest?.pricePaise ?? p.pricePaise, comparePaise: cheapest ? cheapest.comparePaise : p.comparePaise,
+        images: (p.images as string[]).map(mediaUrl), inStock: options.length ? pv.some((v) => v.stock > 0) : p.stock > 0, featured: p.featured,
+        categorySlug: p.categoryId ? catSlug.get(p.categoryId) ?? null : null,
+        seo: (p.seo as { title?: string; description?: string }) ?? {},
+        options, variants: pv.map((v) => ({ id: v.id, title: v.title, values: v.optionValues as string[], pricePaise: v.pricePaise, comparePaise: v.comparePaise, inStock: v.stock > 0 })),
+      };
+    }),
     base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live",
   };
 });
@@ -63,7 +74,7 @@ function demoStore(themeKey?: string): Storefront {
   ];
   const P = (id: string, title: string, price: number, compare: number | null, cat: string, img: string, desc: string, featured = true): SfProduct => ({
     id, title, slug: id, description: desc, pricePaise: price * 100, comparePaise: compare ? compare * 100 : null,
-    images: [`/store-demo/${img}.svg`], inStock: true, featured, categorySlug: cat, seo: {},
+    images: [`/store-demo/${img}.svg`], inStock: true, featured, categorySlug: cat, seo: {}, options: [], variants: [],
   });
   const products = [
     P("indigo-cotton-kurta", "Indigo Cotton Kurta", 1299, 1799, "kurtas", "kurta-indigo", "Breathable hand-block printed cotton kurta. Regular fit."),
@@ -75,6 +86,11 @@ function demoStore(themeKey?: string): Storefront {
     P("cushion-cover", "Block Print Cushion Cover", 449, null, "home-decor", "cushion", "16x16 inch cotton cushion cover, hand block printed.", false),
     P("cotton-stole", "Handloom Cotton Stole", 699, 999, "accessories", "stole", "Soft handloom stole in natural dyes.", false),
   ];
+  // kurtas show how size variants look
+  for (const p of products.filter((x) => x.categorySlug === "kurtas")) {
+    p.options = ["Size"];
+    p.variants = ["S", "M", "L", "XL"].map((sz, i) => ({ id: `${p.id}-${sz.toLowerCase()}`, title: sz, values: [sz], pricePaise: p.pricePaise + (sz === "XL" ? 10_000 : 0), comparePaise: p.comparePaise, inStock: i !== 0 }));
+  }
   const settings = readSettings({
     tagline: "Handmade goods from Indian artisans",
     about: "Vishwa Crafts is a sample store that shows what your online store can look like. Products, prices and reviews here are examples.",

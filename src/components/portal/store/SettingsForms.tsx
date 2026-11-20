@@ -51,7 +51,7 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
       {f.codEnabled && <div className="grid3" style={{ marginTop: 10 }}>{money("codFee", "COD fee (₹)")}{money("codMin", "Min order for COD (₹)")}{money("codMax", "Max order for COD (₹)")}</div>}
       <p className="small muted" style={{ marginTop: 8 }}>COD orders use your existing COD confirmation settings (WhatsApp confirm / cancel) before pickup.</p>
       <h3 style={{ margin: "20px 0 8px" }}>Online payments</h3>
-      <p className="small muted">Connect your own Razorpay account in the next update. Store payments go to your Razorpay account, not your Vishwaship wallet.</p>
+      <p className="small muted">Connect your own Razorpay account in <a className="orange" href="/portal/store/payments/">Online Payments</a>. Store payments go to your Razorpay account, not your Vishwaship wallet. Without it, buyers see Cash on Delivery only.</p>
       <Msg m={msg} />
       <button className="btn btn-orange" style={{ marginTop: 16 }} disabled={busy}>{busy ? "Saving…" : "Save & continue"}</button>
     </form>

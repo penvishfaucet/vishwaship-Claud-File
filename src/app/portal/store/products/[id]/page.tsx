@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/portal/store/CatalogForms";
-import { getProduct, listCategories } from "@/server/store/catalog";
+import { getProduct, listCategories, productVariants } from "@/server/store/catalog";
 import { requireStorePage } from "@/server/store/portal";
 import "@/styles/store.css";
 
@@ -13,6 +13,7 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
   if (!p) notFound();
   const cats = await listCategories(ctx.org.id);
   const seo = (p.seo ?? {}) as { title?: string; description?: string };
+  const variants = await productVariants(ctx.org.id, p.id);
   return (
     <>
       <div className="page-h">
@@ -24,6 +25,8 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
           title: p.title, slug: p.slug, description: p.description ?? "", price: String(p.pricePaise / 100), compare: p.comparePaise ? String(p.comparePaise / 100) : "",
           categoryId: p.categoryId ?? "", images: p.images as string[], stock: String(p.stock), weight: String(p.weightGrams),
           status: p.status as "draft" | "active" | "archived", featured: p.featured, seoTitle: seo.title ?? "", seoDescription: seo.description ?? "",
+          sku: p.sku ?? "", hsn: p.hsn ?? "", taxPercent: String(p.taxBps / 100), lowStockAt: String(p.lowStockAt), lengthCm: p.lengthMm ? String(p.lengthMm / 10) : "", breadthCm: p.breadthMm ? String(p.breadthMm / 10) : "", heightCm: p.heightMm ? String(p.heightMm / 10) : "",
+          options: p.options as string[], variants: variants.map((v) => ({ id: v.id, values: v.optionValues as string[], sku: v.sku ?? "", price: String(v.pricePaise / 100), compare: v.comparePaise ? String(v.comparePaise / 100) : "", stock: String(v.stock), weight: v.weightGrams ? String(v.weightGrams) : "" })),
         }} />
     </>
   );

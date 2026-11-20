@@ -2,7 +2,7 @@ import { BadgeCheck, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { POLICY_KINDS, RADIUS_PX, type StoreSection, fontsHref, rupees } from "@/lib/store-themes";
 import type { Storefront } from "@/server/store/public";
 import { logoUrl, sectionImage } from "@/server/store/public";
-import { HeaderNav } from "./StoreClient";
+import { AttributionCapture, HeaderNav } from "./StoreClient";
 import type { SfProduct } from "./types";
 import "@/styles/store.css";
 
@@ -33,6 +33,7 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
           <HeaderNav store={sf.slug} base={sf.base} links={links.map((l) => ({ ...l, href: l.href + keep }))} />
         </div>
       </header>
+      {!sf.demo && !sf.preview && <AttributionCapture store={sf.slug} />}
       <main className="sf-main" id="main">{children}</main>
       <footer className="sf-foot">
         <div className="sf-wrap">

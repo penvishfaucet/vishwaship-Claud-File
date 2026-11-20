@@ -37,7 +37,7 @@ export default async function ProductPage({ params, searchParams }: { params: P;
             <h1>{p.title}</h1>
             <Price p={p} />
             <p className="sf-note" style={{ marginTop: 4 }}>Inclusive of all taxes</p>
-            <AddToCart store={sf.slug} base={sf.base} product={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? null, pricePaise: p.pricePaise, inStock: p.inStock }} />
+            <AddToCart store={sf.slug} base={sf.base} product={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? null, pricePaise: p.pricePaise, comparePaise: p.comparePaise, inStock: p.inStock, options: p.options, variants: p.variants }} />
             {p.description && <div className="sf-prose" style={{ marginBottom: 20 }}>{p.description}</div>}
             <ul className="sf-perks">
               {sf.settings.checkout.codEnabled && <li>Cash on Delivery available</li>}

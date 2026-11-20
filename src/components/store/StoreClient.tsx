@@ -1,7 +1,9 @@
 "use client";
 import { Menu, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type CartLine, MAX_QTY, addToCart, cartCount, readCart, writeCart } from "./cart";
+import { type CartLine, MAX_QTY, addToCart, captureAttribution, cartCount, readCart, writeCart } from "./cart";
+import type { SfVariant } from "./types";
+export { useCartState };
 
 const rupees = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
@@ -50,25 +52,59 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
   );
 }
 
-export function AddToCart({ store, base, product }: { store: string; base: string; product: { id: string; slug: string; title: string; image: string | null; pricePaise: number; inStock: boolean } }) {
+/** Records UTM / click ids from the landing URL once per visit (for ad attribution at checkout). */
+export function AttributionCapture({ store }: { store: string }) {
+  useEffect(() => { captureAttribution(store); }, [store]);
+  return null;
+}
+
+export function AddToCart({ store, base, product }: { store: string; base: string; product: { id: string; slug: string; title: string; image: string | null; pricePaise: number; comparePaise: number | null; inStock: boolean; options: string[]; variants: SfVariant[] } }) {
   const [qty, setQty] = useState(1);
   const [toast, setToast] = useState("");
+  const hasVariants = product.options.length > 0;
+  const firstAvail = product.variants.find((v) => v.inStock) ?? product.variants[0];
+  const [sel, setSel] = useState<string[]>(firstAvail?.values ?? []);
+  const variant = hasVariants ? product.variants.find((v) => v.values.join("|") === sel.join("|")) ?? null : null;
   if (!product.inStock) return <p className="sf-oos" style={{ fontSize: 15, margin: "20px 0" }}>Currently out of stock</p>;
+  const price = variant?.pricePaise ?? product.pricePaise;
+  const canBuy = !hasVariants || !!variant?.inStock;
   function add(go: boolean) {
-    addToCart(store, { id: product.id, slug: product.slug, title: product.title, image: product.image, pricePaise: product.pricePaise }, qty);
+    if (!canBuy) return;
+    addToCart(store, { productId: product.id, variantId: variant?.id ?? null, variantTitle: variant?.title ?? null, slug: product.slug, title: product.title, image: product.image, pricePaise: price }, qty);
     if (go) { window.location.href = `${base}/cart/`; return; }
     setToast("Added to cart"); setTimeout(() => setToast(""), 1800);
   }
   return (
     <>
+      {hasVariants && (
+        <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+          {product.options.map((opt, oi) => {
+            const values = [...new Set(product.variants.map((v) => v.values[oi]).filter(Boolean))];
+            return (
+              <fieldset key={opt} style={{ border: 0, padding: 0, margin: 0 }}>
+                <legend className="sf-note" style={{ marginBottom: 6 }}>{opt}: <b style={{ color: "var(--sf-text)" }}>{sel[oi]}</b></legend>
+                <div className="sf-filters" style={{ marginBottom: 0 }}>
+                  {values.map((val) => {
+                    const next = sel.map((s, i) => (i === oi ? val : s));
+                    const v = product.variants.find((x) => x.values.join("|") === next.join("|"));
+                    return <button key={val} type="button" className={`sf-chip${sel[oi] === val ? " on" : ""}`} aria-pressed={sel[oi] === val} onClick={() => setSel(next)} style={{ cursor: "pointer", background: sel[oi] === val ? undefined : "transparent", opacity: v && !v.inStock ? 0.45 : 1, textDecoration: v && !v.inStock ? "line-through" : "none", font: "inherit" }}>{val}</button>;
+                  })}
+                </div>
+              </fieldset>
+            );
+          })}
+          {variant && <div className="sf-price"><b>{rupees(variant.pricePaise)}</b>{variant.comparePaise && variant.comparePaise > variant.pricePaise && <s>{rupees(variant.comparePaise)}</s>}</div>}
+          {(!variant || !variant.inStock) && <p className="sf-oos" style={{ margin: 0 }}>{variant ? "This option is out of stock" : "This combination is not available"}</p>}
+        </div>
+      )}
       <div className="sf-buy">
         <div className="sf-qty" role="group" aria-label="Quantity">
           <button onClick={() => setQty(Math.max(1, qty - 1))} aria-label="Decrease quantity"><Minus size={16} /></button>
           <span aria-live="polite">{qty}</span>
           <button onClick={() => setQty(Math.min(MAX_QTY, qty + 1))} aria-label="Increase quantity"><Plus size={16} /></button>
         </div>
-        <button className="sf-btn" onClick={() => add(false)}>Add to cart</button>
-        <button className="sf-btn ghost" onClick={() => add(true)}>Buy now</button>
+        <button className="sf-btn" onClick={() => add(false)} disabled={!canBuy}>Add to cart</button>
+        <button className="sf-btn ghost" onClick={() => add(true)} disabled={!canBuy}>Buy now</button>
       </div>
       {toast && <div className="sf-toast" role="status">{toast}</div>}
     </>
@@ -90,7 +126,7 @@ export function CartView({ store, base, checkout }: { store: string; base: strin
           <div className="sf-line" key={l.id}>
             {l.image ? <img src={l.image} alt="" /> : <span />}
             <div>
-              <a href={`${base}/products/${l.slug}/`} style={{ fontWeight: 600 }}>{l.title}</a>
+              <a href={`${base}/products/${l.slug}/`} style={{ fontWeight: 600 }}>{l.title}</a>{l.variantTitle && <div className="sf-note">{l.variantTitle}</div>}
               <div className="sf-note">{rupees(l.pricePaise)} each</div>
               <div className="sf-qty" style={{ marginTop: 8 }} role="group" aria-label={`Quantity for ${l.title}`}>
                 <button onClick={() => set(l.id, l.qty - 1)} aria-label="Decrease quantity"><Minus size={14} /></button>
@@ -110,8 +146,9 @@ export function CartView({ store, base, checkout }: { store: string; base: strin
         <div className="row"><span>Shipping</span><span>{ship ? rupees(ship) : "Free"}</span></div>
         <div className="row" style={{ borderTop: "1px solid var(--sf-line)", paddingTop: 10 }}><span>Total</span><b>{rupees(sub + ship)}</b></div>
         {checkout.codEnabled && <p className="sf-note" style={{ margin: 0 }}>Cash on Delivery available</p>}
-        <button className="sf-btn" disabled title={checkout.demo ? "This is a demo store" : undefined}>Checkout</button>
-        <p className="sf-note" style={{ margin: 0 }}>{checkout.demo ? "This is a demo store — orders can't be placed here." : "Online checkout opens soon. Contact the store to order."}</p>
+        {checkout.ready ? <a className="sf-btn" href={`${base}/checkout/`}>Checkout</a> : <button className="sf-btn" disabled>Checkout</button>}
+        {!checkout.ready && <p className="sf-note" style={{ margin: 0 }}>{checkout.demo ? "This is a demo store — orders can't be placed here." : "Checkout works once the store is published."}</p>}
+        <p className="sf-note" style={{ margin: 0 }}>Final price, shipping and discounts are confirmed at checkout.</p>
       </aside>
     </div>
   );

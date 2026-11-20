@@ -148,6 +148,13 @@
       "when": 1795206372972,
       "tag": "0020_online_store",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795206774434,
+      "tag": "0021_store_checkout",
+      "breakpoints": true
     }
   ]
 }

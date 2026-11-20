@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { CategoryManager } from "@/components/portal/store/CatalogForms";
+import { CsvImport } from "@/components/portal/store/StoreOps";
 import { rupees } from "@/lib/store-themes";
 import { listCategories, listProducts } from "@/server/store/catalog";
 import { requireStorePage } from "@/server/store/portal";
@@ -46,7 +47,7 @@ export default async function StoreProducts({ searchParams }: { searchParams: SP
                       <td>{img ? <img src={`/api/store-media/${img}/`} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 8 }} /> : <span style={{ display: "block", width: 44, height: 44, borderRadius: 8, background: "var(--gray-soft)" }} />}</td>
                       <td><a className="orange" style={{ fontWeight: 600 }} href={`/portal/store/products/${p.id}/`}>{p.title}</a>{p.featured && <span className="tiny muted"> · featured</span>}</td>
                       <td>{rupees(p.pricePaise)}</td>
-                      <td className={p.stock === 0 ? "red" : ""}>{p.stock}</td>
+                      <td className={p.stock <= p.lowStockAt ? "red" : ""}>{p.stock}{p.stock > 0 && p.stock <= p.lowStockAt && <div className="tiny">Low stock</div>}</td>
                       <td>{p.categoryId ? catName.get(p.categoryId) ?? "—" : "—"}</td>
                       <td><span className={`chip ${p.status === "active" ? "c-active" : p.status === "archived" ? "c-cancelled" : "c-draft"}`}>{p.status}</span></td>
                     </tr>
@@ -56,7 +57,7 @@ export default async function StoreProducts({ searchParams }: { searchParams: SP
             </div>
           ) : <p className="muted" style={{ padding: 24, textAlign: "center" }}>{all.length ? "No products match." : "No products yet. Add your first product."}</p>}
         </div>
-        <CategoryManager categories={counts} />
+        <div style={{ display: "grid", gap: 12 }}><CategoryManager categories={counts} /><CsvImport /></div>
       </div>
       <style>{`@media (max-width:900px){.os-plist{grid-template-columns:1fr!important}}`}</style>
     </>

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { StoreShell } from "@/components/store/Storefront";
 import { rateLimit } from "@/server/security/rate-limit";
 import { type PublicTrack, publicTrack } from "@/server/tracking/public";
+import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrderByMobile } from "@/server/store/orders";
 import { type SfParams, type SfSearch, resolveSf, sfMeta } from "../_sf";
 
 export const dynamic = "force-dynamic";
@@ -19,15 +20,37 @@ export default async function Track({ params, searchParams }: { params: SfParams
   const q = (typeof sp.awb === "string" ? sp.awb : "").trim().slice(0, 60);
   let r: PublicTrack | null = null;
   let limited = false;
-  if (q && !sf.demo) {
+  const orderNo = (typeof sp.order === "string" ? sp.order : "").trim().slice(0, 30);
+  const mob = (typeof sp.mobile === "string" ? sp.mobile : "").replace(/\D/g, "").slice(-10);
+  let so: Awaited<ReturnType<typeof buyerOrderByMobile>> = null;
+  let soMissing = false;
+  if ((q || (orderNo && mob)) && !sf.demo) {
     const ip = ((await headers()).get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
     limited = !(await rateLimit(`track:${ip}`, 20, 600)).ok;
-    if (!limited) { try { r = await publicTrack(q); } catch { r = null; } }
+    if (!limited && q) { try { r = await publicTrack(q); } catch { r = null; } }
+    if (!limited && orderNo && mob) { so = await buyerOrderByMobile(sf.id, orderNo, mob); soMissing = !so; }
   }
   return (
     <StoreShell sf={sf}>
       <div className="sf-wrap sf-page" style={{ maxWidth: 720 }}>
         <h1>Track your order</h1>
+        <form method="get" style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, margin: "16px 0 8px" }}>
+          {sf.preview && <input type="hidden" name="preview" value="1" />}
+          <label className="sr-only" htmlFor="ono">Order number</label>
+          <input id="ono" name="order" className="sf-input" placeholder="Order number" defaultValue={orderNo} required />
+          <label className="sr-only" htmlFor="omob">Mobile number</label>
+          <input id="omob" name="mobile" className="sf-input" placeholder="Mobile number" inputMode="numeric" maxLength={13} defaultValue={mob} required />
+          <button className="sf-btn">Find</button>
+        </form>
+        {soMissing && <p role="status">We couldn&apos;t find an order with this number and mobile.</p>}
+        {so && (
+          <div className="sf-summary" role="status" style={{ marginBottom: 16 }}>
+            <div className="row"><span>Order {so.number}</span><b>{FULFILMENT_LABEL[so.fulfilment]}</b></div>
+            <div className="row"><span>Payment</span><span>{PAYMENT_LABEL[so.paymentStatus] ?? so.paymentStatus}</span></div>
+            {so.awb ? <div className="row"><span>{so.carrierName}</span><a href={`${sf.base}/track/?awb=${encodeURIComponent(so.awb)}`} style={{ textDecoration: "underline" }}>Track {so.awb}</a></div> : <span className="sf-note">The courier tracking number appears here once your order is shipped.</span>}
+          </div>
+        )}
+        <p className="sf-note" style={{ margin: "8px 0 0" }}>Or track with the courier AWB number:</p>
         <form method="get" role="search" style={{ display: "flex", gap: 8, margin: "16px 0 24px" }}>
           {sf.demo && <input type="hidden" name="theme" value={sf.themeKey} />}
           {sf.preview && <input type="hidden" name="preview" value="1" />}

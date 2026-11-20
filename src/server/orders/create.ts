@@ -38,7 +38,7 @@ export const OrderInput = z.object({
   if (v.declaredValueRupees > 50_000 && v.mode === "B2B" && !v.ewayBill) ctx.addIssue({ code: "custom", path: ["ewayBill"], message: "E-way bill is required for consignments above ₹50,000" });
 });
 
-export async function createOrder(orgId: string, input: z.infer<typeof OrderInput>, source: "manual" | "bulk" | "api" | "shopify" | "woocommerce" | "custom" = "manual", external?: { storeId: string; orderId: string }) {
+export async function createOrder(orgId: string, input: z.infer<typeof OrderInput>, source: "manual" | "bulk" | "api" | "shopify" | "woocommerce" | "custom" | "online_store" = "manual", external?: { storeId: string; orderId: string }) {
   const db = await getDb();
   const [wh] = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.id, input.warehouseId), eq(schema.warehouses.orgId, orgId)));
   if (!wh) return { ok: false as const, message: "Pickup address not found" };

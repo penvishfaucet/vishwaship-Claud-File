@@ -7,7 +7,17 @@ import { sniffUpload } from "@/server/storage";
 import { slugify } from "@/lib/store-themes";
 import { markStep, storeForOrg } from "./service";
 
-/** Phase 1 catalog: simple products (no variants yet), categories and store images. All scoped by the session org. */
+/** Catalog: products (optionally with variants), categories, coupons and store images. All scoped by the session org. */
+
+export const VariantInput = z.object({
+  id: z.string().max(60).nullable().default(null),
+  values: z.array(z.string().trim().min(1, "Fill every option value").max(40)).min(1).max(3),
+  sku: z.string().trim().max(60).default(""),
+  priceRupees: z.number().positive("Variant price must be more than 0").max(10_00_000),
+  compareRupees: z.number().min(0).max(10_00_000).nullable().default(null),
+  stock: z.number().int().min(0).max(1_000_000),
+  weightGrams: z.number().int().min(1).max(100_000).nullable().default(null),
+});
 
 export const ProductInput = z.object({
   title: z.string().trim().min(2, "Enter a product name").max(140),
@@ -23,6 +33,26 @@ export const ProductInput = z.object({
   featured: z.boolean().default(false),
   seoTitle: z.string().max(70).default(""),
   seoDescription: z.string().max(160).default(""),
+  sku: z.string().trim().max(60).default(""),
+  hsn: z.string().trim().regex(/^$|^\d{4,8}$/, "HSN code is 4 to 8 digits").default(""),
+  taxPercent: z.number().refine((v) => [0, 0.25, 3, 5, 12, 18, 28].includes(v), "Choose a GST rate").default(0),
+  lowStockAt: z.number().int().min(0).max(100_000).default(5),
+  lengthCm: z.number().min(0).max(500).default(0),
+  breadthCm: z.number().min(0).max(500).default(0),
+  heightCm: z.number().min(0).max(500).default(0),
+  options: z.array(z.string().trim().min(1, "Name every option").max(30)).max(3).default([]),
+  variants: z.array(VariantInput).max(100).default([]),
+}).superRefine((v, ctx) => {
+  if (v.options.length && !v.variants.length) ctx.addIssue({ code: "custom", path: ["variants"], message: "Add at least one variant" });
+  if (!v.options.length && v.variants.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Name the option (e.g. Size) for your variants" });
+  if (new Set(v.options.map((o) => o.toLowerCase())).size !== v.options.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Option names must be different" });
+  const seen = new Set<string>();
+  v.variants.forEach((x, i) => {
+    if (x.values.length !== v.options.length) ctx.addIssue({ code: "custom", path: ["variants", i], message: "Each variant needs a value for every option" });
+    const k = x.values.map((s) => s.toLowerCase()).join("|");
+    if (seen.has(k)) ctx.addIssue({ code: "custom", path: ["variants", i], message: `Variant "${x.values.join(" / ")}" is listed twice` });
+    seen.add(k);
+  });
 });
 export type ProductInput = z.infer<typeof ProductInput>;
 
@@ -79,21 +109,47 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
   }
   if (input.compareRupees !== null && input.compareRupees > 0 && input.compareRupees <= input.priceRupees) throw new StoreError("Compare-at price must be more than the price");
   const slug = await uniqueSlug(s.id, input.slug || input.title, id);
+  for (const v of input.variants) if (v.compareRupees && v.compareRupees <= v.priceRupees) throw new StoreError(`Compare-at price of ${v.values.join(" / ")} must be more than its price`);
+  const hasVariants = input.options.length > 0;
   const values = {
-    title: input.title, slug, description: input.description || null, pricePaise: toPaise(input.priceRupees),
-    comparePaise: input.compareRupees ? toPaise(input.compareRupees) : null, categoryId: input.categoryId, images: input.images,
-    stock: input.stock, weightGrams: input.weightGrams, status: input.status, featured: input.featured,
-    seo: { title: input.seoTitle, description: input.seoDescription }, updatedAt: new Date(),
+    title: input.title, slug, description: input.description || null,
+    // with variants, the product price/stock mirror the cheapest variant / total stock (lists, sorting, SEO)
+    pricePaise: hasVariants ? Math.min(...input.variants.map((v) => toPaise(v.priceRupees))) : toPaise(input.priceRupees),
+    comparePaise: !hasVariants && input.compareRupees ? toPaise(input.compareRupees) : null, categoryId: input.categoryId, images: input.images,
+    stock: hasVariants ? input.variants.reduce((n, v) => n + v.stock, 0) : input.stock, weightGrams: input.weightGrams, status: input.status, featured: input.featured,
+    seo: { title: input.seoTitle, description: input.seoDescription }, sku: input.sku || null, hsn: input.hsn || null, taxBps: Math.round(input.taxPercent * 100),
+    lowStockAt: input.lowStockAt, lengthMm: Math.round(input.lengthCm * 10), breadthMm: Math.round(input.breadthCm * 10), heightMm: Math.round(input.heightCm * 10),
+    options: input.options, updatedAt: new Date(),
   };
-  if (id) {
-    const res = await db.update(schema.storeProducts).set(values).where(and(eq(schema.storeProducts.id, id), eq(schema.storeProducts.storeId, s.id))).returning({ id: schema.storeProducts.id });
-    if (!res.length) throw new StoreError("Product not found");
-  } else {
-    id = newId("sp");
-    await db.insert(schema.storeProducts).values({ id, storeId: s.id, orgId, ...values });
-  }
+  const pid = id ?? newId("sp");
+  await db.transaction(async (tx) => {
+    if (id) {
+      const res = await tx.update(schema.storeProducts).set(values).where(and(eq(schema.storeProducts.id, id), eq(schema.storeProducts.storeId, s.id))).returning({ id: schema.storeProducts.id });
+      if (!res.length) throw new StoreError("Product not found");
+    } else {
+      await tx.insert(schema.storeProducts).values({ id: pid, storeId: s.id, orgId, ...values });
+    }
+    // variants: update the ones we know, add new ones, archive removed ones (orders keep pointing at them)
+    const existing = await tx.select({ id: schema.storeProductVariants.id }).from(schema.storeProductVariants).where(eq(schema.storeProductVariants.productId, pid));
+    const known = new Set(existing.map((e) => e.id));
+    const kept = new Set<string>();
+    for (const [i, v] of input.variants.entries()) {
+      const row = { title: v.values.join(" / "), optionValues: v.values, sku: v.sku || null, pricePaise: toPaise(v.priceRupees), comparePaise: v.compareRupees ? toPaise(v.compareRupees) : null, stock: v.stock, weightGrams: v.weightGrams, sort: i, archived: false };
+      if (v.id && known.has(v.id)) { await tx.update(schema.storeProductVariants).set(row).where(eq(schema.storeProductVariants.id, v.id)); kept.add(v.id); }
+      else await tx.insert(schema.storeProductVariants).values({ id: newId("spv"), productId: pid, storeId: s.id, orgId, ...row });
+    }
+    const gone = [...known].filter((x) => !kept.has(x));
+    if (gone.length) await tx.update(schema.storeProductVariants).set({ archived: true }).where(inArray(schema.storeProductVariants.id, gone));
+  });
   if (input.status === "active") await markStep(orgId, 3);
-  return { id, slug };
+  return { id: pid, slug };
+}
+
+export async function productVariants(orgId: string, productId: string) {
+  const db = await getDb();
+  return db.select().from(schema.storeProductVariants)
+    .where(and(eq(schema.storeProductVariants.productId, productId), eq(schema.storeProductVariants.orgId, orgId), eq(schema.storeProductVariants.archived, false)))
+    .orderBy(asc(schema.storeProductVariants.sort));
 }
 
 export async function archiveProduct(orgId: string, id: string) {

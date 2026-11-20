@@ -63,7 +63,7 @@ describe("store lifecycle", () => {
     const img = await cat.uploadMedia(A, PNG);
     await expect(cat.uploadMedia(A, Buffer.from("GIF89a-not-allowed"))).rejects.toThrow(/PNG, JPG or WebP/);
     const catId = await cat.addCategory(A, "Sarees");
-    const base = { title: "Silk Saree", slug: "", description: "Pure silk", priceRupees: 1499, compareRupees: 1999, categoryId: catId, images: [img], stock: 3, weightGrams: 600, status: "active" as const, featured: true, seoTitle: "", seoDescription: "" };
+    const base = cat.ProductInput.parse({ title: "Silk Saree", description: "Pure silk", priceRupees: 1499, compareRupees: 1999, categoryId: catId, images: [img], stock: 3, weightGrams: 600, status: "active", featured: true });
     const p = await cat.saveProduct(A, base);
     expect(p.slug).toBe("silk-saree");
     expect((await cat.saveProduct(A, base)).slug).toBe("silk-saree-2");

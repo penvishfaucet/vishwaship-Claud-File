@@ -8,25 +8,55 @@ type Cat = { id: string; name: string };
 export type ProductFormValue = {
   title: string; slug: string; description: string; price: string; compare: string; categoryId: string; images: string[];
   stock: string; weight: string; status: "draft" | "active" | "archived"; featured: boolean; seoTitle: string; seoDescription: string;
+  sku: string; hsn: string; taxPercent: string; lowStockAt: string; lengthCm: string; breadthCm: string; heightCm: string;
+  options: string[]; variants: VariantRow[];
 };
+export type VariantRow = { id: string | null; values: string[]; sku: string; price: string; compare: string; stock: string; weight: string };
+
+const GST = ["0", "0.25", "3", "5", "12", "18", "28"];
+
+/** Every combination of the option values (e.g. Size S,M × Colour Red,Blue → 4 variants). */
+function combos(lists: string[][]): string[][] {
+  return lists.reduce<string[][]>((acc, vals) => acc.flatMap((a) => vals.map((v) => [...a, v])), [[]]).filter((c) => c.length === lists.length);
+}
 
 export function ProductForm({ id, initial, categories, storeSlug }: { id?: string; initial: ProductFormValue; categories: Cat[]; storeSlug: string }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: string; err?: string } | null>(null);
+  const [optValues, setOptValues] = useState<string[]>(initial.options.map((_, i) => [...new Set(initial.variants.map((v) => v.values[i]))].join(", ")));
   const set = <K extends keyof ProductFormValue>(k: K, v: ProductFormValue[K]) => setF({ ...f, [k]: v });
   const num = (v: string) => (v.trim() === "" ? NaN : Number(v));
+  const hasVariants = f.options.length > 0;
+
+  function buildVariants(options: string[], valueText: string[]) {
+    const lists = options.map((_, i) => [...new Set((valueText[i] ?? "").split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 20));
+    if (lists.some((l) => !l.length)) return;
+    const next = combos(lists).slice(0, 100).map((values) => {
+      const old = f.variants.find((v) => v.values.join("|").toLowerCase() === values.join("|").toLowerCase());
+      return old ?? { id: null, values, sku: "", price: f.price, compare: f.compare, stock: "0", weight: "" };
+    });
+    setF((cur) => ({ ...cur, options, variants: next }));
+  }
+  const setVar = (i: number, k: keyof VariantRow, v: string) => setF({ ...f, variants: f.variants.map((x, j) => (j === i ? { ...x, [k]: v } : x)) });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg(null);
+    const variants = f.variants.map((v) => ({ id: v.id, values: v.values, sku: v.sku, priceRupees: num(v.price), compareRupees: v.compare.trim() ? num(v.compare) : null, stock: Math.floor(num(v.stock) || 0), weightGrams: v.weight.trim() ? Math.floor(num(v.weight)) : null }));
     const body = {
-      title: f.title, slug: f.slug, description: f.description, priceRupees: num(f.price), compareRupees: f.compare.trim() ? num(f.compare) : null,
+      title: f.title, slug: f.slug, description: f.description,
+      priceRupees: hasVariants ? Math.min(...variants.map((v) => v.priceRupees).filter((x) => x > 0), Infinity) : num(f.price),
+      compareRupees: !hasVariants && f.compare.trim() ? num(f.compare) : null,
       categoryId: f.categoryId || null, images: f.images, stock: Math.floor(num(f.stock) || 0), weightGrams: Math.floor(num(f.weight) || 0),
       status: f.status, featured: f.featured, seoTitle: f.seoTitle, seoDescription: f.seoDescription,
+      sku: f.sku, hsn: f.hsn, taxPercent: Number(f.taxPercent) || 0, lowStockAt: Math.floor(num(f.lowStockAt) || 0),
+      lengthCm: num(f.lengthCm) || 0, breadthCm: num(f.breadthCm) || 0, heightCm: num(f.heightCm) || 0,
+      options: f.options, variants: hasVariants ? variants : [],
     };
-    if (!(body.priceRupees > 0)) { setBusy(false); setMsg({ err: "Enter a price more than 0" }); return; }
+    if (hasVariants && variants.some((v) => !(v.priceRupees > 0))) { setBusy(false); setMsg({ err: "Enter a price for every variant" }); return; }
+    if (!(body.priceRupees > 0) || !Number.isFinite(body.priceRupees)) { setBusy(false); setMsg({ err: "Enter a price more than 0" }); return; }
     if (!(body.weightGrams > 0)) { setBusy(false); setMsg({ err: "Enter the packed weight in grams" }); return; }
     const r = await api<{ id: string; slug: string }>(id ? "PUT" : "POST", id ? `/api/portal/store/products/${id}` : "/api/portal/store/products", body);
     setBusy(false);
@@ -61,12 +91,60 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
         <div className="card mb12" style={{ padding: 20 }}>
           <h3 style={{ marginBottom: 8 }}>Price & stock</h3>
           <div className="grid2">
-            <div className="field"><label htmlFor="pp">Price (₹) <span className="req">*</span></label><input id="pp" className="input" inputMode="decimal" value={f.price} onChange={(e) => set("price", e.target.value.replace(/[^0-9.]/g, ""))} required /></div>
-            <div className="field"><label htmlFor="pc">Compare-at price (₹)</label><input id="pc" className="input" inputMode="decimal" value={f.compare} onChange={(e) => set("compare", e.target.value.replace(/[^0-9.]/g, ""))} placeholder="MRP, shown struck out" /></div>
-            <div className="field"><label htmlFor="ps">Stock</label><input id="ps" className="input" inputMode="numeric" value={f.stock} onChange={(e) => set("stock", e.target.value.replace(/\D/g, ""))} /></div>
+            {!hasVariants && <>
+              <div className="field"><label htmlFor="pp">Price (₹) <span className="req">*</span></label><input id="pp" className="input" inputMode="decimal" value={f.price} onChange={(e) => set("price", e.target.value.replace(/[^0-9.]/g, ""))} required /></div>
+              <div className="field"><label htmlFor="pc">Compare-at price (₹)</label><input id="pc" className="input" inputMode="decimal" value={f.compare} onChange={(e) => set("compare", e.target.value.replace(/[^0-9.]/g, ""))} placeholder="MRP, shown struck out" /></div>
+              <div className="field"><label htmlFor="ps">Stock</label><input id="ps" className="input" inputMode="numeric" value={f.stock} onChange={(e) => set("stock", e.target.value.replace(/\D/g, ""))} /></div>
+              <div className="field"><label htmlFor="psku">SKU</label><input id="psku" className="input" maxLength={60} value={f.sku} onChange={(e) => set("sku", e.target.value)} /></div>
+            </>}
             <div className="field"><label htmlFor="pw">Packed weight (grams) <span className="req">*</span></label><input id="pw" className="input" inputMode="numeric" value={f.weight} onChange={(e) => set("weight", e.target.value.replace(/\D/g, ""))} required /></div>
+            <div className="field"><label htmlFor="plow">Low-stock alert at</label><input id="plow" className="input" inputMode="numeric" value={f.lowStockAt} onChange={(e) => set("lowStockAt", e.target.value.replace(/\D/g, ""))} /></div>
           </div>
-          <p className="small muted" style={{ marginTop: 8 }}>Variants (size/colour), HSN/tax and CSV import come in the next update.</p>
+        </div>
+        <div className="card mb12" style={{ padding: 20 }}>
+          <h3 style={{ marginBottom: 4 }}>Variants</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>Sizes, colours or other options. Each variant has its own price and stock.</p>
+          {f.options.map((o, i) => (
+            <div className="grid2" key={i} style={{ marginBottom: 8 }}>
+              <div className="field"><label htmlFor={`on${i}`}>Option name</label><input id={`on${i}`} className="input" value={o} maxLength={30} onChange={(e) => setF({ ...f, options: f.options.map((x, j) => (j === i ? e.target.value : x)) })} placeholder="Size" /></div>
+              <div className="field"><label htmlFor={`ov${i}`}>Values (comma separated)</label>
+                <div className="row" style={{ gap: 6 }}>
+                  <input id={`ov${i}`} className="input" style={{ flex: 1, minWidth: 0 }} value={optValues[i] ?? ""} onChange={(e) => setOptValues(optValues.map((x, j) => (j === i ? e.target.value : x)))} onBlur={() => buildVariants(f.options, optValues)} placeholder="S, M, L, XL" />
+                  <button type="button" className="os-ic" aria-label={`Remove option ${o || i + 1}`} onClick={() => { const options = f.options.filter((_, j) => j !== i); const vals = optValues.filter((_, j) => j !== i); setOptValues(vals); if (!options.length) setF({ ...f, options: [], variants: [] }); else buildVariants(options, vals); }}><Trash2 size={14} /></button>
+                </div></div>
+            </div>
+          ))}
+          {f.options.length < 3 && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setF({ ...f, options: [...f.options, f.options.length ? "Colour" : "Size"] }); setOptValues([...optValues, ""]); }}>+ Add option</button>}
+          {hasVariants && f.variants.length > 0 && (
+            <div style={{ overflowX: "auto", marginTop: 12 }}>
+              <table className="os-dns">
+                <thead><tr><th>Variant</th><th>Price ₹</th><th>MRP ₹</th><th>Stock</th><th>SKU</th><th>Weight g</th></tr></thead>
+                <tbody>{f.variants.map((v, i) => (
+                  <tr key={v.values.join("|")}>
+                    <td><b>{v.values.join(" / ")}</b></td>
+                    <td><input className="input" style={{ width: 90 }} inputMode="decimal" aria-label={`Price for ${v.values.join(" / ")}`} value={v.price} onChange={(e) => setVar(i, "price", e.target.value.replace(/[^0-9.]/g, ""))} /></td>
+                    <td><input className="input" style={{ width: 90 }} inputMode="decimal" aria-label={`MRP for ${v.values.join(" / ")}`} value={v.compare} onChange={(e) => setVar(i, "compare", e.target.value.replace(/[^0-9.]/g, ""))} /></td>
+                    <td><input className="input" style={{ width: 70 }} inputMode="numeric" aria-label={`Stock for ${v.values.join(" / ")}`} value={v.stock} onChange={(e) => setVar(i, "stock", e.target.value.replace(/\D/g, ""))} /></td>
+                    <td><input className="input" style={{ width: 110 }} aria-label={`SKU for ${v.values.join(" / ")}`} value={v.sku} maxLength={60} onChange={(e) => setVar(i, "sku", e.target.value)} /></td>
+                    <td><input className="input" style={{ width: 80 }} inputMode="numeric" aria-label={`Weight for ${v.values.join(" / ")}`} placeholder={f.weight} value={v.weight} onChange={(e) => setVar(i, "weight", e.target.value.replace(/\D/g, ""))} /></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          {hasVariants && !f.variants.length && <p className="small muted">Type the values and click outside the box to create the variants.</p>}
+        </div>
+        <div className="card mb12" style={{ padding: 20 }}>
+          <h3 style={{ marginBottom: 8 }}>Tax & box size</h3>
+          <div className="grid3">
+            <div className="field"><label htmlFor="phsn">HSN code</label><input id="phsn" className="input" inputMode="numeric" maxLength={8} value={f.hsn} onChange={(e) => set("hsn", e.target.value.replace(/\D/g, ""))} /></div>
+            <div className="field"><label htmlFor="pgst">GST rate</label><select id="pgst" className="input select" value={f.taxPercent} onChange={(e) => set("taxPercent", e.target.value)}>{GST.map((g) => <option key={g} value={g}>{g}%</option>)}</select></div>
+            <div />
+            <div className="field"><label htmlFor="pl">Length (cm)</label><input id="pl" className="input" inputMode="decimal" value={f.lengthCm} onChange={(e) => set("lengthCm", e.target.value.replace(/[^0-9.]/g, ""))} /></div>
+            <div className="field"><label htmlFor="pb">Breadth (cm)</label><input id="pb" className="input" inputMode="decimal" value={f.breadthCm} onChange={(e) => set("breadthCm", e.target.value.replace(/[^0-9.]/g, ""))} /></div>
+            <div className="field"><label htmlFor="ph">Height (cm)</label><input id="ph" className="input" inputMode="decimal" value={f.heightCm} onChange={(e) => set("heightCm", e.target.value.replace(/[^0-9.]/g, ""))} /></div>
+          </div>
+          <p className="small muted" style={{ marginTop: 8 }}>Prices include GST. Box size and weight are used for exact courier rates when you ship.</p>
         </div>
         <div className="card mb12" style={{ padding: 20 }}>
           <h3 style={{ marginBottom: 8 }}>Search engines (optional)</h3>

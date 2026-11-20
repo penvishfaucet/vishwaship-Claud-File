@@ -232,7 +232,7 @@ export const orders = pgTable("orders", {
   id: id(),
   orgId: text("org_id").notNull().references(() => orgs.id),
   orderNumber: text("order_number").notNull(),
-  source: text("source").notNull().default("manual"), // manual | bulk | api | shopify | woocommerce | custom
+  source: text("source").notNull().default("manual"), // manual | bulk | api | shopify | woocommerce | custom | online_store
   externalStoreId: text("external_store_id"),
   externalOrderId: text("external_order_id"),
   status: text("status").notNull().default("draft"),
@@ -1149,9 +1149,100 @@ export const storeProducts = pgTable("store_products", {
   status: text("status").notNull().default("active"), // draft | active | archived
   featured: boolean("featured").notNull().default(false),
   seo: jsonb("seo").notNull().default({}),
+  sku: text("sku"),
+  hsn: text("hsn"),
+  /** GST rate in basis points (prices are tax-inclusive; used for invoices). */
+  taxBps: integer("tax_bps").notNull().default(0),
+  lowStockAt: integer("low_stock_at").notNull().default(5),
+  lengthMm: integer("length_mm").notNull().default(0),
+  breadthMm: integer("breadth_mm").notNull().default(0),
+  heightMm: integer("height_mm").notNull().default(0),
+  /** Option names when the product has variants, e.g. ["Size","Colour"]. Empty = no variants (stock on the product). */
+  options: jsonb("options").notNull().default([]),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);
+
+/** A sellable variant (e.g. "M / Red") with its own price, stock and weight. */
+export const storeProductVariants = pgTable("store_product_variants", {
+  id: id(),
+  productId: text("product_id").notNull().references(() => storeProducts.id),
+  storeId: text("store_id").notNull(),
+  orgId: text("org_id").notNull(),
+  title: text("title").notNull(),
+  optionValues: jsonb("option_values").notNull().default([]),
+  sku: text("sku"),
+  pricePaise: paise("price_paise").notNull(),
+  comparePaise: paise("compare_paise"),
+  stock: integer("stock").notNull().default(0),
+  weightGrams: integer("weight_grams"),
+  sort: integer("sort").notNull().default(0),
+  archived: boolean("archived").notNull().default(false),
+  createdAt: created(),
+}, (t) => [index("store_variants_product").on(t.productId)]);
+
+export const storeCoupons = pgTable("store_coupons", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  code: text("code").notNull(),
+  kind: text("kind").notNull(), // percent | flat | free_shipping
+  /** percent: basis points; flat: paise; free_shipping: 0 */
+  value: integer("value").notNull().default(0),
+  maxDiscountPaise: paise("max_discount_paise"),
+  minSubtotalPaise: paise("min_subtotal_paise").notNull().default(0),
+  maxUses: integer("max_uses"),
+  used: integer("used").notNull().default(0),
+  startsAt: ts("starts_at"),
+  endsAt: ts("ends_at"),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_coupons_code").on(t.storeId, t.code)]);
+
+/**
+ * A buyer's order on a merchant store. Payment state lives here; fulfilment (booking, AWB, pickup, delivery, COD
+ * collection and remittance) lives on the linked shipping order (orders.id) and its shipment, so it is never copied.
+ * Online payments go to the merchant's own Razorpay account and never touch the Vishwaship wallet.
+ */
+export const storeOrders = pgTable("store_orders", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  number: text("number").notNull(),
+  /** Client-generated key for one checkout attempt: retries return the same order. */
+  checkoutKey: text("checkout_key").notNull(),
+  /** Random token that lets the buyer open the confirmation page. */
+  buyerToken: text("buyer_token").notNull(),
+  status: text("status").notNull(), // pending_payment | placed | cancelled
+  paymentMethod: text("payment_method").notNull(), // cod | razorpay
+  paymentStatus: text("payment_status").notNull(), // pending | paid | failed | refund_due | refunded | cod_pending
+  buyer: jsonb("buyer").notNull(), // name, mobile, email, line1, line2, pincode, city, state
+  lines: jsonb("lines").notNull(), // [{productId, variantId, title, variantTitle, sku, qty, unitPaise, weightGrams, hsn, taxBps}]
+  subtotalPaise: paise("subtotal_paise").notNull(),
+  discountPaise: paise("discount_paise").notNull().default(0),
+  shippingPaise: paise("shipping_paise").notNull().default(0),
+  codFeePaise: paise("cod_fee_paise").notNull().default(0),
+  totalPaise: paise("total_paise").notNull(),
+  couponCode: text("coupon_code"),
+  razorpayOrderId: text("razorpay_order_id"),
+  razorpayPaymentId: text("razorpay_payment_id"),
+  /** Linked shipping order (orders.id) created once the order is placed. */
+  shippingOrderId: text("shipping_order_id"),
+  stockReleased: boolean("stock_released").notNull().default(false),
+  /** UTM / click ids captured on the storefront (used by marketing attribution). */
+  attribution: jsonb("attribution").notNull().default({}),
+  note: text("note"),
+  paidAt: ts("paid_at"),
+  placedAt: ts("placed_at"),
+  cancelledAt: ts("cancelled_at"),
+  createdAt: created(),
+}, (t) => [
+  uniqueIndex("store_orders_number").on(t.storeId, t.number),
+  uniqueIndex("store_orders_checkout").on(t.storeId, t.checkoutKey),
+  uniqueIndex("store_orders_rzp_order").on(t.razorpayOrderId),
+  uniqueIndex("store_orders_rzp_payment").on(t.razorpayPaymentId),
+  index("store_orders_store_created").on(t.storeId, t.createdAt),
+]);
 
 /** Store images (logo, banners, product photos). Kept in the database so redeploys never lose them. */
 export const storeMedia = pgTable("store_media", {

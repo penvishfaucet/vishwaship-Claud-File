@@ -147,6 +147,9 @@ export async function scheduleSweeps() {
   const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
   for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   await sweepNoResponse();
+  // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
+  try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }
+  catch (e) { console.error("[store]", (e as Error).message); }
   await scheduleTrackingPolls();
   // Android push for new in-app alerts (claims each alert once; no-op sends until FCM is configured)
   try { const { dispatchPush } = await import("@/server/mobile/push"); await dispatchPush(); }

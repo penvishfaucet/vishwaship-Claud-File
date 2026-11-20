@@ -12,7 +12,7 @@ export default async function NewProduct() {
     <>
       <div className="page-h"><div><p className="small muted" style={{ margin: 0 }}><a href="/portal/store/products/">Store products</a></p><h1>Add product</h1></div></div>
       <ProductForm storeSlug={store.slug} categories={cats.map((c) => ({ id: c.id, name: c.name }))}
-        initial={{ title: "", slug: "", description: "", price: "", compare: "", categoryId: "", images: [], stock: "10", weight: "500", status: "active", featured: false, seoTitle: "", seoDescription: "" }} />
+        initial={{ title: "", slug: "", description: "", price: "", compare: "", categoryId: "", images: [], stock: "10", weight: "500", status: "active", featured: false, seoTitle: "", seoDescription: "", sku: "", hsn: "", taxPercent: "0", lowStockAt: "5", lengthCm: "", breadthCm: "", heightCm: "", options: [], variants: [] }} />
     </>
   );
 }

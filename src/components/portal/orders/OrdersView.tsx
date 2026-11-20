@@ -36,7 +36,7 @@ interface Props {
 type DialogState = null | { kind: "track"; shipmentId: string } | { kind: "cod" | "breakdown" | "pickup"; row: OrderRow };
 type Toast = null | { text: string; bad?: boolean; retry?: { ids: string[]; format: PrintFormat }; sub?: string[] };
 
-const SOURCE: Record<string, string> = { manual: "Custom", bulk: "Bulk Import", api: "API", shopify: "Shopify", woocommerce: "WooCommerce", custom: "Custom" };
+const SOURCE: Record<string, string> = { manual: "Custom", bulk: "Bulk Import", api: "API", shopify: "Shopify", woocommerce: "WooCommerce", custom: "Custom", online_store: "Online Store" };
 const SHIP_STATUSES = ["not_booked", "booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "delivered", "ndr", "rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"];
 
 /** Booking badge in "Order Details" (shared with Admin: lib/order-view bookingStage). */
