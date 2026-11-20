@@ -206,6 +206,53 @@ describe("print formats", { timeout: 20_000 }, () => {
   });
 });
 
+describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
+  const delivers = (p: Awaited<ReturnType<typeof pdfPages>>[number]) => p.items.filter((i) => i.str === "DELIVER TO");
+
+  it("A4 · 1 label per page: one label on each sheet", async () => {
+    const ids = [await ship({ mode: "B2C", provider: "delhivery_b2c" }), await ship({ mode: "B2C", provider: "delhivery_b2c" })];
+    const r = await renderLabels(ORG, ids, "a4_1up");
+    expect(r.skipped).toEqual([]);
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(2);
+    for (const p of pages) { expect(p.w).toBeCloseTo(595.28, 1); expect(delivers(p)).toHaveLength(1); }
+  });
+
+  it("A4 · all labels on one page: 1, 2 and 3 cartons each fit one sheet; two shipments never share a sheet", async () => {
+    for (const boxes of [1, 2, 3]) {
+      const sid = await ship({ boxes, pieces: Array.from({ length: boxes }, (_, i) => `99${boxes}00${i}`) });
+      const r = await renderLabels(ORG, [sid], "a4_fit");
+      expect(r.skipped).toEqual([]);
+      const pages = await pdfPages(r.pdf!);
+      expect(pages).toHaveLength(1);
+      expect(delivers(pages[0])).toHaveLength(boxes);
+      if (boxes > 1) expect(decodeBarcodes(pages[0]).length).toBeGreaterThanOrEqual(boxes); // the test decoder reads standard bar widths (a full-page label draws wider bars)
+    }
+    const a = await ship({ mode: "B2C", provider: "delhivery_b2c" }), b = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const pages = await pdfPages((await renderLabels(ORG, [a, b], "a4_fit")).pdf!);
+    expect(pages).toHaveLength(2);
+  });
+
+  it("A4 · label + invoice: labels on the top half, the shipper's invoice below the cut line, no COD amount", async () => {
+    const sid = await ship({ boxes: 2, pieces: ["7700001", "7700002"], pay: "cod" });
+    const r = await renderLabels(ORG, [sid], "a4_doc");
+    expect(r.skipped).toEqual([]);
+    const [p, ...more] = await pdfPages(r.pdf!);
+    expect(more).toHaveLength(0);
+    const labels = delivers(p);
+    expect(labels).toHaveLength(2);
+    for (const l of labels) expect(l.transform[5]).toBeGreaterThan(p.h / 2);
+    const inv = p.items.find((i) => i.str === "INVOICE")!;
+    expect(inv.transform[5]).toBeLessThan(p.h / 2);
+    for (const t of ["cut here", "Penvish Bath Fittings LLP", "05ABCPZ9876K1Z2", "Bill / ship to", "Shree Balaji Traders Pvt Ltd", "Steel Almirah", "Office Chair", "Rs. 25,000.00", "Rs. 50,000.00", "Total Rs. 75,000.00", "COD"]) expect(p.text).toContain(t);
+    expect(p.text).not.toContain("1,234.56"); // the COD amount (₹1,234.56) is never printed
+    // 3 cartons: two on the invoice sheet, the third on its own sheet
+    const sid3 = await ship({ boxes: 3, pieces: ["7710001", "7710002", "7710003"] });
+    const p3 = await pdfPages((await renderLabels(ORG, [sid3], "a4_doc")).pdf!);
+    expect(p3.map((x) => delivers(x).length)).toEqual([2, 1]);
+  });
+});
+
 describe("downloads are safe", { timeout: 20_000 }, () => {
   it("another account's shipment is not found for a customer; Admin (no org filter) can download it", async () => {
     const theirs = await ship({ org: OTHER, mode: "B2C", provider: "delhivery_b2c" });

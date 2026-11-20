@@ -12,6 +12,7 @@ import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
 import { orgSetting } from "@/server/couriers";
 import { paymentLabel } from "@/lib/payment";
+import { type InvoiceBlock, cutLine, drawInvoice, fitGrid, gridBoxes, LOWER_HALF } from "./sheet";
 
 const PT = 72 / 25.4;
 /** Narrowest printable bar: 0.19 mm ≈ 1.5 dots at 203 dpi. */
@@ -88,6 +89,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
   for (const oid of new Set(rows.map((r) => r.org.id))) invoice.set(oid, (await orgSetting<{ businessName?: string; gstin?: string }>(oid, "invoice_settings")) ?? {});
   const inv = (oid: string) => invoice.get(oid) ?? {};
   const brandedOf = new Map<BrandedLabel, string>(); // label → shipment id (for errors)
+  const invoices = new Map<string, InvoiceBlock>(); // shipment id → invoice (A4 · label + invoice)
 
   for (const { s, o, w, org } of rows) {
     const skip = (reason: string, retryable = false) => skipped.push({ shipmentId: s.id, orderNumber: o.orderNumber, reason, retryable });
@@ -113,6 +115,19 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       const products = ((o.products ?? []) as Product[]).filter((p) => p?.name);
       const pickup = (o.pickupSnapshot as Addr | null) ?? (w ? { label: w.label, contactName: w.contactName, line1: w.line1, line2: w.line2 ?? undefined, city: w.city, state: w.state, pincode: w.pincode, mobile: w.mobile } : null);
       const logo = carrierLogoFor(s.carrierName);
+      if (layoutFormat === "a4_doc") {
+        const look = ((await orgSetting<Record<string, unknown>>(org.id, "invoice_settings")) ?? {}) as { businessName?: string; gstin?: string; address?: string; phone?: string; prefix?: string; footer?: string; signatureText?: string; showHsn?: boolean };
+        const items = ((o.products ?? []) as Array<{ name?: string; qty?: number; unitPrice?: number; hsn?: string }>).filter((x) => x?.name).map((x) => ({ name: String(x.name), hsn: x.hsn, qty: Number(x.qty) || 1, unitPrice: Number(x.unitPrice) || 0 }));
+        invoices.set(s.id, {
+          seller: { name: look.businessName || inv(org.id).businessName || org.businessName, gstin: look.gstin || inv(org.id).gstin || org.gstin || null, phone: look.phone,
+            address: look.address || (pickup ? [pickup.line1, pickup.line2, pickup.city, pickup.state, pickup.pincode].filter(Boolean).join(", ") : "") },
+          number: `${look.prefix ?? ""}${o.invoiceNumber ?? o.orderNumber}`, date: o.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }),
+          orderNumber: o.orderNumber, buyer: o.consignee as Addr, buyerGstin: o.buyerGstin ?? null, items,
+          // like the label, the printed sheet never shows the COD amount
+          payment: paymentLabel(o.paymentType, o.codAmountPaise), shippedVia: `${s.carrierName} · ${isB2B ? "LRN" : "AWB"} ${s.lrNumber && isB2B ? s.lrNumber : s.awb}`, ewayBill: o.ewayBill ?? null,
+          footer: look.footer, signature: look.signatureText, showHsn: look.showHsn !== false,
+        });
+      }
       for (let i = 0; i < cartons; i++) {
         const l: BrandedLabel = {
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
@@ -164,45 +179,83 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     const logos = { vs: await img(VISHWASHIP_LOGO), carriers: new Map<LabelLogo, PDFImage>() };
     for (const l of branded) if (l.carrierLogo && !logos.carriers.has(l.carrierLogo)) logos.carriers.set(l.carrierLogo, await img(l.carrierLogo));
     const failed = new Set<string>();
-    const ok: BrandedLabel[] = [];
-    // check every label fits its slot before placing any page (so a size that cannot fit is reported, not clipped)
-    const slotMm = slotSize(layoutFormat);
-    for (const l of branded) {
-      const sid = brandedOf.get(l)!;
+    type Place = { l: BrandedLabel; page: number; box: Box };
+    const plan: Place[] = [];
+    const invoicePages: Array<{ page: number; sid: string }> = [];
+    let pageNo = -1;
+    const pm = fmt.mm!;
+    const rotate = !fmt.slots && fmt.group === "thermal" && pm[0] < 60; // narrow rolls: landscape layout on a rotated page
+    if (fmt.slots) {
+      const [cols, rws] = fmt.slots;
+      const per = cols * rws;
+      // A4 · 1 label per page: a normal-size label on the top half (a full-page frame would leave the label lost in white space)
+      const band = layoutFormat === "a4_1up" ? 148.5 : 297;
+      for (let i = 0; i < branded.length; i += per) { pageNo++; gridBoxes(cols, rws, 0, band).slice(0, Math.min(per, branded.length - i)).forEach((box, k) => plan.push({ l: branded[i + k], page: pageNo, box })); }
+    } else if (layoutFormat === "a4_fit" || layoutFormat === "a4_doc") {
+      // one shipment never shares a sheet with another; its cartons stay together
+      const groups = new Map<string, BrandedLabel[]>();
+      for (const l of branded) { const sid = brandedOf.get(l)!; groups.set(sid, [...(groups.get(sid) ?? []), l]); }
+      for (const [sid, list] of groups) {
+        let rest = list;
+        if (layoutFormat === "a4_doc") {
+          pageNo++;
+          const top = rest.slice(0, 2);
+          gridBoxes(top.length, 1, 0, 148.5).forEach((box, k) => plan.push({ l: top[k], page: pageNo, box }));
+          invoicePages.push({ page: pageNo, sid });
+          rest = rest.slice(2);
+        }
+        while (rest.length) {
+          const chunk = rest.slice(0, 6);
+          const [cols, rws] = fitGrid(chunk.length);
+          pageNo++;
+          gridBoxes(cols, rws, 0, chunk.length === 1 ? 148.5 : 297).forEach((box, k) => { if (chunk[k]) plan.push({ l: chunk[k], page: pageNo, box }); });
+          rest = rest.slice(6);
+        }
+      }
+    } else {
+      for (const l of branded) { pageNo++; const w = (rotate ? pm[1] : pm[0]) * PT, h = (rotate ? pm[0] : pm[1]) * PT; plan.push({ l, page: pageNo, box: { x: 0, y: 0, w, h } }); }
+    }
+    // check every label fits the box it will get before drawing anything (a size that cannot fit is reported, not clipped)
+    for (const it of plan) {
+      const sid = brandedOf.get(it.l)!;
       if (failed.has(sid)) continue;
       const probe = await PDFDocument.create();
       const pf = { r: await probe.embedFont(StandardFonts.Helvetica), b: await probe.embedFont(StandardFonts.HelveticaBold) };
-      const page = probe.addPage([slotMm.w * PT, slotMm.h * PT]);
-      const err = drawBranded(page, pf, { vs: null, carrier: null }, l, { x: 0, y: 0, w: slotMm.w * PT, h: slotMm.h * PT });
+      const page = probe.addPage([it.box.w, it.box.h]);
+      const err = drawBranded(page, pf, { vs: null, carrier: null }, it.l, { x: 0, y: 0, w: it.box.w, h: it.box.h });
       if (err) {
         failed.add(sid);
         const row = rows.find((r) => r.s.id === sid)!;
         const alt = ["thermal_4x6", "a4_2up", "thermal_4x4"].filter((k) => k !== layoutFormat).map((k) => PRINT_FORMATS.find((x) => x.key === k)!.name).join(", ");
         skipped.push({ shipmentId: sid, orderNumber: row.o.orderNumber, reason: `${err} on ${fmt.name}. Use ${alt} instead.`, retryable: false });
-      } else ok.push(l);
-    }
-    const placed = ok.filter((l) => !failed.has(brandedOf.get(l)!));
-    if (fmt.slots) {
-      const [cols, rws] = fmt.slots;
-      const per = cols * rws;
-      for (let i = 0; i < placed.length; i += per) {
-        const page = doc.addPage([210 * PT, 297 * PT]);
-        placed.slice(i, i + per).forEach((l, k) => {
-          const c = k % cols, r = Math.floor(k / cols);
-          const x = (A4_MARGIN + c * (slotMm.w + A4_GAP)) * PT, yTop = (297 - A4_MARGIN - r * (slotMm.h + A4_GAP)) * PT;
-          const box = { x, y: yTop - slotMm.h * PT, w: slotMm.w * PT, h: slotMm.h * PT };
-          // light cut guide around each label
-          page.drawRectangle({ x: box.x, y: box.y, width: box.w, height: box.h, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5, borderDashArray: [3, 3] });
-          drawBranded(page, fonts, { vs: logos.vs, carrier: l.carrierLogo ? logos.carriers.get(l.carrierLogo)! : null }, l, box);
-        });
       }
-    } else {
-      const pm = fmt.mm!;
-      const rotate = pm[0] < 60; // narrow rolls: landscape layout on a rotated page, so the barcode runs along the long side
-      for (const l of placed) {
-        const page = doc.addPage(rotate ? [pm[1] * PT, pm[0] * PT] : [pm[0] * PT, pm[1] * PT]);
-        if (rotate) page.setRotation(degrees(90));
-        drawBranded(page, fonts, { vs: logos.vs, carrier: l.carrierLogo ? logos.carriers.get(l.carrierLogo)! : null }, l, { x: 0, y: 0, w: page.getWidth(), h: page.getHeight() });
+    }
+    // draw; pages are created on first use so a skipped shipment leaves no blank sheet
+    const pdfPages = new Map<number, PDFPage>();
+    const pageFor = (n: number) => {
+      let pg = pdfPages.get(n);
+      if (!pg) {
+        pg = fmt.group === "a4" ? doc.addPage([210 * PT, 297 * PT]) : doc.addPage(rotate ? [pm[1] * PT, pm[0] * PT] : [pm[0] * PT, pm[1] * PT]);
+        if (rotate) pg.setRotation(degrees(90));
+        pdfPages.set(n, pg);
+      }
+      return pg;
+    };
+    const keep = plan.filter((it) => !failed.has(brandedOf.get(it.l)!));
+    const pagesInOrder = [...new Set([...keep.map((x) => x.page), ...invoicePages.filter((x) => !failed.has(x.sid)).map((x) => x.page)])].sort((x, y) => x - y);
+    for (const n of pagesInOrder) {
+      const page = pageFor(n);
+      for (const it of keep.filter((x) => x.page === n)) {
+        // light cut guide around each label on A4 sheets
+        if (fmt.group === "a4") page.drawRectangle({ x: it.box.x, y: it.box.y, width: it.box.w, height: it.box.h, borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5, borderDashArray: [3, 3] });
+        drawBranded(page, fonts, { vs: logos.vs, carrier: it.l.carrierLogo ? logos.carriers.get(it.l.carrierLogo)! : null }, it.l, it.box);
+      }
+      const invPage = invoicePages.find((x) => x.page === n && !failed.has(x.sid));
+      if (invPage) {
+        const data = invoices.get(invPage.sid);
+        // cut line across the middle, then the invoice on the bottom half
+        cutLine(page, fonts.r);
+        if (data) drawInvoice(page, fonts, data, LOWER_HALF);
       }
     }
   }

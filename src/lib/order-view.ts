@@ -128,8 +128,14 @@ export const COD_FILTERS: Array<{ key: string; label: string }> = [
  *  - mm: physical page size (exact PDF page dimensions)
  *  - slots: A4 sheets hold several labels in a grid (cols × rows), placed in order; unused slots stay blank
  */
-export type PrintFormat = "a4_2up" | "a4_4up" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "original";
+export type PrintFormat = "a4_1up" | "a4_fit" | "a4_doc" | "a4_2up" | "a4_4up" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100" | "original";
 export const PRINT_FORMATS: Array<{ key: PrintFormat; name: string; group: "a4" | "thermal" | "carrier"; w?: string; h?: string; mm?: [number, number]; slots?: [number, number] }> = [
+  // a4_1up: one label per sheet, half-page size at the top
+  { key: "a4_1up", name: "A4 · 1 label per page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297], slots: [1, 1] },
+  // a4_fit: every carton label of one shipment on the same sheet (1, 2, 3 or 2 × 2; 2 × 3 beyond that)
+  { key: "a4_fit", name: "A4 · all labels of a shipment on one page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297] },
+  // a4_doc: up to 2 carton labels on the top half, the shipment's invoice on the bottom half
+  { key: "a4_doc", name: "A4 · label + invoice on one page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297] },
   { key: "a4_2up", name: "A4 · 2 labels per page", group: "a4", w: "210mm", h: "297mm", mm: [210, 297], slots: [1, 2] },
   { key: "a4_4up", name: "A4 · 4 labels per page (2 × 2)", group: "a4", w: "210mm", h: "297mm", mm: [210, 297], slots: [2, 2] },
   { key: "thermal_4x6", name: "Thermal 4 × 6 inches", group: "thermal", w: "4in", h: "6in", mm: [101.6, 152.4] },

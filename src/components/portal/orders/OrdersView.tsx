@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive, ArchiveRestore, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileText, Filter,
   MessageCircle, PlusCircle, RefreshCw, Settings, Settings2, Tag, Truck, Upload, XCircle,
-  ClipboardList, CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, SlidersHorizontal, Undo2, UserRound,
+  ClipboardList, CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, Receipt, SlidersHorizontal, Undo2, UserRound,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
@@ -472,7 +472,8 @@ function RowMenu({ r, open, onLabel, onCancel, onArchive, onMenu }: { r: OrderRo
               )) : <button type="button" disabled><span>AWB Pending<span className="why">Labels appear once the courier assigns the AWB</span></span></button>}
               <div className="sep" />
               <span className="hd">Documents</span>
-              <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener"><FileText size={14} aria-hidden /> Invoice</a>
+              <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener"><FileText size={14} aria-hidden /> Download invoice</a>
+              <Link role="menuitem" href={`/portal/billing/shipment/${s.id}/`}><Receipt size={14} aria-hidden /> Vishwaship GST invoice</Link>
               <div className="sep" />
             </>
           )}
@@ -669,7 +670,8 @@ function MobileCard({ r, selected, onToggle, open, defaultLabel, codLabel, onLab
         <summary>More actions</summary>
         <div className="btns" style={{ flexDirection: "column", alignItems: "stretch" }}>
           {s?.awb && s.labelFormats.map((x) => <button key={x.key} type="button" className="ov-btn ghost sm" disabled={!x.ok} onClick={() => onLabel(x.key)} title={x.reason}>Label · {x.name}{!x.ok ? " (unavailable)" : ""}</button>)}
-          {s && <a className="ov-btn ghost sm" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener">Invoice</a>}
+          {s && <a className="ov-btn ghost sm" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener">Download invoice</a>}
+          {s && <Link className="ov-btn ghost sm" href={`/portal/billing/shipment/${s.id}/`}>Vishwaship GST invoice</Link>}
           <Link className="ov-btn ghost sm" href={`/portal/orders/${r.id}/`}>View Order Details</Link>
           <button type="button" className="ov-btn ghost sm" onClick={() => onArchive(!r.archived)}>{r.archived ? "Restore from Archive" : "Move to Archive"}</button>
           {canCancel && <button type="button" className="ov-btn ghost sm" style={{ color: "var(--red)" }} onClick={onCancel}>{s ? "Cancel Shipment" : "Cancel Order"}</button>}
@@ -768,6 +770,7 @@ function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: 
   const s = r.shipment;
   const canCancel = s ? s.cancellable : r.cancellableOrder;
   const editable = !s && ["draft", "ready", "booking_failed"].includes(r.orderStatus);
+  const cartons = Math.max(r.boxes, s?.pieces ?? 0);
   const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
   const go = (fn: () => void) => () => { m.close(); fn(); };
   return (
@@ -776,16 +779,21 @@ function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: 
       {m.pos && (
         <div className="ov-menu" role="menu" style={m.pos}>
           {s?.awb && <>
-            <span className="hd">Download label</span>
+            <span className="hd">Download label{cartons > 1 ? ` · ${cartons} cartons` : ""}</span>
             {s.labelFormats.map((x) => <button key={x.key} role="menuitem" type="button" disabled={!x.ok} onClick={go(() => onLabel(x.key))}><Download size={14} aria-hidden /><span>{x.name}{x.reason && <span className="why">{x.reason}</span>}</span></button>)}
             <div className="sep" />
           </>}
+          {s && <>
+            <span className="hd">Invoices</span>
+            <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener" onClick={() => m.close()}><FileText size={14} aria-hidden /> Download invoice</a>
+            <Link role="menuitem" href={`/portal/billing/shipment/${s.id}/`} onClick={() => m.close()}><Receipt size={14} aria-hidden /> Vishwaship GST invoice</Link>
+            <div className="sep" />
+          </>}
           {s?.awb && <button role="menuitem" type="button" onClick={go(() => open({ kind: "track", shipmentId: s.id }))}><Truck size={14} aria-hidden /> Track shipment</button>}
-          {s && <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener" onClick={() => m.close()}><FileText size={14} aria-hidden /> Check invoice</a>}
           {editable
             ? <Link role="menuitem" href={`/portal/orders/new/?draft=${r.id}`}><Pencil size={14} aria-hidden /> Edit order</Link>
             : <button role="menuitem" type="button" disabled><Pencil size={14} aria-hidden /><span>Edit order<span className="why">Not possible after the courier is assigned</span></span></button>}
-          <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone order</button>
+          <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone / duplicate order</button>
           <Link role="menuitem" href={`/portal/orders/${r.id}/`}><Eye size={14} aria-hidden /> View details</Link>
           {s?.awb && s.status !== "cancelled" && <button role="menuitem" type="button" onClick={go(() => { void openManifest({ shipmentId: s.id }).then((r) => { if (!r.ok) alertBox(r.message); }); })}><ClipboardList size={14} aria-hidden /> Download manifest</button>}
           <Link role="menuitem" href={ticket}><LifeBuoy size={14} aria-hidden /> Raise ticket</Link>
