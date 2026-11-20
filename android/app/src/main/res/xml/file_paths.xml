@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Labels / manifests / invoices are written to app-private cache and shared via content:// only. -->
+    <!-- Splash image handed to Chrome when the app opens the website. -->
+    <files-path name="twa_splash" path="twa_splash/" />
+    <!-- Used by the (currently unused) native screens for labels / manifests / invoices. -->
     <cache-path name="documents" path="documents/" />
 </paths>
