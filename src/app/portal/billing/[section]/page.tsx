@@ -13,6 +13,9 @@ import { getDb, schema } from "@/server/db/client";
 import { PassbookView } from "@/components/billing/PassbookView";
 import { PASSBOOK_TYPES, type PassbookType, passbookHistory } from "@/server/passbook";
 import { portalContext } from "@/server/portal/context";
+import { creditPrice } from "@/server/notifications/credits";
+import { codSettings } from "@/server/whatsapp/service";
+import { getSetting } from "@/server/quotes/service";
 
 const SECTIONS = {
   passbook: { title: "Passbook", desc: "Every wallet credit and debit with its reference and running balance.", export: "passbook" },
@@ -230,9 +233,11 @@ async function Credits({ orgId, balance, wallet }: { orgId: string; balance: num
   const packs = await db.select().from(schema.creditPacks).where(eq(schema.creditPacks.active, true)).orderBy(asc(schema.creditPacks.sort));
   const [gst] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "gst_bps"));
   const hist = await creditHistory(orgId);
+  const [price, cod, costs] = await Promise.all([creditPrice(), codSettings(), getSetting("notification_credit_cost", { whatsapp: 1 } as Record<string, number>)]);
   return (
     <>
-      <BuyCredits balance={balance} walletPaise={wallet} gstBps={Number(gst?.value ?? 1800)} packs={packs.map((p) => ({ id: p.id, credits: p.credits, unitPricePaise: p.unitPricePaise }))} />
+      <BuyCredits balance={balance} walletPaise={wallet} gstBps={Number(gst?.value ?? 1800)} packs={packs.map((p) => ({ id: p.id, credits: p.credits, unitPricePaise: p.unitPricePaise }))}
+        price={price} perMessage={{ cod: cod.credits, whatsapp: Number(costs.value.whatsapp ?? 1) }} />
       <div className="card p0 tbl-wrap mt12">
         <table className="tbl">
           <thead><tr><th>Date</th><th>Type</th><th>Event</th><th>Reference</th><th style={R}>Credits</th><th style={R}>Balance</th><th style={R}>Paid</th></tr></thead>

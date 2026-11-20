@@ -5,6 +5,7 @@ import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { getSetting } from "@/server/quotes/service";
+import { creditPrice } from "@/server/notifications/credits";
 
 async function saveCod(fd: FormData) {
   "use server";
@@ -20,11 +21,29 @@ async function saveCod(fd: FormData) {
   redirect("/admin/notifications/?ok=1");
 }
 
+async function savePrice(fd: FormData) {
+  "use server";
+  const s = await requireStaff("notifications.write");
+  const paisePerCredit = Math.round(Math.max(0.01, Math.min(100, Number(fd.get("price")) || 0.25)) * 100);
+  const value = { paisePerCredit, gstInclusive: fd.get("gstInclusive") === "on", minRupees: Math.max(1, Math.min(10_000, Math.round(Number(fd.get("min")) || 10))) };
+  const costs = { sms: 1, email: 0, webhook: 0, whatsapp: Math.max(0, Math.min(10, Math.round(Number(fd.get("wa")) || 0))), cod_confirmation: Math.max(0, Math.min(10, Math.round(Number(fd.get("cod")) || 0))) };
+  const db = await getDb();
+  await db.insert(schema.pricingSettings).values({ key: "notification_credit_price", value }).onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value, updatedAt: new Date() } });
+  await db.insert(schema.pricingSettings).values({ key: "notification_credit_cost", value: costs }).onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value: costs, updatedAt: new Date() } });
+  // COD confirmation cost lives with the COD settings (used when sending)
+  const [cur] = await db.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "cod_confirmation"));
+  const cod = { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", ...((cur?.value as object) ?? {}), credits: costs.cod_confirmation };
+  await db.insert(schema.pricingSettings).values({ key: "cod_confirmation", value: cod }).onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value: cod, updatedAt: new Date() } });
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "notifications.credit_price", details: { ...value, ...costs } });
+  redirect("/admin/notifications/?ok=1");
+}
+
 export default async function AdminNotifications({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("notifications.read");
-  const cfg = await getSetting("cod_confirmation", { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 2 });
-  const costs = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 2 });
+  const cfg = await getSetting("cod_confirmation", { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 1 });
+  const costs = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 1 });
+  const price = await creditPrice();
   const db = await getDb();
   const packs = await db.select().from(schema.creditPacks);
   const exceptions = await db.select({ c: schema.codConfirmations, o: schema.orgs }).from(schema.codConfirmations).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId)).orderBy(desc(schema.codConfirmations.createdAt)).limit(50);
@@ -46,10 +65,18 @@ export default async function AdminNotifications({ searchParams }: { searchParam
           </form>
         </section>
         <section className="card" style={{ padding: 18 }}>
-          <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Credit costs &amp; packs</h2>
-          <dl className="kv-list">{Object.entries(costs.value).map(([k, v]) => <><dt key={`${k}t`}>{k.replace("_", " ")}</dt><dd key={`${k}v`}>{v} credit{v === 1 ? "" : "s"}</dd></>)}</dl>
-          <p className="small mt8">{packs.map((p) => `${p.credits} × ₹${(p.unitPricePaise / 100).toFixed(2)}`).join(" · ")} (+ GST)</p>
-          <p className="tiny muted">Provider for WhatsApp: WATI (configure in Integrations). Templates must be approved by Meta before sending.</p>
+          <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Credit price &amp; cost per message</h2>
+          <form action={savePrice} className="grid2" style={{ gap: 10 }}>
+            <div className="field"><label htmlFor="pp">Price of 1 credit (₹)</label><input id="pp" name="price" type="number" step="0.01" min="0.01" className="input" defaultValue={(price.paisePerCredit / 100).toFixed(2)} disabled={!write} /></div>
+            <div className="field"><label htmlFor="mn">Minimum purchase (₹)</label><input id="mn" name="min" type="number" min="1" className="input" defaultValue={price.minRupees} disabled={!write} /></div>
+            <div className="field"><label htmlFor="cc">Credits per COD confirmation</label><input id="cc" name="cod" type="number" min="0" max="10" className="input" defaultValue={cfg.value.credits} disabled={!write} /></div>
+            <div className="field"><label htmlFor="wc">Credits per WhatsApp update</label><input id="wc" name="wa" type="number" min="0" max="10" className="input" defaultValue={Number(costs.value.whatsapp ?? 1)} disabled={!write} /></div>
+            <label className="check" style={{ gridColumn: "1 / -1" }}><input type="checkbox" name="gstInclusive" defaultChecked={price.gstInclusive} disabled={!write} /> Price includes GST (₹1 buys exactly {Math.floor(100 / price.paisePerCredit)} credits)</label>
+            {write && <button className="btn btn-orange" style={{ alignSelf: "end" }}>Save price</button>}
+          </form>
+          <p className="small mt8">Customers buy any amount from their wallet (Billing → Notification Credits). With 0 credits no WhatsApp message is sent, so the provider charges nothing.</p>
+          {packs.length > 0 && <p className="tiny muted">Fixed packs also offered: {packs.map((p) => `${p.credits} × ₹${(p.unitPricePaise / 100).toFixed(2)}`).join(" · ")} (+ GST)</p>}
+          <p className="tiny muted">WhatsApp provider (WATI, AiSensy or Meta): API Keys &amp; Services. Templates: WhatsApp Ops → Template mapping.</p>
         </section>
       </div>
       <section className="card p0 mt16"><h2 className="b small card-h" style={{ margin: 0 }}>COD subscriptions</h2>

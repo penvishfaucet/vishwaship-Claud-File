@@ -18,6 +18,7 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
   const mode = await whatsappMode();
   const acct = await whatsappAccount();
   const isMeta = acct?.adapter === "meta_whatsapp";
+  const isAisensy = acct?.adapter === "aisensy";
   const cfg = await codSettings();
   const appUrl = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
   const templates = await db.select().from(schema.notificationTemplates).where(eq(schema.notificationTemplates.channel, "whatsapp"));
@@ -27,7 +28,7 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
   const cancellations = await db.select({ c: schema.codConfirmations, o: schema.orders, org: schema.orgs.businessName }).from(schema.codConfirmations)
     .innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId))
     .where(isNotNull(schema.codConfirmations.cancellationStatus)).orderBy(desc(schema.codConfirmations.cancellationAt)).limit(30);
-  const inbound = await db.select().from(schema.inboundEvents).where(inArray(schema.inboundEvents.provider, ["wati", "meta_whatsapp"])).orderBy(desc(schema.inboundEvents.createdAt)).limit(15);
+  const inbound = await db.select().from(schema.inboundEvents).where(inArray(schema.inboundEvents.provider, ["wati", "aisensy", "meta_whatsapp"])).orderBy(desc(schema.inboundEvents.createdAt)).limit(15);
   const hints = (acct?.secretsHint as Record<string, string> | null) ?? {};
   const unmatched = inbound.filter((i) => i.error && i.error !== null && !i.error.startsWith("ignored")).length;
   return (
@@ -40,15 +41,15 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
         <section className="card" style={{ padding: 18 }}>
           <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Provider connection</h2>
           <dl className="kv-list">
-            <dt>Status</dt><dd><span className={`chip ${mode === "live" ? "c-active" : mode === "demo" ? "c-pending" : "c-failed"}`}>{mode === "live" ? (isMeta ? "Connected (Meta Cloud API)" : "Connected (WATI)") : mode === "demo" ? "Demo mode (local only)" : "Not connected"}</span></dd>
+            <dt>Status</dt><dd><span className={`chip ${mode === "live" ? "c-active" : mode === "demo" ? "c-pending" : "c-failed"}`}>{mode === "live" ? (isMeta ? "Connected (Meta Cloud API)" : isAisensy ? "Connected (AiSensy)" : "Connected (WATI)") : mode === "demo" ? "Demo mode (local only)" : "Not connected"}</span></dd>
             <dt>Account</dt><dd className="small">{acct ? `${acct.label} · ${acct.mode}` : "—"}</dd>
             {Object.entries(hints).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd className="small mono">{v}</dd></Fragment>)}
             <dt>Last test</dt><dd className="small">{acct?.lastTestAt ? `${fmt(acct.lastTestAt)} · ${acct.lastTestOk ? "OK" : acct.lastTestMessage ?? "failed"}` : "—"}</dd>
             <dt>Last send</dt><dd className="small">{fmt(acct?.lastSuccessAt ?? null)}</dd>
           </dl>
           <p className="small mt8">Webhook URL for the provider:</p>
-          <p className="small mono" style={{ wordBreak: "break-all" }}>{isMeta ? `${appUrl}/api/webhooks/meta-whatsapp` : `${appUrl}/api/webhooks/wati?token=<webhookToken>`}</p>
-          <p className="tiny muted">Keys are stored encrypted and never shown again. Add, change or switch provider (WATI / Meta) in <Link className="link" href="/admin/services/">API Keys &amp; Services</Link>.</p>
+          <p className="small mono" style={{ wordBreak: "break-all" }}>{isMeta ? `${appUrl}/api/webhooks/meta-whatsapp` : isAisensy ? `${appUrl}/api/webhooks/aisensy?token=<webhookToken>` : `${appUrl}/api/webhooks/wati?token=<webhookToken>`}</p>
+          <p className="tiny muted">Keys are stored encrypted and never shown again. Add, change or switch provider (WATI / AiSensy / Meta) in <Link className="link" href="/admin/services/">API Keys &amp; Services</Link>.</p>
           {unmatched > 0 && <p className="small t-debit">{unmatched} recent inbound event(s) could not be matched — see below.</p>}
         </section>
 
@@ -66,7 +67,7 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
       </div>
 
       <section className="card p0 mt16">
-        <h2 className="b small card-h" style={{ margin: 0 }}>Template mapping (Meta-approved WATI templates)</h2>
+        <h2 className="b small card-h" style={{ margin: 0 }}>Template mapping (approved templates)</h2>
         <div className="col" style={{ gap: 12, padding: 16 }}>
           {(["out_for_delivery", "cod_confirmation"] as const).map((ev) => {
             const t = templates.find((x) => x.event === ev);
@@ -74,7 +75,7 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
               <form key={ev} action={saveTemplateMapping} className="row wrap" style={{ gap: 8, alignItems: "end" }}>
                 <input type="hidden" name="event" value={ev} />
                 <b className="small" style={{ minWidth: 150 }}>{WA_EVENT_LABEL[ev]}</b>
-                <div className="field"><label htmlFor={`tn-${ev}`}>WATI template name</label><input id={`tn-${ev}`} name="templateName" className="input mono" defaultValue={t?.providerTemplateName ?? ""} placeholder={ev === "cod_confirmation" ? "cod_confirm_v1" : "out_for_delivery_v1"} disabled={!write} /></div>
+                <div className="field"><label htmlFor={`tn-${ev}`}>Template name (WATI) / API campaign name (AiSensy) / template name (Meta)</label><input id={`tn-${ev}`} name="templateName" className="input mono" defaultValue={t?.providerTemplateName ?? ""} placeholder={ev === "cod_confirmation" ? "cod_confirm_v1" : "out_for_delivery_v1"} disabled={!write} /></div>
                 <div className="field"><label htmlFor={`ap-${ev}`}>Approval</label><select id={`ap-${ev}`} name="approval" className="select" defaultValue={t?.approvalState ?? "draft"} disabled={!write}><option value="draft">Draft</option><option value="submitted">Submitted to Meta</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
                 <div className="field"><label htmlFor={`lg-${ev}`}>Language</label><select id={`lg-${ev}`} name="language" className="select" defaultValue={t?.language ?? "en"} disabled={!write}><option value="en">English</option><option value="hi">Hindi</option></select></div>
                 <div className="field" style={{ flex: 1, minWidth: 240 }}><label htmlFor={`bd-${ev}`}>Body (reference copy)</label><input id={`bd-${ev}`} name="body" className="input" defaultValue={t?.body ?? (ev === "cod_confirmation" ? "Hi {{buyer_name}}, please confirm your COD order {{order_id}} from {{merchant_name}} for {{cod_amount}}. [Confirm Order] [Cancel Order]" : "Hi {{buyer_name}}, your order {{order_id}} from {{merchant_name}} is out for delivery with {{carrier}} (AWB {{awb}}). Track: {{tracking_link}}")} disabled={!write} /></div>

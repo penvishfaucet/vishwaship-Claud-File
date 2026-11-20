@@ -16,12 +16,12 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp";
+  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp" | "aisensy";
   group: "Email" | "Sign-in" | "WhatsApp";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
   guide: string[]; links: Array<{ label: string; url: string }>;
-  /** One provider per group is active at a time (WhatsApp: WATI or Meta). */
+  /** One provider per group is active at a time (WhatsApp: WATI, AiSensy or Meta). */
   exclusive?: boolean;
 };
 
@@ -76,6 +76,23 @@ export const SERVICES: ServiceDef[] = [
     links: [{ label: "WATI", url: "https://app.wati.io" }],
   },
   {
+    adapter: "aisensy", group: "WhatsApp", name: "AiSensy (WhatsApp)", exclusive: true,
+    purpose: "Out for Delivery and COD Confirmation WhatsApp messages through AiSensy.",
+    fields: [
+      { key: "apiKey", label: "API key", secret: true, required: true, placeholder: "eyJhbGciOi…", help: "AiSensy → Manage → API Key (Developer API)" },
+      { key: "webhookToken", label: "Webhook token", secret: true, required: true, placeholder: "Any long random text you choose", help: "Make up a long random text; it goes in the webhook URL below" },
+    ],
+    guide: [
+      "Open app.aisensy.com and sign in → Manage → API Key → copy the key.",
+      "Choose a Webhook token: any long random text (at least 24 characters). Paste both below → Save → Test connection → Turn ON.",
+      "Create your WhatsApp templates in AiSensy and get them approved. COD confirmation needs two quick-reply buttons: “Confirm Order” and “Cancel Order”.",
+      "Template variables are numbered. COD confirmation: {{1}} buyer name, {{2}} your client’s business name, {{3}} order ID, {{4}} COD amount. Out for delivery: {{1}} buyer name, {{2}} order ID, {{3}} courier, {{4}} AWB, {{5}} tracking link.",
+      "Campaigns → Launch → API campaign for each approved template (e.g. cod_confirm_v1). Map these campaign names in WhatsApp Ops → Template mapping.",
+      "Manage → Webhooks → add the Webhook URL below (with your token at the end); topics: message received (user messages) and message status updated.",
+    ],
+    links: [{ label: "AiSensy", url: "https://app.aisensy.com" }],
+  },
+  {
     adapter: "meta_whatsapp", group: "WhatsApp", name: "Meta WhatsApp Cloud API", exclusive: true,
     purpose: "The same WhatsApp messages sent directly through Meta (instead of WATI).",
     fields: [
@@ -105,11 +122,12 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   const u = appUrl();
   if (adapter === "google_oauth") return [{ label: "Authorized JavaScript origin", value: u }, { label: "Authorized redirect URI", value: `${u}/api/auth/google/callback` }];
   if (adapter === "wati") return [{ label: "Webhook URL", value: `${u}/api/webhooks/wati?token=<your webhook token>` }];
+  if (adapter === "aisensy") return [{ label: "Webhook URL", value: `${u}/api/webhooks/aisensy?token=<your webhook token>` }];
   if (adapter === "meta_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -139,6 +157,7 @@ function hostsFor(adapter: string, v: Record<string, string>): string[] {
   if (adapter === "resend") return ["api.resend.com"];
   if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
   if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
+  if (adapter === "aisensy") return ["backend.aisensy.com"];
   if (adapter === "wati") { try { const h = new URL(v.apiEndpoint).hostname.toLowerCase(); return /(^|\.)wati\.io$/.test(h) ? [h] : []; } catch { return []; } }
   return [];
 }
@@ -162,7 +181,8 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (adapter === "google_oauth" && !/\.apps\.googleusercontent\.com$/.test(v.clientId)) return { ok: false, message: "The Client ID ends with .apps.googleusercontent.com" };
   if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
   if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
-  if ((adapter === "wati" && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
+  if (adapter === "aisensy" && v.apiKey.length < 20) return { ok: false, message: "Copy the full AiSensy API key (Manage → API Key)" };
+  if (((adapter === "wati" || adapter === "aisensy") && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
   const changed = def.fields.some((f) => (old[f.key] ?? "") !== v[f.key]);
   const cleaned = Object.fromEntries(Object.entries(v).filter(([, x]) => x));
   const db = await getDb();
@@ -206,6 +226,15 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
       const base = v.apiEndpoint.replace(/\/+$/, "");
       const x = await call(`${base}/api/v1/getMessageTemplates?pageSize=1`, { headers: { authorization: `Bearer ${v.accessToken}` } });
       res = x.ok ? { ok: true, message: "Connected to WATI (templates readable)" } : { ok: false, message: x.status === 401 || x.status === 403 ? "WATI rejected the access token" : `WATI HTTP ${x.status}` };
+    } else if (adapter === "aisensy") {
+      // No read-only endpoint: ask for a campaign that cannot exist — nothing is sent. A valid key gets "campaign not found".
+      const x = await call("https://backend.aisensy.com/campaign/t1/api/v2", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ apiKey: v.apiKey, campaignName: "vishwaship-connection-test-do-not-create", destination: "910000000000", userName: "Test", templateParams: [] }) });
+      const t = (await x.text().catch(() => "")).slice(0, 300);
+      res = x.status === 401 || x.status === 403 || /api ?key|unauthori[sz]ed|invalid token|jwt/i.test(t)
+        ? { ok: false, message: "AiSensy rejected the API key — copy it again from Manage → API Key" }
+        : x.status >= 500 ? { ok: false, message: `AiSensy HTTP ${x.status} — try again` }
+        : { ok: true, message: "AiSensy accepted the API key (test campaign not found, nothing was sent)" };
     } else {
       const x = await call(`https://graph.facebook.com/v21.0/${encodeURIComponent(v.phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`, { headers: { authorization: `Bearer ${v.accessToken}` } });
       const j = (await x.json().catch(() => ({}))) as { display_phone_number?: string; verified_name?: string; error?: { message?: string } };

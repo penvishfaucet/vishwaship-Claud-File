@@ -12,12 +12,13 @@ import { newId } from "@/server/util/ids";
 import { enqueue } from "@/server/jobs/runner";
 import { decisionFromReply, parseWatiWebhook, watiSendTemplate } from "./wati";
 import { type InboundWa, metaSendTemplate, parseMetaWebhook } from "./meta";
+import { aisensySendTemplate, parseAisensyWebhook } from "./aisensy";
 
 export type WaEvent = "out_for_delivery" | "cod_confirmation";
 export const WA_EVENT_LABEL: Record<WaEvent, string> = { out_for_delivery: "Out for Delivery", cod_confirmation: "COD Confirmation" };
 
 export interface CodSettings { reminderMinutes: number; expiryMinutes: number; noReply: "release" | "hold_for_review" | "cancel"; credits: number }
-export const COD_DEFAULTS: CodSettings = { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 2 };
+export const COD_DEFAULTS: CodSettings = { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 1 };
 export const codSettings = async () => ({ ...COD_DEFAULTS, ...(await getSetting<Partial<CodSettings>>("cod_confirmation", COD_DEFAULTS)).value }) as CodSettings;
 
 /** Shipment states where a carrier will still accept a cancellation (before pickup). */
@@ -33,10 +34,17 @@ export async function watiAccount() {
   return a ?? null;
 }
 
-/** The WhatsApp provider switched ON in Admin → API Keys & Services (WATI or Meta Cloud API; only one at a time). */
+/** The WhatsApp provider switched ON in Admin → API Keys & Services (WATI, AiSensy or Meta Cloud API; only one at a time). */
 export async function whatsappAccount() {
   const db = await getDb();
-  const [a] = await db.select().from(schema.providerAccounts).where(and(inArray(schema.providerAccounts.adapter, ["wati", "meta_whatsapp"]), eq(schema.providerAccounts.status, "enabled"))).limit(1);
+  const [a] = await db.select().from(schema.providerAccounts).where(and(inArray(schema.providerAccounts.adapter, ["wati", "aisensy", "meta_whatsapp"]), eq(schema.providerAccounts.status, "enabled"))).limit(1);
+  return a ?? null;
+}
+
+/** The enabled AiSensy account, or null. */
+export async function aisensyAccount() {
+  const db = await getDb();
+  const [a] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, "aisensy"), eq(schema.providerAccounts.status, "enabled")));
   return a ?? null;
 }
 
@@ -48,7 +56,7 @@ export async function whatsappMode(): Promise<"live" | "demo" | "unconfigured"> 
 
 async function creditCost(event: WaEvent) {
   if (event === "cod_confirmation") return (await codSettings()).credits;
-  const c = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 2 });
+  const c = await getSetting("notification_credit_cost", { sms: 1, whatsapp: 1, email: 0, webhook: 0, cod_confirmation: 1 });
   return c.value.whatsapp ?? 1;
 }
 
@@ -138,7 +146,9 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
   const ctx = await providerContext(acct);
   const r = acct.adapter === "meta_whatsapp"
     ? await metaSendTemplate(ctx, { toE164, templateName, language: tpl?.language ?? "en", body: tpl?.body ?? "", params })
-    : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
+    : acct.adapter === "aisensy"
+      ? await aisensySendTemplate(ctx, { toE164, campaignName: templateName, event: a.event, body: tpl?.body ?? "", params })
+      : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
   if (r.ok) {
     await db.update(schema.providerAccounts).set({ lastSuccessAt: new Date() }).where(eq(schema.providerAccounts.id, acct.id));
     return finish("sent", { templateName, providerMessageId: r.providerMessageId ?? null, creditsCharged: cost });
@@ -181,7 +191,11 @@ export async function codSendFailed(orderId: string, reason: string) {
   const db = await getDb();
   const [c] = await db.update(schema.codConfirmations).set({ status: "send_failed" }).where(and(eq(schema.codConfirmations.orderId, orderId), eq(schema.codConfirmations.status, "pending"))).returning();
   if (!c) return;
-  await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: c.orgId, kind: "cod", title: `COD confirmation not sent: ${reason}. Order is on hold — release or cancel it.`, href: "/portal/notifications/cod/?status=send_failed" });
+  const noCredits = /insufficient notification credits/i.test(reason);
+  await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: c.orgId, kind: "cod",
+    title: noCredits ? "COD confirmation not sent: no notification credits. Buy credits (Billing → Notification Credits) and it goes out automatically — or release / cancel the order."
+      : `COD confirmation not sent: ${reason}. Order is on hold — release or cancel it.`,
+    href: noCredits ? "/portal/billing/notification-credits/" : "/portal/notifications/cod/?status=send_failed" });
   await audit({ actorKind: "system", orgId: c.orgId, action: "cod.send_failed", targetType: "order", targetId: orderId, details: { reason } });
 }
 
@@ -339,6 +353,12 @@ export async function sweepNoResponse() {
 export async function handleWatiWebhook(body: Record<string, unknown>): Promise<{ result: string }> {
   const p = parseWatiWebhook(body);
   return handleInbound("wati", p, `wati:${p.eventType}:${p.msgId || JSON.stringify(body).length}`);
+}
+
+/** AiSensy webhook. Caller has already verified the secret token. */
+export async function handleAisensyWebhook(body: Record<string, unknown>): Promise<{ result: string }> {
+  const p = parseAisensyWebhook(body);
+  return handleInbound("aisensy", p, `aisensy:${p.eventType}:${p.msgId || p.waId + ":" + p.replyText + ":" + JSON.stringify(body).length}`);
 }
 
 /** Meta Cloud API webhook: one payload can carry several messages / statuses. */
