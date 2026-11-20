@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 
-declare global { interface Window { Cashfree?: (o: { mode: string }) => { checkout: (o: { paymentSessionId: string; redirectTarget: string }) => Promise<unknown> } } }
+// window.Cashfree is typed once, globally, in src/components/portal/RechargeV2.tsx.
 
 /**
  * Cashfree checkout launcher for the Android app (opened in a Chrome Custom Tab). The app passes the payment
