@@ -432,7 +432,7 @@ function useFixedMenu(onOpen?: (o: boolean) => void) {
     const r = btn.current!.getBoundingClientRect();
     const right = Math.max(8, window.innerWidth - r.right);
     const below = window.innerHeight - r.bottom;
-    setPos(below > 340 || below > r.top ? { position: "fixed", top: r.bottom + 6, right, maxHeight: below - 16, overflowY: "auto" } : { position: "fixed", bottom: window.innerHeight - r.top + 6, right, maxHeight: r.top - 16, overflowY: "auto" });
+    setPos(below > 340 || below > r.top ? { position: "fixed", top: r.bottom + 6, bottom: "auto", left: "auto", right, maxHeight: below - 16, overflowY: "auto" } : { position: "fixed", top: "auto", left: "auto", bottom: window.innerHeight - r.top + 6, right, maxHeight: r.top - 16, overflowY: "auto" });
     onOpen?.(true);
   };
   return { pos, btn, ref, toggle, close };
