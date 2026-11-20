@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { AddToCart, ProductGallery } from "@/components/store/StoreClient";
 import { Price, ProductCard, StoreShell } from "@/components/store/Storefront";
+import { TrackOnMount } from "@/components/store/Tracking";
 import { type SfSearch, keepQs, resolveSf, sfMeta } from "../../_sf";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export default async function ProductPage({ params, searchParams }: { params: P;
         </div>
         {related.length > 0 && <section className="sf-sec"><h2>You may also like</h2><div className="sf-grid">{related.map((r) => <ProductCard key={r.id} p={r} base={sf.base} q={keep} />)}</div></section>}
       </div>
+      <TrackOnMount event={{ name: "view_item", item: { id: p.id, name: p.title, price: p.pricePaise / 100, qty: 1 } }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ld).replace(/</g, "\\u003c") }} />
     </StoreShell>
   );

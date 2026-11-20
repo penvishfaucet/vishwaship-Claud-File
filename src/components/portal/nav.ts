@@ -25,6 +25,8 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
     { id: "store.orders", href: "/portal/store/orders/", label: "Store Orders", icon: ClipboardList, module: "online_store" },
     { id: "store.theme", href: "/portal/store/theme/", label: "Theme Editor", icon: Palette, module: "online_store" },
     { id: "store.products", href: "/portal/store/products/", label: "Store Products", icon: ShoppingBag, module: "online_store" },
+    { id: "store.analytics", href: "/portal/store/analytics/", label: "Store Analytics", icon: FileBarChart, module: "online_store" },
+    { id: "store.marketing", href: "/portal/store/marketing/", label: "Meta & Google", icon: Zap, module: "online_store" },
     { id: "store.coupons", href: "/portal/store/coupons/", label: "Coupons", icon: Tag, module: "online_store" },
     { id: "store.payments", href: "/portal/store/payments/", label: "Online Payments", icon: CreditCard, module: "online_store" },
     { id: "store.pages", href: "/portal/store/pages/", label: "Pages & SEO", icon: FileText, module: "online_store" },

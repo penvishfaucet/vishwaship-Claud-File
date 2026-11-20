@@ -35,7 +35,16 @@ export async function POST(req: Request, ctx: Ctx) {
   const { slug } = await ctx.params;
   if (!(await rateLimit(`sf-checkout:${ip(req)}`, 20, 600)).ok) return apiError(429, "rate_limited", "Too many attempts. Please wait a few minutes.");
   const p = await parseJson(req, CheckoutInput); if (!p.ok) return p.res;
-  try { return NextResponse.json(await placeOrder(slug, p.data)); } catch (e) { return fail(e); }
+  // keep only known attribution fields; IP and browser are kept only when the buyer allowed marketing cookies
+  const a = p.data.attribution;
+  const consent = ["analytics", "marketing"].filter((k) => (a.consent ?? "").split(",").includes(k)).join(",");
+  const keep = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "landing", "at"];
+  const marketingKeys = consent.includes("marketing") ? ["fbp", "fbc"] : [];
+  const analyticsKeys = consent.includes("analytics") ? ["gaClientId"] : [];
+  const clean: Record<string, string> = Object.fromEntries(Object.entries(a).filter(([k]) => [...keep, ...marketingKeys, ...analyticsKeys].includes(k)));
+  if (consent) clean.consent = consent;
+  if (consent.includes("marketing")) { clean.ip = ip(req).slice(0, 60); clean.ua = (req.headers.get("user-agent") ?? "").slice(0, 300); }
+  try { return NextResponse.json(await placeOrder(slug, { ...p.data, attribution: clean })); } catch (e) { return fail(e); }
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {

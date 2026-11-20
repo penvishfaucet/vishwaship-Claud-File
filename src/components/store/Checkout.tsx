@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type CartLine, clearCart, readAttribution } from "./cart";
 import { useCartState } from "./StoreClient";
+import { browserIds, track } from "./Tracking";
 
 import { rupees } from "@/lib/store-themes";
 type Quote = { lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; qty: number; unitPaise: number }>; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: string | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean; codFeeIfCod: number };
@@ -36,6 +37,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
   const [err, setErr] = useState<{ msg: string; field?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const keyRef = useRef<string>("");
+  const began = useRef(false);
   const lines = useMemo(() => (cart ?? []).map((l: CartLine) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })), [cart]);
 
   // one checkout key per cart + details, kept across reloads so a retry never creates a second order
@@ -54,6 +56,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
       return;
     }
     setErr(null); setQ(j);
+    if (!began.current) { began.current = true; track({ name: "begin_checkout", value: j.totalPaise / 100, items: j.lines.map((l: Quote["lines"][number]) => ({ id: l.variantId ?? l.productId, name: l.title, price: l.unitPaise / 100, qty: l.qty })) }); }
     setMethod((cur) => cur ?? (j.onlineAllowed ? "razorpay" : j.codAllowed ? "cod" : null));
   }, [api, lines]);
 
@@ -85,7 +88,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
     e.preventDefault();
     if (!method) { setErr({ msg: "Choose a payment method" }); return; }
     setBusy(true); setErr(null);
-    const r = await fetch(api, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutKey: keyRef.current, lines, buyer: b, paymentMethod: method, coupon, attribution: readAttribution(store) }) });
+    const r = await fetch(api, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutKey: keyRef.current, lines, buyer: b, paymentMethod: method, coupon, attribution: { ...readAttribution(store), ...browserIds(store) } }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { setBusy(false); setErr({ msg: j?.error?.message ?? "Could not place the order", field: j?.error?.field }); if (j?.error?.message?.includes("cancelled")) { keyRef.current = newKey(); try { sessionStorage.setItem(`sf-ck:${store}`, keyRef.current); } catch { /* ignore */ } } return; }
     if (j.kind === "placed") { done(j.orderId, j.number, j.token); return; }

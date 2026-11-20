@@ -1266,3 +1266,55 @@ export const storeHelpRequests = pgTable("store_help_requests", {
   status: text("status").notNull().default("new"), // new | contacted | closed
   createdAt: created(),
 });
+
+// ---------- online store: marketing (pixels, conversions, ad stats, visits) ----------
+/**
+ * One server-side conversion per store order and platform (Meta Conversions API, GA4 Measurement Protocol).
+ * eventId is shared with the browser pixel so the platform de-duplicates the two.
+ */
+export const storeConversions = pgTable("store_conversions", {
+  id: id(),
+  storeOrderId: text("store_order_id").notNull().references(() => storeOrders.id),
+  orgId: text("org_id").notNull(),
+  platform: text("platform").notNull(), // meta | ga4
+  eventId: text("event_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending | sent | skipped | failed
+  reason: text("reason"),
+  attempts: integer("attempts").notNull().default(0),
+  sentAt: ts("sent_at"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_conversions_once").on(t.storeOrderId, t.platform)]);
+
+/** Daily ad results per platform/campaign: from the platform API (meta) or a merchant CSV upload (google). */
+export const storeAdStats = pgTable("store_ad_stats", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  platform: text("platform").notNull(), // meta | google
+  day: text("day").notNull(), // YYYY-MM-DD (IST)
+  campaignId: text("campaign_id").notNull().default(""),
+  campaignName: text("campaign_name"),
+  spendPaise: paise("spend_paise").notNull().default(0),
+  impressions: integer("impressions").notNull().default(0),
+  clicks: integer("clicks").notNull().default(0),
+  /** What the ad platform says it attributed — shown separately from orders we can match ourselves. */
+  platformPurchases: integer("platform_purchases").notNull().default(0),
+  platformValuePaise: paise("platform_value_paise").notNull().default(0),
+  source: text("source").notNull(), // api | csv
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("store_ad_stats_day").on(t.storeId, t.platform, t.day, t.campaignId)]);
+
+/** Storefront traffic per day (page views; unique visitors are counted in store_visitors). */
+export const storeVisitsDaily = pgTable("store_visits_daily", {
+  storeId: text("store_id").notNull().references(() => stores.id),
+  day: text("day").notNull(),
+  views: integer("views").notNull().default(0),
+  visitors: integer("visitors").notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.storeId, t.day] })]);
+
+export const storeVisitors = pgTable("store_visitors", {
+  storeId: text("store_id").notNull(),
+  day: text("day").notNull(),
+  /** sha256 of a random browser id + day: no personal data. */
+  visitorHash: text("visitor_hash").notNull(),
+}, (t) => [primaryKey({ columns: [t.storeId, t.day, t.visitorHash] })]);

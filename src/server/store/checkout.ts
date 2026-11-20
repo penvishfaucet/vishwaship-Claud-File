@@ -161,7 +161,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
 }
 
 async function resume(store: Store, o: typeof schema.storeOrders.$inferSelect): Promise<PlaceResult> {
-  if (o.status === "placed") { await ensureShippingOrder(o.id); return { kind: "placed", orderId: o.id, number: o.number, token: o.buyerToken }; }
+  if (o.status === "placed") { await ensureShippingOrder(o.id); await reportPurchase(o.id); return { kind: "placed", orderId: o.id, number: o.number, token: o.buyerToken }; }
   if (o.status === "cancelled") throw new CheckoutError("This order was cancelled. Please place a new order.");
   // pending online payment: create (once) the Razorpay order on the merchant's account
   let rzOrderId = o.razorpayOrderId, keyId = "";
@@ -196,6 +196,7 @@ export async function applyPayment(orgId: string, p: RzPayment, _source: "checko
   await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", razorpayPaymentId: p.id, paidAt: new Date(), placedAt: new Date() })
     .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment")));
   await ensureShippingOrder(o.id);
+  await reportPurchase(o.id);
   return { ok: true as const, orderId: o.id };
 }
 
@@ -317,4 +318,10 @@ export async function sweepStoreOrders(now = new Date()) {
     });
   }
   return { stale: stale.length, orphaned: orphaned.length };
+}
+
+/** Queue server-side purchase events when the order's milestone is reached. Never blocks or fails a checkout. */
+async function reportPurchase(storeOrderId: string) {
+  try { const { queueConversions } = await import("./marketing"); await queueConversions(storeOrderId); }
+  catch (e) { console.error("[store marketing]", (e as Error).message); }
 }

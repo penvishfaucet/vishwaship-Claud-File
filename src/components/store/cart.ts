@@ -1,4 +1,5 @@
 "use client";
+import { track } from "./Tracking";
 /**
  * Buyer cart kept in the browser (per store). Prices here are for display only:
  * checkout re-reads every price and stock level on the server.
@@ -29,6 +30,7 @@ export function addToCart(store: string, line: Omit<CartLine, "qty" | "id">, qty
   if (hit) hit.qty = Math.min(MAX_QTY, hit.qty + qty);
   else lines.push({ ...line, id, qty: Math.min(MAX_QTY, qty) });
   writeCart(store, lines);
+  track({ name: "add_to_cart", item: { id: line.variantId ?? line.productId, name: line.title, price: line.pricePaise / 100, qty } });
 }
 
 export const clearCart = (store: string) => writeCart(store, []);

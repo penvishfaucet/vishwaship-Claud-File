@@ -63,8 +63,8 @@ export default async function SetupStep({ params }: { params: Promise<{ step: st
   if (n === 6) body = (
     <div className="card" style={{ padding: 20, maxWidth: 760 }}>
       <p style={{ marginTop: 0 }}>Connect Facebook, Instagram, Meta Pixel, Google Ads and Google Analytics to track visitors and sales from your ads.</p>
-      <p className="small muted">These connections are coming in the next update. You can launch your store now and connect them later.</p>
-      <StepNext step={6} label="Skip for now" skip />
+      <p className="small muted">Add them on the Meta &amp; Google page — or skip and do it any time after launch.</p>
+      <div className="row wrap" style={{ gap: 8 }}><a className="btn btn-outline" href="/portal/store/marketing/">Set up Meta &amp; Google</a><StepNext step={6} label={done.has(6) ? "Continue" : "Skip for now"} skip={!done.has(6)} /></div>
     </div>
   );
   if (n === 7) {

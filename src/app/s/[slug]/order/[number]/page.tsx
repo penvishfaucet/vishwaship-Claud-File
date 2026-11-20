@@ -2,6 +2,8 @@ import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { notFound } from "next/navigation";
 import { rupees } from "@/lib/store-themes";
 import { StoreShell } from "@/components/store/Storefront";
+import { TrackOnMount } from "@/components/store/Tracking";
+import { purchaseEventId } from "@/server/store/marketing";
 import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrder } from "@/server/store/orders";
 import { type SfSearch, resolveSf, sfMeta } from "../../_sf";
 
@@ -51,6 +53,9 @@ export default async function OrderConfirmation({ params, searchParams }: { para
           <span>{o.buyer.name} · {o.buyer.mobile}</span>
           <span className="sf-note">{[o.buyer.line1, o.buyer.line2, `${o.buyer.city}, ${o.buyer.state} ${o.buyer.pincode}`].filter(Boolean).join(", ")}</span>
         </div>
+        {o.status === "placed" && (o.paymentStatus === "paid" || (o.paymentMethod === "cod" && sf.tags.codMilestone === "placed")) && (
+          <TrackOnMount onceKey={`sf-purchase:${o.id}`} event={{ name: "purchase", eventId: purchaseEventId(o.id), orderNumber: o.number, value: o.totalPaise / 100, items: o.lines.map((l) => ({ id: l.variantId ?? l.productId, name: l.title, price: l.unitPaise / 100, qty: l.qty })) }} />
+        )}
         <p className="sf-note" style={{ marginTop: 16 }}>Save this page link to check your order later, or use <a href={`${sf.base}/track/`} style={{ textDecoration: "underline" }}>Track order</a> with your order number and mobile number.</p>
       </div>
     </StoreShell>

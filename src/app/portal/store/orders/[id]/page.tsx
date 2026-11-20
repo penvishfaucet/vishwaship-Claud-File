@@ -50,10 +50,10 @@ export default async function StoreOrderDetail({ params }: { params: Promise<{ i
             <h3 style={{ fontSize: 14, marginBottom: 8 }}>Buyer</h3>
             <p className="small" style={{ margin: 0 }}><b>{o.buyer.name}</b> · {o.buyer.mobile}{o.buyer.email ? ` · ${o.buyer.email}` : ""}<br />{[o.buyer.line1, o.buyer.line2, `${o.buyer.city}, ${o.buyer.state} ${o.buyer.pincode}`].filter(Boolean).join(", ")}</p>
           </div>
-          {Object.keys(o.attribution).length > 0 && (
+          {Object.keys(o.attribution).some((k) => k.startsWith("utm_") || k === "fbclid" || k === "gclid" || k === "landing") && (
             <div className="card" style={{ padding: 16 }}>
               <h3 style={{ fontSize: 14, marginBottom: 8 }}>Came from</h3>
-              <dl className="kv-list">{Object.entries(o.attribution).filter(([k]) => k !== "at").map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd style={{ wordBreak: "break-all" }}>{v}</dd></Fragment>)}</dl>
+              <dl className="kv-list">{Object.entries(o.attribution).filter(([k]) => ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "landing", "consent"].includes(k)).map(([k, v]) => <Fragment key={k}><dt>{k}</dt><dd style={{ wordBreak: "break-all" }}>{v}</dd></Fragment>)}</dl>
             </div>
           )}
         </div>

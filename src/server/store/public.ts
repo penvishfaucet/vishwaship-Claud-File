@@ -5,6 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { type StoreSettings, type ThemeConfig, defaultTheme, readSettings, readTheme, themeByKey } from "@/lib/store-themes";
 import type { SfCategory, SfProduct } from "@/components/store/types";
+import { publicTags } from "./marketing";
 
 /**
  * Buyer-facing store lookup. Only live stores are public. The owner (customer session of the same org)
@@ -16,8 +17,11 @@ export type Storefront = {
   settings: StoreSettings; theme: ThemeConfig; themeKey: string;
   categories: SfCategory[]; products: SfProduct[];
   base: string; preview: boolean; demo: boolean; indexable: boolean;
+  /** Browser tag ids (never secrets); empty on preview and demo. */
+  tags: { metaPixelId: string | null; ga4Id: string | null; gadsId: string | null; gadsLabel: string | null; codMilestone: string };
 };
 
+const NO_TAGS = { metaPixelId: null, ga4Id: null, gadsId: null, gadsLabel: null, codMilestone: "confirmed" };
 const mediaUrl = (ref: string) => (ref.startsWith("sm_") ? `/api/store-media/${ref}/` : ref);
 
 export const loadStorefront = cache(async (slug: string, opts: { preview?: boolean; demoTheme?: string } = {}): Promise<Storefront | null> => {
@@ -59,6 +63,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
       };
     }),
     base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live",
+    tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });
 
@@ -105,6 +110,6 @@ function demoStore(themeKey?: string): Storefront {
   });
   return {
     id: "demo", name: "Vishwa Crafts", slug: "demo", status: "live", settings, theme, themeKey: key,
-    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false,
+    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS,
   };
 }

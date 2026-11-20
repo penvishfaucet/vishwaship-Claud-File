@@ -74,6 +74,21 @@ registerHandler("booking.reconcile", async (p, attempt): Promise<JobResult> => {
  * All three are idempotent: message rows dedupe on their key, credits charge once per message,
  * decisions apply once, refunds use a fixed ledger idempotency key.
  */
+/** store.conversion — one server-side purchase event (Meta Conversions API / GA4) for a store order. */
+registerHandler("store.conversion", async (p, attempt): Promise<JobResult> => {
+  const { sendConversion } = await import("@/server/store/marketing");
+  const r = await sendConversion((p as { conversionId: string }).conversionId);
+  if (r.retry && attempt < 6) return { retryInSec: 60 * 2 ** attempt, error: r.message };
+  return { done: true };
+});
+
+/** store.meta.sync — daily pull of Meta ad results for one merchant. */
+registerHandler("store.meta.sync", async (p): Promise<JobResult> => {
+  const { syncMetaInsights } = await import("@/server/store/meta-connect");
+  await syncMetaInsights((p as { orgId: string }).orgId, 30);
+  return { done: true };
+});
+
 registerHandler("cod.send", async (p, attempt): Promise<JobResult> => {
   const { orderId } = p as { orderId: string };
   const r = await sendCodConfirmation(orderId);
@@ -150,6 +165,16 @@ export async function scheduleSweeps() {
   // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
   try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }
   catch (e) { console.error("[store]", (e as Error).message); }
+  // store marketing: purchases that reached their milestone, and one Meta ads sync per merchant per IST day (after 6 AM)
+  try {
+    const { sweepConversions } = await import("@/server/store/marketing");
+    await sweepConversions();
+    const ist = new Date(Date.now() + 5.5 * 3600_000);
+    if (ist.getUTCHours() >= 6) {
+      const { orgsWithMetaAds } = await import("@/server/store/meta-connect");
+      for (const orgId of await orgsWithMetaAds()) await enqueue("store.meta.sync", { orgId }, { dedupeKey: `store.meta.sync:${orgId}:${ist.toISOString().slice(0, 10)}` });
+    }
+  } catch (e) { console.error("[store marketing]", (e as Error).message); }
   await scheduleTrackingPolls();
   // Android push for new in-app alerts (claims each alert once; no-op sends until FCM is configured)
   try { const { dispatchPush } = await import("@/server/mobile/push"); await dispatchPush(); }
