@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   if (!s) return apiError(401, "unauthorized", "Please log in");
   const rl = await rateLimit(`recharge:${s.orgId}`, 10, 600);
   if (!rl.ok) return apiError(429, "rate_limited", "Too many recharge attempts — try again in a few minutes");
-  const p = await parseJson(req, z.object({ amountRupees: z.number().int().positive().max(10_000_000), gateway: z.enum(["razorpay", "cashfree"]).optional() }));
+  const p = await parseJson(req, z.object({ amountRupees: z.number().int().positive().max(10_000_000), gateway: z.enum(["razorpay", "cashfree"]).optional(), client: z.enum(["web", "android"]).optional() }));
   if (!p.ok) return p.res;
   const settings = await getPaymentSettings();
   const amountPaise = p.data.amountRupees * 100;
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     const [u] = await db.select({ mobile: schema.users.mobile, email: schema.users.email, name: schema.users.name }).from(schema.users).where(eq(schema.users.id, s.userId));
     const phone = String(u?.mobile ?? "").replace(/\D/g, "").slice(-10);
     if (!/^[6-9]\d{9}$/.test(phone)) throw new Error("Add a valid mobile number to your profile to pay with Cashfree");
-    const order = await createCashfreeOrder({ orderId: rechargeId, amountPaise, customerId: s.orgId, phone, email: u?.email, name: u?.name, returnUrl: `${appUrl()}/portal/billing/recharges/${rechargeId}/?from=cashfree`, notifyUrl: webhookUrl("cashfree") });
+    const order = await createCashfreeOrder({ orderId: rechargeId, amountPaise, customerId: s.orgId, phone, email: u?.email, name: u?.name, returnUrl: p.data.client === "android" ? `${appUrl()}/app/recharge/${rechargeId}/?from=cashfree` : `${appUrl()}/portal/billing/recharges/${rechargeId}/?from=cashfree`, notifyUrl: webhookUrl("cashfree") });
     await db.update(schema.recharges).set({ providerOrderId: rechargeId }).where(eq(schema.recharges.id, rechargeId));
     return NextResponse.json({ mode: "cashfree", rechargeId, paymentSessionId: order.paymentSessionId, cashfreeMode: order.mode, amountPaise });
   } catch (e) {

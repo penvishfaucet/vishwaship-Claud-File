@@ -1,0 +1,15 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+# signing material and Firebase config never live in the repo
+*.jks
+*.keystore
+keystore.properties
+upload-keystore.properties
+google-services.json

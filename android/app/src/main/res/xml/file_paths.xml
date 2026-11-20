@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Labels / manifests / invoices are written to app-private cache and shared via content:// only. -->
+    <cache-path name="documents" path="documents/" />
+</paths>

@@ -134,6 +134,13 @@
       "when": 1795092907545,
       "tag": "0018_email_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795118938498,
+      "tag": "0019_mobile_app",
+      "breakpoints": true
     }
   ]
 }

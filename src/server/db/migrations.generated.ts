@@ -390,5 +390,21 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795092907545,
   "hash": "2b6b772fdd35fdf6b57b8e502d9f7f30aeea5da5b882149824ab320a846393ce"
+ },
+ {
+  "tag": "0019_mobile_app",
+  "sql": [
+   "CREATE TABLE \"account_deletion_requests\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"user_id\" text,\n\t\"org_id\" text,\n\t\"email\" text NOT NULL,\n\t\"reason\" text,\n\t\"source\" text NOT NULL,\n\t\"status\" text DEFAULT 'requested' NOT NULL,\n\t\"note\" text,\n\t\"decided_by\" text,\n\t\"decided_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"mobile_devices\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"session_id\" text NOT NULL,\n\t\"install_id\" text NOT NULL,\n\t\"platform\" text DEFAULT 'android' NOT NULL,\n\t\"app_version\" text,\n\t\"push_token\" text,\n\t\"push_enabled\" boolean DEFAULT false NOT NULL,\n\t\"last_seen_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"revoked_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"in_app_alerts\" ADD COLUMN \"pushed_at\" timestamp with time zone;",
+   "\nALTER TABLE \"account_deletion_requests\" ADD CONSTRAINT \"account_deletion_requests_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"mobile_devices\" ADD CONSTRAINT \"mobile_devices_user_id_users_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"users\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"account_deletion_status\" ON \"account_deletion_requests\" USING btree (\"status\");",
+   "\nCREATE UNIQUE INDEX \"mobile_devices_install\" ON \"mobile_devices\" USING btree (\"install_id\");",
+   "\nCREATE INDEX \"mobile_devices_org\" ON \"mobile_devices\" USING btree (\"org_id\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795118938498,
+  "hash": "d095a1184c9cc1afd5f9c7d5c743e5180bb0901d6f34b00b57fb43ff5d52b59e"
  }
 ];
