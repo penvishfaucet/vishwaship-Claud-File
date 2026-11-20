@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
+import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, ScrollText, Truck, Warehouse } from "lucide-react";
+import { CountUp, RotatingWords } from "@/components/site/HeroMotion";
 import { HeroCtas } from "@/components/site/HeroCtas";
 import { BikeRoad } from "@/components/site/BikeRoad";
 import { siteAuth } from "@/server/site/auth";
@@ -27,31 +28,52 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const heroImg = oldDefaults.includes(h.heroPosterUrl ?? "") ? "/brand/hero.jpg" : h.heroPosterUrl;
   return (
     <>
-      <section className="h5" aria-labelledby="hero-h">
-        <div className="w-wrap h5-in">
-          <div className="h5-txt">
-            <span className="h5-kicker"><i aria-hidden="true" />Your Pan-India shipping partner</span>
-            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span> <span className="o">{h.heroLine2}<BikeRoad /></span></h1>
-            <p className="w-lead">{h.heroText}</p>
+      <section className="h6" aria-labelledby="hero-h">
+        <div className="h6-bg" aria-hidden="true"><i className="d1" /><i className="d2" /><i className="d3" /></div>
+        <div className="w-wrap h6-in">
+          <div className="h6-txt">
+            <span className="h6-kicker"><i aria-hidden="true" />Your Pan-India shipping partner</span>
+            <h1 id="hero-h" className="h6-title">
+              <span className="l1">{h.heroLine1.split(" ").map((w, i) => <span key={i} className="w" style={{ animationDelay: `${0.1 + i * 0.08}s` }}>{w} </span>)}</span>
+              <span className="o">{h.heroLine2.split(" ").map((w, i) => <span key={i} className="w" style={{ animationDelay: `${0.3 + i * 0.08}s` }}>{w} </span>)}<BikeRoad /></span>
+            </h1>
+            <p className="h6-rotline">Shipping made simple for <RotatingWords words={["small businesses", "online sellers", "everyday parcels", "B2B cargo", "D2C brands"]} /></p>
+            <p className="w-lead h6-lead">{h.heroText} Compare courier rates, book parcels and cargo, schedule pickups and track every shipment across India, from one account.</p>
             <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta, track: h.trackCta }} />
-            <ul className="v4-checks"><li><Check size={16} aria-hidden="true" />Doorstep pickup</li><li><Check size={16} aria-hidden="true" />Pan-India delivery</li><li><Check size={16} aria-hidden="true" />Easy online booking</li></ul>
             {c.offers.visible && c.offers.showOnHome && h.highlights.length > 0 && (
-              <>
-                <ul className="h5-hl">{h.highlights.map((x, i) => <li key={i}><b>{x.big}</b><span>{x.small}</span></li>)}</ul>
-                {h.highlightNote && <p className="h5-note">{h.highlightNote}</p>}
-              </>
+              <ul className="h6-offers">{h.highlights.map((x, i) => <li key={i}><b><CountUp text={x.big} /></b> {x.small}</li>)}</ul>
             )}
           </div>
-          <div className="h5-media">
-            <div className="h5-frame">
-              <img src={heroImg} alt="Vishwaship courier holding parcels in front of a delivery truck" width={1100} height={1100} fetchPriority="high" decoding="async" />
+
+          <div className="h6-art">
+            <div className="h6-orb">
+              <div className="ring r1" aria-hidden="true" />
+              <div className="ring r2" aria-hidden="true" />
+              <div className="disc" aria-hidden="true" />
+              <div className="photo"><img src={heroImg} alt="Vishwaship courier holding parcels in front of a delivery truck" width={1100} height={1100} fetchPriority="high" decoding="async" /></div>
+              <div className="orbit" aria-hidden="true">
+                <span className="chip c1"><Truck size={20} /></span>
+                <span className="chip c2"><Package size={20} /></span>
+                <span className="chip c3"><MapPin size={20} /></span>
+              </div>
             </div>
-            <div className="v4-badge a" aria-hidden="true"><span className="ic"><Truck size={18} /><i className="live" /></span><b>Picked up. On its way.</b></div>
-            <div className="v4-badge b" aria-hidden="true"><span className="ic"><Check size={18} /><i className="live" /></span><b>Shipping made simple.</b></div>
-            <p className="v4-cap" aria-hidden="true"><span>Connecting India, doorstep to doorstep</span><span>Handled with care. Delivered with confidence.</span></p>
+            <div className="v6-box b1"><span className="ic"><Truck size={18} aria-hidden="true" /><i className="live" aria-hidden="true" /></span><span><b>Picked up. On its way.</b><small>Live tracking by AWB</small></span></div>
+            <div className="v6-box b2"><span className="ic"><Check size={18} aria-hidden="true" /><i className="live" aria-hidden="true" /></span><span><b>Shipping made simple.</b><small>Pickup to doorstep</small></span></div>
+            {partners.length > 0 && <div className="v6-box b3"><span className="num"><CountUp text={`${partners.length}+`} /></span><span><b>Courier partners</b><small>One account for all</small></span></div>}
           </div>
         </div>
       </section>
+
+      <div className="w-wrap">
+        <article className="w-card v6-what" aria-labelledby="what-h">
+          <span className="ic" aria-hidden="true"><ScrollText size={30} /></span>
+          <div>
+            <h2 id="what-h">What is Vishwaship?</h2>
+            <p>{c.about.paragraphs[0] || c.about.intro}</p>
+            <Link className="more" href="/about-us/">Know more about us <ArrowRight size={16} aria-hidden="true" /></Link>
+          </div>
+        </article>
+      </div>
 
       <div className="w-strip"><div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} strip /></div></div>
 

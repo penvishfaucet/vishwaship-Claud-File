@@ -1,6 +1,7 @@
 import "@/styles/site-v2.css";
 import "@/styles/site-v3.css";
 import "@/styles/site-v4.css";
+import "@/styles/site-v5.css";
 import { SiteFooterV2, SiteHeaderV2 } from "@/components/site/SiteChromeV2";
 import { MobileTabBar } from "@/components/site/MobileTabBar";
 import { Reveal } from "@/components/site/Reveal";
@@ -24,12 +25,12 @@ export default async function PublicLayout({ children }: { children: React.React
   const signedIn = !!(auth.customer || auth.staff);
   const acct = auth.customer ? "/portal/" : auth.staff ? "/admin/" : accountHref(links.customerLogin, "/login/");
   return (
-    <div className="vs wv v4">
+    <div className="vs wv v4 v5">
       <a className="sr-only" href="#main">Skip to content</a>
       <div className="v4-top">
         <div className="w-wrap in">
-          <span>From your doorstep. To anywhere in India.</span>
-          <a href={accountHref(links.franchiseLogin, "/admin/login/")}>Franchise Login <span aria-hidden="true">↗</span></a>
+          <a className="v5-news" href="/shipping-rate-calculator/"><b>NEW</b><span>Compare B2C parcel and B2B cargo rates together — <u>Check your rates</u></span></a>
+          <a className="v5-fr" href={accountHref(links.franchiseLogin, "/admin/login/")}>Franchise Login <span aria-hidden="true">↗</span></a>
         </div>
       </div>
       <SiteHeaderV2 links={links} auth={auth} logoutCustomer={customerLogout} logoutStaff={staffLogout} />

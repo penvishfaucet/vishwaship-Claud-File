@@ -104,7 +104,7 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
           {SITE_NAV.map((n) => <Link key={n.href} href={n.href} aria-current={isCurrent(path, n.href) ? "page" : undefined}>{n.label}</Link>)}
         </nav>
         <div className="w-acts">
-          {!signedIn && <a className="w-btn out sm" href={L.login}>Login</a>}
+          {!signedIn && <a className="w-hlink" href={L.login}><LogIn size={17} aria-hidden="true" />Login</a>}
           {signedIn && <Link className="w-btn pri sm" href={L.dashboard}>Dashboard</Link>}
           {signedIn ? (
             <div className="w-acct" ref={acctRef}>
