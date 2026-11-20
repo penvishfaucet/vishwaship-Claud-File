@@ -13,6 +13,9 @@ import { enqueue } from "@/server/jobs/runner";
 import { decisionFromReply, parseWatiWebhook, watiSendTemplate } from "./wati";
 import { type InboundWa, metaSendTemplate, parseMetaWebhook } from "./meta";
 import { aisensySendTemplate, parseAisensyWebhook } from "./aisensy";
+import { ORG_SETTING_SCHEMAS } from "@/lib/org-settings";
+import { roughDelivery } from "@/lib/cod-template";
+import { orgSetting } from "@/server/couriers";
 
 export type WaEvent = "out_for_delivery" | "cod_confirmation";
 export const WA_EVENT_LABEL: Record<WaEvent, string> = { out_for_delivery: "Out for Delivery", cod_confirmation: "COD Confirmation" };
@@ -95,7 +98,7 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
   const db = await getDb();
   const [order] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, a.orderId), eq(schema.orders.orgId, a.orgId)));
   if (!order) return { status: "skipped", reason: "Order not found" };
-  const consignee = order.consignee as { name?: string; mobile?: string };
+  const consignee = order.consignee as { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
   const digits = String(consignee.mobile ?? "").replace(/\D/g, "").slice(-10);
   const toE164 = /^[6-9]\d{9}$/.test(digits) ? `+91${digits}` : "";
 
@@ -119,7 +122,10 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
 
   const mode = await whatsappMode();
   if (mode === "unconfigured") return finish("failed", { error: "WhatsApp provider not configured" });
-  const [tpl] = await db.select().from(schema.notificationTemplates).where(and(eq(schema.notificationTemplates.channel, "whatsapp"), eq(schema.notificationTemplates.event, a.event), eq(schema.notificationTemplates.approvalState, "approved"))).orderBy(desc(schema.notificationTemplates.updatedAt));
+  // the client's chosen language first (when an approved template exists in it), else any approved one
+  const msgCfg = ORG_SETTING_SCHEMAS.cod_message.parse((await orgSetting(a.orgId, "cod_message")) ?? {});
+  const approved = await db.select().from(schema.notificationTemplates).where(and(eq(schema.notificationTemplates.channel, "whatsapp"), eq(schema.notificationTemplates.event, a.event), eq(schema.notificationTemplates.approvalState, "approved"))).orderBy(desc(schema.notificationTemplates.updatedAt));
+  const tpl = approved.find((t) => t.language === msgCfg.language) ?? approved[0];
   if (mode === "live" && !tpl?.providerTemplateName) return finish("failed", { error: "No approved WhatsApp template mapped for this event" });
   const templateName = tpl?.providerTemplateName ?? `demo_${a.event}`;
 
@@ -134,6 +140,18 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
     merchant_name: org?.businessName ?? "your seller",
     cod_amount: `₹${(order.codAmountPaise / 100).toLocaleString("en-IN")}`,
   };
+  if (a.event === "cod_confirmation") {
+    const snap = (order.pickupSnapshot ?? null) as { state?: string; mobile?: string } | null;
+    const [wh] = order.warehouseId ? await db.select({ state: schema.warehouses.state, mobile: schema.warehouses.mobile }).from(schema.warehouses).where(eq(schema.warehouses.id, order.warehouseId)) : [];
+    const [sh] = await db.select({ eta: schema.shipments.etaDate }).from(schema.shipments).where(eq(schema.shipments.orderId, order.id)).orderBy(desc(schema.shipments.createdAt)).limit(1);
+    const eta = sh?.eta ?? roughDelivery(snap?.state ?? wh?.state, consignee.state);
+    // WhatsApp rejects empty variables, so every value has a fallback
+    params.store_name = (msgCfg.storeName || org?.businessName || "our store").slice(0, 60);
+    params.delivery_address = [consignee.line1, consignee.line2, consignee.city, consignee.state, consignee.pincode].filter((x) => x && String(x).trim()).join(", ").slice(0, 250) || "as given in your order";
+    params.expected_delivery = eta.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" });
+    params.store_note = msgCfg.note || (msgCfg.language === "hi" ? "हम आपके ऑर्डर का ध्यान रखेंगे।" : "We will keep you updated on your order.");
+    params.support_phone = msgCfg.supportPhone || snap?.mobile || wh?.mobile || "reply to this message";
+  }
   if (ship) {
     params.carrier = ship.carrierName;
     params.awb = ship.awb ?? "";

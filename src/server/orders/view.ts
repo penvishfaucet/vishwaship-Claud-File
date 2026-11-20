@@ -186,7 +186,7 @@ export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limi
     const wh = warehouses.find((w) => w.id === o.warehouseId);
     const snap = (o.pickupSnapshot ?? null) as Addr | null;
     const pickup: Addr | null = snap ?? (wh ? { label: wh.label, contactName: wh.contactName, mobile: wh.mobile, line1: wh.line1, line2: wh.line2 ?? undefined, city: wh.city, state: wh.state, pincode: wh.pincode } : null);
-    const codIn: CodInputs = { paymentType: o.paymentType, included: codIncluded, enabled: toggle ? toggle.enabled : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
+    const codIn: CodInputs = { paymentType: o.paymentType, codPaise: o.codAmountPaise, included: codIncluded, enabled: toggle ? toggle.enabled : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
     return {
       id: o.id, orderNumber: o.orderNumber, createdAt: o.createdAt.toISOString(), source: o.source, mode: o.mode, direction: o.direction,
       orderStatus: o.status, archived: !!o.archivedAt, externalOrderId: o.externalOrderId, invoiceNumber: o.invoiceNumber,

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { retryWhatsapp, saveCodSettings, saveTemplateMapping } from "@/server/admin/module-actions";
+import { metaCodTemplate, retryWhatsapp, saveCodSettings, saveTemplateMapping, fillDefaultCodTemplate } from "@/server/admin/module-actions";
+import { COD_BUTTONS, COD_TEMPLATE, numbered } from "@/lib/cod-template";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -83,7 +84,25 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
               </form>
             );
           })}
-          <p className="tiny muted">Live sending only uses templates marked <b>Approved</b>. Template variables sent: buyer_name, order_id, merchant_name, cod_amount (+ carrier, awb, tracking_link for Out for Delivery). COD templates need quick-reply buttons exactly “Confirm Order” and “Cancel Order”.</p>
+          <div className="note small" style={{ whiteSpace: "normal" }}>
+            <b>Ready-made COD confirmation template</b> — address, COD amount and expected delivery date, with the buttons “{COD_BUTTONS.confirm}” and “{COD_BUTTONS.cancel}” (category Utility).
+            {(() => { const t = templates.find((x) => x.event === "cod_confirmation"); const lang = t?.language === "hi" ? "hi" : "en"; const n = numbered(COD_TEMPLATE[lang]); return (
+              <div className="split mt8" style={{ gap: 12, alignItems: "start" }}>
+                <div><div className="tiny b">Named variables (Meta / WATI)</div><pre className="tiny mono" style={{ whiteSpace: "pre-wrap", margin: "4px 0" }}>{COD_TEMPLATE[lang]}</pre></div>
+                <div><div className="tiny b">Numbered variables (AiSensy)</div><pre className="tiny mono" style={{ whiteSpace: "pre-wrap", margin: "4px 0" }}>{n.text}</pre><div className="tiny muted">{n.order.map((v, i) => `{{${i + 1}}} ${v}`).join(" · ")}</div></div>
+              </div>
+            ); })()}
+            {write && (
+              <div className="row wrap mt8" style={{ gap: 8 }}>
+                <form action={fillDefaultCodTemplate} className="row" style={{ gap: 6 }}><input type="hidden" name="language" value="en" /><input type="hidden" name="templateName" value={templates.find((x) => x.event === "cod_confirmation")?.providerTemplateName ?? ""} /><button className="btn btn-sm btn-outline">Use English template</button></form>
+                <form action={fillDefaultCodTemplate} className="row" style={{ gap: 6 }}><input type="hidden" name="language" value="hi" /><button className="btn btn-sm btn-outline">Use Hindi template</button></form>
+                {isMeta && <form action={metaCodTemplate}><input type="hidden" name="op" value="create" /><button className="btn btn-sm btn-orange">Create on Meta (send for approval)</button></form>}
+                {isMeta && <form action={metaCodTemplate}><input type="hidden" name="op" value="check" /><button className="btn btn-sm btn-navy">Check Meta approval</button></form>}
+              </div>
+            )}
+            <p className="tiny muted" style={{ margin: "6px 0 0" }}>{isMeta ? "Meta: one click creates the template; when Meta approves it (usually minutes), click Check Meta approval — the mapping turns Approved and sending starts." : "WATI: create the template with the named text (same variable names). AiSensy: use the numbered text. Add the two quick-reply buttons, get it approved, enter its name above (AiSensy: the API campaign name) and set Approval to Approved."} Clients choose the store name, help number, note and language on their COD Confirmation page.</p>
+          </div>
+          <p className="tiny muted">Live sending only uses templates marked <b>Approved</b>. Template variables sent: buyer_name, order_id, merchant_name, cod_amount; COD also store_name, delivery_address, expected_delivery, store_note, support_phone (+ carrier, awb, tracking_link for Out for Delivery). COD templates need quick-reply buttons exactly “Confirm Order” and “Cancel Order”.</p>
         </div>
       </section>
 

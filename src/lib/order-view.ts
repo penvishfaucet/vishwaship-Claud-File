@@ -74,6 +74,8 @@ export const COD_DISPLAY: Record<CodDisplay, { label: string; tone: "muted" | "i
 
 export interface CodInputs {
   paymentType: string;
+  /** COD to collect (FOD orders can also collect COD). */
+  codPaise?: number;
   /** Plan / subscription includes COD confirmation. */
   included: boolean;
   /** Customer toggle: null = never configured. */
@@ -88,7 +90,7 @@ export interface CodInputs {
  * — e.g. "Rejected" + "Cancellation Pending".
  */
 export function codDisplay(i: CodInputs): { buyer: CodDisplay; cancellation: CodDisplay | null; reason?: string } {
-  if (i.paymentType !== "cod") return { buyer: "not_applicable", cancellation: null, reason: i.paymentType === "fod" ? "Freight-on-delivery order" : "Prepaid order" };
+  if (!(i.paymentType === "cod" || (i.paymentType === "fod" && (i.codPaise ?? 0) > 0))) return { buyer: "not_applicable", cancellation: null, reason: i.paymentType === "fod" ? "Freight-on-delivery order without COD" : "Prepaid order" };
   const c = i.confirmation;
   if (!c) {
     if (!i.included || i.enabled === null) return { buyer: "setup_required", cancellation: null, reason: i.included ? "Turn on COD Confirmation in Settings" : "Not included in your plan" };

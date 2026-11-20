@@ -443,3 +443,40 @@ html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
 .co-cust-side{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
 .co-tbl th.num,.co-tbl td.num{text-align:right;white-space:nowrap}
 .co-tbl tfoot th{border-top:2px solid var(--line);font-size:12.5px}
+
+/* ===== Customer Portal: COD confirmation setup ===== */
+.cod-setup{display:flex;flex-direction:column;gap:14px;margin:8px 0 6px}
+.cod-top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:16px 20px}
+.cod-top h1{margin:0;font-size:20px}
+.cod-credit{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cod-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:14px;align-items:start}
+.cod-main{padding:22px 24px}
+.cod-title{color:#E0550B;font-size:26px;margin:0 0 4px;font-weight:700}
+.cod-main h3{font-size:15px;margin:22px 0 8px;color:#051C46}
+.cod-switch{display:inline-flex;align-items:center;gap:16px;padding:16px 20px;border:1px solid #dbe3ee;border-radius:14px;background:#fff;font:inherit;font-size:16px;font-weight:600;color:#051C46;cursor:pointer;margin-top:10px}
+.cod-switch i{width:46px;height:26px;border-radius:999px;background:#cbd5e1;position:relative;transition:background .15s;flex:none}
+.cod-switch i b{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.cod-switch.on i{background:#16a34a}
+.cod-switch.on i b{left:23px}
+.cod-switch:focus-visible{outline:3px solid #E0550B;outline-offset:2px}
+.cod-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.cod-form .full{grid-column:1/-1}
+.cod-why{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.cod-why li{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.cod-why svg{color:#16a34a;flex:none;margin-top:2px}
+.cod-flow{padding-left:20px;margin:0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.cod-phone-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;position:sticky;top:90px}
+.cod-badge{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;background:#fff;border:1px solid #dbe3ee;font-size:13px;font-weight:600;color:#051C46;box-shadow:0 4px 12px rgba(5,28,70,.08)}
+.cod-phone{width:100%;max-width:330px;border:10px solid #1f2937;border-radius:38px;background:#e7ddd3;overflow:hidden;box-shadow:0 18px 40px rgba(5,28,70,.18)}
+.cod-phone-top{background:#075e54;color:#fff;padding:12px 16px;display:flex;flex-direction:column}
+.cod-phone-top span{font-size:11px;opacity:.8}
+.cod-chat{padding:12px 10px 18px;display:flex;flex-direction:column;gap:8px;min-height:420px}
+.cod-bubble{max-width:88%;background:#fff;border-radius:10px;padding:8px 10px 6px;box-shadow:0 1px 1px rgba(0,0,0,.12);font-size:12.5px;line-height:1.45;color:#111}
+.cod-bubble.out{align-self:flex-end;background:#dcf8c6}
+.cod-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.cod-time{text-align:right;font-size:10px;color:#667781;margin-top:2px}
+.cod-btns{display:flex;flex-direction:column;border-top:1px solid #eef0f2;margin:6px -10px -6px}
+.cod-btns span{text-align:center;color:#0a7cff;font-weight:600;padding:8px;border-bottom:1px solid #eef0f2;font-size:12.5px}
+.cod-btns span:last-child{border-bottom:0}
+@media (max-width:980px){.cod-grid{grid-template-columns:1fr}.cod-phone-wrap{position:static}}
+@media (max-width:560px){.cod-form{grid-template-columns:1fr}.cod-main{padding:16px}.cod-title{font-size:22px}}

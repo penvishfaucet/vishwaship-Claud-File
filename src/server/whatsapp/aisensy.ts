@@ -16,7 +16,7 @@ const ENDPOINT = "https://backend.aisensy.com/campaign/t1/api/v2";
 
 /** Fill order for numbered AiSensy template variables, per event. Shown in Admin so templates are written to match. */
 export const AISENSY_PARAM_ORDER: Record<string, string[]> = {
-  cod_confirmation: ["buyer_name", "merchant_name", "order_id", "cod_amount"],
+  cod_confirmation: ["buyer_name", "store_name", "order_id", "cod_amount", "delivery_address", "expected_delivery", "store_note", "support_phone"],
   out_for_delivery: ["buyer_name", "order_id", "carrier", "awb", "tracking_link"],
 };
 

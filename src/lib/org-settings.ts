@@ -40,6 +40,13 @@ export const ORG_SETTING_SCHEMAS = {
     color: hex.default("#f0712c"), processingDays: z.number().int().min(0).max(10).default(1), cutoffHour: z.number().int().min(0).max(23).default(14),
     allowedOrigins: z.array(z.string().trim().url().max(120)).max(10).default([]), showCourier: z.boolean().default(false),
   }),
+  /** WhatsApp COD confirmation: the parts of the approved template the client fills in. */
+  cod_message: z.object({
+    storeName: z.string().trim().max(40).default(""),
+    supportPhone: z.string().trim().max(20).regex(/^$|^[+\d][\d\s-]{6,19}$/, "Enter a phone number").default(""),
+    note: z.string().trim().max(120).default(""),
+    language: z.enum(["en", "hi"]).default("en"),
+  }),
   oms: z.object({
     provider: z.enum(["unicommerce", "easyecom", "vinculum", "browntape", "custom"]), accountName: z.string().trim().min(2).max(80),
     pushShipmentUpdates: z.boolean().default(true), notes: z.string().trim().max(300).default(""),

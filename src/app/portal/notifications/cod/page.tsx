@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { and, desc, eq } from "drizzle-orm";
 import { CodActions } from "@/components/portal/CodActions";
-import { CodToggle } from "@/components/portal/CodToggle";
+import { CodSetup } from "@/components/portal/CodSetup";
+import { ORG_SETTING_SCHEMAS } from "@/lib/org-settings";
+import { orgSetting } from "@/server/couriers";
+import { creditPrice } from "@/server/notifications/credits";
 import { formatINR } from "@/lib/money";
 import { getDb, schema } from "@/server/db/client";
-import { eventIncluded, resolveFeatures } from "@/server/features";
+import { eventIncluded } from "@/server/features";
 import { portalContext } from "@/server/portal/context";
 import { codSettings, whatsappMode } from "@/server/whatsapp/service";
 
@@ -22,36 +25,20 @@ export default async function CodPage({ searchParams }: { searchParams: Promise<
   const [setting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, ctx.org.id), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
   const cfg = await codSettings();
   const included = await eventIncluded(ctx.org.id, "whatsapp:cod_confirmation");
-  const { plan } = await resolveFeatures(ctx.org.id);
   const mode = await whatsappMode();
+  const msg = ORG_SETTING_SCHEMAS.cod_message.parse((await orgSetting(ctx.org.id, "cod_message")) ?? {});
+  const price = await creditPrice();
+  const [wh] = await db.select({ mobile: schema.warehouses.mobile }).from(schema.warehouses).where(and(eq(schema.warehouses.orgId, ctx.org.id), eq(schema.warehouses.isDefault, true))).limit(1);
   const rows = await db.select({ c: schema.codConfirmations, o: schema.orders }).from(schema.codConfirmations).innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId))
     .where(eq(schema.codConfirmations.orgId, ctx.org.id)).orderBy(desc(schema.codConfirmations.createdAt)).limit(200);
   const list = rows.filter((r) => (!sp.status || r.c.status === sp.status) && (!sp.q || r.o.orderNumber.toLowerCase().includes(sp.q.toLowerCase())));
-  const enabled = !!setting?.enabled && included;
   return (
     <>
-      <div className="page-h">
-        <div><Link className="small link-navy" href="/portal/notifications/?tab=whatsapp">← Shipping Notifications</Link><h1>COD Confirmation</h1></div>
-        <div className="actions">
-          <span className={`chip ${enabled ? "c-active" : "c-draft"}`}>{enabled ? "Subscribed" : "Not subscribed"}</span>
-          <span className="pill2">Credits: <b>{ctx.credits}</b></span>
-        </div>
-      </div>
-      {mode === "demo" && <p className="note small mb12"><b>Demo mode</b> — no WhatsApp provider is connected, so messages are recorded but not delivered, no credits are used, and you can simulate the buyer’s reply. This never happens in production.</p>}
-      <section className="card mb16" style={{ padding: 18 }}>
-        <div className="row between wrap" style={{ gap: 16 }}>
-          <div style={{ maxWidth: 560 }}>
-            <b>WhatsApp COD confirmation</b>
-            <p className="small muted" style={{ margin: "6px 0" }}>Before a COD order is booked, the buyer gets a WhatsApp message with <b>Confirm Order</b> and <b>Cancel Order</b> buttons. Confirm releases the order for shipping. Cancel cancels it (and asks the courier to cancel if it was already booked). If there is no reply within {Math.round(cfg.expiryMinutes / 60)} h, the status becomes <b>No Response</b> and {NO_REPLY[cfg.noReply]}.</p>
-            <p className="small" style={{ margin: 0 }}><b>{cfg.credits} credits</b> per confirmation. Prepaid orders are not affected.</p>
-          </div>
-          {included ? <CodToggle enabled={!!setting?.enabled} /> : <Link className="btn btn-orange" href="/portal/upgrade/?module=whatsapp_notifications">Upgrade plan</Link>}
-        </div>
-        {!included && <p className="small mt8 t-debit">Not included in your {plan ? `“${plan.name}” plan` : "account"}.{setting?.enabled ? " Your earlier setting is paused." : ""}</p>}
-        <div className="note mt12 small" style={{ whiteSpace: "pre-line" }}>
-          <b>Message preview</b>{"\n"}Hi Ravi, please confirm your Cash on Delivery order VSA1001 from {ctx.org.businessName} for ₹1,499.{"\n"}[ Confirm Order ]  [ Cancel Order ]
-        </div>
-      </section>
+      <Link className="small link-navy" href="/portal/notifications/?tab=whatsapp">← Shipping Notifications</Link>
+      <CodSetup enabled={!!setting?.enabled && included} included={included} msg={msg} businessName={ctx.org.businessName} defaultPhone={wh?.mobile ?? ""}
+        credits={ctx.credits} perMessage={cfg.credits} paisePerCredit={price.paisePerCredit} expiryHours={Math.round(cfg.expiryMinutes / 60)} noReplyText={NO_REPLY[cfg.noReply]}
+        demo={mode === "demo"} live={mode === "live"} />
+      <h2 className="b mt16" style={{ fontSize: 17 }}>Confirmations</h2>
       <div className="pills mb12">
         <Link className={!sp.status ? "pill on" : "pill"} href="/portal/notifications/cod/">All {rows.length}</Link>
         {FILTERS.map((f) => <Link key={f} className={sp.status === f ? "pill on" : "pill"} href={`/portal/notifications/cod/?status=${f}`}>{LABEL[f]} {rows.filter((r) => r.c.status === f).length}</Link>)}

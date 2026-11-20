@@ -554,6 +554,19 @@ function EtaLine({ s }: { s: NonNullable<OrderRow["shipment"]> }) {
   return <div className="tiny ovt-eta">Expected delivery: <b>{new Date(s.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "2-digit", month: "short" })}</b></div>;
 }
 
+/** The buyer's WhatsApp COD answer, right on the order (click for the message details). */
+const COD_BADGE: Partial<Record<string, { text: string; cls: string }>> = {
+  pending: { text: "COD: waiting for buyer", cls: "wait" }, sent: { text: "COD: waiting for buyer", cls: "wait" }, delivered: { text: "COD: seen, waiting for buyer", cls: "wait" },
+  confirmed: { text: "✓ Buyer confirmed — ship", cls: "ok" }, rejected: { text: "✕ Buyer cancelled", cls: "bad" },
+  no_response: { text: "COD: no reply from buyer", cls: "warn" }, message_failed: { text: "COD message not sent", cls: "bad" },
+};
+function CodBadge({ r, open }: { r: OrderRow; open: (d: DialogState) => void }) {
+  const c = codDisplay(r.cod);
+  const shown = c.cancellation === "cancelled" ? { text: "✕ Cancelled by buyer", cls: "bad" } : COD_BADGE[c.buyer];
+  if (!shown) return null;
+  return <button type="button" className={`cod-chip ${shown.cls}`} onClick={() => open({ kind: "cod", row: r })} title="WhatsApp COD confirmation — details">{shown.text}</button>;
+}
+
 function PaymentCell({ r, open }: { r: OrderRow; open: (d: DialogState) => void }) {
   return (
     <div>
@@ -634,6 +647,7 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
           <Link className="ov-link" href={`/portal/orders/${r.id}/`}>{r.orderNumber}</Link>
           <div>Ref. ID: {r.externalOrderId ?? r.invoiceNumber ?? "--"}</div>
           <span className={`ov-badge ${b.cls}`}>{b.text}</span>
+          <CodBadge r={r} open={open} />
           {r.tags.length > 0 && <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>{r.tags.map((t) => <span key={t.id} className="ov-badge" style={{ background: t.color, color: "#fff" }}><Tag size={10} aria-hidden /> {t.name}</span>)}</div>}
         </td>
         {show("product") && <td className="wrap"><ProductCell r={r} /></td>}
@@ -784,6 +798,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
           </div>
         )}
         <div>Status: <span className={`oc-st ${status.tone}`}>{status.text}</span></div>
+        <CodBadge r={r} open={open} />
         {s?.lastLocation && <div className="tiny muted">{placeName(s.lastLocation)}{s.lastEventAt ? ` · ${istDate(s.lastEventAt)} ${istTime(s.lastEventAt)}` : ""}</div>}
         {s && <EtaLine s={s} />}
       </div>
