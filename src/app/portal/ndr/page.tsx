@@ -25,11 +25,11 @@ export default async function NdrPage({ searchParams }: { searchParams: Promise<
     .where(and(eq(schema.ndrCases.orgId, ctx.org.id), eq(schema.ndrCases.kind, tab))).orderBy(desc(schema.ndrCases.createdAt));
   const filtered = sp.status ? rows.filter((r) => r.c.status === sp.status) : rows;
   const counts = rows.reduce<Record<string, number>>((m, r) => ({ ...m, [r.c.status]: (m[r.c.status] ?? 0) + 1 }), {});
-  const [aiOn, callCfg, callCredits, bolna] = await Promise.all([aiCallingEnabled(ctx.org.id), ndrCallSettings(), ndrCallCredits(), bolnaAccount()]);
+  const [aiOn, callCfg, callCredits, bolna, ownCall] = await Promise.all([aiCallingEnabled(ctx.org.id), ndrCallSettings(), ndrCallCredits(), bolnaAccount(), import("@/server/own-providers").then((m) => m.ownCalling(ctx.org.id))]);
   return (
     <>
       <div className="page-h"><div><h1>NDR</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Failed deliveries and RTO — act before the courier deadline.</p></div></div>
-      <NdrAiCalling enabled={aiOn} priceRupees={callCfg.pricePaise / 100} credits={callCredits} balance={ctx.credits} live={!!bolna} />
+      <NdrAiCalling enabled={aiOn} priceRupees={callCfg.pricePaise / 100} credits={callCredits} balance={ctx.credits} live={!!bolna || !!ownCall} own={!!ownCall} />
       <nav className="tabs" aria-label="Queue">
         <Link href="/portal/ndr/?tab=ndr" className={tab === "ndr" ? "on" : ""}>NDR</Link>
         <Link href="/portal/ndr/?tab=rto" className={tab === "rto" ? "on" : ""}>RTO</Link>

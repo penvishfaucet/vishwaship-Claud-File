@@ -68,16 +68,17 @@ export async function placeNdrCall(caseId: string): Promise<{ done: true } | { r
   const consignee = row.o.consignee as { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
   const digits = String(consignee.mobile ?? "").replace(/\D/g, "").slice(-10);
   if (!/^[6-9]\d{9}$/.test(digits)) { await saveCall(caseId, { state: "skipped", attempts, note: "Buyer mobile number is missing or invalid", updatedAt: "" }); return { done: true }; }
-  const acct = await bolnaAccount();
-  if (!acct) { await saveCall(caseId, { state: "skipped", attempts, note: "AI calling is being set up by Vishwaship", updatedAt: "" }); return { done: true }; }
-  const credits = await ndrCallCredits();
+  const own = await (await import("@/server/own-providers")).ownCalling(row.c.orgId);
+  const acct = own ? null : await bolnaAccount();
+  if (!own && !acct) { await saveCall(caseId, { state: "skipped", attempts, note: "AI calling is being set up by Vishwaship", updatedAt: "" }); return { done: true }; }
+  const credits = own ? 0 : await ndrCallCredits(); // the client's own Bolna: no Vishwaship charge
   const key = `${caseId}:${attempts}`;
   if (!(await holdCredits(row.c.orgId, key, credits))) {
     await saveCall(caseId, { state: "skipped", attempts, note: "Not enough notification credits", updatedAt: "" });
     await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: row.c.orgId, kind: "ndr", title: `AI NDR call not made for AWB ${row.sh.awb ?? ""}: no credits. Buy credits or act on the NDR yourself.`, href: "/portal/billing/notification-credits/" });
     return { done: true };
   }
-  const ctx = await providerContext(acct);
+  const ctx = own ? own.ctx : await providerContext(acct!);
   const userData = {
     buyer_name: String(consignee.name ?? "Customer").split(" ")[0], store_name: row.org.businessName, order_id: row.o.orderNumber, awb: row.sh.awb ?? "",
     courier: row.sh.carrierName, cod_amount: row.o.codAmountPaise > 0 ? `₹${(row.o.codAmountPaise / 100).toLocaleString("en-IN")}` : "prepaid",

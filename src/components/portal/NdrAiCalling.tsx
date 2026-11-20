@@ -5,13 +5,13 @@ import { useState } from "react";
 import { Bot, CheckCircle2, PhoneCall, RotateCcw, Undo2 } from "lucide-react";
 
 /** Client NDR page: switch AI NDR calling on/off, with the price and what happens on each answer. */
-export function NdrAiCalling({ enabled, priceRupees, credits, balance, live }: { enabled: boolean; priceRupees: number; credits: number; balance: number; live: boolean }) {
+export function NdrAiCalling({ enabled, priceRupees, credits, balance, live, own = false }: { enabled: boolean; priceRupees: number; credits: number; balance: number; live: boolean; own?: boolean }) {
   const [on, setOn] = useState(enabled);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   async function toggle() {
     const next = !on;
-    if (next && !confirm(`Turn on AI NDR calling? For every failed delivery our AI calls the buyer and asks if they still want the parcel. ₹${priceRupees} (${credits} credits) per connected call — no charge if the buyer does not pick up.`)) return;
+    if (next && !confirm(`Turn on AI NDR calling? For every failed delivery our AI calls the buyer and asks if they still want the parcel. ${own ? "Calls run on your own Bolna account — no Vishwaship charge." : `₹${priceRupees} (${credits} credits) per connected call — no charge if the buyer does not pick up.`}`)) return;
     setBusy(true);
     const r = await fetch("/api/portal/ndr/ai-calling", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: next }) });
     setBusy(false);
@@ -36,8 +36,10 @@ export function NdrAiCalling({ enabled, priceRupees, credits, balance, live }: {
         <div><RotateCcw size={18} aria-hidden /> No answer → tried again once, then you decide</div>
       </div>
       <p className="tiny muted" style={{ margin: "8px 0 0" }}>
+        {own ? <>Calls run on <b>your own Bolna account</b> — no Vishwaship charge. <Link className="link" href="/portal/integrations/own-apis/">Manage</Link></> : <>
         ₹{priceRupees} per connected call ({credits} credits) · no charge if the buyer doesn’t pick up · your balance: <b>{balance.toLocaleString("en-IN")}</b> credits · <Link className="link" href="/portal/billing/notification-credits/">Buy credits</Link>
         {!live && " · Vishwaship is switching AI calling on; your setting is saved."}
+        {" · "}<Link className="link" href="/portal/integrations/own-apis/">Use your own Bolna account (no charge)</Link></>}
       </p>
     </section>
   );

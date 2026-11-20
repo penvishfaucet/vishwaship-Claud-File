@@ -72,6 +72,7 @@ export function CodSetup(p: {
             </button>
           ) : <p className="note small">COD confirmation is switched off for your account. Contact Vishwaship support to turn it on.</p>}
           {on && p.credits < p.perMessage && <p className="note small t-debit">You have no credits, so messages are not sent and COD orders stay on hold. <Link className="link" href="/portal/billing/notification-credits/">Buy credits</Link> — waiting messages go out automatically.</p>}
+          <p className="small mt8"><Link className="link" href="/portal/integrations/own-apis/">Have your own WATI or AiSensy? Connect it</Link> — messages then go from your own WhatsApp number with no Vishwaship charges.</p>
           {!p.live && <p className="tiny muted mt8">{p.demo ? "Demo mode: no WhatsApp provider is connected, so messages are recorded but not delivered and no credits are used." : "Vishwaship is connecting WhatsApp. Your setting is saved and messages start as soon as it is live."}</p>}
           {err && <p className="err small" role="alert">{err}</p>}
 

@@ -120,16 +120,18 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
   }
   if (!toE164) return finish("failed", { error: "Buyer mobile number is missing or invalid" });
 
-  const mode = await whatsappMode();
+  // the client's own WhatsApp account (no Vishwaship credits), when switched on with a template for this event
+  const own = await (await import("@/server/own-providers")).ownWhatsapp(a.orgId, a.event);
+  const mode = own ? "live" : await whatsappMode();
   if (mode === "unconfigured") return finish("failed", { error: "WhatsApp provider not configured" });
   // the client's chosen language first (when an approved template exists in it), else any approved one
   const msgCfg = ORG_SETTING_SCHEMAS.cod_message.parse((await orgSetting(a.orgId, "cod_message")) ?? {});
   const approved = await db.select().from(schema.notificationTemplates).where(and(eq(schema.notificationTemplates.channel, "whatsapp"), eq(schema.notificationTemplates.event, a.event), eq(schema.notificationTemplates.approvalState, "approved"))).orderBy(desc(schema.notificationTemplates.updatedAt));
   const tpl = approved.find((t) => t.language === msgCfg.language) ?? approved[0];
-  if (mode === "live" && !tpl?.providerTemplateName) return finish("failed", { error: "No approved WhatsApp template mapped for this event" });
-  const templateName = tpl?.providerTemplateName ?? `demo_${a.event}`;
+  if (!own && mode === "live" && !tpl?.providerTemplateName) return finish("failed", { error: "No approved WhatsApp template mapped for this event" });
+  const templateName = own ? own.templateName : tpl?.providerTemplateName ?? `demo_${a.event}`;
 
-  const cost = mode === "demo" ? 0 : await creditCost(a.event);
+  const cost = mode === "demo" || own ? 0 : await creditCost(a.event);
   if (!(await chargeCredits(a.orgId, msg.id, cost))) return finish("failed", { error: "Insufficient notification credits", templateName });
 
   const [org] = await db.select().from(schema.orgs).where(eq(schema.orgs.id, a.orgId));
@@ -160,15 +162,16 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
 
   if (mode === "demo") return finish("sent", { templateName, providerMessageId: `demo_${msg.id}`, isDemo: true });
 
-  const acct = (await whatsappAccount())!;
-  const ctx = await providerContext(acct);
-  const r = acct.adapter === "meta_whatsapp"
+  const acct = own ? null : (await whatsappAccount())!;
+  const ctx = own ? own.ctx : await providerContext(acct!);
+  const adapter = own ? own.adapter : acct!.adapter;
+  const r = adapter === "meta_whatsapp"
     ? await metaSendTemplate(ctx, { toE164, templateName, language: tpl?.language ?? "en", body: tpl?.body ?? "", params })
-    : acct.adapter === "aisensy"
-      ? await aisensySendTemplate(ctx, { toE164, campaignName: templateName, event: a.event, body: tpl?.body ?? "", params })
+    : adapter === "aisensy"
+      ? await aisensySendTemplate(ctx, { toE164, campaignName: templateName, event: a.event, body: own ? "" : tpl?.body ?? "", params })
       : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
   if (r.ok) {
-    await db.update(schema.providerAccounts).set({ lastSuccessAt: new Date() }).where(eq(schema.providerAccounts.id, acct.id));
+    if (acct) await db.update(schema.providerAccounts).set({ lastSuccessAt: new Date() }).where(eq(schema.providerAccounts.id, acct.id));
     return finish("sent", { templateName, providerMessageId: r.providerMessageId ?? null, creditsCharged: cost });
   }
   if (r.retryable) {
@@ -377,6 +380,12 @@ export async function handleWatiWebhook(body: Record<string, unknown>): Promise<
 export async function handleAisensyWebhook(body: Record<string, unknown>): Promise<{ result: string }> {
   const p = parseAisensyWebhook(body);
   return handleInbound("aisensy", p, `aisensy:${p.eventType}:${p.msgId || p.waId + ":" + p.replyText + ":" + JSON.stringify(body).length}`);
+}
+
+/** A client's own WATI / AiSensy webhook (/api/webhooks/own/<key>): same reply handling as Vishwaship's. */
+export async function handleOwnWhatsappWebhook(adapter: "wati" | "aisensy", body: Record<string, unknown>): Promise<{ result: string }> {
+  if (adapter === "aisensy") return handleAisensyWebhook(body);
+  return handleWatiWebhook(body);
 }
 
 /** Meta Cloud API webhook: one payload can carry several messages / statuses. */

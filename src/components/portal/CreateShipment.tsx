@@ -9,6 +9,7 @@ import { guessPincode } from "@/lib/pincodes";
 import { FOD_RULE_TEXT, fodAllowed, paymentTypeOf } from "@/lib/payment";
 import { carrierLogo } from "@/lib/site";
 import type { OfferView } from "@/components/public/RateCalculator";
+import { BuyerInsight, CarrierInsight, useInsights } from "@/components/portal/DeliveryInsights";
 
 type WH = { id: string; label: string; city: string; pincode: string; verified: boolean; isDefault: boolean; mobileMasked?: string };
 type Addr = { label: string; line1: string; line2?: string; pincode: string; city: string; state: string };
@@ -220,6 +221,14 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
     if (step === 1) await fetchQuotes();
     setStep((s) => Math.min(2, s + 1));
   }
+
+  // delivery history for this PIN and buyer (courier step)
+  const insights = useInsights(c.pincode, c.mobile, step === 2);
+  const bestCarrier = (() => {
+    const s = insights?.carriers ?? {};
+    const seen = (offers ?? []).map((o) => s[o.carrierCode]).filter((x) => x && x.finished >= 5);
+    return seen.length > 1 ? seen.sort((a, b) => b!.deliveredPct - a!.deliveredPct)[0]!.carrierCode : null;
+  })();
 
   async function fetchQuotes() {
     setBusy(true); setOffers(null); setSelected(null);
@@ -577,6 +586,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                   {" "}<b>Ship Prepaid{codOn ? " without COD" : ""} to avoid {freight === "fod" && codOn ? "these charges" : "this charge"}.</b>
                 </p>
               )}
+              {offers && offers.length > 0 && <BuyerInsight buyer={insights?.buyer ?? null} cod={codOn} />}
               <div className="rate-list mt12" role="radiogroup" aria-label="Courier options">
                 {offers?.map((o) => {
                   const logo = carrierLogo(o.carrierCode);
@@ -596,6 +606,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                           <span className="rate-price">{formatINR(fod ? o.payer!.receiver : o.total)}{fod && <small>paid by receiver</small>}</span>
                         </span>
                         <span className="rate-meta">{o.mode}{o.etaDays ? ` · ${o.etaDays} day${o.etaDays === 1 ? "" : "s"}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg{fod && o.payer!.sender > 0 ? ` · ${formatINR(o.payer!.sender)} charged to you` : fod ? " · nothing charged to you" : " · incl. GST"}</span>
+                        {insights && <CarrierInsight stat={insights.carriers[o.carrierCode]} best={bestCarrier === o.carrierCode} />}
                         {(codOn || freight === "fod") && (
                           <span className="rate-extra">
                             {codOn && (codLine > 0 ? <span className="chip-x">+ {formatINR(withGst(codLine))} COD charge</span> : <span className="chip-x soft">COD charge included in the rate</span>)}

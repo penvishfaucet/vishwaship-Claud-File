@@ -1,7 +1,7 @@
 import {
   Activity, BadgeCheck, BadgeIndianRupee, Bell, Boxes, Calculator, ClipboardList, CornerUpLeft, CreditCard, Download, FileMinus, FilePlus, FileSpreadsheet, FileText,
   Home, Layers, LayoutGrid, ListOrdered, MapPin, Package, Palette, Plug, Printer, Receipt, ReceiptText, Scale, Settings, ShoppingBag, Store, Tag, Timer, Truck,
-  Users, Wallet, Webhook, Wrench, Zap, BookOpen, FileBarChart, Gauge, CalendarClock,
+  Users, Wallet, Webhook, Wrench, Zap, BookOpen, FileBarChart, Gauge, CalendarClock, MessagesSquare,
 } from "lucide-react";
 import type { ModuleKey } from "@/lib/modules";
 
@@ -61,6 +61,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
     { id: "integrations.oms", href: "/portal/integrations/oms/", label: "OMS", icon: LayoutGrid, module: "oms" },
     { id: "integrations.edd", href: "/portal/integrations/edd-widget/", label: "EDD Widget", icon: CalendarClock, module: "edd_widget" },
     { id: "integrations.api", href: "/portal/integrations/api/", label: "API Integration", icon: Webhook, module: "api_integration" },
+    { id: "integrations.own", href: "/portal/integrations/own-apis/", label: "Own WhatsApp & AI calls", icon: MessagesSquare },
   ] },
   { id: "others", group: "Others", icon: Boxes, items: [
     { id: "others.customers", href: "/portal/others/customers/", label: "Customers", icon: Users },

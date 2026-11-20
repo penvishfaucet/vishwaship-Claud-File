@@ -7,7 +7,7 @@ export const MODULES = [
   { key: "warehouses", label: "Warehouses & pickup addresses", default: true, needsPlan: false },
   { key: "reports", label: "Reports & downloads", default: true, needsPlan: false },
   { key: "tracking", label: "Shipment tracking", default: true, needsPlan: false },
-  { key: "branded_tracking", label: "Branded tracking page", default: false, needsPlan: true },
+  { key: "branded_tracking", label: "Branded tracking page", default: true, needsPlan: false },
   { key: "bulk_upload", label: "Bulk order upload", default: true, needsPlan: false },
   { key: "store_channels", label: "Store channels (Shopify / WooCommerce)", default: true, needsPlan: false },
   { key: "api_integration", label: "API integration", default: true, needsPlan: false },

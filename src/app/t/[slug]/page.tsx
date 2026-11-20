@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { and, eq, or } from "drizzle-orm";
 import { BuyerTracking } from "@/components/public/BuyerTracking";
+import { EmbedResize } from "@/components/public/EmbedResize";
 import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
 import { rateLimit } from "@/server/security/rate-limit";
@@ -22,7 +23,7 @@ export default async function TrackingEntry({ params, searchParams }: { params: 
   const { q } = await searchParams;
   const footer = await t("public.tracking.footer");
   const byRef = await buyerShipmentByRef(slug);
-  if (byRef) return <BuyerTracking brand={await liveBranding(byRef.orgId)} shipment={byRef.shipment} footer={footer} />;
+  if (byRef) return <><EmbedResize /><BuyerTracking brand={await liveBranding(byRef.orgId)} shipment={byRef.shipment} footer={footer} /></>;
 
   const db = await getDb();
   const [page] = await db.select().from(schema.trackingPages).where(eq(schema.trackingPages.slug, slug));
@@ -43,6 +44,8 @@ export default async function TrackingEntry({ params, searchParams }: { params: 
     }
   }
   return (
+    <>
+    <EmbedResize />
     <BuyerTracking brand={brand} shipment={null} footer={footer}>
       <form style={{ display: "flex", gap: 8, margin: "8px 0 12px" }} role="search">
         <label htmlFor="bq" className="sr-only">AWB or order ID</label>
@@ -51,5 +54,6 @@ export default async function TrackingEntry({ params, searchParams }: { params: 
       </form>
       {(notFoundMsg || limited) && <p role="status" style={{ color: "#c62828", margin: "0 0 12px" }}>{limited ? "Too many searches. Please try again in a few minutes." : "We couldn’t find that order. Check the AWB or order ID."}</p>}
     </BuyerTracking>
+    </>
   );
 }
