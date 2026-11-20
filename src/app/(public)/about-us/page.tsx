@@ -14,19 +14,23 @@ export default async function AboutPage({ searchParams }: { searchParams: Promis
   const a = c.about;
   return (
     <>
-      <section className="w-about-hero" aria-labelledby="ab-h">
+      <section className="ab-hero" aria-labelledby="ab-h">
         {a.imageUrl && <img src={a.imageUrl} alt="" fetchPriority="high" />}
         <div className="w-wrap in">
           <span className="w-eyebrow">About us</span>
-          <h1 id="ab-h" className="w-h1">{a.heading}</h1>
-          <p className="w-lead" style={{ color: "#c9d3e6" }}>{a.intro}</p>
+          <h1 id="ab-h">{a.heading}</h1>
+          <p className="w-lead">{a.intro}</p>
         </div>
       </section>
 
       <section className="w-sec">
         <div className="w-wrap w-split" style={{ alignItems: "start" }}>
-          <div className="w-prose">{a.paragraphs.filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}</div>
+          <div className="w-prose">
+            <span className="w-eyebrow" style={{ marginBottom: 16 }}>Who we are</span>
+            {a.paragraphs.filter(Boolean).map((p, i) => <p key={i}>{p}</p>)}
+          </div>
           <div style={{ display: "grid", gap: 14 }}>
+            <span className="w-eyebrow">What we do</span>
             {[
               { icon: Scale, t: "Rate comparison", d: "Compare available courier services for your route and package." },
               { icon: Package, t: "Booking", d: "Book B2C parcels and B2B cargo from one account." },
@@ -34,12 +38,12 @@ export default async function AboutPage({ searchParams }: { searchParams: Promis
               { icon: MapPin, t: "Tracking", d: "Follow every shipment by AWB, order or LR number." },
               { icon: Headset, t: "Customer support", d: "Regional and Pan-India support from our head office." },
             ].map(({ icon: Icon, t, d }) => (
-              <div key={t} className="w-card" style={{ display: "flex", gap: 16, padding: 18, alignItems: "flex-start" }}>
-                <span style={{ width: 44, height: 44, borderRadius: 12, background: "var(--os)", color: "var(--o)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon size={22} aria-hidden="true" /></span>
-                <span><b style={{ display: "block", fontSize: 16.5 }}>{t}</b><span style={{ color: "var(--mut)", fontSize: 15, lineHeight: 1.55 }}>{d}</span></span>
+              <div key={t} className="w-card ab-svc">
+                <span className="ic"><Icon size={22} aria-hidden="true" /></span>
+                <span><b>{t}</b><span>{d}</span></span>
               </div>
             ))}
-            <Link className="w-btn ghost" href="/customer-care/" style={{ justifySelf: "start" }}>Meet our support team <ArrowRight size={18} aria-hidden="true" /></Link>
+            <Link className="w-btn out" href="/customer-care/" style={{ justifySelf: "start" }}>Meet our support team <ArrowRight size={18} aria-hidden="true" /></Link>
           </div>
         </div>
       </section>
@@ -48,9 +52,9 @@ export default async function AboutPage({ searchParams }: { searchParams: Promis
         <div className="w-wrap">
           <div className="w-quote">
             <p className="w-slogan"><span>{c.home.heroLine1}</span><span className="o" style={{ color: "var(--o)" }}>{c.home.heroLine2}</span></p>
-            <p className="w-lead" style={{ margin: "18px auto 0", color: "#c9d3e6" }}>{a.closingText}</p>
+            <p className="w-lead" style={{ margin: "18px auto 0", color: "#d6deec" }}>{a.closingText}</p>
             <div className="w-btns">
-              <Link className="w-btn pri" href="/shipping-rate-calculator/">Calculate Rates <ArrowRight size={18} aria-hidden="true" /></Link>
+              <Link className="w-btn pri" href="/shipping-rate-calculator/">Check Your Rates <ArrowRight size={18} aria-hidden="true" /></Link>
               <Link className="w-btn sec" href="/customer-care/">Contact Support</Link>
             </div>
           </div>

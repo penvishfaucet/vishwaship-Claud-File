@@ -1,4 +1,5 @@
 import "@/styles/site-v2.css";
+import "@/styles/site-v3.css";
 import { SiteFooterV2, SiteHeaderV2 } from "@/components/site/SiteChromeV2";
 import { DEFAULTS } from "@/lib/site-content";
 import { customerLogout, staffLogout } from "@/server/auth/actions";

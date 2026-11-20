@@ -114,7 +114,15 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * Get priced offers from every quoting shipping account, in parallel with an independent timeout each.
  * `orgId` MUST come from the authenticated session/API key (null for the public calculator).
  */
-export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string } = {}): Promise<{ offers: QuoteOffer[]; errors: string[] }> {
+/** Outcome of one shipping service for one quote request (public calculator shows these per service). */
+export type ServiceStatus = {
+  accountId: string; adapter: string; mode: "B2C" | "B2B";
+  /** ok = returned rates; no_service = answered but does not serve this route/shipment; failed = timeout/error (retry); skipped = not offered for this payment mode */
+  status: "ok" | "no_service" | "failed" | "skipped";
+  category?: string; message?: string; count: number;
+};
+
+export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string } = {}): Promise<{ offers: QuoteOffer[]; errors: string[]; statuses: ServiceStatus[] }> {
   const persist = opts.persist ?? true;
   const allowed = await (await import("@/server/couriers")).courierFilter(orgId);
   const db = await getDb();
@@ -131,19 +139,24 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     const spec = CARRIER_SPECS[acct.adapter];
     const label = spec?.route === "aggregator" ? (partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>) ?? "Courier partner") : String((acct.configPublic as Record<string, unknown>)?.brandName ?? acct.label);
     const adapter = adapterFor(acct);
-    if (!adapter) return { offers, error: `${label}: integration pending` };
+    const st = (status: ServiceStatus["status"], message?: string, category?: string): ServiceStatus => ({ accountId: acct.id, adapter: acct.adapter, mode: req.mode, status, message: message ? hideProviders(message) : undefined, category, count: offers.length });
+    if (!adapter) return { offers, error: `${label}: integration pending`, status: st("failed", "integration pending", "unsupported") };
     const pay = paymentConfig(acct, adapter);
     const allowedMode = modeAllowed(pay, req.paymentType);
-    if (!allowedMode.ok) return { offers, error: pay.fodStatus === "not_supported" && req.paymentType === "fod" ? null : `${label}: ${allowedMode.reason}` };
+    if (!allowedMode.ok) return { offers, error: pay.fodStatus === "not_supported" && req.paymentType === "fod" ? null : `${label}: ${allowedMode.reason}`, status: st("skipped", allowedMode.reason, "payment_mode") };
     // FOD + COD: only couriers that collect cash on a FOD shipment (Delhivery B2B — Shipmozo does not)
-    if (req.paymentType === "fod" && (req.codAmount ?? 0) > 0 && (!FOD_COD_ADAPTERS.includes(acct.adapter) || !pay.cod)) return { offers, error: null };
+    if (req.paymentType === "fod" && (req.codAmount ?? 0) > 0 && (!FOD_COD_ADAPTERS.includes(acct.adapter) || !pay.cod)) return { offers, error: null, status: st("skipped", "COD on FOD is not offered", "payment_mode") };
     let res;
     try {
       res = await withTimeout(adapter.quote(await providerContext(acct), req), QUOTE_TIMEOUT_MS, label);
     } catch (e) {
-      return { offers, error: `${label}: rate unavailable — ${(e as Error).message}`.slice(0, 200) };
+      return { offers, error: `${label}: rate unavailable — ${(e as Error).message}`.slice(0, 200), status: st("failed", (e as Error).message, "timeout") };
     }
-    if (!res.ok) return { offers, error: res.error.category === "unsupported" ? null : `${label}: ${res.error.message}` };
+    if (!res.ok) {
+      const c = res.error.category;
+      const kind: ServiceStatus["status"] = c === "unsupported" || c === "not_serviceable" || c === "validation" ? "no_service" : "failed";
+      return { offers, error: c === "unsupported" ? null : `${label}: ${res.error.message}`, status: st(kind, res.error.message, c) };
+    }
 
     // KYC not approved yet → the non-KYC margin on every courier and service; approved → the normal rules
     const markup = nonKyc ?? pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
@@ -167,14 +180,14 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
         totalPaise: priced.total, expiresAt,
       });
     }
-    return { offers, error: null as string | null };
+    return { offers, error: null as string | null, status: st(offers.length ? "ok" : "no_service", offers.length ? undefined : "no courier for this shipment", offers.length ? undefined : "not_serviceable") };
   }));
 
   const offers = results.flatMap((r) => r.offers).sort((a, b) => a.total - b.total);
   const errors = results.map((r) => r.error).filter((e): e is string => !!e).map(hideProviders);
   // Say so instead of an empty list when no courier service is switched on for this shipment type.
   if (!offers.length && !errors.length && !opts.onlyAccountId) errors.push(`${req.mode} rates are not available right now — no ${req.mode} courier service is active yet. Please try again later.`);
-  return { offers, errors };
+  return { offers, errors, statuses: results.map((r) => r.status) };
 }
 
 /** Load a saved quote for booking; honours the original rule while valid. */

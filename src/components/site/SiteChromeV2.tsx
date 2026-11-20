@@ -105,7 +105,7 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
         </nav>
         <div className="w-acts">
           {!signedIn && <a className="w-btn out sm" href={L.login}>Login</a>}
-          <Link className="w-btn pri sm" href={L.dashboard}>Dashboard</Link>
+          {signedIn && <Link className="w-btn pri sm" href={L.dashboard}>Dashboard</Link>}
           {signedIn ? (
             <div className="w-acct" ref={acctRef}>
               <button type="button" className="w-acct-btn" aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}>
@@ -113,10 +113,11 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
               </button>
               {acct && <div className="w-pop" role="menu"><AccountMenu auth={auth} logoutCustomer={logoutCustomer} logoutStaff={logoutStaff} onNavigate={() => setAcct(false)} /></div>}
             </div>
-          ) : <a className="w-btn pri sm" href={L.signup}>Create Account</a>}
+          ) : <a className="w-btn pri sm" href={L.signup}>Sign Up</a>}
         </div>
         <div className="w-micons">
-          <Link className="w-btn pri sm w-mdash" href={L.dashboard}><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
+          {signedIn ? <Link className="w-btn pri sm w-mdash" href={L.dashboard}><LayoutDashboard size={18} aria-hidden="true" />Dashboard</Link>
+            : <a className="w-btn out sm w-mlogin" href={L.login}>Login</a>}
           {signedIn && (
             <div className="w-acct" ref={acctRef2}>
               <button type="button" className="w-ic" aria-label={`Account: ${name}`} aria-haspopup="menu" aria-expanded={acct} onClick={() => setAcct((a) => !a)}><UserCircle2 size={23} aria-hidden="true" /></button>
@@ -142,15 +143,15 @@ export function SiteHeaderV2({ links, auth, logoutCustomer, logoutStaff }: { lin
             {auth.customer && <Link className="lnk" href="/portal/profile/" tabIndex={open ? 0 : -1} onClick={() => setOpen(false)}><UserCircle2 size={20} aria-hidden="true" />Account</Link>}
             {auth.staff && <Link className="lnk" href={ADMIN_DASHBOARD} tabIndex={open ? 0 : -1} onClick={() => setOpen(false)}><Shield size={20} aria-hidden="true" />Admin Dashboard</Link>}
             {!auth.customer && <a className="lnk" href={L.login} tabIndex={open ? 0 : -1}><LogIn size={20} aria-hidden="true" />Login</a>}
-            {!auth.customer && <a className="lnk" href={L.signup} tabIndex={open ? 0 : -1}><UserPlus size={20} aria-hidden="true" />Create Account</a>}
+            {!auth.customer && <a className="lnk" href={L.signup} tabIndex={open ? 0 : -1}><UserPlus size={20} aria-hidden="true" />Sign Up</a>}
             <a className="lnk" href={L.admin} tabIndex={open ? 0 : -1}><Building2 size={20} aria-hidden="true" />Franchise / Admin Login</a>
           </nav>
           {auth.customer && <form action={logoutCustomer}><button className="w-btn ghost" style={{ width: "100%", marginTop: 16 }} tabIndex={open ? 0 : -1}><LogOut size={18} aria-hidden="true" />Logout</button></form>}
           {!signedIn && (
             <div className="w-btns">
               {known
-                ? <><a className="w-btn pri" href={L.login} tabIndex={open ? 0 : -1}>Login</a><a className="w-btn ghost" href={L.signup} tabIndex={open ? 0 : -1}>Create Account</a></>
-                : <><a className="w-btn pri" href={L.signup} tabIndex={open ? 0 : -1}>Create Account</a><a className="w-btn ghost" href={L.login} tabIndex={open ? 0 : -1}>Login</a></>}
+                ? <><a className="w-btn pri" href={L.login} tabIndex={open ? 0 : -1}>Login</a><a className="w-btn out" href={L.signup} tabIndex={open ? 0 : -1}>Sign Up</a></>
+                : <><a className="w-btn pri" href={L.signup} tabIndex={open ? 0 : -1}>Sign Up</a><a className="w-btn out" href={L.login} tabIndex={open ? 0 : -1}>Login</a></>}
             </div>
           )}
         </div>
@@ -166,7 +167,7 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
       <div className="w-wrap">
         <div className="cols">
           <div>
-            <span className="logo"><BrandLogo height={56} onDark /></span>
+            <span className="logo"><BrandLogo height={44} onDark /></span>
             <p style={{ margin: "0 0 14px", lineHeight: 1.6 }}>{footer.tagline}</p>
             {footer.phone && <a href={`tel:${tel}`}>{footer.phone}</a>}
             {footer.email && <a href={`mailto:${footer.email}`}>{footer.email}</a>}
@@ -179,7 +180,7 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
           <div>
             <b>Your account</b>
             <a href={accountHref(links.customerLogin, "/login/")}>Customer Login</a>
-            <a href={accountHref(links.signUp, "/signup/")}>Create Account</a>
+            <a href={accountHref(links.signUp, "/signup/")}>Sign Up</a>
             <a href={accountHref(links.franchiseLogin, "/admin/login/")}>Franchise / Admin Login</a>
             <a href={accountHref(links.customerLogin, "/login/", CUSTOMER_DASHBOARD)}>Dashboard</a>
           </div>

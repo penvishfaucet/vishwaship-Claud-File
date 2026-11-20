@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Mail, MapPin, Phone, Ticket } from "lucide-react";
+import { Clock, ExternalLink, Mail, MapPin, Phone, Ticket } from "lucide-react";
 import { TeamGrid } from "@/components/site/TeamCards";
 import { mapEmbedUrl, mapOpenUrl } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
@@ -17,12 +17,25 @@ export default async function CustomerCare({ searchParams }: { searchParams: Pro
   const tel = c.footer.phone.replace(/[^\d+]/g, "");
   return (
     <>
-      <section className="w-sec" style={{ paddingTop: 56 }} aria-labelledby="cc-h">
+      <section className="pg-hero" aria-labelledby="cc-h">
         <div className="w-wrap">
           <span className="w-eyebrow">Customer care</span>
-          <h1 id="cc-h" className="w-h2" style={{ fontSize: "clamp(30px,4vw,48px)" }}>{c.care.heading}</h1>
+          <h1 id="cc-h">{c.care.heading}</h1>
           <p className="w-lead">{c.care.intro}</p>
-          <div style={{ marginTop: 32, display: "grid", gap: 22 }}>
+          <ul className="cc-quick" aria-label="Ways to reach us" style={{ listStyle: "none", padding: 0 }}>
+            {c.footer.phone && <li><a className="cc-ch" href={`tel:${tel}`}><span className="ic"><Phone size={22} aria-hidden="true" /></span><span><b>Call us</b><span>{c.footer.phone}</span></span></a></li>}
+            {c.footer.email && <li><a className="cc-ch" href={`mailto:${c.footer.email}`}><span className="ic"><Mail size={22} aria-hidden="true" /></span><span><b>Email us</b><span>{c.footer.email}</span></span></a></li>}
+            <li><Link className="cc-ch" href="/login/?next=%2Fportal%2Fsupport%2Fnew%2F"><span className="ic"><Ticket size={22} aria-hidden="true" /></span><span><b>Raise a ticket</b><span>For existing customers</span><span className="go">Login to raise →</span></span></Link></li>
+            <li><a className="cc-ch" href="#ho-h"><span className="ic">{c.footer.hours ? <Clock size={22} aria-hidden="true" /> : <MapPin size={22} aria-hidden="true" />}</span><span><b>{c.footer.hours ? "Support hours" : "Head office"}</b><span>{c.footer.hours || o.name}</span><span className="go">Head office address ↓</span></span></a></li>
+          </ul>
+        </div>
+      </section>
+
+      <section className="w-sec" aria-labelledby="team-h">
+        <div className="w-wrap">
+          <span className="w-eyebrow">Regional support</span>
+          <h2 id="team-h" className="w-h2">Contact the manager for your region</h2>
+          <div style={{ marginTop: 28, display: "grid", gap: 22 }}>
             <TeamGrid members={c.team.members} />
           </div>
         </div>
@@ -31,7 +44,7 @@ export default async function CustomerCare({ searchParams }: { searchParams: Pro
       <section className="w-sec alt" aria-labelledby="ho-h">
         <div className="w-wrap">
           <span className="w-eyebrow">Visit or write to us</span>
-          <h2 id="ho-h" className="w-h2">{c.care.officeHeading}</h2>
+          <h2 id="ho-h" className="w-h2" style={{ scrollMarginTop: 96 }}>{c.care.officeHeading}</h2>
           <div className="w-office">
             <div className="w-card addr">
               <b style={{ fontSize: 18 }}><MapPin size={18} aria-hidden="true" style={{ verticalAlign: "-3px", color: "var(--o)", marginRight: 6 }} />{o.name}</b>

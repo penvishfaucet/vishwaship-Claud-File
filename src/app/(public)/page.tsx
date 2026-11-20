@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
-import { HeroMedia } from "@/components/site/HeroMedia";
 import { HeroCtas } from "@/components/site/HeroCtas";
 import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
@@ -24,19 +23,28 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const auth = await siteAuth();
   return (
     <>
-      <section className="w-hero4" aria-labelledby="hero-h">
-        <HeroMedia video={h.heroVideoUrl} poster={h.heroPosterUrl} mobile={h.heroMobileUrl} />
-        <div className="w-wrap in">
-          <div className="txt">
-            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span><span className="o">{h.heroLine2}</span></h1>
+      <section className="h5" aria-labelledby="hero-h">
+        <div className="w-wrap h5-in">
+          <div className="h5-txt">
+            <span className="h5-kicker"><i aria-hidden="true" />Parcels &amp; cargo across India</span>
+            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span> <span className="o">{h.heroLine2}</span></h1>
             <p className="w-lead">{h.heroText}</p>
             <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta, track: h.trackCta }} />
             {c.offers.visible && c.offers.showOnHome && h.highlights.length > 0 && (
-              <div className="w-hl">
-                <ul>{h.highlights.map((x, i) => <li key={i}><b>{x.big}</b><span>{x.small}</span></li>)}</ul>
-                {h.highlightNote && <p>{h.highlightNote}</p>}
-              </div>
+              <>
+                <ul className="h5-hl">{h.highlights.map((x, i) => <li key={i}><b>{x.big}</b><span>{x.small}</span></li>)}</ul>
+                {h.highlightNote && <p className="h5-note">{h.highlightNote}</p>}
+              </>
             )}
+          </div>
+          <div className="h5-media">
+            <div className="h5-frame">
+              <picture>
+                {(h.heroMobileUrl || "") && <source media="(max-width: 719px)" srcSet={h.heroMobileUrl} />}
+                <img src={h.heroPosterUrl || "/brand/hero-courier-desktop.webp"} alt="Vishwaship courier associate holding a Vishwaship parcel" fetchPriority="high" decoding="async" />
+              </picture>
+            </div>
+            <div className="h5-badge"><span className="ic"><PackageSearch size={20} aria-hidden="true" /></span><span><b>Door-to-door</b><span>Pickup, delivery and live tracking</span></span></div>
           </div>
         </div>
       </section>
