@@ -292,5 +292,5 @@ html body .wv .w-btn.out:hover{background:var(--n);color:#fff}
 html body .wv .h5 .w-btn.pri{font-size:16.5px}
 html body .wv .h5 .w-slogan .o{color:var(--o)}
 html body .wv .rc-pay button:disabled{background:#f2f4f8!important;border-color:#cdd4e1!important;color:#5b6478!important}
-html body .wv :is(.rc-pin,.rc-unit) input:focus-visible{outline:none}
-html body .wv :is(.rc-pin,.rc-unit):has(input:focus-visible){border-color:var(--n3);box-shadow:0 0 0 3px rgba(22,58,120,.22)}
+html body .wv .rc-pin input:focus-visible,html body .wv .rc-unit input:focus-visible{outline:none}
+html body .wv .rc-pin:has(input:focus-visible),html body .wv .rc-unit:has(input:focus-visible){border-color:var(--n3);box-shadow:0 0 0 3px rgba(22,58,120,.22)}

@@ -1,0 +1,220 @@
+/* Vishwaship public website v4: light, warm theme matching vishwaship.com (off-white page, light-blue hero,
+   deep navy text, bright orange) + entrance/scroll transitions + phone tab bar. Loaded after v2/v3.
+   Selectors start with "html body .wv.v4" so they win over v3 and the app-wide brand layer (brand.css).
+   Button orange #E0550B keeps white text at 4.6:1 (AA). */
+
+html body .wv.v4{
+  --n:#0b1f3a;--n2:#13294b;--n3:#1d3a6b;--o:#f0712c;--o2:#E0550B;--o3:#C2410C;--os:#fff1e8;--ol:#ffd9c4;
+  --ink:#0b1f3a;--mut:#5a6478;--ln:#e6e4dd;--bg:#f4f3ef;--bg2:#fbfaf7;--sky:#eef3f8;--sky2:#e3ebf5;
+  --sh:0 1px 2px rgba(11,31,58,.05),0 8px 24px rgba(11,31,58,.06);--sh2:0 2px 6px rgba(11,31,58,.07),0 22px 48px rgba(11,31,58,.12);
+  background:var(--bg);color:var(--ink);
+}
+
+/* ---------- top strip + header ---------- */
+.v4-top{background:#0b1f3a;color:#fff;font-size:13px}
+.v4-top .in{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:40px}
+.v4-top a{color:#fff;font-weight:700;text-decoration:none;white-space:nowrap}
+.v4-top a:hover{color:#ffd9c4}
+@media (max-width:420px){.v4-top{font-size:11.5px}.v4-top .in{min-height:34px}}
+html body .wv.v4 .w-head{background:var(--bg2);border-bottom-color:var(--ln)}
+html body .wv.v4 .w-nav a{color:var(--n);font-weight:600}
+html body .wv.v4 .w-nav a:hover{background:#efede6}
+html body .wv.v4 .w-nav a[aria-current=page]{color:var(--o2);background:transparent;box-shadow:inset 0 -3px 0 var(--o)}
+html body .wv.v4 .w-mlogin{background:var(--o2)!important;border-color:var(--o2)!important;color:#fff!important}
+html body .wv.v4 .w-burger{background:transparent;color:var(--n);border:1.5px solid var(--ln)}
+html body .wv.v4 .w-burger:hover{border-color:var(--n)}
+
+/* ---------- buttons ---------- */
+html body .wv.v4 .w-btn.pri{background:var(--o2)!important;border-color:var(--o2)!important;box-shadow:0 8px 20px rgba(224,85,11,.25)}
+html body .wv.v4 .w-btn.pri:hover{background:var(--o3)!important;border-color:var(--o3)!important;transform:translateY(-2px)}
+html body .wv.v4 .w-btn.pri:active{transform:translateY(0)}
+html body .wv.v4 .w-btn.navy{background:var(--n)}
+html body .wv.v4 .w-btn.out{color:var(--n);border-color:var(--n)}
+
+/* ---------- hero (light) ---------- */
+html body .wv.v4 .h5{background:var(--sky);color:var(--n)}
+html body .wv.v4 .h5::before{inset:auto auto -30% -12%;width:520px;height:520px;background:radial-gradient(closest-side,rgba(240,113,44,.10),rgba(240,113,44,0))}
+html body .wv.v4 .h5::after{content:"";position:absolute;right:-120px;top:-120px;width:460px;height:460px;border-radius:50%;border:70px solid rgba(29,58,107,.05);z-index:-1}
+html body .wv.v4 .h5-kicker{background:none;border:0;padding:0;color:var(--o2);font-size:12.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+html body .wv.v4 .h5-kicker i{width:7px;height:7px}
+html body .wv.v4 .h5 .w-slogan{color:var(--n);font-size:clamp(40px,5.2vw,74px);letter-spacing:-.04em}
+html body .wv.v4 .h5 .w-slogan span{display:block}
+html body .wv.v4 .h5 .w-slogan .o{color:var(--o);position:relative;display:inline-block}
+/* road + bike under "We Ship It All." (BikeRoad.tsx); the plain line replaces it for reduced motion */
+html body .wv.v4 .h5 .w-slogan{margin-bottom:.45em}
+.v4-road{position:absolute;left:-1%;width:102%;height:auto;bottom:-.66em;overflow:visible;pointer-events:none}
+.v4-road.still{display:none}
+@media (prefers-reduced-motion:reduce){.v4-road.anim{display:none}.v4-road.still{display:block}}
+html body .wv.v4 .h5 .w-lead{color:var(--mut)}
+html body .wv.v4 .h5 .w-btn.sec{background:transparent!important;color:var(--n)!important;border-color:var(--n)!important}
+html body .wv.v4 .h5 .w-btn.sec:hover{background:var(--n)!important;color:#fff!important}
+html body .wv.v4 .h5 .w-btn:focus-visible{outline-color:var(--o2)}
+html body .wv.v4 .h5-login{color:var(--mut)}
+html body .wv.v4 .h5-login a{color:var(--o2)}
+html body .wv.v4 .h5-track{color:var(--n)}
+html body .wv.v4 .h5-track:hover{color:var(--o2)}
+.v4-checks{display:flex;flex-wrap:wrap;gap:8px 20px;list-style:none;margin:20px 0 0;padding:0;font-size:14px;color:#33405c;font-weight:600}
+.v4-checks li{display:inline-flex;align-items:center;gap:7px}
+.v4-checks svg{color:var(--o2)}
+html body .wv.v4 .h5-hl li{background:#fff;border-color:var(--ln);box-shadow:var(--sh)}
+html body .wv.v4 .h5-hl b{color:var(--n)}
+html body .wv.v4 .h5-hl span{color:var(--mut)}
+html body .wv.v4 .h5-note{color:var(--mut)}
+html body .wv.v4 .h5-media{padding:0 12px}
+html body .wv.v4 .h5-frame{aspect-ratio:1/1;max-width:540px;margin-left:auto;border-radius:30px;border:0;background:var(--sky2);box-shadow:0 30px 70px rgba(11,31,58,.18)}
+html body .wv.v4 .h5-frame img{object-position:center 40%}
+.v4-badge{position:absolute;display:flex;align-items:center;gap:10px;background:#fff;color:var(--n);border-radius:14px;padding:10px 16px 10px 10px;box-shadow:0 14px 34px rgba(11,31,58,.16);font-size:14px;white-space:nowrap;z-index:2}
+.v4-badge .ic{width:34px;height:34px;border-radius:10px;background:var(--os);color:var(--o2);display:flex;align-items:center;justify-content:center}
+.v4-badge.a{top:9%;left:-6px;animation:v4-pop .6s .8s cubic-bezier(.2,.9,.3,1.3) both,v4-float 5s 1.6s ease-in-out infinite}
+.v4-badge.b{bottom:15%;right:-2px;animation:v4-pop .6s 1s cubic-bezier(.2,.9,.3,1.3) both,v4-float 5s 2.4s ease-in-out infinite}
+.v4-cap{display:flex;justify-content:space-between;gap:12px;max-width:540px;margin:14px 0 0 auto;font-size:12.5px;color:var(--mut);font-weight:600}
+@media (max-width:1023px){
+  html body .wv.v4 .h5-frame{max-width:none;aspect-ratio:16/11;margin:0}
+  html body .wv.v4 .h5-frame img{object-position:center 30%}
+  .v4-cap{max-width:none;margin-left:0}
+}
+@media (max-width:719px){
+  html body .wv.v4 .h5-media{padding:0}
+  html body .wv.v4 .h5-frame{aspect-ratio:1/1.02;border-radius:24px}
+  html body .wv.v4 .h5-frame img{object-position:center 30%}
+  .v4-badge{font-size:12.5px;padding:8px 12px 8px 8px}
+  .v4-badge .ic{width:28px;height:28px}
+  .v4-badge.a{top:14px;left:10px}
+  .v4-badge.b{bottom:14px;right:10px}
+  .v4-cap{display:none}
+  html body .wv.v4 .h5 .w-btn.sec{border-width:2px}
+  .v4-checks{font-size:13px;gap:6px 14px}
+}
+
+/* hero entrance: text from the left, photo from the right, badges pop in */
+html body .wv.v4 .h5-txt>*{animation:v4-in-l .7s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .h5-txt>*:nth-child(2){animation-delay:.08s}
+html body .wv.v4 .h5-txt>*:nth-child(3){animation-delay:.16s}
+html body .wv.v4 .h5-txt>*:nth-child(4){animation-delay:.24s}
+html body .wv.v4 .h5-txt>*:nth-child(5){animation-delay:.32s}
+html body .wv.v4 .h5-txt>*:nth-child(6){animation-delay:.4s}
+html body .wv.v4 .h5-txt>*:nth-child(n+7){animation-delay:.48s}
+html body .wv.v4 .h5-frame{animation:v4-in-r .9s .15s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .h5-frame img{animation:v4-zoom 1.6s .15s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .v4-cap{animation:v4-in-up .7s .7s both}
+@keyframes v4-in-l{from{opacity:0;transform:translateX(-36px)}to{opacity:1;transform:none}}
+@keyframes v4-in-r{from{opacity:0;transform:translateX(48px)}to{opacity:1;transform:none}}
+@keyframes v4-in-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes v4-zoom{from{transform:scale(1.12)}to{transform:scale(1)}}
+@keyframes v4-pop{from{opacity:0;transform:scale(.6) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes v4-float{0%,100%{translate:0 0}50%{translate:0 -8px}}
+@keyframes v4-draw{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+/* ---------- scroll reveal (classes added by <Reveal/>) ---------- */
+html.rv-on .wv .rv{opacity:0;transition:opacity .7s ease,transform .75s cubic-bezier(.2,.7,.2,1);transition-delay:var(--rv-d,0ms)}
+html.rv-on .wv .rv.rv-up{transform:translateY(30px)}
+html.rv-on .wv .rv.rv-l{transform:translateX(-48px)}
+html.rv-on .wv .rv.rv-r{transform:translateX(48px)}
+html.rv-on .wv .rv.in{opacity:1;transform:none}
+@media (max-width:719px){html.rv-on .wv .rv.rv-l{transform:translateX(-28px)}html.rv-on .wv .rv.rv-r{transform:translateX(28px)}}
+
+/* ---------- sections ---------- */
+html body .wv.v4 .w-sec{background:transparent}
+html body .wv.v4 .w-sec.alt{background:var(--bg2)}
+html body .wv.v4 .w-strip{background:var(--bg2);border-bottom:1px solid var(--ln)}
+html body .wv.v4 .w-eyebrow{color:var(--o2);font-weight:800}
+html body .wv.v4 .w-h2{color:var(--n);font-weight:800;letter-spacing:-.03em;font-size:clamp(28px,3.4vw,44px)}
+html body .wv.v4 .w-card{border-color:var(--ln);box-shadow:var(--sh)}
+html body .wv.v4 .w-svc{background:#f1f5fb;border:1px solid #e1e8f2;box-shadow:none;transition:transform .25s,box-shadow .25s}
+html body .wv.v4 .w-svc.navy{background:#fff4ec;border-color:#fde1cf}
+html body .wv.v4 .w-svc.navy,html body .wv.v4 .w-svc.navy h2,html body .wv.v4 .w-svc.navy h3,html body .wv.v4 .w-svc.navy p,html body .wv.v4 .w-svc.navy li,html body .wv.v4 .w-svc.navy span,html body .wv.v4 .w-svc.navy small,html body .wv.v4 .w-svc.navy b,html body .wv.v4 .w-svc.navy a{color:var(--n)!important}
+html body .wv.v4 .w-svc p,html body .wv.v4 .w-svc.navy p{color:var(--mut)!important}
+html body .wv.v4 .w-svc .ic,html body .wv.v4 .w-svc.navy .ic{background:#fff;color:var(--o2);box-shadow:var(--sh)}
+html body .wv.v4 .w-svc .tag{background:#fff;color:var(--n)}
+html body .wv.v4 .w-svc .more{color:var(--o2)!important;font-weight:700}
+html body .wv.v4 .w-svc.in:hover{transform:translateY(-4px);box-shadow:var(--sh2)}
+html body .wv.v4 .w-step{background:#fff;border:1px solid var(--ln);border-radius:18px;padding:22px;box-shadow:var(--sh)}
+html body .wv.v4 .w-step .num{background:var(--os);color:var(--o2)}
+html body .wv.v4 .w-road::before{background:repeating-linear-gradient(90deg,#d6d2c6 0 18px,transparent 18px 30px)}
+/* the old navy "Features" band becomes a light-blue band with white cards */
+html body .wv.v4 .w-sec.dark{background:var(--sky)}
+html body .wv.v4 .w-sec.dark,html body .wv.v4 .w-sec.dark h1,html body .wv.v4 .w-sec.dark h2,html body .wv.v4 .w-sec.dark h3,html body .wv.v4 .w-sec.dark p,html body .wv.v4 .w-sec.dark li,html body .wv.v4 .w-sec.dark span,html body .wv.v4 .w-sec.dark small,html body .wv.v4 .w-sec.dark b{color:var(--n)}
+html body .wv.v4 .w-sec.dark .w-feat{background:#fff;border:1px solid #dde6f1;border-radius:18px;padding:22px;box-shadow:var(--sh)}
+html body .wv.v4 .w-sec.dark .w-feat p{color:var(--mut)}
+html body .wv.v4 .w-sec.dark .w-feat .ic{background:var(--os);color:var(--o2)}
+/* closing CTA: navy box with a soft ring, like vishwaship.com */
+html body .wv.v4 .w-cta,html body .wv.v4 .w-quote{position:relative;overflow:hidden;background:var(--n);border-radius:26px;isolation:isolate}
+html body .wv.v4 .w-cta::after,html body .wv.v4 .w-quote::after{content:"";position:absolute;right:-90px;top:-110px;width:380px;height:380px;border-radius:50%;border:60px solid rgba(255,255,255,.05);z-index:-1}
+html body .wv.v4 .w-cta h2,html body .wv.v4 .w-cta p{color:#fff}
+html body .wv.v4 .w-cta .w-btn.sec,html body .wv.v4 .w-quote .w-btn.sec{background:transparent!important;border-color:rgba(255,255,255,.8)!important;color:#fff!important}
+
+/* page intro bands */
+html body .wv.v4 .pg-hero{background:var(--sky);border-bottom:0}
+html body .wv.v4 .pg-hero h1{color:var(--n)}
+html body .wv.v4 .pg-hero>.w-wrap>*{animation:v4-in-up .6s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .pg-hero>.w-wrap>*:nth-child(2){animation-delay:.07s}
+html body .wv.v4 .pg-hero>.w-wrap>*:nth-child(3){animation-delay:.14s}
+html body .wv.v4 .pg-hero>.w-wrap>*:nth-child(4){animation-delay:.21s}
+html body .wv.v4 .cc-quick .cc-ch{animation:v4-in-up .6s both}
+html body .wv.v4 .cc-quick li:nth-child(2) .cc-ch{animation-delay:.08s}
+html body .wv.v4 .cc-quick li:nth-child(3) .cc-ch{animation-delay:.16s}
+html body .wv.v4 .cc-quick li:nth-child(4) .cc-ch{animation-delay:.24s}
+html body .wv.v4 .cc-ch{border-color:var(--ln)}
+/* About: light hero with the photo faded on the right */
+html body .wv.v4 .ab-hero{background:var(--sky);color:var(--n)}
+html body .wv.v4 .ab-hero img{left:auto;width:min(46%,620px);object-fit:cover;opacity:1;-webkit-mask-image:linear-gradient(90deg,transparent 0%,#000 40%);mask-image:linear-gradient(90deg,transparent 0%,#000 40%);animation:v4-in-r .9s both}
+html body .wv.v4 .ab-hero::after{display:none}
+html body .wv.v4 .ab-hero h1{color:var(--n)}
+html body .wv.v4 .ab-hero .w-lead{color:var(--mut);max-width:44ch}
+html body .wv.v4 .ab-hero .in>*{animation:v4-in-l .7s both}
+html body .wv.v4 .ab-hero .in>*:nth-child(2){animation-delay:.08s}
+html body .wv.v4 .ab-hero .in>*:nth-child(3){animation-delay:.16s}
+@media (max-width:760px){html body .wv.v4 .ab-hero img{width:100%;opacity:.14;-webkit-mask-image:none;mask-image:none;animation:none}}
+
+/* calculator results slide in one after another */
+html body .wv.v4 .rc-panel{border-color:var(--ln)}
+html body .wv.v4 .rc-offer{animation:v4-in-r .5s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .rc-offer:nth-child(2){animation-delay:.06s}
+html body .wv.v4 .rc-offer:nth-child(3){animation-delay:.12s}
+html body .wv.v4 .rc-offer:nth-child(4){animation-delay:.18s}
+html body .wv.v4 .rc-offer:nth-child(n+5){animation-delay:.24s}
+html body .wv.v4 .rc-banner,html body .wv.v4 .rc-unavail{animation:v4-in-up .45s both}
+
+/* ---------- footer (light) ---------- */
+html body .wv.v4 .w-foot{background:#f1f4f8;color:var(--mut);border-top:1px solid #e3e8ef}
+html body .wv.v4 .w-foot p,html body .wv.v4 .w-foot span,html body .wv.v4 .w-foot small{color:var(--mut)}
+html body .wv.v4 .w-foot b{color:var(--n)}
+html body .wv.v4 .w-foot a{color:#33405c}
+html body .wv.v4 .w-foot a:hover,html body .wv.v4 .w-foot a:focus-visible{color:var(--o2)}
+html body .wv.v4 .w-foot .bottom{border-top-color:#dfe5ee}
+
+/* ---------- mobile drawer: links slide in ---------- */
+html body .wv.v4 .w-drawer-wrap{background:rgba(11,31,58,.45)}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk{animation:v4-in-r .35s cubic-bezier(.2,.7,.2,1) both}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk:nth-child(2){animation-delay:.04s}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk:nth-child(3){animation-delay:.08s}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk:nth-child(4){animation-delay:.12s}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk:nth-child(5){animation-delay:.16s}
+html body .wv.v4 .w-drawer-wrap.open .w-drawer a.lnk:nth-child(n+6){animation-delay:.2s}
+
+/* ---------- phone tab bar ---------- */
+.v4-tabbar{display:none}
+@media (max-width:719px){
+  .v4-tabbar{position:fixed;left:0;right:0;bottom:0;z-index:90;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:rgba(255,255,255,.97);border-top:1px solid var(--ln);box-shadow:0 -8px 24px rgba(11,31,58,.08);padding:6px 4px calc(6px + env(safe-area-inset-bottom));animation:v4-in-up .5s .3s both}
+  .v4-tabbar a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;border-radius:12px;font-size:11px;font-weight:700;color:#5a6478;text-decoration:none;transition:color .15s,background .15s}
+  .v4-tabbar a svg{transition:transform .2s}
+  .v4-tabbar a.on{color:var(--o2);background:var(--os)}
+  .v4-tabbar a.on svg{transform:translateY(-1px) scale(1.08)}
+  .v4-tabbar a.acct{color:var(--n)}
+  .v4-tabbar a:active{background:#f1efe8}
+  html body .wv.v4{padding-bottom:calc(68px + env(safe-area-inset-bottom))}
+}
+
+/* ---------- reduced motion: show everything at once ---------- */
+@media (prefers-reduced-motion:reduce){
+  html body .wv.v4 *,html body .wv.v4 *::before,html body .wv.v4 *::after{animation:none!important}
+  html.rv-on .wv .rv{opacity:1!important;transform:none!important;transition:none!important}
+}
+html body .wv.v4 .w-svc.navy a.more,html body .wv.v4 .w-svc a.more{color:var(--o2)!important}
+
+/* green "online" light on the photo badges */
+.v4-badge .ic{position:relative}
+.v4-badge .live{position:absolute;top:-4px;right:-4px;width:11px;height:11px;border-radius:50%;background:#22c55e;border:2px solid #fff;box-shadow:0 0 6px rgba(34,197,94,.8)}
+.v4-badge .live::after{content:"";position:absolute;inset:-2px;border-radius:50%;background:#22c55e;animation:v4-live 1.6s ease-out infinite;z-index:-1}
+.v4-badge.b .live::after{animation-delay:.8s}
+@keyframes v4-live{0%{transform:scale(1);opacity:.7}100%{transform:scale(2.8);opacity:0}}

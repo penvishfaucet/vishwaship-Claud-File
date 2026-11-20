@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Bell, Boxes, Check, IndianRupee, MapPin, Package, PackageSearch, Scale, Truck, Warehouse } from "lucide-react";
 import { HeroCtas } from "@/components/site/HeroCtas";
+import { BikeRoad } from "@/components/site/BikeRoad";
 import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
 import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
@@ -21,15 +22,19 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const regions = c.team.members.filter((m) => m.visible && m.name.trim());
   const signup = accountHref(c.links.signUp, "/signup/");
   const auth = await siteAuth();
+  // The courier-with-truck photo; a custom image uploaded in Admin → Website Content still wins.
+  const oldDefaults = ["", "/brand/hero-courier-desktop.webp", "/brand/hero-desktop.webp"];
+  const heroImg = oldDefaults.includes(h.heroPosterUrl ?? "") ? "/brand/hero.jpg" : h.heroPosterUrl;
   return (
     <>
       <section className="h5" aria-labelledby="hero-h">
         <div className="w-wrap h5-in">
           <div className="h5-txt">
-            <span className="h5-kicker"><i aria-hidden="true" />Parcels &amp; cargo across India</span>
-            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span> <span className="o">{h.heroLine2}</span></h1>
+            <span className="h5-kicker"><i aria-hidden="true" />Your Pan-India shipping partner</span>
+            <h1 id="hero-h" className="w-slogan"><span>{h.heroLine1}</span> <span className="o">{h.heroLine2}<BikeRoad /></span></h1>
             <p className="w-lead">{h.heroText}</p>
             <HeroCtas links={c.links} auth={auth} text={{ primary: h.primaryCta, signup: h.secondaryCta, login: h.loginCta, dashboard: h.dashboardCta, track: h.trackCta }} />
+            <ul className="v4-checks"><li><Check size={16} aria-hidden="true" />Doorstep pickup</li><li><Check size={16} aria-hidden="true" />Pan-India delivery</li><li><Check size={16} aria-hidden="true" />Easy online booking</li></ul>
             {c.offers.visible && c.offers.showOnHome && h.highlights.length > 0 && (
               <>
                 <ul className="h5-hl">{h.highlights.map((x, i) => <li key={i}><b>{x.big}</b><span>{x.small}</span></li>)}</ul>
@@ -39,12 +44,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           </div>
           <div className="h5-media">
             <div className="h5-frame">
-              <picture>
-                {(h.heroMobileUrl || "") && <source media="(max-width: 719px)" srcSet={h.heroMobileUrl} />}
-                <img src={h.heroPosterUrl || "/brand/hero-courier-desktop.webp"} alt="Vishwaship courier associate holding a Vishwaship parcel" fetchPriority="high" decoding="async" />
-              </picture>
+              <img src={heroImg} alt="Vishwaship courier holding parcels in front of a delivery truck" width={1100} height={1100} fetchPriority="high" decoding="async" />
             </div>
-            <div className="h5-badge"><span className="ic"><PackageSearch size={20} aria-hidden="true" /></span><span><b>Door-to-door</b><span>Pickup, delivery and live tracking</span></span></div>
+            <div className="v4-badge a" aria-hidden="true"><span className="ic"><Truck size={18} /><i className="live" /></span><b>Picked up. On its way.</b></div>
+            <div className="v4-badge b" aria-hidden="true"><span className="ic"><Check size={18} /><i className="live" /></span><b>Shipping made simple.</b></div>
+            <p className="v4-cap" aria-hidden="true"><span>Connecting India, doorstep to doorstep</span><span>Handled with care. Delivered with confidence.</span></p>
           </div>
         </div>
       </section>
