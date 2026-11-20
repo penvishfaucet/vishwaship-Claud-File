@@ -95,8 +95,34 @@ export function IcoRto(p: P) {
   );
 }
 
+/** In transit: a navy delivery truck carrying a box, with speed lines. */
+export function IcoInTransit(p: P) {
+  return (
+    <Svg {...p} label="In transit">
+      <Box t="translate(14 4) scale(0.8)" />
+      <path d="M8 30 h30 v16 H8 Z" fill="#3B8CF2" {...S} />
+      <path d="M38 34 h9 l7 7 v5 H38 Z" fill="#051C46" {...S} />
+      <path d="M41 36.5 h5 l4 4 h-9 Z" fill="#cfe3ff" />
+      <circle cx="17" cy="48" r="5" fill="#051C46" {...S} /><circle cx="17" cy="48" r="2" fill="#fff" />
+      <circle cx="46" cy="48" r="5" fill="#051C46" {...S} /><circle cx="46" cy="48" r="2" fill="#fff" />
+      <path d="M1 34 h5 M3 39 h4 M1 44 h4" stroke="#3B8CF2" strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Delivered: an open-handed box with a green tick badge. */
+export function IcoDelivered(p: P) {
+  return (
+    <Svg {...p} label="Delivered">
+      <Box t="translate(8 6) scale(1.2)" />
+      <circle cx="46" cy="46" r="12" fill="#16A34A" {...S} />
+      <path d="M40.5 46.2 L44.6 50.2 L51.8 42.6" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 export const DASH_ICONS = {
-  new: IcoNewOrders, assigned: IcoCourierAssigned, scheduled: IcoScheduled, all: IcoAllOrders, returns: IcoReturns, rto: IcoRto,
+  new: IcoNewOrders, assigned: IcoCourierAssigned, scheduled: IcoScheduled, in_transit: IcoInTransit, delivered: IcoDelivered, all: IcoAllOrders, returns: IcoReturns, rto: IcoRto,
 } as const;
 
 /** Wallet Balance card: filled orange wallet with a white clasp and card slot (Vishwaship artwork). */

@@ -26,6 +26,8 @@ const CARDS: Array<{ key: BucketKey; icon: typeof Boxes; tone: string }> = [
   { key: "new", icon: PackagePlus, tone: "blue" },
   { key: "assigned", icon: PackageOpen, tone: "orange" },
   { key: "scheduled", icon: CalendarCheck, tone: "teal" },
+  { key: "in_transit", icon: Truck, tone: "blue" },
+  { key: "delivered", icon: PackageOpen, tone: "teal" },
   { key: "all", icon: Boxes, tone: "blue" },
   { key: "returns", icon: Undo2, tone: "red" },
   { key: "rto", icon: RotateCcw, tone: "yellow" },

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { and, count, desc, eq, gte, inArray, lt, sum } from "drizzle-orm";
+import { CustomerOverview } from "@/components/admin/CustomerOverview";
 import { formatINR } from "@/lib/money";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 
-export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ days?: string; denied?: string }> }) {
+export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ days?: string; denied?: string; from?: string; to?: string; customer?: string; q?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("shipments.read");
   const days = [1, 7, 30, 90].includes(Number(sp.days)) ? Number(sp.days) : 30;
@@ -32,8 +33,10 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
   return (
     <>
       {sp.denied && <p className="err mb12" role="alert">Your role doesn’t have access to that section ({sp.denied}).</p>}
+      <div className="page-h"><h1>Dashboard</h1></div>
+      <CustomerOverview sp={sp} contacts={can(s.role, "customers.read")} />
       <div className="page-h">
-        <h1>Dashboard</h1>
+        <h2 className="b" style={{ fontSize: 18, margin: 0 }}>Operations</h2>
         <div className="pills">{[1, 7, 30, 90].map((d) => <Link key={d} className={d === days ? "pill on" : "pill"} href={`/admin/?days=${d}`}>{d === 1 ? "Today" : `${d} days`}</Link>)}</div>
       </div>
       <div className="stats mb16">

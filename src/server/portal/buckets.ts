@@ -54,12 +54,28 @@ export function dashRange(sp: { from?: string; to?: string }) {
 }
 export const rangeCondition = (r: { from: Date; to: Date }) => and(gte(O.createdAt, r.from), lte(O.createdAt, r.to));
 
-export async function bucketCounts(orgId: string, r: { from: Date; to: Date }, keys: BucketKey[]) {
+/** Card counts for one customer, or for every customer when orgId is null (Admin dashboard). */
+export async function bucketCounts(orgId: string | null, r: { from: Date; to: Date }, keys: BucketKey[]) {
   const db = await getDb();
   const out = {} as Record<BucketKey, number>;
   for (const k of keys) {
-    const [row] = await db.select({ n: count() }).from(O).leftJoin(S, eq(S.orderId, O.id)).where(and(eq(O.orgId, orgId), rangeCondition(r), bucketCondition(k)));
+    const [row] = await db.select({ n: count() }).from(O).leftJoin(S, eq(S.orderId, O.id)).where(and(orgId ? eq(O.orgId, orgId) : undefined, rangeCondition(r), bucketCondition(k)));
     out[k] = Number(row?.n ?? 0);
+  }
+  return out;
+}
+
+/** The same counts split by customer (Admin → customer-wise table): orgId → bucket → count. */
+export async function bucketCountsByOrg(r: { from: Date; to: Date }, keys: BucketKey[]) {
+  const db = await getDb();
+  const out = new Map<string, Partial<Record<BucketKey, number>>>();
+  for (const k of keys) {
+    const rows = await db.select({ orgId: O.orgId, n: count() }).from(O).leftJoin(S, eq(S.orderId, O.id)).where(and(rangeCondition(r), bucketCondition(k))).groupBy(O.orgId);
+    for (const row of rows) {
+      const m = out.get(row.orgId) ?? {};
+      m[k] = Number(row.n);
+      out.set(row.orgId, m);
+    }
   }
   return out;
 }
