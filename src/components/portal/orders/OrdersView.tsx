@@ -205,7 +205,7 @@ export function OrdersView(p: Props) {
         {selected.size > 0 && (
           <div className="ov-bulk" role="region" aria-label="Bulk actions" style={{ margin: "0 12px 12px" }}>
             <b>{selected.size} selected</b>
-            <LabelMenu label={`Download labels (${selLabelIds.length})`} formats={PRINT_FORMATS.map((x) => ({ key: x.key, name: x.name, ok: true }))} disabled={!selLabelIds.length || busy === "labels"}
+            <LabelMenu label={`Download labels (${selLabelIds.length})`} formats={LABEL_CHOICES.flatMap((g) => g.items.map((i) => ({ key: i.key, name: g.group === "Thermal printer" ? `Thermal ${i.name}` : i.name, ok: true })))} disabled={!selLabelIds.length || busy === "labels"}
               onPick={(fmt) => downloadLabels(selLabelIds, fmt)} dark onOpen={(o) => { menuOpen.current = o; }} />
             {f.tab === "archive"
               ? <button type="button" className="ov-btn ghost sm" onClick={() => archive([...selected], false)}><ArchiveRestore size={14} aria-hidden /> Restore</button>
@@ -751,12 +751,57 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
       <footer className="oc-foot">
         <div className="small">Order Date: {istDate(r.createdAt)} | {istTime(r.createdAt)}<br />Channel: <span className="oc-chan">{SOURCE[r.source] ?? r.source}</span></div>
         {s?.awb && fmt
-          ? <button type="button" className="oc-btn" onClick={() => onLabel(fmt.key)} disabled={busy === "labels"}>Label</button>
+          ? <LabelSplit formats={s.labelFormats} main={fmt.key} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
           : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
           : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
       </footer>
       {busy === `cancel:${r.id}` && <div className="tiny muted" role="status">Cancelling…</div>}
     </article>
+  );
+}
+
+/** Sizes offered on the Label button: one A4 print (a shipment's labels on one sheet, up to 4) and the thermal rolls. */
+const LABEL_CHOICES: Array<{ group: string; items: Array<{ key: PrintFormat; name: string }> }> = [
+  { group: "A4 print", items: [{ key: "a4_fit", name: "A4 print (up to 4 labels per sheet)" }] },
+  { group: "Thermal printer", items: [
+    { key: "thermal_4x6", name: "4 × 6 in" }, { key: "thermal_3x4", name: "3 × 4 in" }, { key: "thermal_4x4", name: "4 × 4 in" }, { key: "thermal_38x100", name: "38 × 100 mm" },
+  ] },
+  { group: "Courier label", items: [{ key: "original", name: "Courier's original label" }] },
+];
+const LABEL_KEYS = LABEL_CHOICES.flatMap((g) => g.items.map((i) => i.key));
+
+/** Orange "Label" button: the main part downloads the default (A4 print); the arrow opens the sizes. */
+function LabelSplit({ formats, main, onLabel, busy, cartons, onMenu }: { formats: Array<{ key: PrintFormat; name: string; ok: boolean; reason?: string }>; main: PrintFormat; onLabel: (f: PrintFormat) => void; busy: boolean; cartons: number; onMenu: (o: boolean) => void }) {
+  const m = useFixedMenu(onMenu);
+  const ok = (k: PrintFormat) => formats.find((x) => x.key === k);
+  // owner rule: the Label button always prints the A4 sheet; other sizes are in the arrow menu
+  void main;
+  const first = LABEL_KEYS.find((k) => ok(k)?.ok) ?? "a4_fit";
+  return (
+    <div ref={m.ref} className="oc-split">
+      <button type="button" className="oc-btn main" onClick={() => onLabel(first)} disabled={busy} title={PRINT_FORMATS.find((x) => x.key === first)?.name}>Label</button>
+      <button ref={m.btn} type="button" className="oc-btn caret" aria-label="Choose label size" aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle} disabled={busy}><ChevronDown size={16} aria-hidden /></button>
+      {m.pos && (
+        <div className="ov-menu" role="menu" style={m.pos}>
+          {cartons > 1 && <span className="hd">{cartons} cartons</span>}
+          {LABEL_CHOICES.map((g, gi) => {
+            const items = g.items.filter((i) => ok(i.key));
+            if (!items.length) return null;
+            return (
+              <div key={g.group} role="group" aria-label={g.group}>
+                {gi > 0 && <div className="sep" />}
+                <span className="hd">{g.group}</span>
+                {items.map((i) => { const f = ok(i.key)!; return (
+                  <button key={i.key} role="menuitem" type="button" disabled={!f.ok} onClick={() => { m.close(); onLabel(i.key); }}>
+                    <Download size={14} aria-hidden /><span>{i.name}{i.key === first && <span className="why">Default</span>}{f.reason && <span className="why">{f.reason}</span>}</span>
+                  </button>
+                ); })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -770,36 +815,20 @@ function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: 
   const s = r.shipment;
   const canCancel = s ? s.cancellable : r.cancellableOrder;
   const editable = !s && ["draft", "ready", "booking_failed"].includes(r.orderStatus);
-  const cartons = Math.max(r.boxes, s?.pieces ?? 0);
-  const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
   const go = (fn: () => void) => () => { m.close(); fn(); };
   return (
     <div ref={m.ref} className="oc-more">
       <button ref={m.btn} type="button" className="oc-dots" aria-label={`Actions for ${r.orderNumber}`} aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle}><MoreHorizontal size={22} aria-hidden /></button>
       {m.pos && (
         <div className="ov-menu" role="menu" style={m.pos}>
-          {s?.awb && <>
-            <span className="hd">Download label{cartons > 1 ? ` · ${cartons} cartons` : ""}</span>
-            {s.labelFormats.map((x) => <button key={x.key} role="menuitem" type="button" disabled={!x.ok} onClick={go(() => onLabel(x.key))}><Download size={14} aria-hidden /><span>{x.name}{x.reason && <span className="why">{x.reason}</span>}</span></button>)}
-            <div className="sep" />
-          </>}
-          {s && <>
-            <span className="hd">Invoices</span>
-            <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener" onClick={() => m.close()}><FileText size={14} aria-hidden /> Download invoice</a>
-            <Link role="menuitem" href={`/portal/billing/shipment/${s.id}/`} onClick={() => m.close()}><Receipt size={14} aria-hidden /> Vishwaship GST invoice</Link>
-            <div className="sep" />
-          </>}
-          {s?.awb && <button role="menuitem" type="button" onClick={go(() => open({ kind: "track", shipmentId: s.id }))}><Truck size={14} aria-hidden /> Track shipment</button>}
           {editable
             ? <Link role="menuitem" href={`/portal/orders/new/?draft=${r.id}`}><Pencil size={14} aria-hidden /> Edit order</Link>
             : <button role="menuitem" type="button" disabled><Pencil size={14} aria-hidden /><span>Edit order<span className="why">Not possible after the courier is assigned</span></span></button>}
-          <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone / duplicate order</button>
-          <Link role="menuitem" href={`/portal/orders/${r.id}/`}><Eye size={14} aria-hidden /> View details</Link>
+          <button role="menuitem" type="button" onClick={go(onClone)}><CopyPlus size={14} aria-hidden /> Clone order</button>
           {s?.awb && s.status !== "cancelled" && <button role="menuitem" type="button" onClick={go(() => { void openManifest({ shipmentId: s.id }).then((r) => { if (!r.ok) alertBox(r.message); }); })}><ClipboardList size={14} aria-hidden /> Download manifest</button>}
-          <Link role="menuitem" href={ticket}><LifeBuoy size={14} aria-hidden /> Raise ticket</Link>
-          {r.archived
-            ? <button role="menuitem" type="button" onClick={go(() => onArchive(false))}><ArchiveRestore size={14} aria-hidden /> Restore from archive</button>
-            : <button role="menuitem" type="button" onClick={go(() => onArchive(true))}><Archive size={14} aria-hidden /> Move to archive</button>}
+          {s && <a role="menuitem" href={`/api/portal/shipments/${s.id}/invoice`} target="_blank" rel="noopener" onClick={() => m.close()}><FileText size={14} aria-hidden /> Download invoice</a>}
+          {s && <Link role="menuitem" href={`/portal/billing/shipment/${s.id}/`} onClick={() => m.close()}><Receipt size={14} aria-hidden /> Vishwaship GST invoice</Link>}
+          <Link role="menuitem" href={`/portal/orders/${r.id}/`}><Eye size={14} aria-hidden /> View details</Link>
           {canCancel && <><div className="sep" /><button role="menuitem" type="button" className="danger" onClick={go(onCancel)}><XCircle size={14} aria-hidden /> {s ? "Cancel shipment" : "Cancel order"}</button></>}
         </div>
       )}
