@@ -12,7 +12,9 @@ import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
 import { orgSetting } from "@/server/couriers";
 import { paymentLabel } from "@/lib/payment";
-import { type InvoiceBlock, cutLine, drawInvoice, fitGrid, gridBoxes, LOWER_HALF } from "./sheet";
+import { B2B_HANDOVER, type InvoiceBlock, cutLine, drawInvoice, gridBoxes, LOWER_HALF } from "./sheet";
+import { drawTableLabel, tableFits } from "./table-label";
+export { B2B_HANDOVER };
 
 const PT = 72 / 25.4;
 /** Narrowest printable bar: 0.19 mm ≈ 1.5 dots at 203 dpi. */
@@ -38,15 +40,11 @@ export interface BrandedLabel {
   orderNumber: string; invoiceNumber: string | null; invoicePaise: number; products: string; weightKg: number;
   /** B2B only: the one shipment document (stapled with the invoice, handed to the pickup person) instead of a carton label. */
   kind?: "document"; cartonIds?: string[]; ewayBill?: string | null;
+  /** Booking date (as printed) and, for multi-carton B2B, the master carton waybill (carton 1). */
+  date?: string; masterId?: string | null;
 }
 
-/** How B2B paperwork is used: one document stapled with the invoice for the pickup person, one label on each carton. */
-export const B2B_HANDOVER = {
-  document: "Staple this document with the invoice and hand both to the pickup person. Do not paste it on a carton.",
-  label: (carton: number, cartons: number) => `Paste this label on carton ${carton} of ${cartons}. The shipment document goes with the invoice to the pickup person.`,
-  labelShort: (carton: number, cartons: number) => `Paste on carton ${carton} of ${cartons}`,
-  notice: "B2B shipment: staple the shipment document with the invoice and hand both to the pickup person; paste one label on each carton.",
-};
+
 
 /** Product names (with quantity); long lists end with "+N more" so the label never overflows on them. */
 function productLine(products: Product[]) {
@@ -138,6 +136,8 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           footer: look.footer, signature: look.signatureText, showHsn: look.showHsn !== false,
         });
       }
+      const bookedOn = s.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" });
+      let docLabel: BrandedLabel | null = null;
       if (isB2B) {
         notices.add(B2B_HANDOVER.notice);
         const doc: BrandedLabel = {
@@ -149,8 +149,9 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
           kind: "document", cartonIds: pieceIds.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
+          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
         };
-        branded.push(doc); brandedOf.set(doc, s.id);
+        docLabel = doc;
       }
       for (let i = 0; i < cartons; i++) {
         const l: BrandedLabel = {
@@ -163,9 +164,12 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
+          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
         };
         branded.push(l); brandedOf.set(l, s.id);
       }
+      // as on the courier's sheet: the carton labels first, then the shipment document
+      if (docLabel) { branded.push(docLabel); brandedOf.set(docLabel, s.id); }
       continue;
     }
 
@@ -231,11 +235,10 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           rest = rest.filter((l) => !top.includes(l));
         }
         while (rest.length) {
-          const chunk = rest.slice(0, 6);
-          const [cols, rws] = fitGrid(chunk.length);
+          const chunk = rest.slice(0, 4);
           pageNo++;
-          gridBoxes(cols, rws, 0, chunk.length === 1 ? 148.5 : 297).forEach((box, k) => { if (chunk[k]) plan.push({ l: chunk[k], page: pageNo, box }); });
-          rest = rest.slice(6);
+          gridBoxes(2, 2, 0, 297).forEach((box, k) => { if (chunk[k]) plan.push({ l: chunk[k], page: pageNo, box }); });
+          rest = rest.slice(4);
         }
       }
     } else {
@@ -365,6 +368,7 @@ type Box = { x: number; y: number; w: number; h: number };
  * text or a readable barcode does not fit.
  */
 export function drawBranded(page: PDFPage, f: { r: PDFFont; b: PDFFont }, logos: { vs: PDFImage | null; carrier: PDFImage | null }, d: BrandedLabel, box: Box): string | null {
+  if (tableFits(box)) return drawTableLabel(page, f, logos, { ...d, date: d.date ?? "", masterId: d.masterId ?? null }, box);
   const wMm = box.w / PT, hMm = box.h / PT;
   // two columns when the label is wide or short (narrow rolls turned landscape, 4 × 4 in, A4 2-up)
   const landscape = wMm > hMm * 1.25 || (wMm >= 95 && hMm < 125);

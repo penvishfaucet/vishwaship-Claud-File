@@ -103,36 +103,39 @@ describe("Vishwaship B2B label", { timeout: 20_000 }, () => {
     const sid = await ship({ pieces: ["22009988776601"] });
     const r = await renderLabels(ORG, [sid], "thermal_4x6");
     expect(r.skipped).toEqual([]);
-    const [docPage, p] = await pdfPages(r.pdf!);
+    const [p, docPage] = await pdfPages(r.pdf!);
     // B2B: the shipment document comes first (stapled with the invoice), then one label per carton
     expect(docPage.text).toContain("SHIPMENT DOCUMENT");
-    expect(docPage.text).toContain("Staple this document with the invoice");
-    expect(docPage.text).toContain("22009988776601");
-    expect(p.text).toContain("Paste this label on carton 1 of 1");
+    expect(docPage.text).toMatch(/Staple this\s+document\s+with\s+the\s+invoice/);
+    expect(docPage.text).toContain("MPS: Documents");
+    expect(p.text).toContain("Paste on carton 1 of 1");
     expect(r.notices.join(" ")).toContain("staple the shipment document with the invoice");
     expect([p.w, p.h].map((x) => +x.toFixed(2))).toEqual([288, 432]);
-    for (const t of ["DELIVER TO", "Shree Balaji Traders Pvt Ltd", "45 Ring Road, Lajpat Nagar", "PIN 110024", "SHIP FROM / PICKUP", "Penvish Bath Fittings LLP", "05ABCPZ9876K1Z2", "Plot 7, Sidcul", "249403", "INV-", "Rs. 75,000.00", "Steel Almirah x2", "Office Chair", "VS-L", "LRN 2200"]) expect(p.text).toContain(t);
-    // DELIVER TO comes right after the header, above the barcode and SHIP FROM
+    for (const t of ["Shipping address :", "Shree Balaji Traders Pvt Ltd", "45 Ring Road, Lajpat Nagar", "PIN 110024", "Return address :", "Penvish Bath Fittings LLP", "05ABCPZ9876K1Z2", "Plot 7, Sidcul", "249403", "INV-", "Rs. 75,000.00", "Steel Almirah x2", "Office Chair", "VS-L", "LRN: 2200", "Box : 1/1", "B2B", "PREPAID"]) expect(p.text).toContain(t);
+    // table order, as on the courier's label: ID at the top, the barcode, then the shipping and return addresses
     const yOf = (s: string) => p.items.find((i) => i.str.includes(s))!.transform[5];
-    expect(yOf("DELIVER TO")).toBeGreaterThan(yOf("LRN 2200"));
-    expect(yOf("LRN 2200")).toBeGreaterThan(yOf("SHIP FROM"));
+    expect(yOf("LRN: 2200")).toBeGreaterThan(yOf("Box : 1/1"));
+    expect(yOf("Box : 1/1")).toBeGreaterThan(yOf("Shipping address"));
+    expect(yOf("Shipping address")).toBeGreaterThan(yOf("Return address"));
     const [row] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, sid));
-    expect(decodeBarcodes(p).sort()).toEqual([row.awb!, "22009988776601"].sort());
-    // Terms & Conditions at the foot, below every mandatory detail
-    expect(p.text).toContain("Terms & Conditions");
+    // as on the courier label: one barcode per box (its carton waybill); the LRN is printed at the top
+    expect(decodeBarcodes(p)).toEqual(["22009988776601"]);
+    expect(p.text).toContain(`LRN: ${row.awb}`);
+    // terms at the foot, below every mandatory detail
     expect(p.text).toContain("vishwaship.in/terms");
-    expect(yOf("Terms & Conditions")).toBeLessThan(yOf("Invoice value"));
+    expect(yOf("vishwaship.in/terms")).toBeLessThan(yOf("Return address"));
   });
 
   it("multi-carton: one label per carton, each with its own carton barcode", async () => {
     const pieces = ["22001111000101", "22001111000102", "22001111000103"];
     const sid = await ship({ boxes: 3, pieces });
     const r = await renderLabels(ORG, [sid], "thermal_4x4");
-    const [doc, ...pages] = await pdfPages(r.pdf!);
+    const all = await pdfPages(r.pdf!);
+    const doc = all.at(-1)!, pages = all.slice(0, -1);
     expect(doc.text).toContain("SHIPMENT DOCUMENT");
-    expect(doc.text).toContain("3 CARTONS");
+    expect(doc.text).toContain("MPS: Documents");
     expect(pages).toHaveLength(3);
-    pages.forEach((p, i) => { expect(p.text).toContain(`CARTON ${i + 1} OF 3`); expect(p.text).toContain(`carton ${i + 1} of 3`); expect(decodeBarcodes(p)).toContain(pieces[i]); });
+    pages.forEach((p, i) => { expect(p.text).toContain(`Box : ${i + 1}/3`); expect(p.text).toContain(i === 0 ? "MASTER" : "CHILD"); expect(p.text).toContain(`Master: ${pieces[0]}`); expect(decodeBarcodes(p)).toContain(pieces[i]); });
   });
 
   it("multi-carton B2B without the carrier's carton barcodes is not guessed: skipped with Retry", async () => {
@@ -199,23 +202,23 @@ describe("print formats", { timeout: 20_000 }, () => {
     const pages = await pdfPages(r.pdf!);
     expect(pages).toHaveLength(2);
     expect(pages[0].w).toBeCloseTo(595.28, 1); expect(pages[0].h).toBeCloseTo(841.89, 1);
-    const slot = (p: typeof pages[number]) => p.items.filter((i) => i.str === "DELIVER TO").map((i) => [i.transform[4] < p.w / 2 ? "L" : "R", i.transform[5] > p.h / 2 ? "T" : "B"].join(""));
+    const slot = (p: typeof pages[number]) => p.items.filter((i) => i.str === "Shipping address :").map((i) => [i.transform[4] < p.w / 2 ? "L" : "R", i.transform[5] > p.h / 2 ? "T" : "B"].join(""));
     expect(slot(pages[0])).toEqual(["LT", "RT", "LB", "RB"]);
     expect(slot(pages[1])).toEqual(["LT"]);
     // printer-safe margin: nothing within 5 mm of the sheet edge
     for (const p of pages) for (const it of p.items) { expect(it.transform[4]).toBeGreaterThan(5 * PT); expect(it.transform[5]).toBeGreaterThan(5 * PT); }
-    const order = pages[0].items.filter((i) => /^Order ID/.test(i.str) || /^VS-L/.test(i.str)).map((i) => i.str);
+    const order = pages[0].items.filter((i) => /^OID: VS-L/.test(i.str)).map((i) => i.str);
     expect(order.join(" ")).toMatch(new RegExp(ids.slice(0, 4).map((id) => `VS-L${id.slice(1)}`).join(".*")));
 
     const r2 = await renderLabels(ORG, ids.slice(0, 3), "a4_2up");
     const p2 = await pdfPages(r2.pdf!);
     expect(p2).toHaveLength(2);
-    expect(p2[0].items.filter((i) => i.str === "DELIVER TO").map((i) => (i.transform[5] > p2[0].h / 2 ? "T" : "B"))).toEqual(["T", "B"]);
+    expect(p2[0].items.filter((i) => i.str === "Shipping address :").map((i) => (i.transform[5] > p2[0].h / 2 ? "T" : "B"))).toEqual(["T", "B"]);
   });
 });
 
 describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
-  const delivers = (p: Awaited<ReturnType<typeof pdfPages>>[number]) => p.items.filter((i) => i.str === "DELIVER TO");
+  const delivers = (p: Awaited<ReturnType<typeof pdfPages>>[number]) => p.items.filter((i) => i.str === "Shipping address :");
 
   it("A4 · 1 label per page: one label on each sheet", async () => {
     const ids = [await ship({ mode: "B2C", provider: "delhivery_b2c" }), await ship({ mode: "B2C", provider: "delhivery_b2c" })];
@@ -235,8 +238,7 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
       expect(pages).toHaveLength(1);
       expect(delivers(pages[0])).toHaveLength(boxes + 1); // + the B2B shipment document
       expect(pages[0].text).toContain("SHIPMENT DOCUMENT");
-      // every stacked label has a readable LRN barcode (the test decoder cannot split two barcodes side by side in a 2 × 2 grid)
-      expect(decodeBarcodes(pages[0]).length).toBeGreaterThanOrEqual(boxes === 3 ? 2 : boxes + 1);
+      // (barcode decoding is covered on thermal pages: the test decoder cannot split two barcodes side by side in the 2 × 2 grid)
     }
     const a = await ship({ mode: "B2C", provider: "delhivery_b2c" }), b = await ship({ mode: "B2C", provider: "delhivery_b2c" });
     const pages = await pdfPages((await renderLabels(ORG, [a, b], "a4_fit")).pdf!);

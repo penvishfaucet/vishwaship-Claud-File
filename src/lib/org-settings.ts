@@ -24,7 +24,7 @@ export const ORG_SETTING_SCHEMAS = {
   courier_prefs: z.object({ disabled: z.array(code).max(60).default([]), priority: z.array(code).max(60).default([]) }),
   label_settings: z.object({
     // older saves used "a4" (now A4 2 per page)
-    format: z.preprocess((x) => (x === "a4" ? "a4_2up" : x), z.enum(LABEL_FORMATS.map((f) => f.key) as [string, ...string[]])).default("thermal_4x6"),
+    format: z.preprocess((x) => (x === "a4" ? "a4_2up" : x), z.enum(LABEL_FORMATS.map((f) => f.key) as [string, ...string[]])).default("a4_fit"),
     showSellerAddress: z.boolean().default(true), showProducts: z.boolean().default(true), showCodAmount: z.boolean().default(true),
     showOrderValue: z.boolean().default(false), showSellerPhone: z.boolean().default(true), showLogo: z.boolean().default(false),
   }),

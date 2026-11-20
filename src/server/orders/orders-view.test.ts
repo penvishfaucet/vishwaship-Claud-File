@@ -204,8 +204,8 @@ describe("label PDFs (generated demo labels)", { timeout: 20_000 }, () => {
     const pages = await pdfInfo(r.pdf!);
     expect(pages).toHaveLength(3);
     expect(pages.map((p) => [p.wMm, p.hMm])).toEqual([[102, 102], [102, 102], [102, 102]]);
-    expect(pages[0].text).toContain(`AWB AWB${n}`);
-    expect(pages[1].text).toContain("CARTON 2 OF 3");
+    expect(pages[0].text).toContain(`AWB: AWB${n}`);
+    expect(pages[1].text).toContain("Box : 2/3");
     expect(pages[2].text).toContain("PIN 400001");
     expect(pages[0].text).toContain("COD"); // payment mode is shown …
     expect(pages[0].text).not.toMatch(/Rs.?s?500/); // … the COD amount never is
@@ -218,7 +218,7 @@ describe("label PDFs (generated demo labels)", { timeout: 20_000 }, () => {
     const [p] = await pdfInfo(r.pdf!);
     expect(p.rotate).toBe(90);
     expect([p.wMm, p.hMm]).toEqual([38, 100]); // viewport after rotation = printed size
-    expect(p.text).toContain("AWB AWB");
+    expect(p.text).toMatch(/AWB:? AWB/);
   });
   it("bulk: other accounts' and cancelled shipments are skipped with a reason", async () => {
     const { renderLabels } = await import("@/server/labels/render");

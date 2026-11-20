@@ -110,3 +110,11 @@ export function drawInvoice(page: PDFPage, f: { r: PDFFont; b: PDFFont }, d: Inv
   right(d.signature || "Authorised signatory", x1, 7.5, f.b);
   y -= 9; right(`for ${d.seller.name}`, x1, 7, f.r, mut);
 }
+
+/** How B2B paperwork is used: one document stapled with the invoice for the pickup person, one label on each carton. */
+export const B2B_HANDOVER = {
+  document: "Staple this document with the invoice and hand both to the pickup person. Do not paste it on a carton.",
+  label: (carton: number, cartons: number) => `Paste this label on carton ${carton} of ${cartons}. The shipment document goes with the invoice to the pickup person.`,
+  labelShort: (carton: number, cartons: number) => `Paste on carton ${carton} of ${cartons}`,
+  notice: "B2B shipment: staple the shipment document with the invoice and hand both to the pickup person; paste one label on each carton.",
+};

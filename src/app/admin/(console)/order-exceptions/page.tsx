@@ -45,7 +45,7 @@ export default async function OrderExceptions({ searchParams }: { searchParams: 
   const cancelRows = await db.select({ c: schema.codConfirmations, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.codConfirmations)
     .innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId))
     .where(inArray(schema.codConfirmations.cancellationStatus, ["failed", "action_required", "requested"])).orderBy(desc(schema.codConfirmations.cancellationAt)).limit(200);
-  const labelDefault = (await getSetting<PrintFormat>("orders_label_default", "thermal_4x4")).value;
+  const labelDefault = (await getSetting<PrintFormat>("orders_label_default", "a4_fit")).value;
   // Carrier charged more than the quoted carrier cost (customer is never charged above the approved amount).
   const chargeRows = await db.select({ s: schema.shipments, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.shipments)
     .innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))

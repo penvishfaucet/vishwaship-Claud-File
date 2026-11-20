@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
   }
   const own = (await orgSetting<{ format?: string }>(s.orgId, "label_settings"))?.format;
-  const adminDefault = (await getSetting<PrintFormat>("orders_label_default", "thermal_4x6")).value;
+  const adminDefault = (await getSetting<PrintFormat>("orders_label_default", "a4_fit")).value;
   const pick = [asked, own, adminDefault, "thermal_4x6"].find((f) => f && PRINT_FORMATS.some((p) => p.key === f))!;
   return Response.redirect(new URL(`/api/portal/labels?ids=${encodeURIComponent(id)}&format=${pick}`, req.url), 302);
 }
