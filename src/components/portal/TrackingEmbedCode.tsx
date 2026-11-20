@@ -5,7 +5,6 @@ import { Check, Copy } from "lucide-react";
 /** "Add to your website": copy-ready code for the branded tracking page and how to paste it. */
 export function TrackingEmbedCode({ appUrl, slug, published }: { appUrl: string; slug: string; published: boolean }) {
   const script = `<div id="vishwaship-tracking"></div>\n<script src="${appUrl}/track-embed.js" data-store="${slug}" async></script>`;
-  const iframe = `<iframe src="${appUrl}/t/${slug}/" title="Track your order" style="width:100%;min-height:760px;border:0"></iframe>`;
   const [copied, setCopied] = useState<string | null>(null);
   const copy = async (k: string, v: string) => { try { await navigator.clipboard.writeText(v); setCopied(k); setTimeout(() => setCopied(null), 2000); } catch { /* clipboard blocked */ } };
   const Box = ({ k, v }: { k: string; v: string }) => (
@@ -22,9 +21,8 @@ export function TrackingEmbedCode({ appUrl, slug, published }: { appUrl: string;
         <div><b>Wix / Squarespace</b><span>Add an <b>Embed / HTML code</b> element to a page → paste → Publish.</span></div>
         <div><b>Custom website</b><span>Paste the code where the tracker should appear in your page’s HTML.</span></div>
       </div>
-      <p className="tiny muted" style={{ margin: "10px 0 6px" }}>Tip: link to <code>yourwebsite.com/track-order?awb=AWB_NUMBER</code> in your emails and the shipment opens directly. If your website builder does not allow scripts, use this instead:</p>
-      <Box k="iframe" v={iframe} />
-      <p className="tiny muted" style={{ margin: "8px 0 0" }}>Direct link (no website needed): <a className="link" href={`${appUrl}/t/${slug}/`} target="_blank" rel="noopener">{appUrl}/t/{slug}/</a></p>
+      <p className="tiny muted" style={{ margin: "10px 0 6px" }}>Tip: link to <code>yourwebsite.com/track-order?awb=AWB_NUMBER</code> in your emails and the shipment opens directly.</p>
+      <p className="tiny muted" style={{ margin: "0" }}>If your website builder does not allow scripts, add a “Track order” button or menu link to your Vishwaship tracking page instead: <a className="link" href={`${appUrl}/t/${slug}/`} target="_blank" rel="noopener">{appUrl}/t/{slug}/</a></p>
     </section>
   );
 }
