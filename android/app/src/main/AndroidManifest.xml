@@ -33,12 +33,24 @@
         <!-- Lets Chrome verify this app against https://vishwaship.in/.well-known/assetlinks.json (hides the URL bar). -->
         <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
 
+        <!-- Opening animation (Vishwaship logo), then the website. -->
+        <activity
+            android:name=".SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Vishwaship"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
             android:exported="true"
             android:label="@string/app_name">
             <meta-data android:name="android.support.customtabs.trusted.DEFAULT_URL" android:value="${twaUrl}" />
-            <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/vs_navy" />
+            <meta-data android:name="android.support.customtabs.trusted.STATUS_BAR_COLOR" android:resource="@color/vs_white" />
             <meta-data android:name="android.support.customtabs.trusted.NAVIGATION_BAR_COLOR" android:resource="@color/vs_white" />
             <meta-data android:name="android.support.customtabs.trusted.SPLASH_IMAGE_DRAWABLE" android:resource="@drawable/vs_logo" />
             <meta-data android:name="android.support.customtabs.trusted.SPLASH_SCREEN_BACKGROUND_COLOR" android:resource="@color/vs_white" />
@@ -47,16 +59,13 @@
             <meta-data android:name="android.support.customtabs.trusted.SCREEN_ORIENTATION" android:value="any" />
             <meta-data android:name="android.support.customtabs.trusted.FALLBACK_STRATEGY" android:value="customtabs" />
 
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- Links to the site (order, ticket, tracking links in SMS/WhatsApp/email) open in the app. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="${webHost}" android:pathPrefix="/portal/" />
+                <data android:scheme="https" android:host="${webHost}" android:pathPrefix="/track/" />
             </intent-filter>
         </activity>
 

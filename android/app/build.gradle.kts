@@ -23,8 +23,8 @@ android {
         applicationId = "in.vishwaship.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${prop("vishwaship.firebase.projectId")}\"")
         buildConfigField("String", "FIREBASE_APP_ID", "\"${prop("vishwaship.firebase.appId")}\"")
@@ -45,7 +45,7 @@ android {
             manifestPlaceholders["webHost"] = (project.findProperty("vishwaship.stagingHost") as String?) ?: "staging.vishwaship.in"
             manifestPlaceholders["usesCleartext"] = "true"
             // The app shows the website itself (Trusted Web Activity), so site changes appear in the app at once.
-            manifestPlaceholders["twaUrl"] = ((project.findProperty("vishwaship.stagingUrl") as String?) ?: "http://10.0.2.2:3000") + "/portal/"
+            manifestPlaceholders["twaUrl"] = ((project.findProperty("vishwaship.stagingUrl") as String?) ?: "http://10.0.2.2:3000") + "/"
         }
         create("production") {
             dimension = "env"
@@ -54,7 +54,7 @@ android {
             resValue("string", "app_name", "Vishwaship")
             manifestPlaceholders["webHost"] = "vishwaship.in"
             manifestPlaceholders["usesCleartext"] = "false"
-            manifestPlaceholders["twaUrl"] = "https://vishwaship.in/portal/"
+            manifestPlaceholders["twaUrl"] = "https://vishwaship.in/"
         }
     }
 

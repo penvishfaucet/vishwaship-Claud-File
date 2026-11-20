@@ -16,5 +16,5 @@ export function GET() {
   const prints = [...new Set([...fromEnv, ...DEFAULT_PRINTS])];
   const pkg = process.env.ANDROID_PACKAGE ?? "in.vishwaship.app";
   const body = [{ relation: ["delegate_permission/common.handle_all_urls"], target: { namespace: "android_app", package_name: pkg, sha256_cert_fingerprints: prints } }];
-  return Response.json(body, { headers: { "cache-control": "public, max-age=3600" } });
+  return Response.json(body, { headers: { "cache-control": "public, max-age=300" } });
 }
