@@ -16,6 +16,7 @@ export const MODULES = [
   { key: "auto_assign", label: "Courier auto-assign rules", default: true, needsPlan: false },
   { key: "oms", label: "OMS connections", default: true, needsPlan: false },
   { key: "edd_widget", label: "EDD widget", default: true, needsPlan: false },
+  { key: "online_store", label: "Online Store (website builder)", default: true, needsPlan: false },
 ] as const;
 
 export type ModuleKey = (typeof MODULES)[number]["key"];

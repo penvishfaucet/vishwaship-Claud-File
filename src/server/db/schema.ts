@@ -1067,3 +1067,111 @@ export const accountDeletionRequests = pgTable("account_deletion_requests", {
   decidedAt: ts("decided_at"),
   createdAt: created(),
 }, (t) => [index("account_deletion_status").on(t.status)]);
+
+// ---------- online store (merchant storefronts) ----------
+/**
+ * One storefront per org (Phase 1). Theme config lives in `draftTheme`; `publishedTheme` is what buyers see.
+ * Every published version is kept in store_theme_versions so the merchant can restore it.
+ */
+export const stores = pgTable("stores", {
+  id: id(),
+  orgId: text("org_id").notNull().references(() => orgs.id),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  status: text("status").notNull().default("draft"), // draft | live | paused | suspended
+  /** Onboarding: highest step reached (1-7) and the steps marked done. */
+  onboardingStep: integer("onboarding_step").notNull().default(1),
+  stepsDone: jsonb("steps_done").notNull().default([]),
+  themeKey: text("theme_key").notNull().default("bazaar"),
+  draftTheme: jsonb("draft_theme").notNull().default({}),
+  publishedTheme: jsonb("published_theme"),
+  /** Contact, about, policies, SEO defaults, checkout basics (COD, shipping fee). */
+  settings: jsonb("settings").notNull().default({}),
+  /** Admin applied a custom design: merchant theme switching is locked to it. */
+  customDesign: boolean("custom_design").notNull().default(false),
+  suspendedReason: text("suspended_reason"),
+  publishedAt: ts("published_at"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("stores_slug").on(t.slug), uniqueIndex("stores_org").on(t.orgId), index("stores_status").on(t.status)]);
+
+export const storeThemeVersions = pgTable("store_theme_versions", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  version: integer("version").notNull(),
+  themeKey: text("theme_key").notNull(),
+  config: jsonb("config").notNull(),
+  publishedBy: text("published_by"),
+  note: text("note"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_theme_versions_v").on(t.storeId, t.version)]);
+
+export const storeDomains = pgTable("store_domains", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  hostname: text("hostname").notNull(),
+  verifyToken: text("verify_token").notNull(),
+  status: text("status").notNull().default("pending_dns"), // pending_dns | verified | failed
+  sslStatus: text("ssl_status").notNull().default("pending_setup"), // pending_setup | pending | active | failed
+  isPrimary: boolean("is_primary").notNull().default(false),
+  lastCheckedAt: ts("last_checked_at"),
+  lastCheckMessage: text("last_check_message"),
+  verifiedAt: ts("verified_at"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_domains_host").on(t.hostname), index("store_domains_store").on(t.storeId)]);
+
+export const storeCategories = pgTable("store_categories", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  sort: integer("sort").notNull().default(0),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_categories_slug").on(t.storeId, t.slug)]);
+
+export const storeProducts = pgTable("store_products", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  description: text("description"),
+  pricePaise: paise("price_paise").notNull(),
+  comparePaise: paise("compare_paise"),
+  categoryId: text("category_id").references(() => storeCategories.id),
+  /** Ordered list of store_media ids. */
+  images: jsonb("images").notNull().default([]),
+  stock: integer("stock").notNull().default(0),
+  weightGrams: integer("weight_grams").notNull().default(500),
+  status: text("status").notNull().default("active"), // draft | active | archived
+  featured: boolean("featured").notNull().default(false),
+  seo: jsonb("seo").notNull().default({}),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);
+
+/** Store images (logo, banners, product photos). Kept in the database so redeploys never lose them. */
+export const storeMedia = pgTable("store_media", {
+  id: text("id").primaryKey(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  mime: text("mime").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: created(),
+}, (t) => [index("store_media_store").on(t.storeId)]);
+
+/** Public "Request help" leads from the Create Your Online Store page. */
+export const storeHelpRequests = pgTable("store_help_requests", {
+  id: id(),
+  name: text("name").notNull(),
+  mobile: text("mobile").notNull(),
+  email: text("email"),
+  message: text("message"),
+  orgId: text("org_id"),
+  status: text("status").notNull().default("new"), // new | contacted | closed
+  createdAt: created(),
+});

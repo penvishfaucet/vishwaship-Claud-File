@@ -141,6 +141,13 @@
       "when": 1795118938498,
       "tag": "0019_mobile_app",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795206372972,
+      "tag": "0020_online_store",
+      "breakpoints": true
     }
   ]
 }

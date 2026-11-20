@@ -1,7 +1,7 @@
 import {
   Activity, BadgeCheck, BadgeIndianRupee, Bell, Boxes, Calculator, ClipboardList, CornerUpLeft, CreditCard, Download, FileMinus, FilePlus, FileSpreadsheet, FileText,
   Home, Layers, LayoutGrid, ListOrdered, MapPin, Package, Palette, Plug, Printer, Receipt, ReceiptText, Scale, Settings, ShoppingBag, Store, Tag, Timer, Truck,
-  Users, Wallet, Webhook, Wrench, Zap, BookOpen, FileBarChart, Gauge, CalendarClock, MessagesSquare,
+  Users, Wallet, Webhook, Wrench, Zap, BookOpen, Globe, Link2, FileBarChart, Gauge, CalendarClock, MessagesSquare,
 } from "lucide-react";
 import type { ModuleKey } from "@/lib/modules";
 
@@ -20,6 +20,13 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
   { id: "orders", href: "/portal/orders/", label: "Orders", icon: Package },
   { id: "pickups", href: "/portal/pickups/", label: "Pickups", icon: CalendarClock },
   { id: "ndr", href: "/portal/ndr/", label: "NDR", icon: CornerUpLeft },
+  { id: "store", group: "Online Store", icon: Globe, items: [
+    { id: "store.overview", href: "/portal/store/", label: "Store Overview", icon: Store, module: "online_store" },
+    { id: "store.theme", href: "/portal/store/theme/", label: "Theme Editor", icon: Palette, module: "online_store" },
+    { id: "store.products", href: "/portal/store/products/", label: "Store Products", icon: ShoppingBag, module: "online_store" },
+    { id: "store.pages", href: "/portal/store/pages/", label: "Pages & SEO", icon: FileText, module: "online_store" },
+    { id: "store.domains", href: "/portal/store/domains/", label: "Domains", icon: Link2, module: "online_store" },
+  ] },
   { id: "billing", group: "Billing", icon: CreditCard, items: [
     { id: "billing.passbook", href: "/portal/billing/passbook/", label: "Passbook", icon: BookOpen },
     { id: "billing.cod", href: "/portal/billing/cod-remittance/", label: "COD Remittance", icon: BadgeIndianRupee },
