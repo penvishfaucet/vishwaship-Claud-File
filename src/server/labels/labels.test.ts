@@ -425,14 +425,37 @@ describe("barcodes follow the courier (Vishwaship design)", { timeout: 30_000 },
     expect(r.skipped[0]).toMatchObject({ shipmentId: sid, retryable: true });
   });
 
-  it("Delhivery B2B LR: one label per carton waybill, then the document with the LRN (unchanged)", async () => {
-    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", boxes: 2, pieces: ["5500000000011", "5500000000012"], awb: "220099" });
+  it("Delhivery B2B LR 2 boxes (as on Delhivery's own label): Box 1/2 master, Box 2/2 child, document with its own waybill", async () => {
+    // Delhivery's label for LRN 323196522: 24919710016181 (box 1, master), …192 (box 2), …203 (MPS: Documents)
+    for (const pieces of [["24919710016181", "24919710016192", "24919710016203"], ["24919710016203", "24919710016192", "24919710016181"]]) {
+      const lrn = String(323196522 + (n % 1000) * 7);
+      const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", boxes: 2, pieces, awb: lrn });
+      for (const f of ["thermal_4x6", "a4_fit"] as const) {
+        const r = await renderLabels(ORG, [sid], f);
+        expect(r.skipped).toEqual([]);
+        expect(r.labels).toBe(3); // 2 carton labels + 1 document, exactly as Delhivery made
+        const text = (await pdfPages(r.pdf!)).map((p) => p.text).join(" | ");
+        const at = (s: string) => text.indexOf(s);
+        expect(text).toContain(`LRN: ${lrn}`);
+        for (const wb of ["24919710016181", "24919710016192", "24919710016203"]) expect(at(wb)).toBeGreaterThanOrEqual(0);
+        if (f === "thermal_4x6") { // the courier-table layout, as on Delhivery's own label
+          expect(text).toContain("Master: 24919710016181");
+          expect(at("Box : 1/2")).toBeLessThan(at("Box : 2/2"));
+          expect(at("MPS: Documents")).toBeGreaterThan(at("Box : 2/2"));
+          expect(text.slice(at("MPS: Documents") - 400)).toContain("24919710016203");
+        }
+        expect(text.slice(at("SHIPMENT DOCUMENT"))).toContain("24919710016203"); // the document page carries the document waybill
+        expect(text.slice(at("SHIPMENT DOCUMENT"))).not.toContain("24919710016192");
+      }
+    }
+  });
+  it("Delhivery B2B: carton barcodes decode to the carton waybills", async () => {
+    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", boxes: 2, pieces: ["5500000000011", "5500000000012", "5500000000013"], awb: "220099" });
     const r = await renderLabels(ORG, [sid], "thermal_4x6");
     const pages = await pdfPages(r.pdf!);
     expect(pages).toHaveLength(3);
     expect(pages[2].text).toMatch(/SHIPMENT DOCUMENT/);
-    expect(pages.slice(0, 2).flatMap(decodeBarcodes)).toEqual(["5500000000011", "5500000000012"]);
-    expect(pages[2].text).toContain("220099"); // the document carries the LRN
+    expect(pages.map((p) => decodeBarcodes(p)).flat()).toEqual(["5500000000011", "5500000000012", "5500000000013"]);
   });
 });
 

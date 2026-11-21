@@ -111,7 +111,17 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     if (src.kind === "branded") {
       const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
       const pieceIds = (Array.isArray(s.pieceIds) ? (s.pieceIds as unknown[]) : []).map(String).filter(Boolean);
-      let cartons = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0), pieceIds.length);
+      const boxes = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0));
+      // Delhivery B2B makes one waybill per carton (the first is the master) plus one for the shipment document
+      // ("MPS: Documents", the last). Each Vishwaship label carries exactly that waybill: carton n → waybill n, the
+      // document → the document waybill (not the LRN).
+      let cartonWaybills = pieceIds, docWaybill: string | null = null;
+      if (s.provider === "delhivery_b2b" && pieceIds.length === boxes + 1) {
+        // Delhivery numbers them in sequence: master, other cartons, then the document (e.g. …181, …192, …203)
+        const ordered = pieceIds.every((x) => /^\d+$/.test(x)) ? [...pieceIds].sort((x, y) => (BigInt(x) < BigInt(y) ? -1 : 1)) : pieceIds;
+        cartonWaybills = ordered.slice(0, boxes); docWaybill = ordered[boxes];
+      }
+      let cartons = Math.max(boxes, cartonWaybills.length);
       // An AWB courier (Shipmozo, Delhivery B2C) books an AWB, never an LR: no shipment document, whatever the order's
       // weight class. Its labels carry the AWB barcode, as many as the courier itself made (read from its own label).
       const awbCourier = AWB_COURIERS.has(s.provider);
@@ -122,7 +132,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         cartons = got.doc.getPageCount();
       }
       // B2B cartons are scanned by their own waybill; without it a branded carton label would not match the carrier's records
-      if (isB2B && cartons > 1 && s.provider !== "demo" && pieceIds.length < cartons) {
+      if (isB2B && cartons > 1 && s.provider !== "demo" && cartonWaybills.length < cartons) {
         skip(`The courier has not sent the carton barcodes for all ${cartons} cartons yet — download the Carrier label, or retry later`, true);
         continue;
       }
@@ -152,13 +162,13 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         const doc: BrandedLabel = {
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
           payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
-          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: null,
+          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: docWaybill,
           to: o.consignee as Addr,
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
-          kind: "document", cartonIds: pieceIds.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
-          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
+          kind: "document", cartonIds: cartonWaybills.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
+          date: bookedOn, masterId: isB2B && cartons > 1 && cartonWaybills[0] ? cartonWaybills[0] : null,
         };
         docLabel = doc;
       }
@@ -167,13 +177,13 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: awbCourier ? "B2C" : o.mode, service: s.serviceName, // an AWB courier ships it as B2C (no LR, no document)
           payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
           idLabel: isB2B ? "LRN" : "AWB", parentId: s.lrNumber && isB2B ? s.lrNumber : s.awb, carton: i + 1, cartons,
-          cartonId: !awbCourier && pieceIds[i] && pieceIds[i] !== (s.lrNumber ?? s.awb) ? pieceIds[i] : null,
+          cartonId: !awbCourier && cartonWaybills[i] && cartonWaybills[i] !== (s.lrNumber ?? s.awb) ? cartonWaybills[i] : null,
           to: o.consignee as Addr,
           // the shipping customer's own company and GSTIN — never Vishwaship's
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
-          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
+          date: bookedOn, masterId: isB2B && cartons > 1 && cartonWaybills[0] ? cartonWaybills[0] : null,
         };
         branded.push(l); brandedOf.set(l, s.id);
       }
@@ -532,6 +542,7 @@ export function drawBranded(page: PDFPage, f: { r: PDFFont; b: PDFFont }, logos:
     };
     const docCodes = (c: ReturnType<typeof flow>) => {
       c.text(`${d.mode} | ${d.payment} | ${d.service}`, base - 0.5, f.b, { maxLines: 1 });
+      if (d.cartonId) { c.barcode(d.cartonId, small ? 6.5 : hMm > 120 ? 14 : wMm < 80 ? 9 : 11); c.text(`Document ${d.cartonId}`, base + (small ? 1 : 1.5), f.b, { center: true, maxLines: 1 }); c.text(`${d.idLabel} ${d.parentId}`, base, f.b, { center: true, maxLines: 1 }); c.text(`${d.cartons} CARTON${d.cartons > 1 ? "S" : ""}`, base + 1, f.b, { center: true, maxLines: 1 }); return; }
       c.barcode(d.parentId, small ? 6.5 : hMm > 120 ? 14 : wMm < 80 ? 9 : 11);
       c.text(`${d.idLabel} ${d.parentId}`, base + (small ? 1 : 1.5), f.b, { center: true, maxLines: 1 });
       c.text(`${d.cartons} CARTON${d.cartons > 1 ? "S" : ""}`, base + 1, f.b, { center: true, maxLines: 1 });
