@@ -1513,6 +1513,20 @@ export const franchises = pgTable("franchises", {
   notes: text("notes"),
   /** Franchise dashboard login (users.kind = "franchise"). */
   userId: text("user_id"),
+  /**
+   * Commission (phase 3). Vishwaship's price to the franchise = courier cost + base markup; the franchise sets its
+   * customers' markup between min and max; commission = customer markup − base markup on the same cost, per delivered
+   * shipment. Null base = commission not set up yet. commission_from: only shipments booked from this time count.
+   */
+  baseMarkupBps: integer("base_markup_bps"),
+  minCustomerBps: integer("min_customer_bps"),
+  maxCustomerBps: integer("max_customer_bps"),
+  defaultCustomerBps: integer("default_customer_bps"),
+  commissionFrom: ts("commission_from"),
+  /** Payout bank details: holder name, last 4 digits only, IFSC (payment itself is made outside Vishwaship). */
+  payoutAccountName: text("payout_account_name"),
+  payoutAccountLast4: text("payout_account_last4"),
+  payoutIfsc: text("payout_ifsc"),
   createdBy: text("created_by"),
   activatedAt: ts("activated_at"),
   createdAt: created(),
@@ -1572,3 +1586,50 @@ export const franchiseTerms = pgTable("franchise_terms", {
   createdBy: text("created_by"),
   createdAt: created(),
 });
+
+/** One commission line per delivered shipment of a franchise customer. */
+export const franchiseCommissions = pgTable("franchise_commissions", {
+  id: id(),
+  franchiseId: text("franchise_id").notNull().references(() => franchises.id),
+  orgId: text("org_id").notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  /** Courier cost the markup applies to (pre-tax), from the booking quote. */
+  eligiblePaise: paise("eligible_paise").notNull(),
+  customerBps: integer("customer_bps").notNull(),
+  baseBps: integer("base_bps").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  /** earned | in_payout | paid | void */
+  status: text("status").notNull().default("earned"),
+  payoutId: text("payout_id"),
+  deliveredAt: ts("delivered_at").notNull(),
+  /** IST month of delivery, e.g. 2026-11 (the payout period). */
+  period: text("period").notNull(),
+  voidReason: text("void_reason"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("franchise_commissions_shipment").on(t.shipmentId), index("franchise_commissions_fr_period").on(t.franchiseId, t.period, t.status)]);
+
+/** Monthly commission statement and payout for one franchise. */
+export const franchisePayouts = pgTable("franchise_payouts", {
+  id: id(),
+  franchiseId: text("franchise_id").notNull().references(() => franchises.id),
+  period: text("period").notNull(),
+  statementNumber: text("statement_number").notNull(),
+  shipments: integer("shipments").notNull(),
+  grossPaise: paise("gross_paise").notNull(),
+  tdsBps: integer("tds_bps").notNull(),
+  tdsPaise: paise("tds_paise").notNull(),
+  adjustmentPaise: paise("adjustment_paise").notNull().default(0),
+  adjustmentNote: text("adjustment_note"),
+  netPaise: paise("net_paise").notNull(),
+  /** draft | approved | paid | cancelled */
+  status: text("status").notNull().default("draft"),
+  utr: text("utr"),
+  paidOn: ts("paid_on"),
+  createdBy: text("created_by").notNull(),
+  approvedBy: text("approved_by"),
+  approvedAt: ts("approved_at"),
+  paidBy: text("paid_by"),
+  note: text("note"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("franchise_payouts_statement").on(t.statementNumber), uniqueIndex("franchise_payouts_live_period").on(t.franchiseId, t.period).where(sql`status <> 'cancelled'`)]);

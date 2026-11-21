@@ -581,5 +581,29 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795259113863,
   "hash": "5cce8bbdaa6c496cebc2ba48961fe64a36f6836c3af74528d005b4628f54544c"
+ },
+ {
+  "tag": "0028_franchise_commission",
+  "sql": [
+   "CREATE TABLE \"franchise_commissions\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"franchise_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"shipment_id\" text NOT NULL,\n\t\"eligible_paise\" bigint NOT NULL,\n\t\"customer_bps\" integer NOT NULL,\n\t\"base_bps\" integer NOT NULL,\n\t\"amount_paise\" bigint NOT NULL,\n\t\"status\" text DEFAULT 'earned' NOT NULL,\n\t\"payout_id\" text,\n\t\"delivered_at\" timestamp with time zone NOT NULL,\n\t\"period\" text NOT NULL,\n\t\"void_reason\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"franchise_payouts\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"franchise_id\" text NOT NULL,\n\t\"period\" text NOT NULL,\n\t\"statement_number\" text NOT NULL,\n\t\"shipments\" integer NOT NULL,\n\t\"gross_paise\" bigint NOT NULL,\n\t\"tds_bps\" integer NOT NULL,\n\t\"tds_paise\" bigint NOT NULL,\n\t\"adjustment_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"adjustment_note\" text,\n\t\"net_paise\" bigint NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"utr\" text,\n\t\"paid_on\" timestamp with time zone,\n\t\"created_by\" text NOT NULL,\n\t\"approved_by\" text,\n\t\"approved_at\" timestamp with time zone,\n\t\"paid_by\" text,\n\t\"note\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"base_markup_bps\" integer;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"min_customer_bps\" integer;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"max_customer_bps\" integer;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"default_customer_bps\" integer;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"commission_from\" timestamp with time zone;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"payout_account_name\" text;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"payout_account_last4\" text;",
+   "\nALTER TABLE \"franchises\" ADD COLUMN \"payout_ifsc\" text;",
+   "\nALTER TABLE \"franchise_commissions\" ADD CONSTRAINT \"franchise_commissions_franchise_id_franchises_id_fk\" FOREIGN KEY (\"franchise_id\") REFERENCES \"public\".\"franchises\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"franchise_payouts\" ADD CONSTRAINT \"franchise_payouts_franchise_id_franchises_id_fk\" FOREIGN KEY (\"franchise_id\") REFERENCES \"public\".\"franchises\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE UNIQUE INDEX \"franchise_commissions_shipment\" ON \"franchise_commissions\" USING btree (\"shipment_id\");",
+   "\nCREATE INDEX \"franchise_commissions_fr_period\" ON \"franchise_commissions\" USING btree (\"franchise_id\",\"period\",\"status\");",
+   "\nCREATE UNIQUE INDEX \"franchise_payouts_statement\" ON \"franchise_payouts\" USING btree (\"statement_number\");",
+   "\nCREATE UNIQUE INDEX \"franchise_payouts_live_period\" ON \"franchise_payouts\" USING btree (\"franchise_id\",\"period\") WHERE status <> 'cancelled';"
+  ],
+  "bps": true,
+  "folderMillis": 1795261814691,
+  "hash": "8c9102aa3cb88478738431fad0203b5ef28360b9e3858202806231b4d8b9ea01"
  }
 ];

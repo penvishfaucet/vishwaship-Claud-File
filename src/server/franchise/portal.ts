@@ -6,6 +6,7 @@ import { revokeAllSessions } from "@/server/auth/session";
 import { randomToken, newId } from "@/server/util/ids";
 import { hashPassword, sha256 } from "@/server/security/crypto";
 import { FranchiseError, getFranchise } from "./service";
+import { applyDefaultPrice } from "./commission";
 
 /**
  * Franchise phase 2: the franchise's own login, its customers (referral or admin link) and the read-only data its
@@ -109,6 +110,7 @@ export async function linkCustomer(actor: string, franchiseId: string, identifie
   const db = await getDb();
   const res = await db.update(schema.orgs).set({ franchiseId: f.id, franchiseLinkedAt: new Date(), franchiseLinkSource: "admin" }).where(and(eq(schema.orgs.id, o.id), isNull(schema.orgs.franchiseId))).returning({ id: schema.orgs.id });
   if (!res.length) throw new FranchiseError("This customer was just linked to another franchise");
+  await applyDefaultPrice(o.id, f.id);
   await audit({ actorUserId: actor, actorKind: "staff", orgId: o.id, action: "franchise.customer_linked", targetType: "franchise", targetId: f.id, details: { business: o.businessName } });
   return o.businessName;
 }

@@ -176,6 +176,9 @@ export async function scheduleSweeps() {
     }
   } catch (e) { console.error("[store marketing]", (e as Error).message); }
   await scheduleTrackingPolls();
+  // franchise commission on newly delivered shipments of franchise customers (idempotent)
+  try { const { accrueCommissions } = await import("@/server/franchise/commission"); await accrueCommissions(); }
+  catch (e) { console.error("[franchise]", (e as Error).message); }
   // Android push for new in-app alerts (claims each alert once; no-op sends until FCM is configured)
   try { const { dispatchPush } = await import("@/server/mobile/push"); await dispatchPush(); }
   catch (e) { console.error("[push]", (e as Error).message); }

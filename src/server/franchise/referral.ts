@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
+import { applyDefaultPrice } from "./commission";
 
 /**
  * Franchise referral: the link /r/<CODE>/ remembers the code in a cookie for 30 days and opens Sign up. When the new
@@ -40,6 +41,7 @@ export async function attributeReferral(orgId: string, rawCode: string | null | 
       .where(and(eq(schema.orgs.id, orgId), isNull(schema.orgs.franchiseId))).returning({ id: schema.orgs.id });
     if (!res.length) return null;
     await audit({ actorKind: "system", orgId, action: "franchise.customer_referred", targetType: "franchise", targetId: f.id, details: { code: f.code } });
+    await applyDefaultPrice(orgId, f.id);
     return f.id;
   } catch {
     return null;

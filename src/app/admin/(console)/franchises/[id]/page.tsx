@@ -4,13 +4,14 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { and, desc, eq } from "drizzle-orm";
 import { DEPOSIT_METHOD_LABEL, DEPOSIT_STATE_LABEL, STATUS_CHIP, STATUS_LABEL, activationChecklist, depositSummary, rupeesText, termState } from "@/lib/franchise";
 import {
-  addFranchiseArea, createFranchiseLogin, disableFranchiseLogin, linkFranchiseCustomer, unlinkFranchiseCustomer, recordFranchiseAgreement, recordFranchiseDeposit, releaseFranchiseArea, setFranchiseKyc, setFranchiseStatus, settleFranchiseDeposit,
+  addFranchiseArea, createFranchiseLogin, saveFranchiseCommission, voidFranchiseCommission, disableFranchiseLogin, linkFranchiseCustomer, unlinkFranchiseCustomer, recordFranchiseAgreement, recordFranchiseDeposit, releaseFranchiseArea, setFranchiseKyc, setFranchiseStatus, settleFranchiseDeposit,
 } from "@/server/admin/franchise-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { areasOf, currentTerms, depositsOf, getFranchise } from "@/server/franchise/service";
 import { franchiseSummary, loginState } from "@/server/franchise/portal";
+import { accrueCommissions, commissionByPeriod, commissionLines, pctText, periodLabel } from "@/server/franchise/commission";
 import { referralLink, siteBase } from "@/server/franchise/referral";
 import { DistrictFields, FranchiseForm } from "../forms";
 
@@ -23,7 +24,8 @@ const ACTION_LABEL: Record<string, string> = {
   "franchise.deposit_recorded": "Deposit recorded", "franchise.deposit_settled": "Deposit closed", "franchise.kyc_verified": "KYC verified", "franchise.kyc_unverified": "KYC mark removed",
   "franchise.agreement_recorded": "Signed agreement recorded", "franchise.login_created": "Login created", "franchise.login_link_reissued": "New set-password link",
   "franchise.login_disabled": "Login turned off", "franchise.customer_linked": "Customer linked", "franchise.customer_unlinked": "Customer removed", "franchise.customer_referred": "Customer signed up via referral",
-  "franchise.customers_released": "Customers released", "franchise.password_set": "Franchise set password", "franchise.status_active": "Activated", "franchise.status_suspended": "Suspended", "franchise.status_terminated": "Terminated",
+  "franchise.customers_released": "Customers released", "franchise.commission_settings": "Commission settings", "franchise.customer_price": "Customer price changed by franchise", "franchise.customer_price_default": "Default price applied", "franchise.commission_void": "Commission removed",
+  "franchise.payout_created": "Statement prepared", "franchise.payout_adjusted": "Statement adjusted", "franchise.payout_approved": "Statement approved", "franchise.payout_paid": "Payout paid", "franchise.payout_cancelled": "Statement cancelled", "franchise.password_set": "Franchise set password", "franchise.status_active": "Activated", "franchise.status_suspended": "Suspended", "franchise.status_terminated": "Terminated",
 };
 
 export default async function FranchiseDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; err?: string; edit?: string }> }) {
@@ -33,11 +35,14 @@ export default async function FranchiseDetail({ params, searchParams }: { params
   const f = await getFranchise(id);
   if (!f) notFound();
   const db = await getDb();
-  const [areas, history, deps, terms, log, login, biz, base] = await Promise.all([
+  await accrueCommissions(f.id).catch(() => 0);
+  const [areas, history, deps, terms, log, login, biz, base, months, unpaidLines] = await Promise.all([
     areasOf(f.id), areasOf(f.id, true), depositsOf(f.id), currentTerms(),
     db.select().from(schema.auditLog).where(and(eq(schema.auditLog.targetType, "franchise"), eq(schema.auditLog.targetId, f.id))).orderBy(desc(schema.auditLog.createdAt)).limit(60),
-    loginState(f), franchiseSummary(f.id), siteBase(),
+    loginState(f), franchiseSummary(f.id), siteBase(), commissionByPeriod(f.id), commissionLines(f.id, { limit: 30 }),
   ]);
+  const pricingWrite = can(staff.role, "pricing.write");
+  const bp = (v: number | null) => (v == null ? "" : String(v / 100));
   const flash = (await cookies()).get("vs_fr_link")?.value ?? "";
   const setupLink = flash.startsWith(`${f.id}|`) ? flash.slice(f.id.length + 1) : "";
   const actors = [...new Set(log.map((l) => l.actorUserId).filter(Boolean))] as string[];
@@ -249,6 +254,63 @@ export default async function FranchiseDetail({ params, searchParams }: { params
               <div className="field" style={{ flex: 1, minWidth: 200 }}><label htmlFor="ident">Link an existing customer (login email or mobile)</label><input id="ident" name="identifier" className="input" required maxLength={160} /></div>
               <button className="btn btn-outline">Link</button>
             </form>
+          )}
+        </div>
+      </div>
+
+      <div className="grid2" style={{ alignItems: "start", marginTop: 16 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Commission &amp; customer pricing</h3>
+          <p className="tiny muted" style={{ marginTop: 0 }}>Vishwaship&apos;s price to the franchise = courier cost + base markup. The franchise sets each customer between min and max; commission = (customer % − base %) of the courier cost, on delivered shipments only.{f.commissionFrom && ` Counting shipments booked from ${day(f.commissionFrom)}.`}</p>
+          {pricingWrite && !closed ? (
+            <form action={saveFranchiseCommission} style={{ display: "grid", gap: 8 }}>
+              <input type="hidden" name="franchiseId" value={f.id} />
+              <div className="grid2">
+                <div className="field"><label htmlFor="bp">Base markup %</label><input id="bp" name="basePct" className="input" inputMode="decimal" defaultValue={bp(f.baseMarkupBps)} required /></div>
+                <div className="field"><label htmlFor="dp">Default for new customers %</label><input id="dp" name="defaultPct" className="input" inputMode="decimal" defaultValue={bp(f.defaultCustomerBps)} placeholder="Vishwaship standard" /></div>
+                <div className="field"><label htmlFor="mn">Customer minimum %</label><input id="mn" name="minPct" className="input" inputMode="decimal" defaultValue={bp(f.minCustomerBps)} required /></div>
+                <div className="field"><label htmlFor="mx">Customer maximum %</label><input id="mx" name="maxPct" className="input" inputMode="decimal" defaultValue={bp(f.maxCustomerBps)} required /></div>
+              </div>
+              <b className="small" style={{ marginTop: 4 }}>Payout bank account</b>
+              <div className="grid3">
+                <div className="field"><label htmlFor="an">Account holder</label><input id="an" name="accountName" className="input" maxLength={80} defaultValue={f.payoutAccountName ?? ""} /></div>
+                <div className="field"><label htmlFor="l4">Last 4 digits only</label><input id="l4" name="accountLast4" className="input" inputMode="numeric" maxLength={4} defaultValue={f.payoutAccountLast4 ?? ""} /></div>
+                <div className="field"><label htmlFor="ifsc">IFSC</label><input id="ifsc" name="ifsc" className="input" maxLength={11} defaultValue={f.payoutIfsc ?? ""} style={{ textTransform: "uppercase" }} /></div>
+              </div>
+              <p className="tiny muted" style={{ margin: 0 }}>The full account number stays in your bank&apos;s beneficiary list; only the last 4 digits are kept here to match payouts.</p>
+              <div><button className="btn btn-sm btn-orange">Save commission settings</button></div>
+            </form>
+          ) : (
+            <dl className="kv-list">
+              <dt>Base</dt><dd>{pctText(f.baseMarkupBps)}</dd><dt>Customer range</dt><dd>{pctText(f.minCustomerBps)} – {pctText(f.maxCustomerBps)}</dd>
+              <dt>Default</dt><dd>{f.defaultCustomerBps == null ? "Vishwaship standard" : pctText(f.defaultCustomerBps)}</dd>
+              <dt>Payout account</dt><dd>{f.payoutAccountLast4 ? `${f.payoutAccountName ?? ""} ••${f.payoutAccountLast4} · ${f.payoutIfsc}` : "Not added"}</dd>
+            </dl>
+          )}
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Commission by month</h3>
+          {months.length === 0 ? <p className="small muted">No commission yet.</p> : (
+            <table className="tbl"><thead><tr><th>Month</th><th>Shipments</th><th>Earned</th><th>Unpaid</th></tr></thead>
+              <tbody>{months.map((m) => <tr key={m.period}><td className="small">{periodLabel(m.period)}</td><td className="small">{m.shipments}</td><td className="small">{rupeesText(m.earnedPaise)}</td><td className="small">{rupeesText(m.unpaidPaise)}</td></tr>)}</tbody></table>
+          )}
+          <p className="tiny muted"><a href="/admin/franchises/?tab=payouts">Payouts &amp; statements →</a></p>
+          {unpaidLines.length > 0 && (
+            <details><summary className="small">Latest commission lines ({unpaidLines.length})</summary>
+              <table className="tbl"><tbody>{unpaidLines.map(({ c, business, orderNumber }) => (
+                <tr key={c.id}>
+                  <td className="small">{day(c.deliveredAt)}<div className="tiny muted">{business} · {orderNumber}</div></td>
+                  <td className="small">{pctText(c.customerBps)} − {pctText(c.baseBps)}</td><td className="small">{rupeesText(c.amountPaise)}</td>
+                  <td className="small">{c.status.replace("_", " ")}{c.status === "earned" && finance && (
+                    <form action={voidFranchiseCommission} className="row" style={{ gap: 4, marginTop: 4 }}>
+                      <input type="hidden" name="franchiseId" value={f.id} /><input type="hidden" name="commissionId" value={c.id} />
+                      <input name="reason" className="input" placeholder="Reason" minLength={5} required style={{ height: 28, fontSize: 11, width: 120 }} aria-label="Reason to remove" />
+                      <button className="btn btn-sm btn-ghost">Remove</button>
+                    </form>
+                  )}</td>
+                </tr>
+              ))}</tbody></table>
+            </details>
           )}
         </div>
       </div>

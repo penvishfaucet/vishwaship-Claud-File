@@ -10,6 +10,9 @@ import {
 } from "@/server/franchise/service";
 import { disableLogin, issueLoginLink, linkCustomer, unlinkCustomer } from "@/server/franchise/portal";
 import { siteBase } from "@/server/franchise/referral";
+import {
+  adjustPayout, approvePayout, cancelPayout, generatePayouts, markPayoutPaid, saveCommissionSettings, savePayoutConfig, voidCommission,
+} from "@/server/franchise/commission";
 
 /**
  * Admin → Franchises form actions. Permissions: customers.write for the record, areas, KYC and agreement;
@@ -134,4 +137,45 @@ export async function linkFranchiseCustomer(fd: FormData) {
 
 export async function unlinkFranchiseCustomer(fd: FormData) {
   await run("customers.write", detail(str(fd, "franchiseId")), "Customer removed from this franchise", (actor) => unlinkCustomer(actor, str(fd, "franchiseId"), str(fd, "orgId")));
+}
+
+// ---------------- phase 3: commission and payouts ----------------
+const PAYOUTS = "/admin/franchises/?tab=payouts";
+
+export async function saveFranchiseCommission(fd: FormData) {
+  const id = str(fd, "franchiseId");
+  await run("pricing.write", detail(id), "Commission settings saved", (actor) => saveCommissionSettings(actor, id, {
+    basePct: str(fd, "basePct"), minPct: str(fd, "minPct"), maxPct: str(fd, "maxPct"), defaultPct: str(fd, "defaultPct"),
+    accountName: str(fd, "accountName"), accountLast4: str(fd, "accountLast4"), ifsc: str(fd, "ifsc"),
+  }));
+}
+
+export async function voidFranchiseCommission(fd: FormData) {
+  await run("finance.adjust", detail(str(fd, "franchiseId")), "Commission line removed", (actor) => voidCommission(actor, str(fd, "commissionId"), str(fd, "reason")));
+}
+
+export async function saveFranchisePayoutSettings(fd: FormData) {
+  await run("finance.adjust", PAYOUTS, "Payout settings saved", (actor) => savePayoutConfig(actor, Number(str(fd, "tdsPct"))));
+}
+
+export async function generateFranchisePayouts(fd: FormData) {
+  const period = str(fd, "period");
+  let made = 0;
+  await run("finance.adjust", `${PAYOUTS}&period=${encodeURIComponent(period)}`, "Statements prepared", async (actor) => { made = await generatePayouts(actor, period); if (!made) throw new FranchiseError("No unpaid commission for this month (or statements already exist)"); });
+}
+
+export async function adjustFranchisePayout(fd: FormData) {
+  await run("finance.adjust", PAYOUTS, "Adjustment saved", (actor) => adjustPayout(actor, str(fd, "payoutId"), Number(str(fd, "rupees") || "0"), str(fd, "note")));
+}
+
+export async function approveFranchisePayout(fd: FormData) {
+  await run("finance.adjust", PAYOUTS, "Statement approved", (actor) => approvePayout(actor, str(fd, "payoutId")));
+}
+
+export async function payFranchisePayout(fd: FormData) {
+  await run("finance.adjust", PAYOUTS, "Marked paid", (actor) => markPayoutPaid(actor, str(fd, "payoutId"), str(fd, "utr"), str(fd, "paidOn")));
+}
+
+export async function cancelFranchisePayout(fd: FormData) {
+  await run("finance.adjust", PAYOUTS, "Statement cancelled; its commission goes into the next statement", (actor) => cancelPayout(actor, str(fd, "payoutId"), str(fd, "reason")));
 }

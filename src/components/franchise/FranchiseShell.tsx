@@ -2,13 +2,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { FileText, Home, Link2, Menu, Package, Users, X } from "lucide-react";
+import { FileText, Home, IndianRupee, Link2, Menu, Package, Tags, Users, X } from "lucide-react";
 import { SidebarBrand } from "@/components/BrandLogo";
 
 const NAV = [
   { href: "/franchise/", label: "Dashboard", icon: Home },
   { href: "/franchise/customers/", label: "My customers", icon: Users },
   { href: "/franchise/shipments/", label: "Shipments", icon: Package },
+  { href: "/franchise/pricing/", label: "Customer pricing", icon: Tags },
+  { href: "/franchise/earnings/", label: "Commission", icon: IndianRupee },
   { href: "/franchise/referral/", label: "Referral link", icon: Link2 },
   { href: "/franchise/agreement/", label: "Agreement", icon: FileText },
 ];
@@ -43,7 +45,7 @@ export function FranchiseShell({ user, franchise, logout, children }: { user: { 
           </div>
         </header>
         <div className="content" id="main">
-          {franchise.status === "suspended" && <p className="err-box small mb12" role="status">Your franchise is suspended. You can see your customers, but new customers are not linked through your referral link until Vishwaship re-activates it.</p>}
+          {franchise.status === "suspended" && <p className="err-box small mb12" role="status">Your franchise is suspended. You can see your customers, but new customers are not linked through your referral link, prices cannot be changed and commission is on hold until Vishwaship re-activates it.</p>}
           {children}
         </div>
       </div>
