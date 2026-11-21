@@ -155,7 +155,7 @@ describe("quotes across providers", () => {
     expect(r.errors.join(" ")).not.toMatch(/shipmozo/i); // customers see the partner code, never the aggregator
   });
   it("B2C and B2B are separate: the B2B pilot account quotes only for its pilot customer", async () => {
-    const twoBoxes = { ...req("B2B"), packages: [{ ...req().packages[0], count: 2 }] }; // multi-carton: B2B accounts only
+    const twoBoxes = { ...req("B2B"), packages: [{ ...req().packages[0], actualWeightGrams: 80_000 }] }; // over 70 kg: B2B accounts only
     const mine = await getQuotes(twoBoxes, ORG, { persist: false });
     const other = await getQuotes(twoBoxes, OTHER, { persist: false });
     expect(mine.offers.filter((o) => o.providerAccountId === SM_B2B).length).toBe(1);
@@ -431,15 +431,14 @@ describe("Shipmozo B2B: LTL cargo rates are added, the usual rates stay", () => 
     ltlFails = true;
     const r2 = await getQuotes(one, ORG, { persist: false });
     expect(r2.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName)).toEqual(["Delhivery Heavy MPS"]);
-    // several boxes: LTL cargo is offered (booked with the box list); the MPS rates are not, as they cannot be booked yet
-    ltlFails = false;
+    // several boxes: no LTL (Shipmozo made a one-package LR for a 7-box push, 2026-11-22) until multi-carton booking is verified
+    types.length = 0;
     const seven = { ...one, packages: [{ ...one.packages[0], count: 7, actualWeightGrams: 37_000 }] };
     const r3 = await getQuotes(seven, ORG, { persist: false });
-    expect(r3.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName).sort()).toEqual(["Delhivery Heavy MPS", "GATI B2B LTL", "TCI Express LTL B2B"]); // all three came in the LTL (B2B) answer
+    expect(types).not.toContain("B2B");
+    expect(r3.offers.some((o) => o.providerAccountId === SM_B2B)).toBe(false);
   });
-  it("an LTL booking of several boxes sends Shipmozo the box list; an MPS (non-LTL) one is still refused", async () => {
-    const pushed: Array<Record<string, unknown>> = [];
-    script = (url, body) => { if (url.endsWith("/push-order")) pushed.push(body as Record<string, unknown>); return shipmozoHappy(url, body); };
+  it("a several-box booking through Shipmozo is refused (LTL or not) until multi-carton booking is verified", async () => {
     const ctx = { accountId: "x", mode: "live" as const, config: { service: "B2B", baseUrl: { live: "https://shipping-api.com/app/api/v1" } }, secrets: { publicKey: "pk", privateKey: "sk" }, fetch: (await import("@/server/security/safe-fetch")).safeFetch };
     const base = {
       vishwashipOrderId: "ordltl7", pickup: { providerWarehouseRef: "9001" }, paymentType: "prepaid", codAmount: 0, declaredValue: 2_000_000, ewayBill: null,
@@ -447,10 +446,6 @@ describe("Shipmozo B2B: LTL cargo rates are added, the usual rates stay", () => 
       products: [{ name: "Fittings", qty: 7, unitPrice: 285_714 }],
       packages: [{ count: 7, lengthMm: 300, breadthMm: 300, heightMm: 200, actualWeightGrams: 37_000 }],
     };
-    const ltl = await shipmozoAdapter.book(ctx as never, { ...base, quote: { providerQuoteRef: "shipmozo_api:41:auto:ltl" } } as never);
-    expect(ltl.ok).toBe(true);
-    expect(pushed[0]).toMatchObject({ type_of_package: "B2B", no_of_box: 7, weight: 259_000, dimensions: [{ no_of_box: "7", length: "30", width: "30", height: "20", weight: "37000" }] });
-    const mps = await shipmozoAdapter.book(ctx as never, { ...base, vishwashipOrderId: "ordmps7", quote: { providerQuoteRef: "shipmozo_api:31:auto" } } as never);
-    expect(mps).toMatchObject({ ok: false, error: { category: "unsupported" } });
+    for (const ref of ["shipmozo_api:41:auto:ltl", "shipmozo_api:31:auto"]) expect(await shipmozoAdapter.book(ctx as never, { ...base, quote: { providerQuoteRef: ref } } as never)).toMatchObject({ ok: false, error: { category: "unsupported" } });
   });
 });

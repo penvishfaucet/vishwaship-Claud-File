@@ -227,8 +227,9 @@ export const shipmozoAdapter: ShippingAdapter = {
     const body = shipmozoQuoteBodies(ctx, req).rates;
     // A B2B account also asks for Shipmozo's LTL cargo rates (type_of_package "B2B": TCI Express LTL, Gati LTL,
     // Delhivery B2B LTL …) on top of its usual rates. The usual rates are unchanged; if the LTL request fails it is ignored.
-    // LTL is cargo by the box: also for several boxes (booked with the box list — see book()).
-    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false;
+    // LTL only for shipments the account can book: one box (several once multi-carton booking is verified). Live
+    // 2026-11-22 (VSMWQRSR6P, 7 boxes): Shipmozo ignored the box list in push-order and made a one-package LR.
+    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoBooksBoxes(req, ctx.config);
     // the usual (MPS) rates for several boxes only once that multi-carton booking is verified — never a rate that cannot be booked
     const baseBookable = shipmozoBooksBoxes(req, ctx.config);
     const [r, rl] = await Promise.all([
@@ -284,7 +285,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Courier partner warehouse", retryable: false } };
     const boxes = req.packages.reduce((t, p) => t + p.count, 0);
     if (boxes > 1 && service === "B2C") return { ok: false, error: { category: "validation", message: "Courier partner B2C books one package per order — use B2B for multiple cartons", retryable: false } };
-    if (boxes > 1 && !ctx.config.mpsBookingVerified && !ltl) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
+    if (boxes > 1 && !ctx.config.mpsBookingVerified) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
     const big = [...req.packages].sort((a, b) => b.lengthMm * b.breadthMm * b.heightMm - a.lengthMm * a.breadthMm * a.heightMm)[0];
     const orderId = smOrderId(req.vishwashipOrderId); // stable and globally unique → Shipmozo's duplicate check makes retries safe
 
