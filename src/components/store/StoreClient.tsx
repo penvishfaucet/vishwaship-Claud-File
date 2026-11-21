@@ -1,5 +1,5 @@
 "use client";
-import { Menu, Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
+import { CheckCircle2, Menu, Minus, Plus, Search, ShoppingBag, Star, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { type CartLine, MAX_QTY, addToCart, captureAttribution, cartCount, readCart, writeCart } from "./cart";
 import type { SfVariant } from "./types";
@@ -22,18 +22,31 @@ function useCartState(store: string) {
 }
 const useCart = (store: string) => useCartState(store) ?? [];
 
-export function HeaderNav({ store, base, links }: { store: string; base: string; links: Array<{ href: string; label: string }> }) {
+export function HeaderNav({ store, base, links, keep = "" }: { store: string; base: string; links: Array<{ href: string; label: string }>; keep?: string }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState(false);
   const n = cartCount(useCart(store));
   return (
     <>
       <nav className={`sf-nav${open ? " open" : ""}`} aria-label="Store">
         {links.map((l) => <a key={l.href} href={l.href} onClick={() => setOpen(false)}>{l.label}</a>)}
       </nav>
-      <button className="sf-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
-      <a className="sf-cart" href={`${base}/cart/`} aria-label={`Cart, ${n} item${n === 1 ? "" : "s"}`}>
-        <ShoppingBag size={20} aria-hidden />{n > 0 && <span className="n">{n}</span>}
-      </a>
+      <div className="sf-icons">
+        <button className="sf-ic" aria-label="Search products" aria-expanded={search} onClick={() => setSearch(!search)}><Search size={20} aria-hidden /></button>
+        <a className="sf-ic sf-hide-sm" href={`${base}/track/${keep}`} aria-label="Track order" title="Track order"><Truck size={20} aria-hidden /></a>
+        <a className="sf-cart" href={`${base}/cart/${keep}`} aria-label={`Cart, ${n} item${n === 1 ? "" : "s"}`}>
+          <ShoppingBag size={20} aria-hidden />{n > 0 && <span className="n">{n}</span>}
+        </a>
+        <button className="sf-menu-btn" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X size={22} /> : <Menu size={22} />}</button>
+      </div>
+      {search && (
+        <form className="sf-search" role="search" action={`${base}/shop/`} method="get">
+          {keep && [...new URLSearchParams(keep.slice(1)).entries()].map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
+          <label htmlFor="sfq" className="sr-only">Search products</label>
+          <input id="sfq" name="q" className="sf-input" placeholder="Search products" autoFocus maxLength={60} />
+          <button className="sf-btn">Search</button>
+        </form>
+      )}
     </>
   );
 }
@@ -151,5 +164,107 @@ export function CartView({ store, base, checkout }: { store: string; base: strin
         <p className="sf-note" style={{ margin: 0 }}>Final price, shipping and discounts are confirmed at checkout.</p>
       </aside>
     </div>
+  );
+}
+
+/** Top bar while a sale runs, with a live "ends in" countdown. Hides itself when the sale ends. */
+export function SaleBar({ text, endsAt }: { text: string; endsAt: string }) {
+  const end = new Date(endsAt).getTime();
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const left = now === null ? null : end - now;
+  if (left !== null && left <= 0) return null;
+  let label = "";
+  if (left !== null) {
+    const d = Math.floor(left / 86400_000), h = Math.floor((left % 86400_000) / 3600_000), m = Math.floor((left % 3600_000) / 60_000), s = Math.floor((left % 60_000) / 1000);
+    label = d > 0 ? `${d}d ${h}h ${m}m` : `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return <div className="sf-salebar" role="status">{text}{label && <> · ends in <b>{label}</b></>}</div>;
+}
+
+const PIN_KEY = "sf_pin";
+/** "Delivery by Tue, 25 Nov" for the buyer's pincode. Remembers the pincode in this browser only. */
+export function DeliveryCheck({ store, demo }: { store: string; demo?: boolean }) {
+  const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<{ ok: boolean; text: string; cod?: boolean } | null>(null);
+  async function check(p = pin) {
+    if (!/^[1-9]\d{5}$/.test(p)) { setRes({ ok: false, text: "Enter a valid 6-digit pincode" }); return; }
+    if (demo) { setRes({ ok: true, text: "Delivery in 3-5 days (demo)", cod: true }); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/store/${store}/edd/?pin=${p}`);
+      const j = await r.json();
+      if (!r.ok) setRes({ ok: false, text: j?.error?.message ?? "Could not check right now" });
+      else if (!j.serviceable) setRes({ ok: false, text: "Sorry, we don't deliver to this pincode yet" });
+      else {
+        const d = new Date(`${j.date}T00:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+        setRes({ ok: true, text: `Delivery by ${d} (in ${j.days} ${j.days === 1 ? "day" : "days"})`, cod: j.cod });
+        try { localStorage.setItem(PIN_KEY, p); } catch { /* private mode */ }
+      }
+    } catch { setRes({ ok: false, text: "Could not check right now" }); }
+    setBusy(false);
+  }
+  useEffect(() => {
+    let saved = "";
+    try { saved = localStorage.getItem(PIN_KEY) ?? ""; } catch { /* private mode */ }
+    if (/^[1-9]\d{5}$/.test(saved)) { setPin(saved); void check(saved); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div className="sf-edd">
+      <b style={{ display: "flex", gap: 6, alignItems: "center" }}><Truck size={16} aria-hidden /> Check delivery date</b>
+      <form onSubmit={(e) => { e.preventDefault(); void check(); }}>
+        <label htmlFor="sf-pin" className="sr-only">Pincode</label>
+        <input id="sf-pin" className="sf-input" inputMode="numeric" maxLength={6} placeholder="Enter pincode" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} />
+        <button className="sf-btn ghost" disabled={busy}>{busy ? "Checking…" : "Check"}</button>
+      </form>
+      {res && (res.ok
+        ? <div role="status"><div className="ok"><CheckCircle2 size={16} aria-hidden /> {res.text}</div>{res.cod !== undefined && <div className="sf-note">{res.cod ? "Cash on Delivery available" : "Prepaid only for this pincode"}</div>}</div>
+        : <div className="no" role="status">{res.text}</div>)}
+    </div>
+  );
+}
+
+/** Write a review. Published at once; mobile (optional) only checks for a "Verified buyer" badge. */
+export function ReviewForm({ store, productId, demo }: { store: string; productId: string; demo?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ rating: 0, title: "", body: "", name: "", mobile: "", website: "" });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok?: string; err?: string } | null>(null);
+  if (demo) return <p className="sf-note">Reviews can be written on real stores.</p>;
+  if (!open) return <button className="sf-btn ghost" onClick={() => setOpen(true)}>Write a review</button>;
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    if (!f.rating) { setMsg({ err: "Pick a star rating" }); return; }
+    setBusy(true); setMsg(null);
+    const r = await fetch(`/api/store/${store}/reviews/`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...f, productId }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) { setMsg({ err: j?.error?.message ?? "Could not post your review" }); return; }
+    setMsg({ ok: j.verified ? "Thanks! Your review is live with a Verified buyer badge." : "Thanks! Your review is live." });
+    setTimeout(() => window.location.reload(), 1200);
+  }
+  return (
+    <form className="sf-rv-form" onSubmit={send}>
+      <div><span className="sf-note">Your rating</span>
+        <div className="sf-rate" role="radiogroup" aria-label="Rating">{[1, 2, 3, 4, 5].map((k) => (
+          <button type="button" key={k} role="radio" aria-checked={f.rating === k} aria-label={`${k} star${k > 1 ? "s" : ""}`} className={k <= f.rating ? "on" : ""} onClick={() => setF({ ...f, rating: k })}><Star size={26} fill="currentColor" aria-hidden /></button>
+        ))}</div></div>
+      <label className="sr-only" htmlFor="rv-title">Title</label>
+      <input id="rv-title" className="sf-input" placeholder="Title (optional)" maxLength={80} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
+      <label className="sr-only" htmlFor="rv-body">Review</label>
+      <textarea id="rv-body" className="sf-input" rows={4} placeholder="What did you like or dislike?" maxLength={1500} required value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <label className="sr-only" htmlFor="rv-name">Your name</label>
+        <input id="rv-name" className="sf-input" placeholder="Your name" maxLength={40} required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
+        <label className="sr-only" htmlFor="rv-mob">Mobile used for the order</label>
+        <input id="rv-mob" className="sf-input" placeholder="Order mobile (optional)" inputMode="numeric" maxLength={13} value={f.mobile} onChange={(e) => setF({ ...f, mobile: e.target.value })} />
+      </div>
+      <input tabIndex={-1} autoComplete="off" aria-hidden className="sr-only" name="website" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} />
+      <span className="sf-note">Your mobile is only used to show a &quot;Verified buyer&quot; badge. It is never shown or shared.</span>
+      {msg && <div role="status" className={msg.err ? "no" : ""} style={{ color: msg.err ? "#b91c1c" : "#15803d" }}>{msg.err ?? msg.ok}</div>}
+      <div><button className="sf-btn" disabled={busy}>{busy ? "Posting…" : "Post review"}</button></div>
+    </form>
   );
 }

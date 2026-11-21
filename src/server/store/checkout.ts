@@ -1,3 +1,5 @@
+import { saleFor, salePrice } from "@/lib/store-sale";
+import { activeSales } from "./sales";
 import { ORDERS_PAUSED_TEXT, planState } from "@/lib/store-plan";
 import "server-only";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
@@ -62,6 +64,7 @@ export async function quoteCart(store: Store, lines: CheckoutInput["lines"], cou
   const prods = await db.select().from(schema.storeProducts).where(and(eq(schema.storeProducts.storeId, store.id), inArray(schema.storeProducts.id, pids)));
   const vids = lines.map((l) => l.variantId).filter((v): v is string => !!v);
   const vars = vids.length ? await db.select().from(schema.storeProductVariants).where(and(eq(schema.storeProductVariants.storeId, store.id), inArray(schema.storeProductVariants.id, vids))) : [];
+  const sales = await activeSales(store.id, db);
   const out: Line[] = [];
   for (const l of lines) {
     const p = prods.find((x) => x.id === l.productId);
@@ -73,6 +76,8 @@ export async function quoteCart(store: Store, lines: CheckoutInput["lines"], cou
       if (!v) throw new CheckoutError(`Choose an option for ${p.title}`);
       unit = v.pricePaise; stock = v.stock; weight = v.weightGrams ?? p.weightGrams; vTitle = v.title; sku = v.sku ?? p.sku;
     }
+    const sale = saleFor(sales, p.id, p.categoryId);
+    if (sale) unit = salePrice(unit, sale.percentOff);
     const same = out.filter((o) => o.productId === p.id && o.variantId === (l.variantId ?? null)).reduce((n, o) => n + o.qty, 0);
     if (stock < l.qty + same) throw new CheckoutError(stock > 0 ? `Only ${stock} left of ${p.title}${vTitle ? ` (${vTitle})` : ""}` : `${p.title}${vTitle ? ` (${vTitle})` : ""} is out of stock`);
     out.push({ productId: p.id, variantId: l.variantId ?? null, title: p.title, variantTitle: vTitle, sku: sku ?? null, qty: l.qty, unitPaise: unit, weightGrams: weight, hsn: p.hsn, taxBps: p.taxBps, image: (p.images as string[])[0] ?? null });

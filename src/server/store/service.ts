@@ -5,7 +5,7 @@ import { getSetting } from "@/server/quotes/service";
 import { newId } from "@/server/util/ids";
 import {
   ONBOARDING_STEPS, RESERVED_SLUGS, SLUG_RE, type StoreSettings, type ThemeConfig,
-  defaultTheme, readSettings, readTheme, themeByKey,
+  defaultTheme, readSettings, readTheme, sectionMediaIds, themeByKey,
 } from "@/lib/store-themes";
 
 /**
@@ -76,7 +76,7 @@ export async function saveDraftTheme(orgId: string, themeKey: string, config: Th
   if (s.customDesign && themeKey !== s.themeKey) return { ok: false as const, message: "Your store uses a custom design set up by Vishwaship. Contact support to change the theme." };
   if (themeKey !== s.themeKey && (await storeBillingSetting()).disabledThemes.includes(themeKey)) return { ok: false as const, message: "This theme is not available right now. Please pick another." };
   if (config.logo) await assertMediaOwned(s.id, [config.logo]);
-  const imgs = config.sections.map((x) => x.settings.image).filter((v): v is string => !!v);
+  const imgs = sectionMediaIds(config.sections);
   if (imgs.length) await assertMediaOwned(s.id, imgs);
   const db = await getDb();
   await db.update(schema.stores).set({ themeKey: themeByKey(themeKey).key, draftTheme: config, updatedAt: new Date() }).where(eq(schema.stores.id, s.id));

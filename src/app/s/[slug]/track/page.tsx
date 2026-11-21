@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { StoreShell } from "@/components/store/Storefront";
 import { rateLimit } from "@/server/security/rate-limit";
+import { ensurePublicRef } from "@/server/tracking/service";
 import { type PublicTrack, publicTrack } from "@/server/tracking/public";
 import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrderByMobile } from "@/server/store/orders";
 import { type SfParams, type SfSearch, resolveSf, sfMeta } from "../_sf";
@@ -24,11 +25,13 @@ export default async function Track({ params, searchParams }: { params: SfParams
   const mob = (typeof sp.mobile === "string" ? sp.mobile : "").replace(/\D/g, "").slice(-10);
   let so: Awaited<ReturnType<typeof buyerOrderByMobile>> = null;
   let soMissing = false;
+  let liveRef: string | null = null;
   if ((q || (orderNo && mob)) && !sf.demo) {
     const ip = ((await headers()).get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
     limited = !(await rateLimit(`track:${ip}`, 20, 600)).ok;
     if (!limited && q) { try { r = await publicTrack(q); } catch { r = null; } }
     if (!limited && orderNo && mob) { so = await buyerOrderByMobile(sf.id, orderNo, mob); soMissing = !so; }
+    if (so?.awb && so.shipmentId) liveRef = await ensurePublicRef(so.shipmentId);
   }
   return (
     <StoreShell sf={sf}>
@@ -47,6 +50,7 @@ export default async function Track({ params, searchParams }: { params: SfParams
           <div className="sf-summary" role="status" style={{ marginBottom: 16 }}>
             <div className="row"><span>Order {so.number}</span><b>{FULFILMENT_LABEL[so.fulfilment]}</b></div>
             <div className="row"><span>Payment</span><span>{PAYMENT_LABEL[so.paymentStatus] ?? so.paymentStatus}</span></div>
+            {liveRef && <a className="sf-btn" href={`/t/${liveRef}/`} target="_blank" rel="noopener" style={{ marginTop: 6 }}>Open live tracking</a>}
             {so.awb ? <div className="row"><span>{so.carrierName}</span><a href={`${sf.base}/track/?awb=${encodeURIComponent(so.awb)}`} style={{ textDecoration: "underline" }}>Track {so.awb}</a></div> : <span className="sf-note">The courier tracking number appears here once your order is shipped.</span>}
           </div>
         )}

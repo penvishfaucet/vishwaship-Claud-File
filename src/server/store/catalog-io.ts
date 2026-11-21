@@ -150,6 +150,7 @@ export const CouponInput = z.object({
   startsAt: z.string().max(30).nullable().default(null),
   endsAt: z.string().max(30).nullable().default(null),
   active: z.boolean().default(true),
+  showOnStore: z.boolean().default(false),
 }).superRefine((v, ctx) => {
   if (v.kind === "percent" && (v.value <= 0 || v.value > 90)) ctx.addIssue({ code: "custom", path: ["value"], message: "Percent must be between 1 and 90" });
   if (v.kind === "flat" && v.value <= 0) ctx.addIssue({ code: "custom", path: ["value"], message: "Enter the discount amount" });
@@ -170,7 +171,7 @@ export async function saveCoupon(orgId: string, input: z.infer<typeof CouponInpu
   const values = {
     code: input.code, kind: input.kind, value: input.kind === "percent" ? Math.round(input.value * 100) : input.kind === "flat" ? Math.round(input.value * 100) : 0,
     maxDiscountPaise: input.maxDiscountRupees ? Math.round(input.maxDiscountRupees * 100) : null, minSubtotalPaise: Math.round(input.minSubtotalRupees * 100),
-    maxUses: input.maxUses, startsAt: day(input.startsAt, false), endsAt: day(input.endsAt, true), active: input.active,
+    maxUses: input.maxUses, startsAt: day(input.startsAt, false), endsAt: day(input.endsAt, true), active: input.active, showOnStore: input.showOnStore,
   };
   const db = await getDb();
   try {

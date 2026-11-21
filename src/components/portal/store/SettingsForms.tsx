@@ -75,7 +75,7 @@ export function PagesForm({ initial, storeName }: { initial: StoreSettings; stor
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg(null);
-    const r = await api("PUT", "/api/portal/store/settings", { patch: { tagline: s.tagline, about: s.about, contact: s.contact, policies: s.policies, seo: s.seo } });
+    const r = await api("PUT", "/api/portal/store/settings", { patch: { tagline: s.tagline, about: s.about, contact: s.contact, policies: s.policies, seo: s.seo, social: s.social } });
     setBusy(false);
     setMsg(r.ok ? { ok: "Saved. Changes show on your store right away." } : { err: r.error });
     if (r.ok) router.refresh();
@@ -95,6 +95,16 @@ export function PagesForm({ initial, storeName }: { initial: StoreSettings; stor
           <div className="field"><label htmlFor="cp">Phone</label><input id="cp" className="input" inputMode="tel" maxLength={20} value={s.contact.phone} onChange={(e) => setS({ ...s, contact: { ...s.contact, phone: e.target.value } })} /></div>
           <div className="field"><label htmlFor="cw">WhatsApp number</label><input id="cw" className="input" inputMode="tel" maxLength={20} value={s.contact.whatsapp} onChange={(e) => setS({ ...s, contact: { ...s.contact, whatsapp: e.target.value } })} /></div>
           <div className="field"><label htmlFor="ca">Address</label><textarea id="ca" className="input" rows={2} maxLength={400} value={s.contact.address} onChange={(e) => setS({ ...s, contact: { ...s.contact, address: e.target.value } })} /></div>
+        </div>
+      </div>
+      <div className="card mb12" style={{ padding: 20 }}>
+        <h3 style={{ marginBottom: 4 }}>Social links</h3>
+        <p className="small muted" style={{ marginBottom: 10 }}>Shown as icons in your store footer. Paste the full link starting with https://</p>
+        <div className="grid2">
+          {(["instagram", "facebook", "youtube"] as const).map((k) => (
+            <div className="field" key={k}><label htmlFor={`so-${k}`}>{k === "youtube" ? "YouTube" : k[0].toUpperCase() + k.slice(1)}</label>
+              <input id={`so-${k}`} className="input" inputMode="url" maxLength={200} placeholder={`https://${k}.com/yourpage`} value={s.social[k]} onChange={(e) => setS({ ...s, social: { ...s.social, [k]: e.target.value.trim() } })} /></div>
+          ))}
         </div>
       </div>
       <div className="card mb12" style={{ padding: 20 }}>

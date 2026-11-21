@@ -169,6 +169,13 @@
       "when": 1795220363167,
       "tag": "0023_store_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795235026646,
+      "tag": "0024_store_sales_reviews",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,10 @@
 import { ORDERS_PAUSED_TEXT } from "@/lib/store-plan";
-import { BadgeCheck, RotateCcw, ShieldCheck, Truck } from "lucide-react";
-import { POLICY_KINDS, RADIUS_PX, type StoreSection, fontsHref, rupees } from "@/lib/store-themes";
+import { BadgeCheck, Facebook, Instagram, MessageCircle, RotateCcw, ShieldCheck, Star, Truck, Youtube } from "lucide-react";
+import { POLICY_KINDS, RADIUS_PX, type StoreSection, fontsHref, heroSlides, rupees } from "@/lib/store-themes";
+import { HeroSlider } from "./HeroSlider";
 import type { Storefront } from "@/server/store/public";
 import { logoUrl, sectionImage } from "@/server/store/public";
-import { AttributionCapture, HeaderNav } from "./StoreClient";
+import { AttributionCapture, HeaderNav, SaleBar } from "./StoreClient";
 import { StoreTracking } from "./Tracking";
 import type { SfProduct } from "./types";
 import "@/styles/store.css";
@@ -29,11 +30,12 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
       {sf.preview && <div className="sf-preview" role="status">Preview — buyers can't see unpublished changes. <a href="/portal/store/theme/" target="_top">Back to editor</a></div>}
       {sf.demo && <div className="sf-preview" role="status">Demo store — <a href="/online-store/">create your own store</a>. Try themes: {["bazaar", "minimal", "boutique", "fresh"].map((k, i) => <span key={k}>{i ? " · " : " "}<a href={`?theme=${k}`}>{k}</a></span>)}</div>}
       {!sf.ordersOpen && !sf.preview && <div className="sf-bar" role="status">{ORDERS_PAUSED_TEXT}</div>}
+      {sf.sale && sf.ordersOpen && <SaleBar text={sf.sale.text} endsAt={sf.sale.endsAt} />}
       {ann && <div className="sf-bar">{ann.settings.text}</div>}
       <header className="sf-head">
         <div className="sf-wrap">
           <a className="sf-logo" href={`${sf.base}/${keep}`}>{logo ? <img src={logo} alt={sf.name} /> : sf.name}</a>
-          <HeaderNav store={sf.slug} base={sf.base} links={links.map((l) => ({ ...l, href: l.href + keep }))} />
+          <HeaderNav store={sf.slug} base={sf.base} keep={keep} links={links.map((l) => ({ ...l, href: l.href + keep }))} />
         </div>
       </header>
       {!sf.demo && !sf.preview && <><AttributionCapture store={sf.slug} /><StoreTracking store={sf.slug} tags={sf.tags} policyHref={`${sf.base}/policies/privacy/`} /></>}
@@ -42,10 +44,9 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
         <div className="sf-wrap">
           <div className="cols">
             <div>
-              <h3>{sf.name}</h3>
-              {sf.settings.tagline && <p style={{ color: "var(--sf-muted)", margin: 0 }}>{sf.settings.tagline}</p>}
-              {sf.settings.contact.email && <p style={{ margin: "8px 0 0" }}>{sf.settings.contact.email}</p>}
-              {sf.settings.contact.phone && <p style={{ margin: "4px 0 0" }}>{sf.settings.contact.phone}</p>}
+              <a className="sf-logo" href={`${sf.base}/${keep}`}>{logo ? <img src={logo} alt={sf.name} /> : sf.name}</a>
+              {sf.settings.tagline && <p style={{ color: "var(--sf-muted)", margin: "10px 0 0", maxWidth: 320 }}>{sf.settings.tagline}</p>}
+              <Social sf={sf} />
             </div>
             <div><h3>Shop</h3><ul><li><a href={`${sf.base}/shop/${keep}`}>All products</a></li>{sf.categories.slice(0, 5).map((cat) => <li key={cat.id}><a href={`${sf.base}/shop/?c=${cat.slug}${keep ? `&${keep.slice(1)}` : ""}`}>{cat.name}</a></li>)}</ul></div>
             <div><h3>Help</h3><ul>
@@ -53,8 +54,16 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
               <li><a href={`${sf.base}/contact/${keep}`}>Contact us</a></li>
               {(Object.keys(POLICY_KINDS) as Array<keyof typeof POLICY_KINDS>).filter((k) => sf.settings.policies[k]).map((k) => <li key={k}><a href={`${sf.base}/policies/${k}/${keep}`}>{POLICY_KINDS[k]}</a></li>)}
             </ul></div>
+            {(sf.settings.contact.phone || sf.settings.contact.email || sf.settings.contact.address) && (
+              <div><h3>Contact</h3><ul>
+                {sf.settings.contact.phone && <li><a href={`tel:${sf.settings.contact.phone.replace(/[^\d+]/g, "")}`}>{sf.settings.contact.phone}</a></li>}
+                {sf.settings.contact.email && <li><a href={`mailto:${sf.settings.contact.email}`}>{sf.settings.contact.email}</a></li>}
+                {sf.settings.contact.address && <li style={{ whiteSpace: "pre-line" }}>{sf.settings.contact.address}</li>}
+              </ul></div>
+            )}
           </div>
-          <div className="fine"><span>© {new Date().getFullYear()} {sf.name}</span><span>Powered by Vishwaship</span></div>
+          <div className="sf-paybadges" aria-label="Ways to pay">{sf.settings.checkout.codEnabled && <span>Cash on Delivery</span>}{sf.onlinePay && <><span>UPI</span><span>Cards</span><span>Net banking</span></>}</div>
+          <div className="fine"><span>© {new Date().getFullYear()} {sf.name}. All rights reserved.</span><span>Powered by Vishwaship</span></div>
         </div>
       </footer>
     </div>
@@ -72,11 +81,22 @@ export function Price({ p }: { p: SfProduct }) {
   );
 }
 
+export function Stars({ avg, count }: { avg: number; count?: number }) {
+  return (
+    <span className="sf-stars" aria-label={`Rated ${avg} out of 5${count ? `, ${count} reviews` : ""}`}>
+      {[1, 2, 3, 4, 5].map((k) => <Star key={k} size={13} fill={k <= Math.round(avg) ? "currentColor" : "none"} aria-hidden />)}
+      {count !== undefined && <span className="c">({count})</span>}
+    </span>
+  );
+}
+
 export function ProductCard({ p, base, q = "" }: { p: SfProduct; base: string; q?: string }) {
   return (
     <a className="sf-card" href={`${base}/products/${p.slug}/${q}`}>
+      {p.sale && <span className="sale">{p.sale.percentOff}% OFF</span>}
       <div className="img">{p.images[0] ? <img src={p.images[0]} alt={p.title} loading="lazy" /> : null}</div>
       <span className="t">{p.title}</span>
+      {p.rating && <Stars avg={p.rating.avg} count={p.rating.count} />}
       <Price p={p} />
       {!p.inStock && <span className="sf-oos">Out of stock</span>}
     </a>
@@ -94,19 +114,12 @@ function Section({ s, sf, keep }: { s: StoreSection; sf: Storefront; keep: strin
   const v = s.settings;
   switch (s.type) {
     case "hero": {
-      const img = sectionImage(v.image) ?? (sf.demo ? "/store-demo/hero.svg" : null);
-      return (
-        <section className={`sf-hero${v.align === "center" ? " center" : ""}`}>
-          <div className="sf-wrap">
-            <div>
-              <h1>{v.heading || sf.name}</h1>
-              {v.subheading && <p>{v.subheading}</p>}
-              <a className="sf-btn" href={`${sf.base}/shop/${keep}`}>{v.button || "Shop now"}</a>
-            </div>
-            {img && <img src={img} alt="" />}
-          </div>
-        </section>
-      );
+      const slides = heroSlides(v, sf.base, sf.name).map((s, k) => ({
+        ...s, image: sectionImage(s.image) ?? (sf.demo && k === 0 ? "/store-demo/hero.svg" : null),
+        buttons: s.buttons.map((b) => ({ ...b, href: keep && b.href.startsWith(sf.base) ? `${b.href}${b.href.includes("?") ? "&" : "?"}${keep.slice(1)}` : b.href })),
+      }));
+      const secs = Number.parseInt(v.autoplay ?? "5", 10);
+      return <HeroSlider slides={slides} intervalMs={Number.isFinite(secs) ? secs * 1000 : 0} center={v.align === "center"} />;
     }
     case "trust_badges": {
       const items = (v.items ?? "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 4);
@@ -156,4 +169,21 @@ function Section({ s, sf, keep }: { s: StoreSection; sf: Storefront; keep: strin
     default:
       return null;
   }
+}
+
+const SOCIAL = [
+  { k: "instagram", I: Instagram, label: "Instagram" }, { k: "facebook", I: Facebook, label: "Facebook" }, { k: "youtube", I: Youtube, label: "YouTube" },
+] as const;
+/** Social links from Pages & SEO. Only https links are shown; WhatsApp becomes a wa.me chat link. */
+function Social({ sf }: { sf: Storefront }) {
+  const s = sf.settings.social;
+  const wa = (s.whatsapp || sf.settings.contact.whatsapp).replace(/\D/g, "").slice(-10);
+  const items = SOCIAL.filter((x) => /^https:\/\/[^\s"'<>]+$/i.test(s[x.k]));
+  if (!items.length && wa.length !== 10) return null;
+  return (
+    <div className="sf-social">
+      {items.map(({ k, I, label }) => <a key={k} href={s[k]} target="_blank" rel="noopener noreferrer" aria-label={label}><I size={18} aria-hidden /></a>)}
+      {wa.length === 10 && <a href={`https://wa.me/91${wa}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp"><MessageCircle size={18} aria-hidden /></a>}
+    </div>
+  );
 }

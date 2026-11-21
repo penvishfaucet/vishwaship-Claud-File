@@ -1,9 +1,9 @@
 "use client";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Monitor, Plus, RotateCcw, Smartphone, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import {
-  FONT_CHOICES, SECTION_FIELDS, SECTION_LABEL, SECTION_TYPES, THEMES, type SectionType, type StoreSection, type ThemeConfig, defaultTheme,
+  FONT_CHOICES, SECTION_FIELDS, SECTION_LABEL, SECTION_TYPES, THEMES, type SectionField, type SectionType, type StoreSection, type ThemeConfig, defaultTheme,
 } from "@/lib/store-themes";
 import { ImageUpload, Msg, api, mediaSrc } from "./ui";
 
@@ -69,6 +69,23 @@ export function ThemeEditor({ initial, slug, mode, status, versions = [], hidden
 
   async function continueStep() {
     if (await save(true)) { router.push("/portal/store/setup/3/"); router.refresh(); }
+  }
+
+  function fieldInput(s: StoreSection, f: SectionField) {
+    const id = `${s.id}-${f.key}`;
+    const val = s.settings[f.key] ?? "";
+    const set = (v: string) => setSection(s.id, { settings: { ...s.settings, [f.key]: v } });
+    if (f.kind === "image") return (
+      <div className="field"><label>{f.label}</label>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          {val && <img src={mediaSrc(val)} alt="" style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6 }} />}
+          <ImageUpload label={val ? "Change" : "Upload"} onDone={set} />
+          {val && <button type="button" className="link small" onClick={() => set("")}>Remove</button>}
+        </div></div>
+    );
+    if (f.kind === "select") return <div className="field"><label htmlFor={id}>{f.label}</label><select id={id} className="input select" value={val || f.options![0]} onChange={(e) => set(e.target.value)}>{f.options!.map((o) => <option key={o}>{o}</option>)}</select></div>;
+    if (f.kind === "textarea") return <div className="field"><label htmlFor={id}>{f.label}</label><textarea id={id} className="input" rows={3} value={val} maxLength={2000} onChange={(e) => set(e.target.value)} /></div>;
+    return <div className="field"><label htmlFor={id}>{f.label}</label><input id={id} className="input" value={val} maxLength={200} onChange={(e) => set(e.target.value)} /></div>;
   }
 
   const themePicker = (
@@ -177,21 +194,10 @@ export function ThemeEditor({ initial, slug, mode, status, versions = [], hidden
                 </div>
                 {open === s.id && (
                   <div className="os-sec-b">
-                    {SECTION_FIELDS[s.type].map((f) => {
-                      const id = `${s.id}-${f.key}`;
-                      const val = s.settings[f.key] ?? "";
-                      const set = (v: string) => setSection(s.id, { settings: { ...s.settings, [f.key]: v } });
-                      if (f.kind === "image") return (
-                        <div className="field" key={f.key}><label>{f.label}</label>
-                          <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                            {val && <img src={mediaSrc(val)} alt="" style={{ width: 64, height: 40, objectFit: "cover", borderRadius: 6 }} />}
-                            <ImageUpload label={val ? "Change" : "Upload"} onDone={set} />
-                            {val && <button type="button" className="link small" onClick={() => set("")}>Remove</button>}
-                          </div></div>
-                      );
-                      if (f.kind === "select") return <div className="field" key={f.key}><label htmlFor={id}>{f.label}</label><select id={id} className="input select" value={val || f.options![0]} onChange={(e) => set(e.target.value)}>{f.options!.map((o) => <option key={o}>{o}</option>)}</select></div>;
-                      if (f.kind === "textarea") return <div className="field" key={f.key}><label htmlFor={id}>{f.label}</label><textarea id={id} className="input" rows={4} value={val} maxLength={2000} onChange={(e) => set(e.target.value)} /></div>;
-                      return <div className="field" key={f.key}><label htmlFor={id}>{f.label}</label><input id={id} className="input" value={val} maxLength={200} onChange={(e) => set(e.target.value)} /></div>;
+                    {SECTION_FIELDS[s.type].map((f, fi, all) => {
+                      const head = f.group && f.group !== all[fi - 1]?.group
+                        ? <div className="small" style={{ fontWeight: 700, marginTop: 6, paddingTop: 8, borderTop: "1px solid var(--line-2,#e5e7eb)" }}>{f.group}</div> : null;
+                      return <Fragment key={f.key}>{head}{fieldInput(s, f)}</Fragment>;
                     })}
                   </div>
                 )}

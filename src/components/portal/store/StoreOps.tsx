@@ -84,8 +84,8 @@ export function RazorpayForm({ initial }: { initial: RzView }) {
   );
 }
 
-type Coupon = { id: string; code: string; kind: string; value: number; maxDiscountPaise: number | null; minSubtotalPaise: number; maxUses: number | null; used: number; startsAt: string | null; endsAt: string | null; active: boolean };
-const blank = { code: "", kind: "percent", value: "10", maxDiscount: "", minSubtotal: "", maxUses: "", startsAt: "", endsAt: "", active: true };
+type Coupon = { id: string; code: string; kind: string; value: number; maxDiscountPaise: number | null; minSubtotalPaise: number; maxUses: number | null; used: number; startsAt: string | null; endsAt: string | null; active: boolean; showOnStore: boolean };
+const blank = { code: "", kind: "percent", value: "10", maxDiscount: "", minSubtotal: "", maxUses: "", startsAt: "", endsAt: "", active: true, showOnStore: false };
 
 export function CouponManager({ coupons }: { coupons: Coupon[] }) {
   const router = useRouter();
@@ -97,12 +97,12 @@ export function CouponManager({ coupons }: { coupons: Coupon[] }) {
     setMsg(null);
     if (!c) { setEdit("new"); setF(blank); return; }
     setEdit(c.id);
-    setF({ code: c.code, kind: c.kind, value: c.kind === "free_shipping" ? "0" : String(c.value / 100), maxDiscount: c.maxDiscountPaise ? String(c.maxDiscountPaise / 100) : "", minSubtotal: c.minSubtotalPaise ? String(c.minSubtotalPaise / 100) : "", maxUses: c.maxUses ? String(c.maxUses) : "", startsAt: c.startsAt?.slice(0, 10) ?? "", endsAt: c.endsAt?.slice(0, 10) ?? "", active: c.active });
+    setF({ code: c.code, kind: c.kind, value: c.kind === "free_shipping" ? "0" : String(c.value / 100), maxDiscount: c.maxDiscountPaise ? String(c.maxDiscountPaise / 100) : "", minSubtotal: c.minSubtotalPaise ? String(c.minSubtotalPaise / 100) : "", maxUses: c.maxUses ? String(c.maxUses) : "", startsAt: c.startsAt?.slice(0, 10) ?? "", endsAt: c.endsAt?.slice(0, 10) ?? "", active: c.active, showOnStore: c.showOnStore });
   }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const n = (v: string) => (v.trim() ? Number(v) : null);
-    const r = await api("POST", "/api/portal/store/coupons", { id: edit === "new" ? undefined : edit, coupon: { code: f.code, kind: f.kind, value: Number(f.value) || 0, maxDiscountRupees: n(f.maxDiscount), minSubtotalRupees: Number(f.minSubtotal) || 0, maxUses: n(f.maxUses), startsAt: f.startsAt || null, endsAt: f.endsAt || null, active: f.active } });
+    const r = await api("POST", "/api/portal/store/coupons", { id: edit === "new" ? undefined : edit, coupon: { code: f.code, kind: f.kind, value: Number(f.value) || 0, maxDiscountRupees: n(f.maxDiscount), minSubtotalRupees: Number(f.minSubtotal) || 0, maxUses: n(f.maxUses), startsAt: f.startsAt || null, endsAt: f.endsAt || null, active: f.active, showOnStore: f.showOnStore } });
     if (!r.ok) { setMsg({ err: r.error }); return; }
     setEdit(null); setMsg({ ok: "Coupon saved." }); router.refresh();
   }
@@ -130,6 +130,7 @@ export function CouponManager({ coupons }: { coupons: Coupon[] }) {
             <div className="field"><label htmlFor="ce">Ends</label><input id="ce" type="date" className="input" value={f.endsAt} onChange={(e) => setF({ ...f, endsAt: e.target.value })} /></div>
           </div>
           <label className="row" style={{ gap: 8, marginTop: 12 }}><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> Active</label>
+          <label className="row" style={{ gap: 8, marginTop: 6 }}><input type="checkbox" checked={f.showOnStore} onChange={(e) => setF({ ...f, showOnStore: e.target.checked })} /> Show as an offer on product pages</label>
           <Msg m={msg} />
           <div className="row" style={{ gap: 8, marginTop: 14 }}><button className="btn btn-orange">Save coupon</button><button type="button" className="btn btn-outline" onClick={() => setEdit(null)}>Close</button></div>
         </form>

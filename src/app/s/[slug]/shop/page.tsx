@@ -15,7 +15,9 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
   const sp = await searchParams;
   const cat = sf.categories.find((x) => x.slug === sp.c) ?? null;
   const sort = typeof sp.sort === "string" ? sp.sort : "";
+  const term = (typeof sp.q === "string" ? sp.q : "").trim().toLowerCase().slice(0, 60);
   let list = cat ? sf.products.filter((p) => p.categorySlug === cat.slug) : sf.products;
+  if (term) list = list.filter((p) => `${p.title} ${p.description}`.toLowerCase().includes(term));
   if (sort === "price_asc") list = [...list].sort((a, b) => a.pricePaise - b.pricePaise);
   if (sort === "price_desc") list = [...list].sort((a, b) => b.pricePaise - a.pricePaise);
   const keep = keepQs(sf);
@@ -23,7 +25,7 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
   return (
     <StoreShell sf={sf}>
       <div className="sf-wrap sf-page">
-        <h1>{cat ? cat.name : "All products"}</h1>
+        <h1>{term ? `Results for “${term}”` : cat ? cat.name : "All products"}</h1>
         <div className="sf-filters">
           <a className={`sf-chip${!cat ? " on" : ""}`} href={`${sf.base}/shop/${q({ sort })}`}>All</a>
           {sf.categories.map((c) => <a key={c.id} className={`sf-chip${cat?.id === c.id ? " on" : ""}`} href={`${sf.base}/shop/${q({ c: c.slug, sort })}`}>{c.name}</a>)}
@@ -32,7 +34,7 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
             <a className={`sf-chip${sort === "price_desc" ? " on" : ""}`} href={`${sf.base}/shop/${q({ c: cat?.slug ?? "", sort: "price_desc" })}`}>Price: high to low</a>
           </span>
         </div>
-        {list.length ? <div className="sf-grid">{list.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep ? `?${keep}` : ""} />)}</div> : <p className="sf-empty">No products here yet.</p>}
+        {list.length ? <div className="sf-grid">{list.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep ? `?${keep}` : ""} />)}</div> : <p className="sf-empty">{term ? "No products match your search." : "No products here yet."}</p>}
       </div>
     </StoreShell>
   );

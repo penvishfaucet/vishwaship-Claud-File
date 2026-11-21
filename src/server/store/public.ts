@@ -1,12 +1,15 @@
 import "server-only";
 import { cache } from "react";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { type StoreSettings, type ThemeConfig, defaultTheme, readSettings, readTheme, themeByKey } from "@/lib/store-themes";
 import type { SfCategory, SfProduct } from "@/components/store/types";
 import { planState } from "@/lib/store-plan";
+import { couponText, saleFor, salePrice } from "@/lib/store-sale";
+import { activeSales } from "./sales";
 import { publicTags } from "./marketing";
+import { razorpayReady } from "./razorpay";
 
 /**
  * Buyer-facing store lookup. Only live stores are public. The owner (customer session of the same org)
@@ -20,6 +23,12 @@ export type Storefront = {
   base: string; preview: boolean; demo: boolean; indexable: boolean;
   /** False when the trial ended and no plan is running: the store stays visible but takes no new orders. */
   ordersOpen: boolean;
+  /** Biggest running sale, for the top bar countdown. */
+  sale: { name: string; text: string; endsAt: string } | null;
+  /** Coupons the merchant shows as offers on product pages. */
+  offers: Array<{ code: string; text: string }>;
+  /** Online payment (a verified gateway) is available at checkout. */
+  onlinePay: boolean;
   /** Browser tag ids (never secrets); empty on preview and demo. */
   tags: { metaPixelId: string | null; ga4Id: string | null; gadsId: string | null; gadsLabel: string | null; codMilestone: string };
 };
@@ -48,6 +57,19 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
   const vars = withOptions.length
     ? await db.select().from(schema.storeProductVariants).where(and(inArray(schema.storeProductVariants.productId, withOptions), eq(schema.storeProductVariants.archived, false))).orderBy(asc(schema.storeProductVariants.sort))
     : [];
+  const [sales, ratings, offerRows] = await Promise.all([
+    activeSales(s.id, db),
+    db.select({ productId: schema.storeReviews.productId, avg: sql<number>`avg(${schema.storeReviews.rating})::float`, n: sql<number>`count(*)::int` })
+      .from(schema.storeReviews).where(and(eq(schema.storeReviews.storeId, s.id), eq(schema.storeReviews.status, "published"))).groupBy(schema.storeReviews.productId),
+    db.select().from(schema.storeCoupons).where(and(eq(schema.storeCoupons.storeId, s.id), eq(schema.storeCoupons.active, true), eq(schema.storeCoupons.showOnStore, true))),
+  ]);
+  const now = Date.now();
+  const offers = offerRows.filter((c) => (!c.startsAt || c.startsAt.getTime() <= now) && (!c.endsAt || c.endsAt.getTime() > now) && (c.maxUses === null || c.used < c.maxUses))
+    .slice(0, 5).map((c) => ({ code: c.code, text: couponText(c) }));
+  const rate = new Map(ratings.map((r) => [r.productId, { avg: Math.round(r.avg * 10) / 10, count: r.n }]));
+  const salePair = (price: number, compare: number | null, pct: number | null) =>
+    pct ? { pricePaise: salePrice(price, pct), comparePaise: Math.max(compare ?? 0, price) } : { pricePaise: price, comparePaise: compare };
+  const banner = [...sales].sort((a, b) => b.percentOff - a.percentOff)[0] ?? null;
   return {
     id: s.id, name: s.name, slug: s.slug, status: s.status, settings: readSettings(s.settings),
     theme: { ...theme, logo: theme.logo }, themeKey: s.themeKey,
@@ -55,17 +77,22 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     products: prods.map((p) => {
       const options = p.options as string[];
       const pv = options.length ? vars.filter((v) => v.productId === p.id) : [];
-      const cheapest = pv.length ? pv.reduce((m, v) => (v.pricePaise < m.pricePaise ? v : m)) : null;
+      const sale = saleFor(sales, p.id, p.categoryId);
+      const pct = sale?.percentOff ?? null;
+      const variants = pv.map((v) => ({ id: v.id, title: v.title, values: v.optionValues as string[], ...salePair(v.pricePaise, v.comparePaise, pct), inStock: v.stock > 0 }));
+      const cheapest = variants.length ? variants.reduce((m, v) => (v.pricePaise < m.pricePaise ? v : m)) : null;
       return {
         id: p.id, title: p.title, slug: p.slug, description: p.description ?? "",
-        pricePaise: cheapest?.pricePaise ?? p.pricePaise, comparePaise: cheapest ? cheapest.comparePaise : p.comparePaise,
+        ...(cheapest ? { pricePaise: cheapest.pricePaise, comparePaise: cheapest.comparePaise } : salePair(p.pricePaise, p.comparePaise, pct)),
         images: (p.images as string[]).map(mediaUrl), inStock: options.length ? pv.some((v) => v.stock > 0) : p.stock > 0, featured: p.featured,
         categorySlug: p.categoryId ? catSlug.get(p.categoryId) ?? null : null,
         seo: (p.seo as { title?: string; description?: string }) ?? {},
-        options, variants: pv.map((v) => ({ id: v.id, title: v.title, values: v.optionValues as string[], pricePaise: v.pricePaise, comparePaise: v.comparePaise, inStock: v.stock > 0 })),
+        options, variants, sale: sale ? { name: sale.name, percentOff: sale.percentOff } : null, rating: rate.get(p.id) ?? null,
       };
     }),
-    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live", ordersOpen: planState(s).ordersOpen,
+    sale: banner ? { name: banner.name, text: banner.bannerText || `${banner.name}: ${banner.percentOff}% off`, endsAt: banner.endsAt.toISOString() } : null,
+    offers,
+    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live", ordersOpen: planState(s).ordersOpen, onlinePay: preview ? false : await razorpayReady(s.orgId),
     tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });
@@ -83,6 +110,7 @@ function demoStore(themeKey?: string): Storefront {
   const P = (id: string, title: string, price: number, compare: number | null, cat: string, img: string, desc: string, featured = true): SfProduct => ({
     id, title, slug: id, description: desc, pricePaise: price * 100, comparePaise: compare ? compare * 100 : null,
     images: [`/store-demo/${img}.svg`], inStock: true, featured, categorySlug: cat, seo: {}, options: [], variants: [],
+    sale: compare ? { name: "Festive Sale", percentOff: Math.round((1 - price / compare) * 100) } : null, rating: null,
   });
   const products = [
     P("indigo-cotton-kurta", "Indigo Cotton Kurta", 1299, 1799, "kurtas", "kurta-indigo", "Breathable hand-block printed cotton kurta. Regular fit."),
@@ -113,6 +141,8 @@ function demoStore(themeKey?: string): Storefront {
   });
   return {
     id: "demo", name: "Vishwa Crafts", slug: "demo", status: "live", settings, theme, themeKey: key,
-    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true,
+    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true, onlinePay: true,
+    sale: { name: "Festive Sale", text: "Festive Sale is on: up to 30% off", endsAt: new Date(Date.now() + 2 * 86400_000 + 5 * 3600_000).toISOString() },
+    offers: [{ code: "WELCOME10", text: "10% off on orders above ₹999 (up to ₹200)" }, { code: "FREESHIP", text: "Free shipping" }],
   };
 }

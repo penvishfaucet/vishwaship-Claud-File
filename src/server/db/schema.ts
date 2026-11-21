@@ -1201,6 +1201,8 @@ export const storeCoupons = pgTable("store_coupons", {
   startsAt: ts("starts_at"),
   endsAt: ts("ends_at"),
   active: boolean("active").notNull().default(true),
+  /** Show this coupon as an offer on product pages. */
+  showOnStore: boolean("show_on_store").notNull().default(false),
   createdAt: created(),
 }, (t) => [uniqueIndex("store_coupons_code").on(t.storeId, t.code)]);
 
@@ -1427,3 +1429,42 @@ export const storeAdChanges = pgTable("store_ad_changes", {
   metaCampaignId: text("meta_campaign_id"),
   createdAt: created(),
 }, (t) => [index("store_ad_changes_store").on(t.storeId, t.createdAt), index("store_ad_changes_status").on(t.status)]);
+
+// ---------- online store: sale events & reviews (phase 5) ----------
+/** A timed sale: % off for the whole store, some categories or some products. Prices are applied on the server. */
+export const storeSaleEvents = pgTable("store_sale_events", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  name: text("name").notNull(),
+  /** whole percent, 1-90 */
+  percentOff: integer("percent_off").notNull(),
+  /** all | categories | products */
+  scope: text("scope").notNull().default("all"),
+  categoryIds: jsonb("category_ids").notNull().default([]),
+  productIds: jsonb("product_ids").notNull().default([]),
+  startsAt: ts("starts_at").notNull(),
+  endsAt: ts("ends_at").notNull(),
+  /** Bar text shown at the top of the store while the sale runs. */
+  bannerText: text("banner_text"),
+  active: boolean("active").notNull().default(true),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [index("store_sale_events_store").on(t.storeId, t.endsAt)]);
+
+/** Buyer product reviews. Published at once; the merchant can hide or delete. */
+export const storeReviews = pgTable("store_reviews", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  productId: text("product_id").notNull(),
+  rating: integer("rating").notNull(),
+  title: text("title"),
+  body: text("body").notNull(),
+  name: text("name").notNull(),
+  /** Bought this product in this store (matched by the mobile on a placed order). The mobile itself is not kept. */
+  verified: boolean("verified").notNull().default(false),
+  /** published | hidden */
+  status: text("status").notNull().default("published"),
+  createdAt: created(),
+}, (t) => [index("store_reviews_product").on(t.storeId, t.productId, t.status), index("store_reviews_store").on(t.storeId, t.createdAt)]);

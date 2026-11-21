@@ -59,7 +59,7 @@ function present(o: typeof schema.storeOrders.$inferSelect, f: Awaited<ReturnTyp
     id: o.id, number: o.number, status: o.status, paymentMethod: o.paymentMethod, paymentStatus: o.paymentStatus, fulfilment: ful, cod,
     buyer: o.buyer as CheckoutInput["buyer"], lines: o.lines as Line[], subtotalPaise: o.subtotalPaise, discountPaise: o.discountPaise, shippingPaise: o.shippingPaise,
     codFeePaise: o.codFeePaise, totalPaise: o.totalPaise, couponCode: o.couponCode, shippingOrderId: o.shippingOrderId, note: o.note,
-    awb: ship?.awb ?? null, carrierName: ship?.carrierName ?? null, trackingLabel: ship ? STATUS_LABEL[ship.status] ?? ship.status : null,
+    awb: ship?.awb ?? null, shipmentId: ship?.id ?? null, carrierName: ship?.carrierName ?? null, trackingLabel: ship ? STATUS_LABEL[ship.status] ?? ship.status : null,
     createdAt: o.createdAt, paidAt: o.paidAt, cancelledAt: o.cancelledAt, attribution: o.attribution as Record<string, string>,
   };
 }

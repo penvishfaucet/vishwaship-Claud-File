@@ -9,4 +9,8 @@ export type SfProduct = {
   /** Option names (e.g. ["Size","Colour"]); empty when the product has no variants. */
   options: string[];
   variants: SfVariant[];
+  /** Running sale on this product (prices above already include it). */
+  sale: { name: string; percentOff: number } | null;
+  /** Published reviews. */
+  rating: { avg: number; count: number } | null;
 };

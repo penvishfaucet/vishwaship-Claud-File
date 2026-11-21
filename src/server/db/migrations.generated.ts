@@ -518,5 +518,21 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795220363167,
   "hash": "962d6c50c9b8ccc4a65a79c4b9b695db8ae77b8a095f3ddc82a22584a822aa94"
+ },
+ {
+  "tag": "0024_store_sales_reviews",
+  "sql": [
+   "CREATE TABLE \"store_reviews\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"product_id\" text NOT NULL,\n\t\"rating\" integer NOT NULL,\n\t\"title\" text,\n\t\"body\" text NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"verified\" boolean DEFAULT false NOT NULL,\n\t\"status\" text DEFAULT 'published' NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"store_sale_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"percent_off\" integer NOT NULL,\n\t\"scope\" text DEFAULT 'all' NOT NULL,\n\t\"category_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"product_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"starts_at\" timestamp with time zone NOT NULL,\n\t\"ends_at\" timestamp with time zone NOT NULL,\n\t\"banner_text\" text,\n\t\"active\" boolean DEFAULT true NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"store_coupons\" ADD COLUMN \"show_on_store\" boolean DEFAULT false NOT NULL;",
+   "\nALTER TABLE \"store_reviews\" ADD CONSTRAINT \"store_reviews_store_id_stores_id_fk\" FOREIGN KEY (\"store_id\") REFERENCES \"public\".\"stores\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"store_sale_events\" ADD CONSTRAINT \"store_sale_events_store_id_stores_id_fk\" FOREIGN KEY (\"store_id\") REFERENCES \"public\".\"stores\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"store_reviews_product\" ON \"store_reviews\" USING btree (\"store_id\",\"product_id\",\"status\");",
+   "\nCREATE INDEX \"store_reviews_store\" ON \"store_reviews\" USING btree (\"store_id\",\"created_at\");",
+   "\nCREATE INDEX \"store_sale_events_store\" ON \"store_sale_events\" USING btree (\"store_id\",\"ends_at\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795235026646,
+  "hash": "f4e734edf9b20865e2e7ae486ba55385ff89508977885ff56e6cb74749675263"
  }
 ];
