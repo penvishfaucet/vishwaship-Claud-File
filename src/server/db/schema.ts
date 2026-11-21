@@ -1473,3 +1473,95 @@ export const storeReviews = pgTable("store_reviews", {
   status: text("status").notNull().default("published"),
   createdAt: created(),
 }, (t) => [index("store_reviews_product").on(t.storeId, t.productId, t.status), index("store_reviews_store").on(t.storeId, t.createdAt)]);
+
+// ---------- franchise ----------
+/**
+ * A franchise partner that Vishwaship appoints for one or more areas (districts / extra PINs).
+ * Phase 1: admin-managed record, areas, security deposit and agreement. Login, referral and commission come later.
+ */
+export const franchises = pgTable("franchises", {
+  id: id(),
+  /** Short public code, e.g. VSF-0001 (also the future referral code). */
+  code: text("code").notNull(),
+  businessName: text("business_name").notNull(),
+  ownerName: text("owner_name").notNull(),
+  mobile: text("mobile").notNull(),
+  email: text("email").notNull(),
+  gstin: text("gstin"),
+  pan: text("pan"),
+  /** { line1, line2, city, state, pincode } */
+  address: jsonb("address"),
+  /** draft | active | suspended | terminated */
+  status: text("status").notNull().default("draft"),
+  statusReason: text("status_reason"),
+  /** Deposit the admin set for this franchise (paise). */
+  depositRequiredPaise: paise("deposit_required_paise").notNull().default(0),
+  /** Minimum shipments per month expected by the agreement (0 = no target). */
+  monthlyTargetShipments: integer("monthly_target_shipments").notNull().default(0),
+  /** Agreement term (dates, IST calendar days stored as UTC midnight). */
+  termStart: ts("term_start"),
+  termEnd: ts("term_end"),
+  /** Terms & Conditions version this franchise is on, and when the signed agreement was recorded. */
+  termsVersion: integer("terms_version"),
+  agreementSignedAt: ts("agreement_signed_at"),
+  kycVerifiedAt: ts("kyc_verified_at"),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  activatedAt: ts("activated_at"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("franchises_code").on(t.code), index("franchises_status").on(t.status)]);
+
+/**
+ * Areas given to a franchise. area_key is "d:<state>|<district>" or "p:<pincode>" (lower-case); an area can be held by only
+ * one franchise at a time (partial unique index on live rows). Released rows stay as history.
+ */
+export const franchiseAreas = pgTable("franchise_areas", {
+  id: id(),
+  franchiseId: text("franchise_id").notNull().references(() => franchises.id),
+  /** district | pincode */
+  kind: text("kind").notNull(),
+  state: text("state").notNull(),
+  district: text("district"),
+  pincode: text("pincode"),
+  areaKey: text("area_key").notNull(),
+  assignedBy: text("assigned_by"),
+  releasedAt: ts("released_at"),
+  releasedBy: text("released_by"),
+  createdAt: created(),
+}, (t) => [
+  uniqueIndex("franchise_areas_live_key").on(t.areaKey).where(sql`released_at is null`),
+  index("franchise_areas_franchise").on(t.franchiseId),
+  index("franchise_areas_state").on(t.state),
+]);
+
+/** Security deposit received from a franchise (bank transfer / UPI / cheque), recorded by finance, with refund or forfeit. */
+export const franchiseDeposits = pgTable("franchise_deposits", {
+  id: id(),
+  franchiseId: text("franchise_id").notNull().references(() => franchises.id),
+  receiptNumber: text("receipt_number").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  /** bank_transfer | upi | cheque | cash */
+  method: text("method").notNull(),
+  /** UTR / cheque number (never card or account numbers). */
+  reference: text("reference"),
+  receivedOn: ts("received_on").notNull(),
+  /** held | refunded | forfeited | partly_refunded */
+  status: text("status").notNull().default("held"),
+  refundPaise: paise("refund_paise").notNull().default(0),
+  forfeitPaise: paise("forfeit_paise").notNull().default(0),
+  refundReference: text("refund_reference"),
+  decisionNote: text("decision_note"),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  recordedBy: text("recorded_by").notNull(),
+  createdAt: created(),
+}, (t) => [uniqueIndex("franchise_deposits_receipt").on(t.receiptNumber), index("franchise_deposits_franchise").on(t.franchiseId)]);
+
+/** Every published version of the franchise Terms & Conditions, so a franchise's agreement points at the exact text. */
+export const franchiseTerms = pgTable("franchise_terms", {
+  version: integer("version").primaryKey(),
+  body: text("body").notNull(),
+  createdBy: text("created_by"),
+  createdAt: created(),
+});

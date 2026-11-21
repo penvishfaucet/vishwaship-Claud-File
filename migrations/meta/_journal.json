@@ -183,6 +183,13 @@
       "when": 1795239119387,
       "tag": "0025_store_gateways",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795256742377,
+      "tag": "0026_franchise",
+      "breakpoints": true
     }
   ]
 }

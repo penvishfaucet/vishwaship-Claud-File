@@ -546,5 +546,26 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795239119387,
   "hash": "c7c89ba41d4ca3480d42feaf7805162bc4eecdc93df6e32f26a4473dfc4da3c3"
+ },
+ {
+  "tag": "0026_franchise",
+  "sql": [
+   "CREATE TABLE \"franchise_areas\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"franchise_id\" text NOT NULL,\n\t\"kind\" text NOT NULL,\n\t\"state\" text NOT NULL,\n\t\"district\" text,\n\t\"pincode\" text,\n\t\"area_key\" text NOT NULL,\n\t\"assigned_by\" text,\n\t\"released_at\" timestamp with time zone,\n\t\"released_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"franchise_deposits\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"franchise_id\" text NOT NULL,\n\t\"receipt_number\" text NOT NULL,\n\t\"amount_paise\" bigint NOT NULL,\n\t\"method\" text NOT NULL,\n\t\"reference\" text,\n\t\"received_on\" timestamp with time zone NOT NULL,\n\t\"status\" text DEFAULT 'held' NOT NULL,\n\t\"refund_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"forfeit_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"refund_reference\" text,\n\t\"decision_note\" text,\n\t\"decided_by\" text,\n\t\"decided_at\" timestamp with time zone,\n\t\"recorded_by\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"franchise_terms\" (\n\t\"version\" integer PRIMARY KEY NOT NULL,\n\t\"body\" text NOT NULL,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"franchises\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"code\" text NOT NULL,\n\t\"business_name\" text NOT NULL,\n\t\"owner_name\" text NOT NULL,\n\t\"mobile\" text NOT NULL,\n\t\"email\" text NOT NULL,\n\t\"gstin\" text,\n\t\"pan\" text,\n\t\"address\" jsonb,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"status_reason\" text,\n\t\"deposit_required_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"monthly_target_shipments\" integer DEFAULT 0 NOT NULL,\n\t\"term_start\" timestamp with time zone,\n\t\"term_end\" timestamp with time zone,\n\t\"terms_version\" integer,\n\t\"agreement_signed_at\" timestamp with time zone,\n\t\"kyc_verified_at\" timestamp with time zone,\n\t\"notes\" text,\n\t\"created_by\" text,\n\t\"activated_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"franchise_areas\" ADD CONSTRAINT \"franchise_areas_franchise_id_franchises_id_fk\" FOREIGN KEY (\"franchise_id\") REFERENCES \"public\".\"franchises\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"franchise_deposits\" ADD CONSTRAINT \"franchise_deposits_franchise_id_franchises_id_fk\" FOREIGN KEY (\"franchise_id\") REFERENCES \"public\".\"franchises\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE UNIQUE INDEX \"franchise_areas_live_key\" ON \"franchise_areas\" USING btree (\"area_key\") WHERE released_at is null;",
+   "\nCREATE INDEX \"franchise_areas_franchise\" ON \"franchise_areas\" USING btree (\"franchise_id\");",
+   "\nCREATE INDEX \"franchise_areas_state\" ON \"franchise_areas\" USING btree (\"state\");",
+   "\nCREATE UNIQUE INDEX \"franchise_deposits_receipt\" ON \"franchise_deposits\" USING btree (\"receipt_number\");",
+   "\nCREATE INDEX \"franchise_deposits_franchise\" ON \"franchise_deposits\" USING btree (\"franchise_id\");",
+   "\nCREATE UNIQUE INDEX \"franchises_code\" ON \"franchises\" USING btree (\"code\");",
+   "\nCREATE INDEX \"franchises_status\" ON \"franchises\" USING btree (\"status\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795256742377,
+  "hash": "856267638c984bebb6d42b4e3d2b0333d183223408fc3182b1b92110e1f9101a"
  }
 ];
