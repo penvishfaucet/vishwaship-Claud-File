@@ -1,4 +1,5 @@
 import "@/styles/orders-v2.css";
+import { normalizeLabelFormat } from "@/server/labels/formats";
 import { eq } from "drizzle-orm";
 import { OrdersView } from "@/components/portal/orders/OrdersView";
 import { getDb, schema } from "@/server/db/client";
@@ -31,7 +32,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   // label size: customer's own default (Settings → Label) if it is one of the print sizes, else the Admin default
   const own = (await orgSetting<{ format?: string }>(ctx.org.id, "label_settings"))?.format;
   const adminDefault = (await getSetting<PrintFormat>("orders_label_default", "a4_fit")).value;
-  const defaultLabel = (PRINT_FORMATS.some((p) => p.key === own) ? own : adminDefault) as PrintFormat;
+  const defaultLabel = normalizeLabelFormat(PRINT_FORMATS.some((p) => p.key === own) ? own : adminDefault);
   const hidden = (prefs.ordersHidden ?? []).filter((k): k is OptionalColumn => OPTIONAL_COLUMNS.some((c) => c.key === k));
   return (
     <OrdersView

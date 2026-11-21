@@ -3,11 +3,14 @@ import { NextResponse } from "next/server";
 import { hideProviders } from "@/server/customer-safe";
 import { type PrintFormat, PRINT_FORMATS, PRINT_HINT } from "@/lib/order-view";
 import { renderLabels } from "./render";
+import { normalizeLabelFormat } from "./formats";
 
 /** Shared by the customer and Admin label downloads: validate, render, answer with a PDF (or a clear JSON error). */
 export async function labelResponse(orgId: string | null, url: URL, opts: { customerSafe: boolean }) {
-  const format = url.searchParams.get("format") as PrintFormat | null;
-  if (!format || !PRINT_FORMATS.some((p) => p.key === format)) return NextResponse.json({ error: { code: "validation_error", message: "Choose a label format" } }, { status: 422 });
+  const asked = url.searchParams.get("format");
+  // two sizes now (A4 · 4 per sheet, thermal 4 × 6) plus the courier's own label; older choices map to the nearest
+  const format: PrintFormat | null = asked && PRINT_FORMATS.some((p) => p.key === asked) ? normalizeLabelFormat(asked) : null;
+  if (!format) return NextResponse.json({ error: { code: "validation_error", message: "Choose a label format" } }, { status: 422 });
   const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{4,64}$/.test(x)))];
   if (!ids.length) return NextResponse.json({ error: { code: "validation_error", message: "Select at least one shipment" } }, { status: 422 });
   if (ids.length > 100) return NextResponse.json({ error: { code: "validation_error", message: "Download up to 100 labels at a time" } }, { status: 422 });

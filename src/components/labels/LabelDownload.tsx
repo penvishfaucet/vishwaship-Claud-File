@@ -26,7 +26,7 @@ export async function fetchLabels(api: string, ids: string[], format: PrintForma
  * Pending or temporarily unavailable labels show the reason and a Retry button; Retry uses the same booking.
  */
 export function LabelDownload({ ids, api = "/api/portal/labels", formats, defaultFormat, compact }: { ids: string[]; api?: string; formats?: FormatOption[]; defaultFormat?: PrintFormat; compact?: boolean }) {
-  const opts: FormatOption[] = formats ?? PRINT_FORMATS.map((p) => ({ key: p.key, name: p.name, ok: true }));
+  const opts: FormatOption[] = formats ?? PRINT_FORMATS.filter((p) => ["a4_4up", "thermal_4x6", "original"].includes(p.key)).map((p) => ({ key: p.key, name: p.name, ok: true }));
   const first = opts.find((o) => o.key === defaultFormat && o.ok) ?? opts.find((o) => o.ok);
   const [format, setFormat] = useState<PrintFormat>(first?.key ?? "thermal_4x6");
   const [busy, setBusy] = useState(false);

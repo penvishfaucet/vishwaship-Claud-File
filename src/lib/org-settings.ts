@@ -5,27 +5,18 @@ const code = z.string().regex(/^[a-z0-9-]{2,40}$/);
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
 const logo = z.string().max(210_000).regex(/^$|^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/, "Logo must be PNG, JPG or WebP");
 
-/** Default label format choices (the Vishwaship label sizes; see PRINT_FORMATS in order-view). */
+/** Default label format choices: A4 (4 per sheet), thermal 4 × 6 in, or the courier's own label. */
 export const LABEL_FORMATS = [
-  { key: "thermal_4x6", name: "Thermal 4 × 6 in", w: "4in", h: "6in" },
-  { key: "thermal_3x4", name: "Thermal 3 × 4 in", w: "3in", h: "4in" },
-  { key: "thermal_4x4", name: "Thermal 4 × 4 in", w: "4in", h: "4in" },
-  { key: "thermal_2x4", name: "Thermal 2 × 4 in", w: "2in", h: "4in" },
-  { key: "thermal_38x100", name: "Thermal 38 × 100 mm", w: "38mm", h: "100mm" },
-  { key: "thermal_38x200", name: "Thermal 38 × 200 mm", w: "38mm", h: "200mm" },
-  { key: "a4_1up", name: "A4 · 1 label per page", w: "210mm", h: "297mm" },
-  { key: "a4_fit", name: "A4 · all labels of a shipment on one page", w: "210mm", h: "297mm" },
-  { key: "a4_doc", name: "A4 · label + invoice on one page", w: "210mm", h: "297mm" },
-  { key: "a4_2up", name: "A4 · 2 labels per page", w: "210mm", h: "297mm" },
   { key: "a4_4up", name: "A4 · 4 labels per page", w: "210mm", h: "297mm" },
+  { key: "thermal_4x6", name: "Thermal 4 × 6 in", w: "4in", h: "6in" },
   { key: "original", name: "Courier's own label", w: "4in", h: "6in" },
 ] as const;
 
 export const ORG_SETTING_SCHEMAS = {
   courier_prefs: z.object({ disabled: z.array(code).max(60).default([]), priority: z.array(code).max(60).default([]) }),
   label_settings: z.object({
-    // older saves used "a4" (now A4 2 per page)
-    format: z.preprocess((x) => (x === "a4" ? "a4_2up" : x), z.enum(LABEL_FORMATS.map((f) => f.key) as [string, ...string[]])).default("a4_fit"),
+    // older saves (other A4 layouts, other thermal rolls) map to the two sizes there are now
+    format: z.preprocess((x) => (x === "original" ? x : typeof x === "string" && x.startsWith("thermal") ? "thermal_4x6" : typeof x === "string" ? "a4_4up" : x), z.enum(LABEL_FORMATS.map((f) => f.key) as [string, ...string[]])).default("a4_4up"),
     showSellerAddress: z.boolean().default(true), showProducts: z.boolean().default(true), showCodAmount: z.boolean().default(true),
     showOrderValue: z.boolean().default(false), showSellerPhone: z.boolean().default(true), showLogo: z.boolean().default(false),
   }),

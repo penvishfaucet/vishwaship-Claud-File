@@ -39,11 +39,11 @@ export function LabelSettings({ initial }: { initial: V; carrierFormats?: Record
       <section className="card" style={{ padding: 18 }} aria-label="What you download">
         <b className="small">What you download</b>
         <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 4 }}>
-          <li>The courier&apos;s own label, exactly as the courier makes it, so every barcode scans at the hub</li>
-          <li>AWB shipments: the label only. LR shipments (B2B): the labels and the shipment document</li>
-          <li>If the courier does not make the size you chose, its label comes in the courier&apos;s own size</li>
+          <li>The Vishwaship label, with exactly the barcodes the courier made for your shipment (same numbers, so they scan at the hub)</li>
+          <li>As many labels as the courier makes: one per carton, plus the shipment document for LR (B2B) shipments</li>
+          <li>Two sizes: A4 (4 labels per sheet) or thermal 4 × 6 in. "Courier's own label" downloads the courier's label as it is</li>
         </ul>
-        <p className="tiny muted mt8">The courier prints the COD amount on its own label where it requires it.</p>
+        <p className="tiny muted mt8">If a courier barcode cannot be read, that shipment's courier label is included instead, so nothing is ever guessed.</p>
       </section>
     </div>
   );

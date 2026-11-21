@@ -18,6 +18,10 @@ export type TableLabel = {
   to: { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
   shipper: { company: string; gstin: string | null; pickup: { line1?: string; line2?: string; city?: string; state?: string; pincode?: string; mobile?: string } | null };
   kind?: "document"; demo: boolean;
+  /** Other barcodes from the courier's label (e.g. its order id), each printed in a smaller row under the main one. */
+  extraCodes?: string[];
+  /** The courier's 2D code as dark-pixel runs [x, y, length] of its image, redrawn exactly (vector, any size). */
+  matrix?: { w: number; h: number; runs: Array<[number, number, number]> } | null;
 };
 
 const MIN_FONT = 5, MIN_MODULE_MM = 0.19;
@@ -61,8 +65,10 @@ export function drawTableLabel(page: PDFPage, f: { r: PDFFont; b: PDFFont }, log
   const mm = (v: number) => v * k * PT;
   // the flexible shipping-address row takes the remaining height (minus the footnote band)
   // about the courier label's proportions (height ≈ 1.25 × width); any spare height stays below for the notes
-  const fH = Math.min(Math.max(mm(F_MIN), box.h - mm(fixedMm) - mm(FOOT)), Math.max(mm(F_MIN), mm(REF_W * 1.25 - fixedMm)));
-  const tableH = mm(fixedMm) + fH;
+  const extras = (d.extraCodes ?? []).slice(0, 2);
+  const xH = mm(9) * extras.length;
+  const fH = Math.min(Math.max(mm(F_MIN), box.h - mm(fixedMm) - xH - mm(FOOT)), Math.max(mm(F_MIN), mm(REF_W * 1.25 - fixedMm) - xH));
+  const tableH = mm(fixedMm) + xH + fH;
   const half = W * 0.5;
 
   const rect = (x: number, y: number, w: number, h: number) => page.drawRectangle({ x, y, width: w, height: h, borderColor: black, borderWidth: line });
@@ -99,16 +105,26 @@ export function drawTableLabel(page: PDFPage, f: { r: PDFFont; b: PDFFont }, log
   // ---- B: mode + payment | order / master / PIN
   const bH = mm(ROWS.b), third = bH / 3;
   rect(x0, y - bH, half, bH); for (let i = 0; i < 3; i++) rect(x0 + half, y - third * (i + 1), W - half, third);
-  if (d.kind === "document") cell(x0, y, half, bH, [
-    { t: "SHIPMENT DOCUMENT", font: f.b, size: Math.max(MIN_FONT, 10 * k), center: true },
+  // the courier's 2D code (exactly as on its label) on the left, the label's title beside it
+  let mx = x0, mw = half;
+  if (d.matrix) {
+    const sz = bH - 2 * pad, s = sz / Math.max(d.matrix.w, d.matrix.h);
+    const ox = x0 + pad, oy = y - pad - sz;
+    for (const [rx, ry, rl] of d.matrix.runs) page.drawRectangle({ x: ox + rx * s, y: oy + sz - (ry + 1) * s, width: rl * s + s * 0.02, height: s * 1.02, color: black });
+    mx = x0 + sz + pad; mw = half - sz - pad;
+  }
+  if (d.kind === "document") cell(mx, y, mw, bH, [
+    { t: d.matrix ? "DOCUMENT" : "SHIPMENT DOCUMENT", font: f.b, size: Math.max(MIN_FONT, 10 * k), center: true },
     { t: "Not for a carton", font: f.b, size: small, center: true },
   ], false);
-  else cell(x0, y, half, bH, [
-    ...(d.demo ? [{ t: "DEMO - NOT FOR HANDOVER", font: f.b, size: small, center: true }] : []),
-    { t: d.mode, font: f.b, size: Math.max(MIN_FONT, 15 * k), center: true },
-    { t: d.payment, font: f.b, size: Math.max(MIN_FONT, 10 * k), center: true },
-    { t: d.service, size: small, center: true },
-  ], false);
+  else {
+    cell(mx, y, mw, bH, [
+      ...(d.demo ? [{ t: "DEMO - NOT FOR HANDOVER", font: f.b, size: small, center: true }] : []),
+      { t: d.mode, font: f.b, size: Math.max(MIN_FONT, (d.matrix ? 12 : 15) * k), center: true },
+      { t: d.payment, font: f.b, size: Math.max(MIN_FONT, (d.matrix ? 8 : 10) * k), center: true },
+      { t: d.service, size: small, center: true },
+    ], false);
+  }
   cell(x0 + half, y, W - half, third, [{ t: `OID: ${d.orderNumber}`, size: small }]);
   cell(x0 + half, y - third, W - half, third, [{ t: d.masterId ? `Master: ${d.masterId}` : `Invoice: ${d.invoiceNumber || "-"}`, size: small }]);
   cell(x0 + half, y - 2 * third, W - half, third, [{ t: `${d.to.pincode ?? ""} ${(d.to.city ?? "").toUpperCase()}`, font: f.b, size: fs }]);
@@ -129,6 +145,21 @@ export function drawTableLabel(page: PDFPage, f: { r: PDFFont; b: PDFFont }, log
     page.drawText(ansi(code), { x: x0 + (W - tw) / 2, y: by - textH + small * 0.25, size: small, font: f.r, color: black });
   }
   y -= cH;
+
+  // ---- C2: the courier's other barcodes (as on its label), smaller
+  for (const extra of extras) {
+    const h = mm(9);
+    rect(x0, y - h, W, h);
+    const e = code128Bars(ansi(extra));
+    const ew = Math.min(W * 0.7, e.modules * 0.3 * PT), emod = ew / e.modules;
+    if (emod < MIN_MODULE_MM * PT) { err ??= `The barcode for ${extra} is too long to print readably`; y -= h; continue; }
+    const textH = small * LH, barH = h - 2 * pad - textH;
+    const ex = x0 + (W - ew) / 2, ey = y - pad - barH;
+    for (const [bx0, wd] of e.bars) page.drawRectangle({ x: ex + bx0 * emod, y: ey, width: wd * emod, height: barH, color: black });
+    const tw = f.r.widthOfTextAtSize(ansi(extra), small);
+    page.drawText(ansi(extra), { x: x0 + (W - tw) / 2, y: ey - textH + small * 0.25, size: small, font: f.r, color: black });
+    y -= h;
+  }
 
   // ---- D: Box n/N | MASTER / CHILD
   const dH = mm(ROWS.d);

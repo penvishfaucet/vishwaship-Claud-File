@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { normalizeLabelFormat } from "@/server/labels/formats";
 import { redirect } from "next/navigation";
 import { and, desc, eq, gt, inArray, isNotNull, or } from "drizzle-orm";
 import { audit } from "@/server/audit";
@@ -45,7 +46,7 @@ export default async function OrderExceptions({ searchParams }: { searchParams: 
   const cancelRows = await db.select({ c: schema.codConfirmations, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.codConfirmations)
     .innerJoin(schema.orgs, eq(schema.orgs.id, schema.codConfirmations.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.codConfirmations.orderId))
     .where(inArray(schema.codConfirmations.cancellationStatus, ["failed", "action_required", "requested"])).orderBy(desc(schema.codConfirmations.cancellationAt)).limit(200);
-  const labelDefault = (await getSetting<PrintFormat>("orders_label_default", "a4_fit")).value;
+  const labelDefault = normalizeLabelFormat((await getSetting<PrintFormat>("orders_label_default", "a4_4up")).value);
   // Carrier charged more than the quoted carrier cost (customer is never charged above the approved amount).
   const chargeRows = await db.select({ s: schema.shipments, o: schema.orgs, n: schema.orders.orderNumber }).from(schema.shipments)
     .innerJoin(schema.orgs, eq(schema.orgs.id, schema.shipments.orgId)).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
@@ -68,7 +69,7 @@ export default async function OrderExceptions({ searchParams }: { searchParams: 
         <p className="small muted">Used for Download Label when the customer has not chosen one of these sizes in Settings → Label. Customers can always pick another size per download.</p>
         <form action={saveLabelDefault} className="row wrap" style={{ gap: 8 }}>
           <label className="sr-only" htmlFor="lf">Default label size</label>
-          <select id="lf" name="format" className="select" defaultValue={labelDefault} style={{ maxWidth: 260 }} disabled={!canWrite}>{PRINT_FORMATS.map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
+          <select id="lf" name="format" className="select" defaultValue={labelDefault} style={{ maxWidth: 260 }} disabled={!canWrite}>{PRINT_FORMATS.filter((p) => ["a4_4up", "thermal_4x6", "original"].includes(p.key)).map((p) => <option key={p.key} value={p.key}>{p.name}</option>)}</select>
           {canWrite && <button className="btn btn-navy btn-sm">Save</button>}
         </form>
         <p className="tiny muted mt8">Tab names and the COD line text are edited in <Link className="link-navy" href="/admin/content/?group=pages">Portal Text</Link> (keys “Orders – …”). WhatsApp COD rules are in <Link className="link-navy" href="/admin/notifications/">Notifications</Link>; feature access per plan in <Link className="link-navy" href="/admin/plans/">Plans &amp; Features</Link>.</p>

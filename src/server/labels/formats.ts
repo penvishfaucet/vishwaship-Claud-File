@@ -2,14 +2,22 @@ import { type PrintFormat, PRINT_FORMATS } from "@/lib/order-view";
 import type { LabelFormat } from "@/server/providers/types";
 
 /**
- * Where each Download Label format comes from.
- *  - carrier:  the courier's own label file — same pages, same barcodes, same number of labels (cartons + document as
- *              the courier makes them). Used for EVERY size of a courier with a label API; the chosen size only picks
- *              which of the courier's own sizes to ask for. Only our account's name / logo on it becomes Vishwaship's.
- *  - branded:  the Vishwaship label drawn from the booking — only for the demo courier and couriers without a label API.
+ * Labels come in two sizes — A4 (4 per sheet) and thermal 4 × 6 in — plus the courier's own label.
+ *  - matched:  the Vishwaship label for a courier with a label API. The courier's own label is fetched and read: one
+ *              Vishwaship label per courier label, carrying exactly the barcodes read from it (same numbers, Code 128)
+ *              and its 2D code. If any barcode cannot be read, that shipment gets the courier's own label instead.
+ *  - carrier:  the courier's own label file, untouched except our account name / logo ("original").
+ *  - branded:  the Vishwaship label drawn from the booking — the demo courier and couriers without a label API.
  *  - unavailable: with the reason shown in the menu.
  */
-type Source = { kind: "branded" } | { kind: "carrier"; carrierFormat: LabelFormat } | { kind: "unavailable"; reason: string };
+type Source = { kind: "branded" } | { kind: "carrier"; carrierFormat: LabelFormat } | { kind: "matched"; carrierFormat: LabelFormat } | { kind: "unavailable"; reason: string };
+
+/** The two label sizes (plus the courier's own label). Older saved choices map to the nearest one. */
+export const LABEL_SIZES: PrintFormat[] = ["a4_4up", "thermal_4x6"];
+export function normalizeLabelFormat(f: string | null | undefined): PrintFormat {
+  if (f === "original") return "original";
+  return PRINT_FORMATS.find((p) => p.key === f)?.group === "thermal" ? "thermal_4x6" : "a4_4up";
+}
 
 /** Courier label formats each integration can return; first = the courier's default size. */
 export const CARRIER_NATIVE: Record<string, LabelFormat[]> = {
@@ -33,6 +41,9 @@ export function carrierFormatFor(provider: string, f: PrintFormat): LabelFormat 
 }
 
 export function labelSource(provider: string, f: PrintFormat): Source {
+  const native = CARRIER_NATIVE[provider];
+  // the courier's A4 render is its largest image: its barcodes read most reliably
+  if (native && f !== "original") return { kind: "matched", carrierFormat: native.includes("a4") ? "a4" : native[0] };
   const carrierFormat = carrierFormatFor(provider, f);
   if (carrierFormat) return { kind: "carrier", carrierFormat };
   if (f !== "original") return { kind: "branded" };
@@ -42,7 +53,7 @@ export function labelSource(provider: string, f: PrintFormat): Source {
 
 /** Per-format availability for a shipment's menu. */
 export function labelFormatsFor(provider: string): Array<{ key: PrintFormat; name: string; ok: boolean; reason?: string }> {
-  return PRINT_FORMATS.filter((p) => !(provider === "demo" && p.key === "original")).map((p) => {
+  return PRINT_FORMATS.filter((p) => (LABEL_SIZES.includes(p.key) || p.key === "original") && !(provider === "demo" && p.key === "original")).map((p) => {
     const s = labelSource(provider, p.key);
     return { key: p.key, name: p.name, ok: s.kind !== "unavailable", reason: s.kind === "unavailable" ? s.reason : undefined };
   });

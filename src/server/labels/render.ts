@@ -11,6 +11,8 @@ import { CARRIER_POLICY, labelSource } from "./formats";
 import { coverBranding } from "./cover";
 import { BRAND_REPLACEMENT, replaceBrandText } from "./brand-text";
 import { decodePng, findBrandInImage } from "./image-brand";
+import { type PageScan, mergeScans, scanLabelImage } from "./barcode-read";
+import { PDFName, PDFRawStream, PDFRef, type PDFDict, decodePDFRawStream } from "pdf-lib";
 import { CARRIER_LOGOS, type LabelLogo, VISHWASHIP_LOGO } from "./logos.generated";
 import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
@@ -46,6 +48,10 @@ export interface BrandedLabel {
   kind?: "document"; cartonIds?: string[]; ewayBill?: string | null;
   /** Booking date (as printed) and, for multi-carton B2B, the master carton waybill (carton 1). */
   date?: string; masterId?: string | null;
+  /** Other barcodes on the courier's label (e.g. its order id), printed as they are. */
+  extraCodes?: string[];
+  /** The courier's 2D code, redrawn exactly (dark-pixel runs of its image). */
+  matrix?: PageScan["matrix"];
 }
 
 
@@ -177,6 +183,51 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       continue;
     }
 
+    if (src.kind === "matched") {
+      // ---- Vishwaship label with the courier's own barcodes: read every label the courier made, one of ours per label
+      const scans: PageScan[] = [];
+      const got = await courierLabel(s, src.carrierFormat, scans);
+      if (!got.doc) { skip(got.error, got.retryable); continue; }
+      if (!scans.length || scans.length !== got.doc.getPageCount() || scans.some((x) => !x.codes.length)) {
+        // a barcode we cannot read is never guessed: this shipment gets the courier's own label (barcodes unchanged)
+        notices.add(`${o.orderNumber}: the courier's own label is included for this shipment (its barcodes could not be read for the Vishwaship label).`);
+        await coverBranding(got.doc, s.provider);
+        try { await replaceBrandText(got.doc, s.provider); } catch (e) { console.error("label brand text", s.id, (e as Error).message); }
+        for (const pg of await doc.copyPages(got.doc, got.doc.getPageIndices())) doc.addPage(pg);
+        continue;
+      }
+      const isLR = s.provider === "delhivery_b2b";
+      const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
+      const boxes = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0));
+      // Delhivery B2B: one label per carton, then "MPS: Documents" (the shipment document with its own waybill)
+      const docIndex = isLR && scans.length >= 2 && scans.length === boxes + 1 ? scans.length - 1 : -1;
+      const cartons = docIndex >= 0 ? scans.length - 1 : scans.length;
+      const main = (x: PageScan) => [...x.codes].sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0))[0].text;
+      const meta = (o.meta ?? {}) as { grandTotalPaise?: number };
+      const products = ((o.products ?? []) as Product[]).filter((x) => x?.name);
+      const pickup = (o.pickupSnapshot as Addr | null) ?? (w ? { label: w.label, contactName: w.contactName, line1: w.line1, line2: w.line2 ?? undefined, city: w.city, state: w.state, pincode: w.pincode, mobile: w.mobile } : null);
+      const logo = carrierLogoFor(s.carrierName);
+      const bookedOn = s.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" });
+      if (isLR) notices.add(B2B_HANDOVER.notice);
+      scans.forEach((scan, i) => {
+        const code = main(scan);
+        const l: BrandedLabel = {
+          demo: false, carrier: s.carrierName, carrierLogo: logo, mode: isLR ? "B2B" : "B2C", service: s.serviceName,
+          payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
+          idLabel: isLR ? "LRN" : "AWB", parentId: isLR ? (s.lrNumber ?? s.awb!) : s.awb!, carton: i === docIndex ? 0 : i + 1, cartons,
+          cartonId: code, extraCodes: scan.codes.map((c) => c.text).filter((t) => t !== code), matrix: scan.matrix,
+          to: o.consignee as Addr,
+          shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
+          orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
+          products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
+          date: bookedOn, masterId: isLR && cartons > 1 ? main(scans[0]) : null,
+          ...(i === docIndex ? { kind: "document" as const, ewayBill: o.ewayBill ?? null } : {}),
+        };
+        branded.push(l); brandedOf.set(l, s.id);
+      });
+      continue;
+    }
+
     // ---- Courier label: exactly the courier's own file — same pages, same barcodes. Only the account name / logo
     // the courier prints for our aggregator account is replaced by Vishwaship's.
     if (o.paymentType === "cod") notices.add("Courier labels show the COD amount because the courier prints it on its own label.");
@@ -285,7 +336,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
  * The courier's own label for a shipment as a separate PDF (one page per page the courier made), or why not.
  * Read-only: asks the courier for the label; never books or charges. Records whether the courier's label works.
  */
-async function courierLabel(s: typeof schema.shipments.$inferSelect, carrierFormat: LabelFormat): Promise<{ doc: PDFDocument; error?: never; retryable?: never } | { doc: null; error: string; retryable: boolean }> {
+async function courierLabel(s: typeof schema.shipments.$inferSelect, carrierFormat: LabelFormat, scans?: PageScan[]): Promise<{ doc: PDFDocument; error?: never; retryable?: never } | { doc: null; error: string; retryable: boolean }> {
   if (!s.awb) return { doc: null, error: "Label pending — the courier has not assigned the AWB / LRN yet", retryable: true };
   const db = await getDb();
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, s.providerAccountId));
@@ -302,7 +353,8 @@ async function courierLabel(s: typeof schema.shipments.$inferSelect, carrierForm
     try {
       // into a scratch file first, so a half-read label never leaves stray pages in the download
       const one = await PDFDocument.create();
-      if (await placeCarrierLabel(one, r.value, s.provider)) {
+      scans?.splice(0);
+      if (await placeCarrierLabel(one, r.value, s.provider, scans)) {
         await db.update(schema.shipments).set({ labelStatus: "available" }).where(eq(schema.shipments.id, s.id));
         await noteCapability(acct.id, "label", true, { evidence: `AWB ${s.awb}` });
         return { doc: one };
@@ -328,7 +380,7 @@ function slotSize(format: PrintFormat): { w: number; h: number } {
 }
 
 /** Put the courier's label (PNG / JPEG / PDF bytes, base64 text, or HTTPS links) on pages at the courier's own size. */
-export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf?: Uint8Array; images?: string[] }, provider?: string): Promise<number> {
+export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf?: Uint8Array; images?: string[] }, provider?: string, scans?: PageScan[]): Promise<number> {
   let added = 0;
   const fontsFor = new Map<boolean, PDFFont>();
   const fontFor = async (bold: boolean) => { if (!fontsFor.has(bold)) fontsFor.set(bold, await doc.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica)); return fontsFor.get(bold)!; };
@@ -342,6 +394,10 @@ export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf
       const dpi = Math.max(96, im.width / 4), k = 72 / dpi;
       const page = doc.addPage([im.width * k, im.height * k]);
       page.drawImage(im, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+      if (scans) {
+        if (isPng) { const px = decodePng(b); scans.push(scanLabelImage(px.rgba, px.width, px.height)); }
+        else scans.push({ codes: [], matrix: null }); // JPEG: not read here
+      }
       if (isPng && provider) {
         // our account's name in the image → VISHWASHIP, written over it in the same place (barcodes are elsewhere)
         try {
@@ -361,6 +417,7 @@ export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf
     if (isPdf) {
       const srcDoc = await PDFDocument.load(b, { ignoreEncryption: true });
       for (const p of await doc.copyPages(srcDoc, srcDoc.getPageIndices())) { doc.addPage(p); added++; }
+      if (scans) for (const i of srcDoc.getPageIndices()) scans.push(mergeScans(pdfPageImages(srcDoc, i).map((im) => scanLabelImage(im.rgba, im.width, im.height))));
       return;
     }
     const text = Buffer.from(b).toString("utf8").trim().replace(/^"|"$/g, "");
@@ -382,6 +439,42 @@ export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf
   if (v.pdf) await place(v.pdf);
   else if (v.url) await place(await fetchBytes(v.url));
   return added;
+}
+
+/** 8-bit RGB / grey Flate (or plain) images drawn on a PDF page, as RGBA (soft masks applied); others are skipped. */
+function pdfPageImages(doc: PDFDocument, index: number): Array<{ width: number; height: number; rgba: Uint8Array }> {
+  const out: Array<{ width: number; height: number; rgba: Uint8Array }> = [];
+  const look = (v: unknown) => (v instanceof PDFRef ? doc.context.lookup(v) : v);
+  const xo = look(doc.getPage(index).node.Resources()?.get(PDFName.of("XObject"))) as PDFDict | undefined;
+  if (!xo || !("entries" in xo)) return out;
+  const pixels = (st: PDFRawStream) => {
+    const d = st.dict;
+    const w = (look(d.get(PDFName.of("Width"))) as { asNumber(): number }).asNumber(), h = (look(d.get(PDFName.of("Height"))) as { asNumber(): number }).asNumber();
+    const bpc = (look(d.get(PDFName.of("BitsPerComponent"))) as { asNumber(): number } | undefined)?.asNumber();
+    const cs = String(look(d.get(PDFName.of("ColorSpace"))) ?? "");
+    const filter = String(look(d.get(PDFName.of("Filter"))) ?? "");
+    if (bpc !== 8 || !["/DeviceRGB", "/DeviceGray"].includes(cs) || !["", "/FlateDecode"].includes(filter) || d.get(PDFName.of("DecodeParms"))) return null;
+    const data = decodePDFRawStream(st).decode();
+    const ch = cs === "/DeviceRGB" ? 3 : 1;
+    return data.length >= w * h * ch ? { w, h, ch, data } : null;
+  };
+  for (const [, ref] of (xo as unknown as { entries(): Array<[unknown, unknown]> }).entries()) {
+    const st = look(ref);
+    if (!(st instanceof PDFRawStream) || String(st.dict.get(PDFName.of("Subtype"))) !== "/Image") continue;
+    try {
+      const im = pixels(st);
+      if (!im) continue;
+      const sm = look(st.dict.get(PDFName.of("SMask")));
+      const alpha = sm instanceof PDFRawStream ? pixels(sm) : null;
+      const rgba = new Uint8Array(im.w * im.h * 4);
+      for (let p = 0; p < im.w * im.h; p++) {
+        rgba[p * 4] = im.data[p * im.ch]; rgba[p * 4 + 1] = im.data[p * im.ch + (im.ch > 1 ? 1 : 0)]; rgba[p * 4 + 2] = im.data[p * im.ch + (im.ch > 1 ? 2 : 0)];
+        rgba[p * 4 + 3] = alpha && alpha.w === im.w && alpha.h === im.h ? alpha.data[p * alpha.ch] : 255;
+      }
+      out.push({ width: im.w, height: im.h, rgba });
+    } catch { /* an image we cannot read is simply not scanned */ }
+  }
+  return out;
 }
 
 /** HTTPS download of a label link: follows up to 3 redirects (each hop re-checked), PDF / image only, max 10 MB. */
