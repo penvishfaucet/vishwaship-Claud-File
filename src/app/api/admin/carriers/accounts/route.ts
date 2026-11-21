@@ -160,7 +160,9 @@ export async function POST(req: Request) {
         patch.courierIds = b.courierIds.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x));
       }
       if (acct.adapter === "shipmozo") {
-        if (b.typeOfPackage && !/^[A-Z_]{2,20}$/.test(b.typeOfPackage)) return apiError(422, "validation_error", "type_of_package must be a code like SPS or MPS");
+        // Shipmozo rate-calculator: SPS (one parcel), MPS (multi-piece parcel), B2B (LTL cargo: TCI Express LTL, Gati LTL, Delhivery LTL …)
+        if (b.typeOfPackage && !["SPS", "MPS", "B2B"].includes(b.typeOfPackage.toUpperCase())) return apiError(422, "validation_error", "type_of_package must be SPS, MPS or B2B");
+        b.typeOfPackage = b.typeOfPackage.toUpperCase();
         patch.typeOfPackage = b.typeOfPackage || null; patch.rovType = b.rovType || null; patch.gstTreatment = b.gstTreatment; patch.skipManualPickup = b.skipManualPickup;
         patch.courierIds = b.courierIds.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,20}$/.test(x));
       }

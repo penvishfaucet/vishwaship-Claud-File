@@ -225,15 +225,26 @@ export const shipmozoAdapter: ShippingAdapter = {
     // "serviceable": false for lanes where rate-calculator returned several couriers (seen 2026-11-18).
     const actualGrams = req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
     const body = shipmozoQuoteBodies(ctx, req).rates;
-    const r = await call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify(body) });
-    if (!r.ok) return r;
+    // A B2B account also asks for Shipmozo's LTL cargo rates (type_of_package "B2B": TCI Express LTL, Gati LTL,
+    // Delhivery B2B LTL …) on top of its usual rates. The usual rates are unchanged; if the LTL request fails it is ignored.
+    // (one box, or several once multi-carton booking is verified — never a rate that cannot be booked)
+    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoB2cTakesB2b(req, ctx.config);
+    const [r, rl] = await Promise.all([
+      call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify(body) }),
+      ltl ? call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify({ ...body, type_of_package: "B2B" }) }) : Promise.resolve(null),
+    ]);
+    if (!r.ok && !(rl && rl.ok)) return r;
+    const allRows = [...(r.ok ? dataRows(r.value.data) : []), ...(rl && rl.ok ? dataRows(rl.value.data) : [])];
     const allow = new Set(((ctx.config.courierIds as string[] | undefined) ?? []).map(String).filter(Boolean));
     const quotes: ProviderQuote[] = [];
     const skipped: string[] = [];
-    for (const row of dataRows(r.value.data)) {
+    const seen = new Set<string>();
+    for (const row of allRows) {
       const p = parseRateRow(row, { mode: req.mode, gstTreatment: String(ctx.config.gstTreatment ?? "auto"), actualGrams });
       if ("error" in p) { skipped.push(p.error); continue; }
       if (allow.size && !allow.has(p.courierId)) continue;
+      if (seen.has(p.courierId)) continue; // the same courier from both requests
+      seen.add(p.courierId);
       quotes.push(p.quote);
     }
     if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped.length ? `Courier partner rate could not be verified: ${skipped[0]}` : `Courier partner has no courier from ${req.originPincode} to ${req.destinationPincode} for this shipment`, retryable: false } };

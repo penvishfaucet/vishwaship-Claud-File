@@ -59,7 +59,7 @@ export const CARRIER_SPECS: Record<string, CarrierSpec> = {
     },
     serviceNotes: {
       B2C: "Single-package parcels (type_of_package SPS). Courier IDs come from the rate-calculator response.",
-      B2B: "Multi-carton / cargo (type_of_package set below, default MPS). Ask Shipmozo which package type, courier IDs and rate card apply to your B2B account.",
+      B2B: "Multi-carton / cargo (type_of_package set below, default MPS; LTL cargo rates — type B2B — are asked for as well). Ask Shipmozo which package type, courier IDs and rate card apply to your B2B account.",
     },
   },
   delhivery_b2c: {

@@ -401,3 +401,34 @@ describe("reconcile checks the right booking attempt (VSMWN3MT67 regression)", (
     expect(await debits("ord_rc")).toBe(1); // the approved sender charge was taken once, not released
   });
 });
+
+describe("Shipmozo B2B: LTL cargo rates are added, the usual rates stay", () => {
+  it("a one-box B2B quote asks MPS and B2B (LTL); both lists are offered; an LTL failure leaves the MPS rates", async () => {
+    const types: string[] = [];
+    const mps = [{ courier_id: 31, name: "Delhivery Heavy MPS", before_tax_total_charges: 600, gst: 108, total_charges: 708 }];
+    const ltlRows = [
+      { courier_id: 41, name: "TCI Express LTL B2B", before_tax_total_charges: 2800, gst: 504, total_charges: 3304 },
+      { courier_id: 42, name: "GATI B2B LTL", before_tax_total_charges: 3000, gst: 540, total_charges: 3540 },
+      { courier_id: 31, name: "Delhivery Heavy MPS", before_tax_total_charges: 600, gst: 108, total_charges: 708 },
+    ];
+    let ltlFails = false;
+    script = (url, body) => {
+      if (!url.endsWith("/rate-calculator")) return shipmozoHappy(url, body);
+      const t = String((body as { type_of_package?: string }).type_of_package); types.push(t);
+      if (t === "B2B") return ltlFails ? { result: "0", message: "Error", data: { error: "not available" } } : { result: "1", data: ltlRows };
+      return { result: "1", data: mps };
+    };
+    const one = { ...req("B2B"), packages: [{ count: 1, lengthMm: 1000, breadthMm: 800, heightMm: 800, actualWeightGrams: 260_000 }] };
+    const r = await getQuotes(one, ORG, { persist: false });
+    expect(types.sort()).toEqual(expect.arrayContaining(["B2B", "MPS"]));
+    const b2b = r.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName).sort();
+    expect(b2b).toEqual(["Delhivery Heavy MPS", "GATI B2B LTL", "TCI Express LTL B2B"].sort());
+    ltlFails = true;
+    const r2 = await getQuotes(one, ORG, { persist: false });
+    expect(r2.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName)).toEqual(["Delhivery Heavy MPS"]);
+    // several boxes: no LTL request until multi-carton booking is verified
+    types.length = 0;
+    await getQuotes({ ...one, packages: [{ ...one.packages[0], count: 2 }] }, ORG, { persist: false });
+    expect(types).not.toContain("B2B");
+  });
+});
