@@ -428,17 +428,21 @@ describe("every download is the courier's own label (same pages and barcodes)", 
 
 describe("our account's name / logo on the courier's label becomes Vishwaship's", { timeout: 20_000 }, () => {
   it("Delhivery B2B: every PENVISH B2B (cell and return address) is covered and VISHWASHIP written there", async () => {
-    const { replaceBrandText, findText } = await import("./brand-text");
+    const { replaceBrandText } = await import("./brand-text");
     const { StandardFonts } = await import("pdf-lib");
     const d = await PDFDocument.create(); const p = d.addPage([288, 432]); const font = await d.embedFont(StandardFonts.HelveticaBold);
     p.drawText("PENVISH B2B", { x: 150, y: 300, size: 8, font });
     p.drawText("PENVISH B2B,Arihant vihar khankhal", { x: 10, y: 100, size: 6, font });
     p.drawText("24919710016181", { x: 10, y: 200, size: 8, font });
-    expect(await replaceBrandText(d, "delhivery_b2c")).toBe(0); // only where the account name is known
-    expect(await replaceBrandText(d, "delhivery_b2b")).toBe(2);
-    const bytes = await d.save();
-    expect((await findText(bytes, ["VISHWASHIP"])).map((h) => Math.round(h.x))).toEqual([150, 10]);
-    expect((await pdfPages(bytes))[0].text).toContain("24919710016181"); // everything else is untouched
+    const label = await PDFDocument.load(await d.save()); // as a courier's file arrives
+    expect(await replaceBrandText(label, "delhivery_b2c")).toBe(0); // only where the account name is known
+    expect(await replaceBrandText(label, "delhivery_b2b")).toBe(2);
+    const [pg] = await pdfPages(await label.save());
+    expect(pg.text).not.toContain("PENVISH"); // gone from the PDF, not only hidden
+    const at = (s: string) => pg.items.filter((i) => i.str.includes(s)).map((i) => [Math.round(i.transform[4]), Math.round(i.transform[5])]);
+    expect(at("VISHWASHIP")).toEqual([[150, 300], [10, 100]]); // in the same places
+    expect(pg.text).toContain(",Arihant vihar khankhal");
+    expect(pg.text).toContain("24919710016181"); // everything else is untouched
   });
   it("Shipmozo: the logo box is covered, clear of barcodes, address and border (measured on a real label)", async () => {
     const { coverBranding, BRAND_COVER } = await import("./cover");

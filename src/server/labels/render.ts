@@ -186,7 +186,8 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     const got = await courierLabel(s, src.carrierFormat);
     if (!got.doc) { skip(got.error, got.retryable); continue; }
     await coverBranding(got.doc, s.provider);
-    await replaceBrandText(got.doc, s.provider);
+    try { await replaceBrandText(got.doc, s.provider); }
+    catch (e) { console.error("label brand text", s.id, (e as Error).message); } // the courier's label still downloads
     for (const p of await doc.copyPages(got.doc, got.doc.getPageIndices())) doc.addPage(p);
   }
 

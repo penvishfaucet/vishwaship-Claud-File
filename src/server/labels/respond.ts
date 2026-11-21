@@ -11,7 +11,12 @@ export async function labelResponse(orgId: string | null, url: URL, opts: { cust
   const ids = [...new Set((url.searchParams.get("ids") ?? "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{4,64}$/.test(x)))];
   if (!ids.length) return NextResponse.json({ error: { code: "validation_error", message: "Select at least one shipment" } }, { status: 422 });
   if (ids.length > 100) return NextResponse.json({ error: { code: "validation_error", message: "Download up to 100 labels at a time" } }, { status: 422 });
-  const r = await renderLabels(orgId, ids, format);
+  let r: Awaited<ReturnType<typeof renderLabels>>;
+  try { r = await renderLabels(orgId, ids, format); }
+  catch (e) {
+    console.error("label download failed", ids.join(","), format, e);
+    return NextResponse.json({ error: { code: "label_error", message: "Could not prepare the labels just now — please try again. If it keeps failing, contact Vishwaship support." }, skipped: [], notices: [], retryable: true }, { status: 500 });
+  }
   const clean = (s: string) => (opts.customerSafe ? hideProviders(s) : s);
   const skipped = r.skipped.map((x) => ({ ...x, reason: clean(x.reason) }));
   const notices = r.notices.map(clean);
