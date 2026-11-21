@@ -180,6 +180,11 @@ describe("quotes across providers", () => {
     expect(fromB2c.map((o) => o.carrierName).sort()).toEqual(["Allcargo Gati", "Blue Dart", "DTDC", "Delhivery", "Ekart", "TCI Express"]);
     expect(fromB2c.every((o) => o.mode === "B2B")).toBe(true);
     expect(sent.some((x) => /"type_of_package":"SPS"/.test(x.body))).toBe(true);
+    // over 70 kg the B2C account is not asked (it answers "weight must be ≤ 70000"): no notice to the customer
+    sent.length = 0;
+    const tooHeavy = await getQuotes({ ...heavy, packages: [{ ...heavy.packages[0], actualWeightGrams: 260_000 }] }, OTHER, { persist: false });
+    expect(tooHeavy.offers.some((o) => o.providerAccountId === SM_B2C)).toBe(false);
+    expect(tooHeavy.errors.join(" ")).not.toMatch(/70000/);
     // several cartons: only once the B2C account's multi-carton booking is verified
     const two = { ...heavy, packages: [{ ...heavy.packages[0], count: 2 }] };
     expect((await getQuotes(two, OTHER, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2C)).toBe(false);

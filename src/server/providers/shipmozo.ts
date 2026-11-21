@@ -1,5 +1,5 @@
 import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/engine";
-import { shipmozoB2cTakesB2b } from "./shipmozo-rules";
+import { shipmozoB2cTakesB2b, shipmozoBooksBoxes } from "./shipmozo-rules";
 import { amountToPaise, firstString, jsonOrNull } from "./delhivery-common";
 import { type BookResult, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
 
@@ -228,7 +228,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     // A B2B account also asks for Shipmozo's LTL cargo rates (type_of_package "B2B": TCI Express LTL, Gati LTL,
     // Delhivery B2B LTL …) on top of its usual rates. The usual rates are unchanged; if the LTL request fails it is ignored.
     // (one box, or several once multi-carton booking is verified — never a rate that cannot be booked)
-    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoB2cTakesB2b(req, ctx.config);
+    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoBooksBoxes(req, ctx.config);
     const [r, rl] = await Promise.all([
       call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify(body) }),
       ltl ? call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify({ ...body, type_of_package: "B2B" }) }) : Promise.resolve(null),
