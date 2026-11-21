@@ -10,6 +10,7 @@ import { FranchiseError, areaStatus, currentTerms, listFranchises, termsVersions
 import { sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { DistrictFields } from "./forms";
+import { IndiaMap } from "./IndiaMap";
 
 type SP = Promise<{ tab?: string; period?: string; status?: string; state?: string; q?: string; cs?: string; cd?: string; ok?: string; err?: string }>;
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "—");
@@ -18,7 +19,7 @@ const DEP_CHIP: Record<string, string> = { held: "c-active", not_required: "c-dr
 export default async function AdminFranchises({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const staff = await requireStaff("customers.read");
-  const tab = ["area", "terms", "payouts"].includes(sp.tab ?? "") ? sp.tab! : "list";
+  const tab = ["area", "terms", "payouts", "map"].includes(sp.tab ?? "") ? sp.tab! : "list";
   const head = (
     <div className="page-h">
       <div><h1>Franchises</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Franchise partners, their exclusive areas, security deposits and agreements. Every change is in the audit log.</p></div>
@@ -28,12 +29,15 @@ export default async function AdminFranchises({ searchParams }: { searchParams: 
   const tabs = (
     <nav className="tabs mb12" aria-label="Franchises">
       <a className={tab === "list" ? "on" : ""} href="/admin/franchises/">All franchises</a>
+      <a className={tab === "map" ? "on" : ""} href="/admin/franchises/?tab=map">India map</a>
       <a className={tab === "area" ? "on" : ""} href="/admin/franchises/?tab=area">Check an area</a>
       <a className={tab === "payouts" ? "on" : ""} href="/admin/franchises/?tab=payouts">Commission payouts</a>
       <a className={tab === "terms" ? "on" : ""} href="/admin/franchises/?tab=terms">Terms &amp; Conditions</a>
     </nav>
   );
   const notes = <>{sp.ok && <p className="note small mb12">{sp.ok}</p>}{sp.err && <p className="err-box small mb12" role="alert">{sp.err}</p>}</>;
+
+  if (tab === "map") return <>{head}{tabs}{notes}<IndiaMap selected={sp.state} /></>;
 
   if (tab === "payouts") {
     const finance = can(staff.role, "finance.adjust");
