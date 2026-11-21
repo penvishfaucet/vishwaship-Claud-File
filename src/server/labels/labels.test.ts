@@ -84,7 +84,7 @@ async function ship(o: { org?: string; provider?: string; mode?: "B2B" | "B2C"; 
     consignee: { name: "Shree Balaji Traders Pvt Ltd", mobile: "9123456780", line1: o.address ?? "45 Ring Road", line2: "Lajpat Nagar", city: "New Delhi", state: "Delhi", pincode: "110024" } });
   await db.insert(schema.packages).values({ id: `p${id}`, orderId: `o${id}`, count: o.boxes ?? 1, lengthMm: 500, breadthMm: 400, heightMm: 400, actualWeightGrams: 20_000 });
   const awb = o.awb === undefined ? `2200${String(n).padStart(8, "0")}` : o.awb;
-  await db.insert(schema.shipments).values({ id: `s${id}`, orgId: o.org ?? ORG, orderId: `o${id}`, providerAccountId: "pa_live", provider: o.provider ?? "delhivery_b2b", carrierCode: "delhivery", carrierName: "Delhivery",
+  await db.insert(schema.shipments).values({ id: `s${id}`, orgId: o.org ?? ORG, orderId: `o${id}`, providerAccountId: "pa_live", provider: o.provider ?? "bluedart", carrierCode: "delhivery", carrierName: "Delhivery",
     serviceName: "B2B Surface", awb, lrNumber: (o.mode ?? "B2B") === "B2B" ? awb : null, pieceIds: o.pieces ?? null, bookingStatus: "confirmed", pickupStatus: "scheduled", status: o.status ?? "booked",
     quoteId: "q", sellPaise: 300_000, costPaise: 250_000, chargeableWeightGrams: 20_000 });
   return `s${id}`;
@@ -146,7 +146,7 @@ describe("Vishwaship B2B label", { timeout: 20_000 }, () => {
   });
 
   it("COD: the amount is not on the Vishwaship label nor in its PDF data", async () => {
-    const sid = await ship({ pay: "cod", mode: "B2C", provider: "delhivery_b2c" });
+    const sid = await ship({ pay: "cod", mode: "B2C", provider: "bluedart" });
     const r = await renderLabels(ORG, [sid], "thermal_4x6");
     const [p] = await pdfPages(r.pdf!);
     expect(p.text).toContain("COD");
@@ -188,7 +188,7 @@ describe("print formats", { timeout: 20_000 }, () => {
   });
 
   it("38 × 100 mm single-carton B2C label fits and its AWB decodes", async () => {
-    const sid = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const sid = await ship({ mode: "B2C", provider: "bluedart" });
     const r = await renderLabels(ORG, [sid], "thermal_38x100");
     if (!r.pdf) throw new Error(r.skipped.map((s) => s.reason).join());
     const [p] = await pdfPages(r.pdf);
@@ -197,7 +197,7 @@ describe("print formats", { timeout: 20_000 }, () => {
 
   it("A4 4 per page (2 × 2): labels in order, unused slots blank; A4 2 per page: top then bottom", async () => {
     const ids: string[] = [];
-    for (let i = 0; i < 5; i++) ids.push(await ship({ mode: "B2C", provider: "delhivery_b2c" }));
+    for (let i = 0; i < 5; i++) ids.push(await ship({ mode: "B2C", provider: "bluedart" }));
     const r = await renderLabels(ORG, ids, "a4_4up");
     const pages = await pdfPages(r.pdf!);
     expect(pages).toHaveLength(2);
@@ -219,7 +219,7 @@ describe("print formats", { timeout: 20_000 }, () => {
 
 describe("thermal 38 × 200 mm", { timeout: 20_000 }, () => {
   it("page is 38 × 200 mm, rotated so the barcode runs along the roll, and the AWB decodes", async () => {
-    const sid = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const sid = await ship({ mode: "B2C", provider: "bluedart" });
     const r = await renderLabels(ORG, [sid], "thermal_38x200");
     expect(r.skipped).toEqual([]);
     const [p] = await pdfPages(r.pdf!);
@@ -233,7 +233,7 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
   const delivers = (p: Awaited<ReturnType<typeof pdfPages>>[number]) => p.items.filter((i) => i.str === "Shipping address :");
 
   it("A4 · 1 label per page: one label on each sheet", async () => {
-    const ids = [await ship({ mode: "B2C", provider: "delhivery_b2c" }), await ship({ mode: "B2C", provider: "delhivery_b2c" })];
+    const ids = [await ship({ mode: "B2C", provider: "bluedart" }), await ship({ mode: "B2C", provider: "bluedart" })];
     const r = await renderLabels(ORG, ids, "a4_1up");
     expect(r.skipped).toEqual([]);
     const pages = await pdfPages(r.pdf!);
@@ -252,13 +252,13 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
       expect(pages[0].text).toContain("SHIPMENT DOCUMENT");
       // (barcode decoding is covered on thermal pages: the test decoder cannot split two barcodes side by side in the 2 × 2 grid)
     }
-    const a = await ship({ mode: "B2C", provider: "delhivery_b2c" }), b = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const a = await ship({ mode: "B2C", provider: "bluedart" }), b = await ship({ mode: "B2C", provider: "bluedart" });
     const pages = await pdfPages((await renderLabels(ORG, [a, b], "a4_fit")).pdf!);
     expect(pages).toHaveLength(2);
   });
 
   it("A4 · label + invoice: labels on the top half, the shipper's invoice below the cut line, no COD amount", async () => {
-    const sid = await ship({ boxes: 2, pieces: ["7700001", "7700002"], pay: "cod", mode: "B2C", provider: "delhivery_b2c" });
+    const sid = await ship({ boxes: 2, pieces: ["7700001", "7700002"], pay: "cod", mode: "B2C", provider: "bluedart" });
     const r = await renderLabels(ORG, [sid], "a4_doc");
     expect(r.skipped).toEqual([]);
     const [p, ...more] = await pdfPages(r.pdf!);
@@ -283,15 +283,15 @@ describe("A4 sheets for one shipment", { timeout: 30_000 }, () => {
 
 describe("downloads are safe", { timeout: 20_000 }, () => {
   it("another account's shipment is not found for a customer; Admin (no org filter) can download it", async () => {
-    const theirs = await ship({ org: OTHER, mode: "B2C", provider: "delhivery_b2c" });
+    const theirs = await ship({ org: OTHER, mode: "B2C", provider: "bluedart" });
     expect((await renderLabels(ORG, [theirs], "thermal_4x6")).skipped[0]).toMatchObject({ reason: "Not found" });
     expect((await renderLabels(null, [theirs], "thermal_4x6")).pdf).not.toBeNull();
   });
 
   it("bulk with a partial failure: available labels download; the pending one is listed for Retry", async () => {
-    const good = await ship({ mode: "B2C", provider: "delhivery_b2c" });
-    const pending = await ship({ mode: "B2C", provider: "delhivery_b2c", awb: null });
-    const cancelled = await ship({ mode: "B2C", provider: "delhivery_b2c", status: "cancelled" });
+    const good = await ship({ mode: "B2C", provider: "bluedart" });
+    const pending = await ship({ mode: "B2C", provider: "bluedart", awb: null });
+    const cancelled = await ship({ mode: "B2C", provider: "bluedart", status: "cancelled" });
     const r = await renderLabels(ORG, [good, pending, cancelled], "a4_2up");
     expect(r.pages).toBe(1);
     expect(r.skipped).toEqual(expect.arrayContaining([
@@ -312,7 +312,7 @@ describe("carrier label (courier's original)", { timeout: 20_000 }, () => {
   async function pdfBytes(text: string) { const d = await PDFDocument.create(); d.addPage([288, 432]).drawText(text, { x: 20, y: 200, size: 12, color: rgb(0, 0, 0) }); return d.save(); }
 
   it("PDF bytes, base64 inside JSON, and a redirected link all become PDF pages; repeated downloads never book or charge", async () => {
-    const sid = await ship({ mode: "B2B", pieces: ["1"] });
+    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", pieces: ["1"] });
     const before = { ships: (await db.select().from(schema.shipments)).length, ledger: (await db.select().from(schema.ledgerEntries)).length };
     const pdf = await pdfBytes("CARRIER-PDF");
     const b64 = Buffer.from(await pdfBytes("CARRIER-B64")).toString("base64");
@@ -336,7 +336,7 @@ describe("carrier label (courier's original)", { timeout: 20_000 }, () => {
   });
 
   it("an expired label link is refreshed once from the courier; a pending label is retryable", async () => {
-    const sid = await ship({ mode: "B2B", pieces: ["1"] });
+    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", pieces: ["1"] });
     const pdf = await pdfBytes("FRESH");
     files.set("https://labels.example/old.pdf", () => new Response("expired", { status: 403 }));
     files.set("https://labels.example/new.pdf", () => new Response(Buffer.from(pdf), { status: 200 }));
@@ -371,5 +371,83 @@ describe("Delhivery B2B label reply formats", () => {
     expect(r.ok && r.value.images?.[0]).toMatch(/^data:application\/octet-stream;base64,A+$/);
     r = await delhiveryB2bAdapter.label(ctxWith(() => new Response(JSON.stringify({ success: true, data: [] }))), { providerOrderRef: "x", awb: "220011" }, "thermal_3x4");
     expect(r).toMatchObject({ ok: false, error: { retryable: true, message: expect.stringMatching(/not generated/) } });
+  });
+});
+
+describe("every download is the courier's own label", { timeout: 20_000 }, () => {
+  async function pdfBytes(text: string, size: [number, number] = [288, 432]) { const d = await PDFDocument.create(); d.addPage(size).drawText(text, { x: 20, y: 200, size: 12, color: rgb(0, 0, 0) }); return d.save(); }
+  const png = async () => { const sharp = (await import("sharp")).default; return sharp({ create: { width: 812, height: 1218, channels: 3, background: "#ffffff" } }).png().toBuffer(); };
+
+  it("Shipmozo AWB (even a heavy multi-box B2C): only the courier's label pages, no document, whatever size was chosen", async () => {
+    const sid = await ship({ mode: "B2B", provider: "shipmozo", boxes: 2, pieces: ["1", "2"] });
+    for (const f of ["a4_fit", "thermal_4x6", "thermal_3x4", "original"] as const) {
+      carrierCalls.length = 0;
+      const img = (await png()).toString("base64");
+      carrierReply = [() => ({ ok: true, value: { images: [`data:image/png;base64,${img}`, `data:image/png;base64,${img}`], formatsAvailable: [] } })];
+      const r = await renderLabels(ORG, [sid], f);
+      expect(r.skipped).toEqual([]);
+      expect(carrierCalls[0]).toMatch(/:thermal_4x6$/); // Shipmozo's own size
+      const pages = await pdfPages(r.pdf!);
+      expect(pages).toHaveLength(2); // the two courier labels, nothing added
+      expect(pages.map((p) => [Math.round(p.w / PT), Math.round(p.h / PT)])).toEqual([[102, 152], [102, 152]]);
+      expect(pages.map((p) => p.text).join(" ")).not.toMatch(/SHIPMENT DOCUMENT|DELIVER TO/);
+    }
+  });
+
+  it("Delhivery B2B LR: the courier's labels, then the shipment document; A4 sizes ask Delhivery for its A4 label", async () => {
+    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", pieces: ["1"] });
+    carrierCalls.length = 0;
+    carrierReply = [async () => ({ ok: true, value: { pdf: await pdfBytes("DLV-CARTON-1"), formatsAvailable: [] } })];
+    const r = await renderLabels(ORG, [sid], "a4_fit");
+    expect(carrierCalls[0]).toMatch(/:a4$/);
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(2);
+    expect(pages[0].text).toBe("DLV-CARTON-1"); // untouched
+    expect(pages[1].text).toMatch(/SHIPMENT DOCUMENT/);
+    expect(r.notices.join()).toMatch(/pickup/i);
+  });
+
+  it("Delhivery B2C AWB: only the courier's label; a size Delhivery does not make falls back to its 4 × 6 with a notice", async () => {
+    const sid = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    carrierCalls.length = 0;
+    carrierReply = [async () => ({ ok: true, value: { pdf: await pdfBytes("DLV-B2C"), formatsAvailable: [] } })];
+    const r = await renderLabels(ORG, [sid], "thermal_3x4");
+    expect(carrierCalls[0]).toMatch(/:thermal_4x6$/);
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].text).toBe("DLV-B2C");
+    expect(r.notices.join()).toMatch(/comes in Thermal 4 × 6/);
+  });
+
+  it("a half-read courier label leaves no stray pages; bulk keeps each shipment's pages together", async () => {
+    const a = await ship({ mode: "B2C", provider: "delhivery_b2c" }), b = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const good = await pdfBytes("GOOD-A");
+    carrierReply = [
+      () => ({ ok: true, value: { pdf: good, images: ["not-a-label"], formatsAvailable: [] } }), () => ({ ok: false, error: { message: "nope", retryable: false } }),
+      async () => ({ ok: true, value: { pdf: await pdfBytes("GOOD-B"), formatsAvailable: [] } }),
+    ];
+    const r = await renderLabels(ORG, [a, b], "thermal_4x6");
+    expect(r.skipped.map((x) => x.shipmentId)).toEqual([a]);
+    expect((await pdfPages(r.pdf!)).map((p) => p.text)).toEqual(["GOOD-B"]);
+  });
+});
+
+describe("aggregator branding cover", () => {
+  it("paints only the listed region white and puts the Vishwaship logo there", async () => {
+    const { coverBranding } = await import("./cover");
+    const d = await PDFDocument.create(); d.addPage([288, 432]);
+    expect(await coverBranding(d, "delhivery_b2c")).toBe(0); // courier brands stay
+    expect(await coverBranding(d, "shipmozo", [{ x: 0, y: 0, w: 0.5, h: 0.1 }])).toBe(1);
+    const [p] = await pdfPages(await d.save());
+    expect(p.ops.fnArray).toContain(p.OPS.paintImageXObject);
+  });
+  it("Shipmozo: the covered box stays clear of the barcodes, the address and the page border (measured on a real label)", async () => {
+    const { BRAND_COVER } = await import("./cover");
+    for (const r of BRAND_COVER.shipmozo) {
+      expect(r.y + r.h).toBeLessThan(0.326); // AWB barcode starts here
+      expect(r.x).toBeGreaterThan(0.57); // address text ends before this
+      expect(r.x + r.w).toBeLessThan(0.97); // right border line
+      expect(r.x <= 0.604 && r.y <= 0.12 && r.x + r.w >= 0.959 && r.y + r.h >= 0.176).toBe(true); // covers the whole logo image
+    }
   });
 });

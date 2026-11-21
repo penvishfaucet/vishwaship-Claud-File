@@ -3,12 +3,14 @@ import type { LabelFormat } from "@/server/providers/types";
 
 /**
  * Where each Download Label format comes from.
- *  - branded:  the Vishwaship label, drawn from the booking (all sizes; one label per carton). The barcode is the
- *              carrier's own identifier (AWB / LRN and the carton waybill) in Code 128, which these carriers scan.
- *  - carrier:  the courier's original label, untouched (requested from the courier API in its own format).
+ *  - carrier:  the courier's own label file, pages and barcodes untouched (the hub scans these). Used for EVERY size
+ *              of a courier with a label API: the chosen size only picks which of the courier's own sizes to ask for.
+ *              `document`: an LR booking (Delhivery B2B) also gets its shipment document after the labels;
+ *              an AWB booking (B2C, Shipmozo) gets only the courier's label, exactly as the courier gives it.
+ *  - branded:  the Vishwaship label drawn from the booking — only for the demo courier and couriers without a label API.
  *  - unavailable: with the reason shown in the menu.
  */
-type Source = { kind: "branded" } | { kind: "carrier"; carrierFormat: LabelFormat } | { kind: "unavailable"; reason: string };
+type Source = { kind: "branded" } | { kind: "carrier"; carrierFormat: LabelFormat; document: boolean } | { kind: "unavailable"; reason: string };
 
 /** Courier label formats each integration can return; first = the courier's default size. */
 export const CARRIER_NATIVE: Record<string, LabelFormat[]> = {
@@ -17,23 +19,25 @@ export const CARRIER_NATIVE: Record<string, LabelFormat[]> = {
   shipmozo: ["thermal_4x6"],
 };
 
-/**
- * Carrier rules for the Vishwaship label. `carrierLabelAdvised`: the courier's own label carries routing / sort codes
- * that its API does not give us; the hub may ask for it — the Carrier label is always offered next to ours.
- */
-export const CARRIER_POLICY: Record<string, { carrierLabelAdvised: boolean; note?: string }> = {
-  delhivery_b2b: { carrierLabelAdvised: true, note: "Delhivery's own label adds its routing codes. If the pickup team asks for it, print the Carrier label too." },
-  delhivery_b2c: { carrierLabelAdvised: true, note: "Delhivery's own label adds its sort code. If the pickup team asks for it, print the Carrier label too." },
-  shipmozo: { carrierLabelAdvised: true, note: "The courier's own label adds its routing code. If the pickup team asks for it, print the Carrier label too." },
-  shiporax: { carrierLabelAdvised: true },
-};
+/** Couriers whose booking is an LR (lorry receipt): their labels come with the shipment document. */
+const LR_PROVIDERS = new Set(["delhivery_b2b"]);
+
+/** The courier's own size closest to what was asked: the same size if the courier has it, A4 for A4 sheets, else its default. */
+export function carrierFormatFor(provider: string, f: PrintFormat): LabelFormat | null {
+  const native = CARRIER_NATIVE[provider];
+  if (!native) return null;
+  if (native.includes(f as LabelFormat)) return f as LabelFormat;
+  const group = PRINT_FORMATS.find((p) => p.key === f)?.group;
+  if (group === "a4" && native.includes("a4")) return "a4";
+  return native[0];
+}
 
 export function labelSource(provider: string, f: PrintFormat): Source {
+  const carrierFormat = carrierFormatFor(provider, f);
+  if (carrierFormat) return { kind: "carrier", carrierFormat, document: LR_PROVIDERS.has(provider) };
   if (f !== "original") return { kind: "branded" };
   if (provider === "demo") return { kind: "branded" }; // the demo courier has no label of its own
-  const native = CARRIER_NATIVE[provider];
-  if (!native) return { kind: "unavailable", reason: provider === "shiporax" ? "Open this shipment's label from its order page" : "This courier's own label is not available through Vishwaship yet" };
-  return { kind: "carrier", carrierFormat: native[0] };
+  return { kind: "unavailable", reason: provider === "shiporax" ? "Open this shipment's label from its order page" : "This courier's own label is not available through Vishwaship yet" };
 }
 
 /** Per-format availability for a shipment's menu. */

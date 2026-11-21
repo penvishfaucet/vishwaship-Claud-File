@@ -6,7 +6,8 @@ import { adapterFor, providerContext } from "@/server/providers/registry";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { code128Bars } from "@/lib/code128";
 import { LABEL_TERMS, type PrintFormat, PRINT_FORMATS } from "@/lib/order-view";
-import { CARRIER_POLICY, labelSource } from "./formats";
+import { labelSource } from "./formats";
+import { coverBranding } from "./cover";
 import { CARRIER_LOGOS, type LabelLogo, VISHWASHIP_LOGO } from "./logos.generated";
 import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
@@ -117,8 +118,6 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         skip(`The courier has not sent the carton barcodes for all ${cartons} cartons yet — download the Carrier label, or retry later`, true);
         continue;
       }
-      const pol = CARRIER_POLICY[s.provider];
-      if (pol?.note) notices.add(`${s.carrierName}: ${pol.note}`);
       const meta = (o.meta ?? {}) as { grandTotalPaise?: number };
       const products = ((o.products ?? []) as Product[]).filter((p) => p?.name);
       const pickup = (o.pickupSnapshot as Addr | null) ?? (w ? { label: w.label, contactName: w.contactName, line1: w.line1, line2: w.line2 ?? undefined, city: w.city, state: w.state, pincode: w.pincode, mobile: w.mobile } : null);
@@ -173,28 +172,64 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       continue;
     }
 
-    // ---- Carrier label (courier's original, untouched)
-    if (o.mode === "B2B" || s.provider === "delhivery_b2b") notices.add(B2B_HANDOVER.notice);
-    if (o.paymentType === "cod") notices.add("Carrier labels show the COD amount because the courier prints it on its own label. The Vishwaship label never shows it.");
+    // ---- Carrier label: the courier's own file, pages and barcodes untouched (only another company's logo is covered)
+    if (src.document) notices.add(B2B_HANDOVER.notice);
+    if (o.paymentType === "cod") notices.add("Courier labels show the COD amount because the courier prints it on its own label.");
+    if (format !== "original" && src.carrierFormat !== format && !(src.carrierFormat === "a4" && PRINT_FORMATS.find((p) => p.key === format)?.group === "a4")) {
+      const size = PRINT_FORMATS.find((p) => p.key === src.carrierFormat)?.name ?? src.carrierFormat;
+      notices.add(`${s.carrierName}: the courier's label comes in ${size}, so it is downloaded in that size (the barcodes stay exactly as the courier made them).`);
+    }
     const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, s.providerAccountId));
     const ad = acct && adapterFor(acct);
     if (!ad) { skip("Courier account unavailable — contact Vishwaship support"); continue; }
     const ctx = await providerContext(acct);
     const ref = { providerOrderRef: s.providerOrderRef ?? s.id, awb: s.awb };
-    let added = 0, lastErr = "";
-    for (let attempt = 0; attempt < 2 && !added; attempt++) {
+    let placed: PDFDocument | null = null, lastErr = "";
+    for (let attempt = 0; attempt < 2 && !placed; attempt++) {
       // a second attempt asks the courier again: label links are short-lived and a fresh request returns new ones
       const r = await ad.label(ctx, ref, src.carrierFormat);
       if (!r.ok) { lastErr = r.error.message; if (!r.error.retryable) break; continue; }
       if (r.value.html) { lastErr = "This courier's label opens as a web page — use the order page's label link"; break; }
       try {
-        added = await placeCarrierLabel(doc, r.value);
-        if (!added) lastErr = "The courier returned an empty label";
+        // into a scratch file first, so a half-read label never leaves stray pages in the download
+        const one = await PDFDocument.create();
+        if (await placeCarrierLabel(one, r.value)) { await coverBranding(one, s.provider); placed = one; }
+        else lastErr = "The courier returned an empty label";
       } catch (e) {
         lastErr = `Could not read the courier's label: ${(e as Error).message}`.slice(0, 200);
       }
     }
-    if (added) {
+    if (placed) {
+      for (const p of await doc.copyPages(placed, placed.getPageIndices())) doc.addPage(p);
+      // an LR booking: the shipment document follows the courier's labels (an AWB booking has no document)
+      if (src.document) {
+        const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
+        const pieceIds = (Array.isArray(s.pieceIds) ? (s.pieceIds as unknown[]) : []).map(String).filter(Boolean);
+        const cartons = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0), pieceIds.length);
+        const meta = (o.meta ?? {}) as { grandTotalPaise?: number };
+        const products = ((o.products ?? []) as Product[]).filter((p) => p?.name);
+        const pickup = (o.pickupSnapshot as Addr | null) ?? (w ? { label: w.label, contactName: w.contactName, line1: w.line1, line2: w.line2 ?? undefined, city: w.city, state: w.state, pincode: w.pincode, mobile: w.mobile } : null);
+        const logo = carrierLogoFor(s.carrierName);
+        const d: BrandedLabel = {
+          demo: false, carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
+          payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
+          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: null,
+          to: o.consignee as Addr,
+          shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
+          orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
+          products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
+          kind: "document", cartonIds: pieceIds.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
+          date: s.createdAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }),
+          masterId: cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
+        };
+        // A4 labels → the document on the top half of an A4 sheet; thermal labels → a 4 × 6 in sheet
+        const a4 = src.carrierFormat === "a4";
+        const page = a4 ? doc.addPage([210 * PT, 297 * PT]) : doc.addPage([101.6 * PT, 152.4 * PT]);
+        const box = a4 ? gridBoxes(1, 1, 0, 148.5)[0] : { x: 0, y: 0, w: page.getWidth(), h: page.getHeight() };
+        const plain = { r: await doc.embedFont(StandardFonts.Helvetica), b: await doc.embedFont(StandardFonts.HelveticaBold) };
+        const color = async (l: LabelLogo) => doc.embedPng(Buffer.from(a4 ? l.color : l.mono, "base64"));
+        drawBranded(page, plain, { vs: await color(VISHWASHIP_LOGO), carrier: logo ? await color(logo) : null }, d, box);
+      }
       await db.update(schema.shipments).set({ labelStatus: "available" }).where(eq(schema.shipments.id, s.id));
       await noteCapability(acct.id, "label", true, { evidence: `AWB ${s.awb}` });
     } else {

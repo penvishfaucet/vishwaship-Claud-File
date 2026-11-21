@@ -261,10 +261,14 @@ describe("label formats", () => {
   it("demo courier: every layout generated", () => {
     expect(labelFormatsFor("demo").every((x) => x.ok)).toBe(true);
   });
-  it("every size is the Vishwaship label; Carrier label = the courier's own default size", () => {
-    for (const f of ["a4_2up", "a4_4up", "thermal_4x6", "thermal_3x4", "thermal_4x4", "thermal_2x4", "thermal_38x100"] as const) expect(labelSource("delhivery_b2b", f).kind).toBe("branded");
-    expect(labelSource("delhivery_b2c", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_4x6" });
-    expect(labelSource("delhivery_b2b", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_3x4" });
+  it("couriers with a label API: every size is the courier's own label (same size if it has it, A4 for A4, else its default)", () => {
+    for (const f of ["a4_2up", "a4_4up", "thermal_4x6", "thermal_3x4", "thermal_4x4", "thermal_2x4", "thermal_38x100", "original"] as const) for (const p of ["delhivery_b2b", "delhivery_b2c", "shipmozo"]) expect(labelSource(p, f).kind).toBe("carrier");
+    expect(labelSource("delhivery_b2c", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_4x6", document: false });
+    expect(labelSource("delhivery_b2b", "original")).toEqual({ kind: "carrier", carrierFormat: "thermal_3x4", document: true });
+    expect(labelSource("delhivery_b2b", "thermal_4x4")).toEqual({ kind: "carrier", carrierFormat: "thermal_4x4", document: true });
+    expect(labelSource("delhivery_b2c", "a4_fit")).toEqual({ kind: "carrier", carrierFormat: "a4", document: false });
+    expect(labelSource("shipmozo", "a4_fit")).toEqual({ kind: "carrier", carrierFormat: "thermal_4x6", document: false });
+    expect(labelSource("demo", "thermal_4x6").kind).toBe("branded");
   });
   it("a courier without a label integration: Vishwaship label yes, carrier label not faked", () => {
     expect(labelFormatsFor("bluedart").find((x) => x.key === "original")?.ok).toBe(false);

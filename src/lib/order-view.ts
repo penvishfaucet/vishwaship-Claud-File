@@ -125,8 +125,8 @@ export const COD_FILTERS: Array<{ key: string; label: string }> = [
 // ---------------------------------------------------------------- labels
 
 /**
- * Download Label formats. Every size except "original" is the Vishwaship-branded label (drawn from the booking);
- * "original" is the courier's own label, untouched (Carrier Label).
+ * Download Label formats. For couriers with a label API every choice gives the courier's own label (the size picks
+ * which of the courier's sizes to ask for); the drawn Vishwaship label is only for couriers without one (see labels/formats).
  *  - mm: physical page size (exact PDF page dimensions)
  *  - slots: A4 sheets hold several labels in a grid (cols × rows), placed in order; unused slots stay blank
  */

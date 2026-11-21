@@ -49,7 +49,7 @@ export function LabelDownload({ ids, api = "/api/portal/labels", formats, defaul
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         <label className="sr-only" htmlFor={`lf-${ids[0]}`}>Label format</label>
         <select id={`lf-${ids[0]}`} className="select" value={format} onChange={(e) => setFormat(e.target.value as PrintFormat)} style={{ maxWidth: 290 }}>
-          <optgroup label="Vishwaship label">{opts.filter((o) => o.key !== "original").map((o) => <option key={o.key} value={o.key} disabled={!o.ok}>{o.name}{!o.ok ? " (unavailable)" : ""}</option>)}</optgroup>
+          <optgroup label="Label size">{opts.filter((o) => o.key !== "original").map((o) => <option key={o.key} value={o.key} disabled={!o.ok}>{o.name}{!o.ok ? " (unavailable)" : ""}</option>)}</optgroup>
           {opts.some((o) => o.key === "original") && <optgroup label="Courier's own label">{opts.filter((o) => o.key === "original").map((o) => <option key={o.key} value={o.key} disabled={!o.ok}>{o.name}{!o.ok ? " (unavailable)" : ""}</option>)}</optgroup>}
         </select>
         <button type="button" className="btn btn-orange" disabled={busy || !sel?.ok} onClick={() => void go(ids)}><Download size={16} aria-hidden /> {busy ? "Preparing…" : ids.length > 1 ? `Download ${ids.length} labels` : "Download Label"}</button>
