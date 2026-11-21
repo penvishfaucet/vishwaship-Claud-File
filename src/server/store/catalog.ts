@@ -199,7 +199,7 @@ export async function uploadMedia(orgId: string, buf: Buffer) {
   if (!kind || !["image/png", "image/jpeg", "image/webp"].includes(kind.mime)) throw new StoreError("Use a PNG, JPG or WebP image");
   const db = await getDb();
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.storeMedia).where(eq(schema.storeMedia.storeId, s.id));
-  if (n >= 500) throw new StoreError("Image limit reached (500). Remove unused products first.");
+  if (n >= 2000) throw new StoreError("Image limit reached (2,000). Remove unused products first.");
   const id = newId("sm", 20);
   await db.insert(schema.storeMedia).values({ id, storeId: s.id, orgId, mime: kind.mime, sizeBytes: buf.length, data: buf });
   return id;

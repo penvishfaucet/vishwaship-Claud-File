@@ -51,7 +51,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
   const cats = await db.select().from(schema.storeCategories).where(eq(schema.storeCategories.storeId, s.id)).orderBy(asc(schema.storeCategories.sort));
   const prods = await db.select().from(schema.storeProducts)
     .where(and(eq(schema.storeProducts.storeId, s.id), eq(schema.storeProducts.status, "active")))
-    .orderBy(desc(schema.storeProducts.featured), desc(schema.storeProducts.createdAt)).limit(500);
+    .orderBy(desc(schema.storeProducts.featured), desc(schema.storeProducts.createdAt)).limit(2000);
   const catSlug = new Map(cats.map((c) => [c.id, c.slug]));
   const withOptions = prods.filter((p) => (p.options as string[]).length > 0).map((p) => p.id);
   const vars = withOptions.length

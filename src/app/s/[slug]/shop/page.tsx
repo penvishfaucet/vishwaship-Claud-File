@@ -20,6 +20,10 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
   if (term) list = list.filter((p) => `${p.title} ${p.description}`.toLowerCase().includes(term));
   if (sort === "price_asc") list = [...list].sort((a, b) => a.pricePaise - b.pricePaise);
   if (sort === "price_desc") list = [...list].sort((a, b) => b.pricePaise - a.pricePaise);
+  const PER = 48;
+  const pages = Math.max(1, Math.ceil(list.length / PER));
+  const pageNo = Math.min(pages, Math.max(1, Number.parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1));
+  const shown = list.slice((pageNo - 1) * PER, pageNo * PER);
   const keep = keepQs(sf);
   const q = (o: Record<string, string>) => { const u = new URLSearchParams(keep); for (const [k, v] of Object.entries(o)) if (v) u.set(k, v); const s = u.toString(); return s ? `?${s}` : ""; };
   return (
@@ -34,7 +38,20 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
             <a className={`sf-chip${sort === "price_desc" ? " on" : ""}`} href={`${sf.base}/shop/${q({ c: cat?.slug ?? "", sort: "price_desc" })}`}>Price: high to low</a>
           </span>
         </div>
-        {list.length ? <div className="sf-grid">{list.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep ? `?${keep}` : ""} />)}</div> : <p className="sf-empty">{term ? "No products match your search." : "No products here yet."}</p>}
+        {list.length > 0 && <p className="sf-note" style={{ marginTop: -8 }}>{list.length} products{pages > 1 ? ` · page ${pageNo} of ${pages}` : ""}</p>}
+        {shown.length ? <div className="sf-grid">{shown.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep ? `?${keep}` : ""} />)}</div> : <p className="sf-empty">{term ? "No products match your search." : "No products here yet."}</p>}
+        {pages > 1 && (
+          <nav className="sf-filters" aria-label="Pages" style={{ justifyContent: "center", marginTop: 28 }}>
+            {pageNo > 1 && <a className="sf-chip" href={`${sf.base}/shop/${q({ c: cat?.slug ?? "", sort, q: term, page: String(pageNo - 1) })}`} rel="prev">← Previous</a>}
+            {Array.from({ length: pages }, (_, i) => i + 1).filter((n) => n === 1 || n === pages || Math.abs(n - pageNo) <= 2).map((n, i, arr) => (
+              <span key={n} style={{ display: "contents" }}>
+                {i > 0 && n - arr[i - 1] > 1 && <span className="sf-note" aria-hidden>…</span>}
+                <a className={`sf-chip${n === pageNo ? " on" : ""}`} aria-current={n === pageNo ? "page" : undefined} href={`${sf.base}/shop/${q({ c: cat?.slug ?? "", sort, q: term, page: n > 1 ? String(n) : "" })}`}>{n}</a>
+              </span>
+            ))}
+            {pageNo < pages && <a className="sf-chip" href={`${sf.base}/shop/${q({ c: cat?.slug ?? "", sort, q: term, page: String(pageNo + 1) })}`} rel="next">Next →</a>}
+          </nav>
+        )}
       </div>
     </StoreShell>
   );
