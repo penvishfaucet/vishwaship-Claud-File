@@ -1090,6 +1090,11 @@ export const stores = pgTable("stores", {
   /** Admin applied a custom design: merchant theme switching is locked to it. */
   customDesign: boolean("custom_design").notNull().default(false),
   suspendedReason: text("suspended_reason"),
+  /** Billing (Phase 4): free trial end, paid-until date of the current plan, and the Vishwaship staff member looking after the store. */
+  trialEndsAt: ts("trial_ends_at"),
+  paidUntil: ts("paid_until"),
+  planId: text("plan_id"),
+  assignedStaffId: text("assigned_staff_id"),
   publishedAt: ts("published_at"),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
@@ -1318,3 +1323,107 @@ export const storeVisitors = pgTable("store_visitors", {
   /** sha256 of a random browser id + day: no personal data. */
   visitorHash: text("visitor_hash").notNull(),
 }, (t) => [primaryKey({ columns: [t.storeId, t.day, t.visitorHash] })]);
+
+// ---------- online store: plans, deposits, managed Meta Ads (phase 4) ----------
+/** Store plans an admin sells (price includes GST). Paid from the shipping wallet. */
+export const storePlans = pgTable("store_plans", {
+  id: id(),
+  name: text("name").notNull(),
+  /** month | year */
+  interval: text("interval").notNull(),
+  pricePaise: paise("price_paise").notNull(),
+  active: boolean("active").notNull().default(true),
+  sort: integer("sort").notNull().default(0),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+});
+
+/** One row per plan purchase (also the receipt). */
+export const storeSubscriptions = pgTable("store_subscriptions", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  planId: text("plan_id").notNull(),
+  planName: text("plan_name").notNull(),
+  interval: text("interval").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  basePaise: paise("base_paise").notNull(),
+  gstPaise: paise("gst_paise").notNull(),
+  periodStart: ts("period_start").notNull(),
+  periodEnd: ts("period_end").notNull(),
+  receiptNumber: text("receipt_number").notNull(),
+  ledgerEntryId: text("ledger_entry_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_subscriptions_receipt").on(t.receiptNumber), uniqueIndex("store_subscriptions_idem").on(t.idempotencyKey), index("store_subscriptions_store").on(t.storeId, t.createdAt)]);
+
+/** Managed Meta Ads security deposit, held from the wallet with its own ledger entry and receipt. */
+export const storeDeposits = pgTable("store_deposits", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  /** held | refund_requested | refunded | forfeited */
+  status: text("status").notNull().default("held"),
+  receiptNumber: text("receipt_number").notNull(),
+  ledgerEntryId: text("ledger_entry_id").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  termsVersion: integer("terms_version").notNull(),
+  paidBy: text("paid_by"),
+  refundRequestedAt: ts("refund_requested_at"),
+  refundReason: text("refund_reason"),
+  refundPaise: paise("refund_paise"),
+  refundLedgerEntryId: text("refund_ledger_entry_id"),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  decisionNote: text("decision_note"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_deposits_receipt").on(t.receiptNumber), uniqueIndex("store_deposits_idem").on(t.idempotencyKey), index("store_deposits_store").on(t.storeId), index("store_deposits_status").on(t.status)]);
+
+/** Managed Meta Ads service for a store: onboarding checklist, accepted terms, status. */
+export const storeManagedAds = pgTable("store_managed_ads", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  /** onboarding | active | paused | ended */
+  status: text("status").notNull().default("onboarding"),
+  /** Manual checklist items: { [key]: { at, by, kind: "merchant" | "staff" } } */
+  checklist: jsonb("checklist").notNull().default({}),
+  termsVersion: integer("terms_version"),
+  termsAcceptedAt: ts("terms_accepted_at"),
+  termsAcceptedBy: text("terms_accepted_by"),
+  /** Monthly ad spend ceiling the merchant agreed to (paid to Meta from their own ad account). */
+  monthlyCapPaise: paise("monthly_cap_paise"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("store_managed_ads_store").on(t.storeId), index("store_managed_ads_status").on(t.status)]);
+
+/**
+ * Campaign changes by Vishwaship staff. Anything that can raise spend (new campaign, budget increase, resume)
+ * waits for the merchant's explicit approval; the rest is recorded as done. Together they are the change history.
+ */
+export const storeAdChanges = pgTable("store_ad_changes", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  /** new_campaign | budget_increase | budget_decrease | pause | resume | end | creative | note */
+  kind: text("kind").notNull(),
+  campaignName: text("campaign_name").notNull(),
+  dailyBudgetPaise: paise("daily_budget_paise"),
+  totalBudgetPaise: paise("total_budget_paise"),
+  startDate: text("start_date"),
+  endDate: text("end_date"),
+  details: text("details"),
+  /** pending | approved | rejected | applied | withdrawn */
+  status: text("status").notNull(),
+  needsApproval: boolean("needs_approval").notNull(),
+  proposedBy: text("proposed_by").notNull(),
+  decidedBy: text("decided_by"),
+  decidedAt: ts("decided_at"),
+  decisionNote: text("decision_note"),
+  appliedBy: text("applied_by"),
+  appliedAt: ts("applied_at"),
+  metaCampaignId: text("meta_campaign_id"),
+  createdAt: created(),
+}, (t) => [index("store_ad_changes_store").on(t.storeId, t.createdAt), index("store_ad_changes_status").on(t.status)]);

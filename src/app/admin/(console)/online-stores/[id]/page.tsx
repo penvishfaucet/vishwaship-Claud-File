@@ -5,6 +5,7 @@ import { applyCustomDesign, setDomainSsl, setStoreSuspended } from "@/server/adm
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { StoreBillingAdmin } from "./billing";
 
 const when = (d: Date | null) => (d ? d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
@@ -78,6 +79,7 @@ export default async function AdminStoreDetail({ params, searchParams }: { param
           <p className="tiny muted" style={{ marginTop: 8 }}>Set SSL to active only after the edge proxy has issued the certificate for that hostname.</p>
         </div>
       </div>
+      <StoreBillingAdmin s={s} role={staff.role} />
       {manage && (
         <form action={applyCustomDesign} className="card" style={{ padding: 16, marginTop: 16 }}>
           <h3 style={{ fontSize: 14, marginBottom: 4 }}>Apply custom design</h3>

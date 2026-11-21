@@ -1,3 +1,4 @@
+import { ORDERS_PAUSED_TEXT } from "@/lib/store-plan";
 import { BadgeCheck, RotateCcw, ShieldCheck, Truck } from "lucide-react";
 import { POLICY_KINDS, RADIUS_PX, type StoreSection, fontsHref, rupees } from "@/lib/store-themes";
 import type { Storefront } from "@/server/store/public";
@@ -27,6 +28,7 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
       <link rel="stylesheet" href={fontsHref(c)} />
       {sf.preview && <div className="sf-preview" role="status">Preview — buyers can't see unpublished changes. <a href="/portal/store/theme/" target="_top">Back to editor</a></div>}
       {sf.demo && <div className="sf-preview" role="status">Demo store — <a href="/online-store/">create your own store</a>. Try themes: {["bazaar", "minimal", "boutique", "fresh"].map((k, i) => <span key={k}>{i ? " · " : " "}<a href={`?theme=${k}`}>{k}</a></span>)}</div>}
+      {!sf.ordersOpen && !sf.preview && <div className="sf-bar" role="status">{ORDERS_PAUSED_TEXT}</div>}
       {ann && <div className="sf-bar">{ann.settings.text}</div>}
       <header className="sf-head">
         <div className="sf-wrap">

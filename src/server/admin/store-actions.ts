@@ -5,7 +5,12 @@ import { audit } from "@/server/audit";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { newId } from "@/server/util/ids";
-import { ThemeConfig, themeByKey } from "@/lib/store-themes";
+import { THEMES, ThemeConfig, themeByKey } from "@/lib/store-themes";
+import { StoreError } from "@/server/store/catalog";
+import {
+  BillingConfigInput, ChangeInput, NEEDS_APPROVAL, PlanInput, assignStaff, decideDepositRefund, extendTrial, proposeChange, saveBillingConfig, savePlan,
+  setAdsStatus, setChecklistItem, staffChangeAction,
+} from "@/server/store/billing";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const back = (id: string, q: string) => redirect(`/admin/online-stores/${id}/?${q}`);
@@ -82,4 +87,92 @@ export async function setHelpRequestStatus(fd: FormData) {
   await db.update(schema.storeHelpRequests).set({ status }).where(eq(schema.storeHelpRequests.id, id));
   await audit({ actorUserId: staff.userId, actorKind: "staff", action: "store.help_request", targetType: "store_help_request", targetId: id, details: { status } });
   redirect("/admin/online-stores/?tab=help&ok=Updated");
+}
+
+// ---------------- phase 4: plans, trial, deposits, managed Meta Ads ----------------
+const msg = (e: unknown) => encodeURIComponent(e instanceof StoreError ? e.message : "Something went wrong");
+const settingsBack = (q: string) => redirect(`/admin/online-stores/?tab=settings&${q}`);
+
+export async function saveStoreBillingSettings(fd: FormData) {
+  const staff = await requireStaff("pricing.write");
+  const p = BillingConfigInput.safeParse({
+    trialDays: str(fd, "trialDays"), depositRupees: str(fd, "depositRupees"), terms: String(fd.get("terms") ?? ""), refundDays: str(fd, "refundDays"),
+    disabledThemes: THEMES.map((t) => t.key).filter((k) => !fd.getAll("enabledThemes").map(String).includes(k)),
+  });
+  if (!p.success) settingsBack(`err=${encodeURIComponent(p.error.issues[0]?.message ?? "Invalid settings")}`);
+  if (p.data!.disabledThemes.length >= THEMES.length) settingsBack("err=Keep+at+least+one+theme+on");
+  const next = await saveBillingConfig(staff.userId, p.data!);
+  settingsBack(`ok=${encodeURIComponent(`Saved. Terms version ${next.termsVersion}.`)}`);
+}
+
+export async function saveStorePlan(fd: FormData) {
+  const staff = await requireStaff("pricing.write");
+  const p = PlanInput.safeParse({ id: str(fd, "id") || undefined, name: str(fd, "name"), interval: str(fd, "interval"), priceRupees: str(fd, "priceRupees"), active: str(fd, "active") === "1", sort: str(fd, "sort") || 0 });
+  if (!p.success) settingsBack(`err=${encodeURIComponent(p.error.issues[0]?.message ?? "Invalid plan")}`);
+  try { await savePlan(staff.userId, p.data!); } catch (e) { settingsBack(`err=${msg(e)}`); }
+  settingsBack("ok=Plan+saved");
+}
+
+export async function extendStoreTrial(fd: FormData) {
+  const staff = await requireStaff("customers.write");
+  const id = str(fd, "storeId");
+  try { await extendTrial(staff.userId, id, Number(str(fd, "days")), str(fd, "reason")); } catch (e) { back(id, `err=${msg(e)}`); }
+  back(id, "ok=Trial+extended");
+}
+
+export async function assignStoreStaff(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const id = str(fd, "storeId");
+  try { await assignStaff(staff.userId, id, str(fd, "assignee") || null); } catch (e) { back(id, `err=${msg(e)}`); }
+  back(id, "ok=Account+manager+updated");
+}
+
+async function orgOf(storeId: string) {
+  const s = await storeById(storeId);
+  if (!s) redirect("/admin/online-stores/?err=Store+not+found");
+  return s;
+}
+
+export async function staffAdsChecklist(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const s = await orgOf(str(fd, "storeId"));
+  try { await setChecklistItem(s.orgId, { userId: staff.userId, kind: "staff" }, str(fd, "key"), str(fd, "done") === "1"); } catch (e) { back(s.id, `err=${msg(e)}`); }
+  back(s.id, "ok=Checklist+updated");
+}
+
+export async function staffAdsStatus(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const s = await orgOf(str(fd, "storeId"));
+  const to = str(fd, "to");
+  if (!["active", "paused", "ended"].includes(to)) back(s.id, "err=Bad+status");
+  try { await setAdsStatus(s.orgId, { userId: staff.userId, kind: "staff" }, to as "active" | "paused" | "ended"); } catch (e) { back(s.id, `err=${msg(e)}`); }
+  back(s.id, `ok=${encodeURIComponent(`Managed Meta Ads ${to === "active" ? "started" : to}`)}`);
+}
+
+export async function proposeAdChange(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const id = str(fd, "storeId");
+  const num = (k: string) => (str(fd, k) ? str(fd, k) : undefined);
+  const p = ChangeInput.safeParse({ kind: str(fd, "kind"), campaignName: str(fd, "campaignName"), dailyBudgetRupees: num("daily"), totalBudgetRupees: num("total"), startDate: num("startDate"), endDate: num("endDate"), details: str(fd, "details") || undefined });
+  if (!p.success) back(id, `err=${encodeURIComponent(`${p.error.issues[0]?.path.join(".")}: ${p.error.issues[0]?.message}`)}`);
+  try { await proposeChange(staff.userId, id, p.data!); } catch (e) { back(id, `err=${msg(e)}`); }
+  back(id, `ok=${NEEDS_APPROVAL.includes(p.data!.kind) ? "Sent+to+the+merchant+for+approval" : "Change+recorded"}`);
+}
+
+export async function staffAdChangeAction(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const id = str(fd, "storeId");
+  const action = str(fd, "action") === "applied" ? "applied" : "withdrawn";
+  try { await staffChangeAction(staff.userId, str(fd, "changeId"), action, str(fd, "metaCampaignId")); } catch (e) { back(id, `err=${msg(e)}`); }
+  back(id, `ok=${action === "applied" ? "Marked+as+done" : "Withdrawn"}`);
+}
+
+export async function decideStoreDeposit(fd: FormData) {
+  const staff = await requireStaff("finance.adjust");
+  const approve = str(fd, "approve") === "1";
+  const from = str(fd, "from") === "deposits" ? "/admin/online-stores/?tab=deposits&" : `/admin/online-stores/${str(fd, "storeId")}/?`;
+  const rupeesIn = str(fd, "refundRupees");
+  const refundPaise = Math.round(Number(rupeesIn || "0") * 100);
+  try { await decideDepositRefund(staff.userId, str(fd, "depositId"), approve, refundPaise, str(fd, "note")); } catch (e) { redirect(`${from}err=${msg(e)}`); }
+  redirect(`${from}ok=${approve ? "Refund+approved+and+credited+to+the+wallet" : "Refund+request+rejected"}`);
 }

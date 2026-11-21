@@ -3,7 +3,7 @@ import { z } from "zod";
 import { readSettings } from "@/lib/store-themes";
 import { apiError, parseJson } from "@/server/http";
 import { rateLimit } from "@/server/security/rate-limit";
-import { CheckoutError, CheckoutInput, confirmCheckoutPayment, liveStore, placeOrder, quoteCart } from "@/server/store/checkout";
+import { CheckoutError, CheckoutInput, assertOrdersOpen, confirmCheckoutPayment, liveStore, placeOrder, quoteCart } from "@/server/store/checkout";
 
 type Ctx = { params: Promise<{ slug: string }> };
 const ip = (req: Request) => (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
@@ -22,6 +22,7 @@ export async function PUT(req: Request, ctx: Ctx) {
   const p = await parseJson(req, QuoteBody); if (!p.ok) return p.res;
   try {
     const store = await liveStore(slug);
+    assertOrdersOpen(store);
     const q = await quoteCart(store, p.data.lines, p.data.coupon, p.data.paymentMethod);
     return NextResponse.json({
       lines: q.lines.map((l) => ({ productId: l.productId, variantId: l.variantId, title: l.title, variantTitle: l.variantTitle, qty: l.qty, unitPaise: l.unitPaise })),

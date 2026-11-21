@@ -1,5 +1,6 @@
 import { CheckCircle2, Circle, ExternalLink, Globe, Palette, ShoppingBag } from "lucide-react";
 import { and, eq, sql } from "drizzle-orm";
+import { planState } from "@/lib/store-plan";
 import { ONBOARDING_STEPS } from "@/lib/store-themes";
 import { StoreBasicsForm } from "@/components/portal/store/StoreBasicsForm";
 import { getDb, schema } from "@/server/db/client";
@@ -29,6 +30,9 @@ export default async function StoreOverview() {
   const checklist = await launchChecklist(ctx.org.id);
   const url = `${appUrl()}/s/${store.slug}/`;
   const live = store.status === "live";
+  const plan = planState(store);
+  const db0 = await getDb();
+  const [{ pendingAds }] = await db0.select({ pendingAds: sql<number>`count(*)::int` }).from(schema.storeAdChanges).where(and(eq(schema.storeAdChanges.storeId, store.id), eq(schema.storeAdChanges.status, "pending")));
   return (
     <>
       <div className="page-h">
@@ -45,6 +49,9 @@ export default async function StoreOverview() {
           <a className="btn btn-orange" href="/portal/store/setup/7/">{live ? "Publish changes" : "Launch checklist"}</a>
         </div>
       </div>
+      {plan.state === "expired" && <div className="err-box small mb12" role="alert"><b>New orders are paused.</b> Your {store.paidUntil ? "plan" : "free trial"} has ended. Buyers can still see your store. <a className="orange" href="/portal/store/plan/">Choose a plan</a> to reopen at once.</div>}
+      {plan.state === "trial" && plan.until && <p className="note small mb12">Free trial: <b>{plan.daysLeft} {plan.daysLeft === 1 ? "day" : "days"} left</b>. <a className="orange" href="/portal/store/plan/">See plans</a></p>}
+      {pendingAds > 0 && <p className="note small mb12"><b>{pendingAds} ad {pendingAds === 1 ? "change needs" : "changes need"} your approval.</b> <a className="orange" href="/portal/store/managed-ads/">Review in Managed Meta Ads</a></p>}
       <div className="grid2" style={{ alignItems: "start" }}>
         <div className="card" style={{ padding: 16 }}>
           <h3 style={{ fontSize: 14, marginBottom: 10 }}>Setup progress ({done.size}/7)</h3>

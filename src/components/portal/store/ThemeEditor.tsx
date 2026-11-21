@@ -18,7 +18,7 @@ type Props = {
 
 const COLOR_LABEL: Record<keyof ThemeConfig["colors"], string> = { primary: "Buttons & highlights", accent: "Accent", background: "Background", text: "Text" };
 
-export function ThemeEditor({ initial, slug, mode, status, versions = [] }: Props) {
+export function ThemeEditor({ initial, slug, mode, status, versions = [], hiddenThemes = [] }: Props & { hiddenThemes?: string[] }) {
   const router = useRouter();
   const [themeKey, setThemeKey] = useState(initial.themeKey);
   const [c, setC] = useState<ThemeConfig>(initial.config);
@@ -73,7 +73,7 @@ export function ThemeEditor({ initial, slug, mode, status, versions = [] }: Prop
 
   const themePicker = (
     <div className="os-theme-grid" role="radiogroup" aria-label="Theme">
-      {THEMES.map((t) => (
+      {THEMES.filter((t) => t.key === themeKey || t.key === initial.themeKey || !hiddenThemes.includes(t.key)).map((t) => (
         <button key={t.key} type="button" role="radio" aria-checked={t.key === themeKey} className={`os-theme${t.key === themeKey ? " on" : ""}`} onClick={() => pickTheme(t.key)} disabled={locked && t.key !== themeKey}>
           <b>{t.name}</b>
           <div className="sw">{Object.entries(t.config.colors).map(([k, col]) => <span key={k} style={{ background: col }} />)}</div>

@@ -54,7 +54,7 @@ export async function pnlByOrg(range: PnlRange, orgId?: string): Promise<{ rows:
     db.execute(sql`
       select w.org_id, l.kind, coalesce(sum(l.amount_paise), 0)::bigint as amt
       from ledger_entries l join wallets w on w.id = l.wallet_id
-      where l.kind in ('recharge_credit', 'weight_charge', 'weight_reversal', 'adjustment_credit', 'adjustment_debit', 'reserve_settle', 'credits_purchase', 'refund_credit', 'refund_debit')
+      where l.kind in ('recharge_credit', 'weight_charge', 'weight_reversal', 'adjustment_credit', 'adjustment_debit', 'reserve_settle', 'credits_purchase', 'refund_credit', 'refund_debit', 'store_plan')
         ${sw(sql`l.created_at`)} ${org(sql`w.org_id`)}
       group by w.org_id, l.kind`),
     db.execute(sql`select org_id, coalesce(sum(price_paise), 0)::bigint as price from credit_entries where kind = 'purchase' ${sw(sql`created_at`)} ${org(sql`org_id`)} group by org_id`),
@@ -76,7 +76,7 @@ export async function pnlByOrg(range: PnlRange, orgId?: string): Promise<{ rows:
     const adjustmentsNet = -(l.adjustment_debit ?? 0) - (l.adjustment_credit ?? 0); // debits are income, credits are given away
     const revenue = shippingRevenue + weightRevenue + creditsRevenue + adjustmentsNet;
     const profit = revenue - courierCost;
-    const consumed = -((l.reserve_settle ?? 0) + (l.weight_charge ?? 0) + (l.credits_purchase ?? 0) + (l.adjustment_debit ?? 0) + (l.refund_debit ?? 0)) - (l.weight_reversal ?? 0) - (l.refund_credit ?? 0);
+    const consumed = -((l.reserve_settle ?? 0) + (l.weight_charge ?? 0) + (l.credits_purchase ?? 0) + (l.store_plan ?? 0) + (l.adjustment_debit ?? 0) + (l.refund_debit ?? 0)) - (l.weight_reversal ?? 0) - (l.refund_credit ?? 0);
     return {
       orgId: id, name: String(o.name ?? id), shipments: n(s?.shipments), shippingGross, shippingRevenue, courierCost, quotedCost: n(s?.quoted), carrierExtra: n(s?.extra),
       weightNet, weightRevenue, creditsRevenue, adjustmentsNet, revenue, profit, marginPct: revenue > 0 ? Math.round((profit * 1000) / revenue) / 10 : null,

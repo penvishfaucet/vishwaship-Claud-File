@@ -1,3 +1,4 @@
+import { ORDERS_PAUSED_TEXT, planState } from "@/lib/store-plan";
 import "server-only";
 import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -41,6 +42,11 @@ export class CheckoutError extends Error { constructor(message: string, public f
 type Store = typeof schema.stores.$inferSelect;
 type Db = Awaited<ReturnType<typeof getDb>>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** New orders (quote / place) also need a running trial or plan; resuming or paying an existing order does not. */
+export function assertOrdersOpen(s: Store) {
+  if (!planState(s).ordersOpen) throw new CheckoutError(ORDERS_PAUSED_TEXT);
+}
 
 export async function liveStore(slug: string): Promise<Store> {
   const db = await getDb();
@@ -118,6 +124,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
   const db = await getDb();
   const [existing] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.storeId, store.id), eq(schema.storeOrders.checkoutKey, input.checkoutKey)));
   if (existing) return resume(store, existing);
+  assertOrdersOpen(store);
 
   if (input.paymentMethod === "razorpay" && !(await razorpayReady(store.orgId))) throw new CheckoutError("Online payment is not available. Please choose Cash on Delivery.");
   const settings = readSettings(store.settings);

@@ -13,6 +13,9 @@
  *   weight_reversal   +  compensating entry when a dispute is waived
  *   credits_purchase  -  notification credit pack bought from the wallet
  *   refund            +/- refunds
+ *   store_plan        -  Online Store plan bought from the wallet
+ *   store_deposit     -  Managed Meta Ads security deposit held (refundable, not revenue)
+ *   store_deposit_refund + deposit returned to the wallet after an approved refund
  *
  * Every mutation carries an idempotency key that is unique in the table, so replays of the same
  * callback / job / request produce at most one entry. Callers must run these functions inside a
@@ -23,7 +26,8 @@ import type { Paise } from "@/lib/money";
 export type LedgerKind =
   | "recharge_credit" | "reserve" | "reserve_settle" | "reserve_release"
   | "adjustment_credit" | "adjustment_debit" | "weight_charge" | "weight_reversal"
-  | "credits_purchase" | "refund_credit" | "refund_debit";
+  | "credits_purchase" | "refund_credit" | "refund_debit"
+  | "store_plan" | "store_deposit" | "store_deposit_refund";
 
 export interface LedgerEntry {
   id: string;
@@ -78,7 +82,7 @@ async function append(store: LedgerStore, w: WalletState, e: Omit<LedgerEntry, "
   return entry;
 }
 
-export async function credit(store: LedgerStore, a: Common & { amount: Paise; kind: "recharge_credit" | "adjustment_credit" | "weight_reversal" | "refund_credit" }) {
+export async function credit(store: LedgerStore, a: Common & { amount: Paise; kind: "recharge_credit" | "adjustment_credit" | "weight_reversal" | "refund_credit" | "store_deposit_refund" }) {
   if (a.amount <= 0) throw new Error("Credit must be positive");
   const dup = await store.findByIdempotencyKey(a.idempotencyKey);
   if (dup) return { entry: dup, replayed: true };
@@ -87,7 +91,7 @@ export async function credit(store: LedgerStore, a: Common & { amount: Paise; ki
   return { entry, replayed: false };
 }
 
-export async function debit(store: LedgerStore, a: Common & { amount: Paise; kind: "adjustment_debit" | "weight_charge" | "credits_purchase" | "refund_debit"; allowNegative?: boolean }) {
+export async function debit(store: LedgerStore, a: Common & { amount: Paise; kind: "adjustment_debit" | "weight_charge" | "credits_purchase" | "refund_debit" | "store_plan" | "store_deposit"; allowNegative?: boolean }) {
   if (a.amount <= 0) throw new Error("Debit must be positive");
   const dup = await store.findByIdempotencyKey(a.idempotencyKey);
   if (dup) return { entry: dup, replayed: true };

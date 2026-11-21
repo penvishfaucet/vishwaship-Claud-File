@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, max, ne } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
+import { getSetting } from "@/server/quotes/service";
 import { newId } from "@/server/util/ids";
 import {
   ONBOARDING_STEPS, RESERVED_SLUGS, SLUG_RE, type StoreSettings, type ThemeConfig,
@@ -38,7 +39,7 @@ export async function createStore(orgId: string, a: { name: string; slug: string
   try {
     const [s] = await db.insert(schema.stores).values({
       id, orgId, name: a.name, slug: a.slug, themeKey: "bazaar", draftTheme: defaultTheme("bazaar"),
-      settings: readSettings({}), stepsDone: [1], onboardingStep: 2,
+      settings: readSettings({}), stepsDone: [1], onboardingStep: 2, trialEndsAt: new Date(Date.now() + (await storeBillingSetting()).trialDays * 86400_000),
     }).returning();
     return { ok: true, store: s };
   } catch {
@@ -73,6 +74,7 @@ export async function saveDraftTheme(orgId: string, themeKey: string, config: Th
   const s = await storeForOrg(orgId);
   if (!s) return { ok: false as const, message: "Create your store first" };
   if (s.customDesign && themeKey !== s.themeKey) return { ok: false as const, message: "Your store uses a custom design set up by Vishwaship. Contact support to change the theme." };
+  if (themeKey !== s.themeKey && (await storeBillingSetting()).disabledThemes.includes(themeKey)) return { ok: false as const, message: "This theme is not available right now. Please pick another." };
   if (config.logo) await assertMediaOwned(s.id, [config.logo]);
   const imgs = config.sections.map((x) => x.settings.image).filter((v): v is string => !!v);
   if (imgs.length) await assertMediaOwned(s.id, imgs);
@@ -176,4 +178,10 @@ export const stepTitle = (n: number) => ONBOARDING_STEPS.find((x) => x.n === n)?
 export async function storeCategories(storeId: string) {
   const db = await getDb();
   return db.select().from(schema.storeCategories).where(eq(schema.storeCategories.storeId, storeId)).orderBy(asc(schema.storeCategories.sort), asc(schema.storeCategories.name));
+}
+
+/** Admin store settings (trial length, themes switched off). Full config lives in billing.ts; read here without importing it. */
+export async function storeBillingSetting(): Promise<{ trialDays: number; disabledThemes: string[] }> {
+  const v = (await getSetting<{ trialDays?: number; disabledThemes?: string[] }>("store_billing", {})).value;
+  return { trialDays: Number.isFinite(v.trialDays) ? Number(v.trialDays) : 15, disabledThemes: Array.isArray(v.disabledThemes) ? v.disabledThemes : [] };
 }
