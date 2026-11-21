@@ -437,6 +437,7 @@ describe("Shipmozo B2B: LTL cargo rates are added, the usual rates stay", () => 
     const r3 = await getQuotes(seven, ORG, { persist: false });
     expect(types).not.toContain("B2B");
     expect(r3.offers.some((o) => o.providerAccountId === SM_B2B)).toBe(false);
+    expect(r3.errors.join(" ")).not.toMatch(/no courier/i); // and no confusing notice
   });
   it("a several-box booking through Shipmozo is refused (LTL or not) until multi-carton booking is verified", async () => {
     const ctx = { accountId: "x", mode: "live" as const, config: { service: "B2B", baseUrl: { live: "https://shipping-api.com/app/api/v1" } }, secrets: { publicKey: "pk", privateKey: "sk" }, fetch: (await import("@/server/security/safe-fetch")).safeFetch };

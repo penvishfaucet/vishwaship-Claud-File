@@ -232,6 +232,8 @@ export const shipmozoAdapter: ShippingAdapter = {
     const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoBooksBoxes(req, ctx.config);
     // the usual (MPS) rates for several boxes only once that multi-carton booking is verified — never a rate that cannot be booked
     const baseBookable = shipmozoBooksBoxes(req, ctx.config);
+    // nothing this account could book (several boxes, multi-carton booking not verified): no rate and no notice
+    if (!baseBookable && !ltl) return { ok: true, value: [] };
     const [r, rl] = await Promise.all([
       call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify(body) }),
       ltl ? call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify({ ...body, type_of_package: "B2B" }) }) : Promise.resolve(null),
