@@ -7,10 +7,10 @@ import { sha256 } from "@/server/security/crypto";
 import { randomToken } from "@/server/util/ids";
 import { type Permission, type StaffRole, MFA_REQUIRED, can } from "./rbac";
 
-const COOKIE = { customer: "vs_cs", staff: "vs_ss" } as const;
-const TTL = { customer: 14 * 86400_000, staff: 12 * 3600_000 };
+const COOKIE = { customer: "vs_cs", staff: "vs_ss", franchise: "vs_fs" } as const;
+const TTL = { customer: 14 * 86400_000, staff: 12 * 3600_000, franchise: 7 * 86400_000 };
 
-export type Kind = "customer" | "staff";
+export type Kind = "customer" | "staff" | "franchise";
 
 export interface SessionUser {
   sessionId: string;

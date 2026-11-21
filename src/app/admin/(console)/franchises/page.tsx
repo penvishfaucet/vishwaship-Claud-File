@@ -4,6 +4,8 @@ import { publishFranchiseTerms } from "@/server/admin/franchise-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { FranchiseError, areaStatus, currentTerms, listFranchises, termsVersions } from "@/server/franchise/service";
+import { sql } from "drizzle-orm";
+import { getDb, schema } from "@/server/db/client";
 import { DistrictFields } from "./forms";
 
 type SP = Promise<{ tab?: string; status?: string; state?: string; q?: string; cs?: string; cd?: string; ok?: string; err?: string }>;
@@ -77,6 +79,8 @@ export default async function AdminFranchises({ searchParams }: { searchParams: 
   const rows = await listFranchises({ status: sp.status, state: sp.state, q: sp.q?.slice(0, 60) });
   const all = sp.status || sp.state || sp.q ? await listFranchises() : rows;
   const count = (st: string) => all.filter((r) => r.f.status === st).length;
+  const db = await getDb();
+  const custCounts = new Map((await db.select({ id: schema.orgs.franchiseId, n: sql<number>`count(*)::int` }).from(schema.orgs).where(sql`${schema.orgs.franchiseId} is not null`).groupBy(schema.orgs.franchiseId)).map((r) => [r.id, r.n]));
   return (
     <>{head}{tabs}{notes}
       <div className="grid3 mb12" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}>
@@ -94,7 +98,7 @@ export default async function AdminFranchises({ searchParams }: { searchParams: 
         <div className="card empty"><p className="muted">{all.length ? "No franchise matches these filters." : "No franchises yet. Create the first one with “+ New franchise”."}</p></div>
       ) : (
         <div className="card p0 tbl-wrap"><table className="tbl">
-          <thead><tr><th>Code</th><th>Franchise</th><th>Areas</th><th>Deposit</th><th>Term</th><th>Status</th></tr></thead>
+          <thead><tr><th>Code</th><th>Franchise</th><th>Areas</th><th>Customers</th><th>Deposit</th><th>Term</th><th>Status</th></tr></thead>
           <tbody>{rows.map(({ f, areas, deposit }) => {
             const ts = termState(f.termEnd);
             const names = areas.map((a) => (a.kind === "district" ? `${a.district}, ${a.state}` : `PIN ${a.pincode}`));
@@ -103,6 +107,7 @@ export default async function AdminFranchises({ searchParams }: { searchParams: 
                 <td className="small mono"><a href={`/admin/franchises/${f.id}/`}>{f.code}</a></td>
                 <td className="small"><a href={`/admin/franchises/${f.id}/`}><b>{f.businessName}</b></a><div className="tiny muted">{f.ownerName} · {f.mobile}</div></td>
                 <td className="small" style={{ maxWidth: 280 }}>{names.length ? <>{names.slice(0, 3).join("; ")}{names.length > 3 && <span className="muted"> +{names.length - 3} more</span>}</> : <span className="muted">None</span>}</td>
+                <td className="small">{custCounts.get(f.id) ?? 0}</td>
                 <td className="small"><span className={`chip ${DEP_CHIP[deposit.state]}`}>{DEPOSIT_STATE_LABEL[deposit.state]}</span><div className="tiny muted">{rupeesText(deposit.heldPaise)} of {rupeesText(deposit.requiredPaise)}</div></td>
                 <td className="small">{f.termEnd ? <>till {day(f.termEnd)}{ts === "ended" ? <div className="tiny red">ended</div> : ts === "ending" ? <div className="tiny" style={{ color: "#b54708" }}>ends soon</div> : null}</> : <span className="muted">—</span>}</td>
                 <td><span className={`chip ${STATUS_CHIP[f.status]}`}>{STATUS_LABEL[f.status] ?? f.status}</span></td>

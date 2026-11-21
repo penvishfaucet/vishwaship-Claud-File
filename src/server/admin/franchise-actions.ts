@@ -1,4 +1,5 @@
 "use server";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/server/auth/session";
 import type { Permission } from "@/server/auth/rbac";
@@ -7,6 +8,8 @@ import {
   FranchiseError, addDistrict, addPincode, createFranchise, publishTerms, recordAgreement, recordDeposit, releaseArea, setKycVerified, setStatus,
   settleDeposit, updateFranchise, type FranchiseInputT, type FranchiseStatus,
 } from "@/server/franchise/service";
+import { disableLogin, issueLoginLink, linkCustomer, unlinkCustomer } from "@/server/franchise/portal";
+import { siteBase } from "@/server/franchise/referral";
 
 /**
  * Admin → Franchises form actions. Permissions: customers.write for the record, areas, KYC and agreement;
@@ -100,4 +103,35 @@ export async function setFranchiseStatus(fd: FormData) {
 
 export async function publishFranchiseTerms(fd: FormData) {
   await run("modules.manage", "/admin/franchises/?tab=terms", "New Terms version published", (actor) => publishTerms(actor, String(fd.get("body") ?? "")));
+}
+
+// ---------------- phase 2: login and customers ----------------
+/** The set-password link is shown once to the admin (short-lived cookie read by the detail page), never put in a URL. */
+const LOGIN_FLASH_COOKIE = "vs_fr_link"; // same name in the franchise detail page
+
+export async function createFranchiseLogin(fd: FormData) {
+  const staff = await requireStaff("customers.write");
+  const id = str(fd, "franchiseId");
+  let msg: string;
+  try {
+    const { token } = await issueLoginLink(staff.userId, id);
+    (await cookies()).set(LOGIN_FLASH_COOKIE, `${id}|${await siteBase()}/franchise/setup-password/?token=${token}`, { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production", path: "/admin/franchises/", maxAge: 300 });
+    msg = q("ok", "Set-password link ready. Share it with the franchise owner privately (valid 72 hours, works once).");
+  } catch (e) {
+    if (!(e instanceof FranchiseError)) throw e;
+    msg = q("err", e.message);
+  }
+  redirect(`${detail(id)}?${msg}`);
+}
+
+export async function disableFranchiseLogin(fd: FormData) {
+  await run("customers.write", detail(str(fd, "franchiseId")), "Login turned off", (actor) => disableLogin(actor, str(fd, "franchiseId")));
+}
+
+export async function linkFranchiseCustomer(fd: FormData) {
+  await run("customers.write", detail(str(fd, "franchiseId")), "Customer linked", (actor) => linkCustomer(actor, str(fd, "franchiseId"), str(fd, "identifier")));
+}
+
+export async function unlinkFranchiseCustomer(fd: FormData) {
+  await run("customers.write", detail(str(fd, "franchiseId")), "Customer removed from this franchise", (actor) => unlinkCustomer(actor, str(fd, "franchiseId"), str(fd, "orgId")));
 }

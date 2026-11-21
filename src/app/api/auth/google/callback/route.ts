@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { createCustomerAccount } from "@/server/auth/accounts";
+import { referralFromCookie } from "@/server/franchise/referral";
 import { googleAvailable, googleCallback, rememberPendingLink } from "@/server/auth/google";
 import { createSession } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
     await rememberPendingLink(r.id);
     return to(`/login/?link=google&email=${encodeURIComponent(r.id.email)}`);
   }
-  const userId = await createCustomerAccount({ name: r.id.name, email: r.id.email, googleSub: r.id.sub, via: "google" });
+  const userId = await createCustomerAccount({ name: r.id.name, email: r.id.email, googleSub: r.id.sub, via: "google", referralCode: await referralFromCookie() });
   if (!userId) return to("/login/?err=google");
   await createSession(userId, "customer", meta);
   return to("/portal/");

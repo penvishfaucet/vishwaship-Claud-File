@@ -12,6 +12,7 @@ import { createSession, destroySession, readSession, revokeAllSessions } from ".
 import { consumeResetOtp, consumeSignupOtp } from "./signup-otp";
 import { linkPendingGoogle } from "./google";
 import { createCustomerAccount } from "./accounts";
+import { referralFromCookie } from "@/server/franchise/referral";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -73,7 +74,7 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   // The account exists only after the email code is verified (single use, expiry and attempts checked on the server).
   const otp = await consumeSignupOtp(v.email, v.otp);
   if (!otp.ok) return { error: otp.message };
-  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp" });
+  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp", referralCode: await referralFromCookie() });
   if (!userId) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
   await createSession(userId, "customer", m);
   redirect("/portal/");

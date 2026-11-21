@@ -21,6 +21,8 @@ const Body = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
   acceptTerms: z.literal(true, { errorMap: () => ({ message: "Please accept the Terms & shipping policy" }) }),
   device: DeviceSchema.optional(),
+  /** Franchise referral code (e.g. VSF-0001), when the app was opened from a referral link. */
+  referralCode: z.string().trim().max(20).optional(),
 });
 
 export async function POST(req: Request) {
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
   if (dup.length) return apiError(409, "conflict", "An account with this email already exists. Sign in, or use Forgot password to recover it.");
   const otp = await consumeSignupOtp(v.email, v.otp);
   if (!otp.ok) return apiError(422, "validation_error", otp.message);
-  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp" });
+  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp", referralCode: v.referralCode });
   if (!userId) return apiError(409, "conflict", "An account with this email already exists. Sign in, or use Forgot password to recover it.");
   const [u] = await db.select({ orgId: schema.users.orgId }).from(schema.users).where(eq(schema.users.id, userId));
   const session = await issueMobileSession(userId, u.orgId!, m, v.device);

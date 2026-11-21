@@ -3,12 +3,13 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { newId } from "@/server/util/ids";
+import { attributeReferral } from "@/server/franchise/referral";
 
 /**
  * New customer account (email-OTP signup or first Google sign-in). The email is already verified by the caller.
  * Business details, mobile and address come next on Complete Your Profile. Returns null when the email is taken.
  */
-export async function createCustomerAccount(a: { name: string; email: string; passwordHash?: string | null; googleSub?: string; via: "email_otp" | "google" }) {
+export async function createCustomerAccount(a: { name: string; email: string; passwordHash?: string | null; googleSub?: string; via: "email_otp" | "google"; referralCode?: string | null }) {
   const db = await getDb();
   const orgId = newId("org"), userId = newId("usr");
   try {
@@ -21,6 +22,8 @@ export async function createCustomerAccount(a: { name: string; email: string; pa
   await db.insert(schema.wallets).values({ id: newId("wal"), orgId });
   await db.insert(schema.creditBalances).values({ orgId, credits: 0 });
   await audit({ actorUserId: userId, actorKind: "customer", orgId, action: "auth.signup", details: { via: a.via } });
+  // Franchise referral link (cookie on web / code from the app). Skipped silently when unknown or not active.
+  if (a.referralCode) await attributeReferral(orgId, a.referralCode);
   return userId;
 }
 

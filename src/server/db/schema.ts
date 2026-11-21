@@ -31,12 +31,17 @@ export const orgs = pgTable("orgs", {
   /** Complete Your Profile: { line1, line2, city, state, pincode }. */
   address: jsonb("address"),
   profileCompletedAt: ts("profile_completed_at"),
+  /** Franchise this customer belongs to (signed up via its referral link, or linked by an admin). */
+  franchiseId: text("franchise_id"),
+  franchiseLinkedAt: ts("franchise_linked_at"),
+  /** referral | admin */
+  franchiseLinkSource: text("franchise_link_source"),
   createdAt: created(),
-});
+}, (t) => [index("orgs_franchise").on(t.franchiseId)]);
 
 export const users = pgTable("users", {
   id: id(),
-  kind: text("kind").notNull(), // customer | staff
+  kind: text("kind").notNull(), // customer | staff | franchise
   orgId: text("org_id").references(() => orgs.id), // null for staff
   name: text("name").notNull(),
   email: text("email"),
@@ -1506,11 +1511,13 @@ export const franchises = pgTable("franchises", {
   agreementSignedAt: ts("agreement_signed_at"),
   kycVerifiedAt: ts("kyc_verified_at"),
   notes: text("notes"),
+  /** Franchise dashboard login (users.kind = "franchise"). */
+  userId: text("user_id"),
   createdBy: text("created_by"),
   activatedAt: ts("activated_at"),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
-}, (t) => [uniqueIndex("franchises_code").on(t.code), index("franchises_status").on(t.status)]);
+}, (t) => [uniqueIndex("franchises_code").on(t.code), index("franchises_status").on(t.status), uniqueIndex("franchises_user").on(t.userId)]);
 
 /**
  * Areas given to a franchise. area_key is "d:<state>|<district>" or "p:<pincode>" (lower-case); an area can be held by only

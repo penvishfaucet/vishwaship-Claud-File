@@ -567,5 +567,19 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795256742377,
   "hash": "856267638c984bebb6d42b4e3d2b0333d183223408fc3182b1b92110e1f9101a"
+ },
+ {
+  "tag": "0027_franchise_portal",
+  "sql": [
+   "ALTER TABLE \"franchises\" ADD COLUMN \"user_id\" text;",
+   "\nALTER TABLE \"orgs\" ADD COLUMN \"franchise_id\" text;",
+   "\nALTER TABLE \"orgs\" ADD COLUMN \"franchise_linked_at\" timestamp with time zone;",
+   "\nALTER TABLE \"orgs\" ADD COLUMN \"franchise_link_source\" text;",
+   "\nCREATE UNIQUE INDEX \"franchises_user\" ON \"franchises\" USING btree (\"user_id\");",
+   "\nCREATE INDEX \"orgs_franchise\" ON \"orgs\" USING btree (\"franchise_id\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795259113863,
+  "hash": "5cce8bbdaa6c496cebc2ba48961fe64a36f6836c3af74528d005b4628f54544c"
  }
 ];

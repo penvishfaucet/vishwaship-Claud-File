@@ -1,14 +1,17 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { CheckCircle2, Circle } from "lucide-react";
 import { and, desc, eq } from "drizzle-orm";
 import { DEPOSIT_METHOD_LABEL, DEPOSIT_STATE_LABEL, STATUS_CHIP, STATUS_LABEL, activationChecklist, depositSummary, rupeesText, termState } from "@/lib/franchise";
 import {
-  addFranchiseArea, recordFranchiseAgreement, recordFranchiseDeposit, releaseFranchiseArea, setFranchiseKyc, setFranchiseStatus, settleFranchiseDeposit,
+  addFranchiseArea, createFranchiseLogin, disableFranchiseLogin, linkFranchiseCustomer, unlinkFranchiseCustomer, recordFranchiseAgreement, recordFranchiseDeposit, releaseFranchiseArea, setFranchiseKyc, setFranchiseStatus, settleFranchiseDeposit,
 } from "@/server/admin/franchise-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { areasOf, currentTerms, depositsOf, getFranchise } from "@/server/franchise/service";
+import { franchiseSummary, loginState } from "@/server/franchise/portal";
+import { referralLink, siteBase } from "@/server/franchise/referral";
 import { DistrictFields, FranchiseForm } from "../forms";
 
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "—");
@@ -18,7 +21,9 @@ const todayIst = () => ist(new Date());
 const ACTION_LABEL: Record<string, string> = {
   "franchise.created": "Created", "franchise.updated": "Details edited", "franchise.area_added": "Area added", "franchise.area_released": "Area released",
   "franchise.deposit_recorded": "Deposit recorded", "franchise.deposit_settled": "Deposit closed", "franchise.kyc_verified": "KYC verified", "franchise.kyc_unverified": "KYC mark removed",
-  "franchise.agreement_recorded": "Signed agreement recorded", "franchise.status_active": "Activated", "franchise.status_suspended": "Suspended", "franchise.status_terminated": "Terminated",
+  "franchise.agreement_recorded": "Signed agreement recorded", "franchise.login_created": "Login created", "franchise.login_link_reissued": "New set-password link",
+  "franchise.login_disabled": "Login turned off", "franchise.customer_linked": "Customer linked", "franchise.customer_unlinked": "Customer removed", "franchise.customer_referred": "Customer signed up via referral",
+  "franchise.customers_released": "Customers released", "franchise.password_set": "Franchise set password", "franchise.status_active": "Activated", "franchise.status_suspended": "Suspended", "franchise.status_terminated": "Terminated",
 };
 
 export default async function FranchiseDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; err?: string; edit?: string }> }) {
@@ -28,10 +33,13 @@ export default async function FranchiseDetail({ params, searchParams }: { params
   const f = await getFranchise(id);
   if (!f) notFound();
   const db = await getDb();
-  const [areas, history, deps, terms, log] = await Promise.all([
+  const [areas, history, deps, terms, log, login, biz, base] = await Promise.all([
     areasOf(f.id), areasOf(f.id, true), depositsOf(f.id), currentTerms(),
     db.select().from(schema.auditLog).where(and(eq(schema.auditLog.targetType, "franchise"), eq(schema.auditLog.targetId, f.id))).orderBy(desc(schema.auditLog.createdAt)).limit(60),
+    loginState(f), franchiseSummary(f.id), siteBase(),
   ]);
+  const flash = (await cookies()).get("vs_fr_link")?.value ?? "";
+  const setupLink = flash.startsWith(`${f.id}|`) ? flash.slice(f.id.length + 1) : "";
   const actors = [...new Set(log.map((l) => l.actorUserId).filter(Boolean))] as string[];
   const names = new Map((actors.length ? await db.select({ id: schema.users.id, name: schema.users.name }).from(schema.users).where(eq(schema.users.kind, "staff")) : []).map((u) => [u.id, u.name]));
   const dep = depositSummary(f.depositRequiredPaise, deps);
@@ -196,11 +204,60 @@ export default async function FranchiseDetail({ params, searchParams }: { params
         </div>
       </div>
 
+      <div className="grid2" style={{ alignItems: "start", marginTop: 16 }}>
+        <div className="card" style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Franchise login</h3>
+          <dl className="kv-list">
+            <dt>Login</dt><dd>{login.state === "none" ? "Not created" : login.state === "invited" ? "Link sent, password not set yet" : login.state === "disabled" ? "Turned off" : "Active"}</dd>
+            <dt>Login email</dt><dd>{f.email}</dd>
+            {"lastLogin" in login && login.lastLogin && <><dt>Last login</dt><dd>{when(login.lastLogin)}</dd></>}
+            <dt>Referral link</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{referralLink(base, f.code)}</dd>
+          </dl>
+          {setupLink && (
+            <div className="note small" style={{ marginTop: 10 }}>
+              <b>Set-password link</b> (shown for 5 minutes; share it privately with {f.ownerName}):
+              <input className="input mono" readOnly value={setupLink} aria-label="Set-password link" style={{ marginTop: 6, fontSize: 11.5 }} />
+            </div>
+          )}
+          {write && !closed && (
+            <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
+              <form action={createFranchiseLogin}><input type="hidden" name="franchiseId" value={f.id} /><button className="btn btn-sm btn-outline">{login.state === "none" ? "Create login" : "New set-password link"}</button></form>
+              {login.state !== "none" && login.state !== "disabled" && <form action={disableFranchiseLogin}><input type="hidden" name="franchiseId" value={f.id} /><button className="btn btn-sm btn-ghost">Turn login off</button></form>}
+            </div>
+          )}
+          <p className="tiny muted">The franchise logs in at /franchise/login/ with this email. A new link signs them out everywhere.</p>
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          <h3 style={{ fontSize: 14, marginBottom: 8 }}>Customers ({biz.customers})</h3>
+          <dl className="kv-list">
+            <dt>This month</dt><dd>{biz.shipmentsMonth.toLocaleString("en-IN")} shipments · {rupeesText(biz.valueMonthPaise)}{f.monthlyTargetShipments > 0 && <span className="muted"> · target {f.monthlyTargetShipments.toLocaleString("en-IN")}</span>}</dd>
+            <dt>New this month</dt><dd>{biz.newThisMonth}</dd>
+            <dt>Wallet balances</dt><dd>{rupeesText(biz.walletPaise)}</dd>
+          </dl>
+          {biz.rows.length > 0 && (
+            <table className="tbl" style={{ marginTop: 8 }}><tbody>{biz.rows.slice(0, 50).map((r) => (
+              <tr key={r.orgId}>
+                <td className="small"><a href={`/admin/customers/${r.orgId}/`}>{r.businessName}</a><div className="tiny muted">{r.source === "admin" ? "linked by admin" : "referral"} · {day(r.linkedAt)}</div></td>
+                <td className="small">{r.shipmentsMonth} this month</td>
+                <td>{write && <form action={unlinkFranchiseCustomer}><input type="hidden" name="franchiseId" value={f.id} /><input type="hidden" name="orgId" value={r.orgId} /><button className="btn btn-sm btn-ghost">Remove</button></form>}</td>
+              </tr>
+            ))}</tbody></table>
+          )}
+          {write && f.status === "active" && (
+            <form action={linkFranchiseCustomer} className="row wrap" style={{ gap: 8, marginTop: 12, alignItems: "flex-end" }}>
+              <input type="hidden" name="franchiseId" value={f.id} />
+              <div className="field" style={{ flex: 1, minWidth: 200 }}><label htmlFor="ident">Link an existing customer (login email or mobile)</label><input id="ident" name="identifier" className="input" required maxLength={160} /></div>
+              <button className="btn btn-outline">Link</button>
+            </form>
+          )}
+        </div>
+      </div>
+
       <div className="card p0" style={{ marginTop: 16 }}><div className="card-h"><b>History</b></div>
         {log.length === 0 ? <p className="small muted" style={{ padding: 16 }}>No activity yet.</p> : (
           <table className="tbl"><tbody>{log.map((l) => {
             const d = (l.details ?? {}) as Record<string, unknown>;
-            const extra = [d.district && `${d.district}, ${d.state}`, d.pincode && `PIN ${d.pincode}`, d.receiptNumber, typeof d.amountPaise === "number" && rupeesText(d.amountPaise), d.reason, d.termsVersion && `Terms v${d.termsVersion}`, Array.isArray(d.changed) && d.changed.length > 0 && `changed: ${(d.changed as string[]).join(", ")}`].filter(Boolean).join(" · ");
+            const extra = [d.business, typeof d.count === "number" && `${d.count} customers`, d.code, d.district && `${d.district}, ${d.state}`, d.pincode && `PIN ${d.pincode}`, d.receiptNumber, typeof d.amountPaise === "number" && rupeesText(d.amountPaise), d.reason, d.termsVersion && `Terms v${d.termsVersion}`, Array.isArray(d.changed) && d.changed.length > 0 && `changed: ${(d.changed as string[]).join(", ")}`].filter(Boolean).join(" · ");
             return <tr key={l.id}><td className="small">{ACTION_LABEL[l.action] ?? l.action}</td><td className="small muted">{extra}</td><td className="small">{(l.actorUserId && names.get(l.actorUserId)) ?? l.actorKind}</td><td className="small muted">{when(l.createdAt)}</td></tr>;
           })}</tbody></table>
         )}

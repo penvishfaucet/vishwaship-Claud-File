@@ -132,6 +132,11 @@ export async function updateFranchise(actor: string, id: string, input: Franchis
   const v = parse(input);
   const row = toRow(v);
   const db = await getDb();
+  if (f.userId && (row.email !== f.email || row.ownerName !== f.ownerName)) {
+    // keep the franchise login in step with the record (the login email is the franchise email)
+    try { await db.update(schema.users).set({ email: row.email, name: row.ownerName }).where(eq(schema.users.id, f.userId)); }
+    catch (e) { if (isUnique(e)) throw new FranchiseError("Another franchise login already uses this email"); throw e; }
+  }
   await db.update(schema.franchises).set({ ...row, updatedAt: new Date() }).where(eq(schema.franchises.id, id));
   const changed = (Object.keys(row) as Array<keyof typeof row>).filter((k) => JSON.stringify(row[k]) !== JSON.stringify(f[k]));
   await log(actor, "updated", f, { changed });
@@ -348,6 +353,13 @@ export async function setStatus(actor: string, franchiseId: string, next: Franch
     if (next === "terminated") {
       // Areas become free for a new franchise; the history rows stay.
       await db.update(schema.franchiseAreas).set({ releasedAt: new Date(), releasedBy: actor }).where(and(eq(schema.franchiseAreas.franchiseId, f.id), isNull(schema.franchiseAreas.releasedAt)));
+      // Customers continue with Vishwaship directly (Terms 7.4); the login stops working.
+      const freed = await db.update(schema.orgs).set({ franchiseId: null, franchiseLinkedAt: null, franchiseLinkSource: null }).where(eq(schema.orgs.franchiseId, f.id)).returning({ id: schema.orgs.id });
+      if (freed.length) await log(actor, "customers_released", f, { count: freed.length });
+      if (f.userId) {
+        await db.update(schema.users).set({ active: false }).where(eq(schema.users.id, f.userId));
+        await db.update(schema.sessions).set({ revokedAt: new Date() }).where(and(eq(schema.sessions.userId, f.userId), isNull(schema.sessions.revokedAt)));
+      }
     }
   } else {
     throw new FranchiseError("Unknown status");
