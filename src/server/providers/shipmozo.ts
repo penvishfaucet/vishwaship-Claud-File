@@ -1,4 +1,5 @@
 import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/engine";
+import { shipmozoB2cTakesB2b } from "./shipmozo-rules";
 import { amountToPaise, firstString, jsonOrNull } from "./delhivery-common";
 import { type BookResult, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
 
@@ -217,7 +218,9 @@ export const shipmozoAdapter: ShippingAdapter = {
 
   async quote(ctx, req) {
     const service = ctx.config.service === "B2B" ? "B2B" : "B2C";
-    if (req.mode !== service || req.paymentType === "fod") return { ok: true, value: [] };
+    // a B2B-class (heavy) parcel is also priced by the B2C account's couriers when that account can book it
+    const heavyOnB2c = service === "B2C" && req.mode === "B2B" && shipmozoB2cTakesB2b(req, ctx.config);
+    if ((req.mode !== service && !heavyOnB2c) || req.paymentType === "fod") return { ok: true, value: [] };
     // Serviceability is decided by rate-calculator: on the live account pincode-serviceability answered
     // "serviceable": false for lanes where rate-calculator returned several couriers (seen 2026-11-18).
     const actualGrams = req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
@@ -228,7 +231,7 @@ export const shipmozoAdapter: ShippingAdapter = {
     const quotes: ProviderQuote[] = [];
     const skipped: string[] = [];
     for (const row of dataRows(r.value.data)) {
-      const p = parseRateRow(row, { mode: service, gstTreatment: String(ctx.config.gstTreatment ?? "auto"), actualGrams });
+      const p = parseRateRow(row, { mode: req.mode, gstTreatment: String(ctx.config.gstTreatment ?? "auto"), actualGrams });
       if ("error" in p) { skipped.push(p.error); continue; }
       if (allow.size && !allow.has(p.courierId)) continue;
       quotes.push(p.quote);
@@ -368,7 +371,7 @@ export function shipmozoQuoteBodies(ctx: ProviderContext, req: import("./types")
       payment_type: req.paymentType === "cod" ? "COD" : "PREPAID", shipment_type: req.direction === "reverse" ? "RETURN" : "FORWARD",
       // Shipmozo rejects order_amount 0 ("The selected order amount is invalid"); calculators without a declared value send ₹100.
       // Booking re-quotes with the real declared value, so any ROV difference is shown to the customer before charging.
-      order_amount: rupees(req.declaredValue || req.codAmount || 10_000), type_of_package: String(ctx.config.typeOfPackage ?? (service === "B2B" ? "MPS" : "SPS")),
+      order_amount: rupees(req.declaredValue || req.codAmount || 10_000), type_of_package: String(ctx.config.typeOfPackage ?? (service === "B2B" || req.packages.reduce((t, p) => t + p.count, 0) > 1 ? "MPS" : "SPS")),
       rov_type: String(ctx.config.rovType ?? "ROV_OWNER"), cod_amount: req.paymentType === "cod" ? String(rupees(req.codAmount ?? 0)) : "",
       weight: actualGrams,
       dimensions: req.packages.map((p) => ({ no_of_box: String(p.count), length: String(Math.ceil(p.lengthMm / 10)), width: String(Math.ceil(p.breadthMm / 10)), height: String(Math.ceil(p.heightMm / 10)) })),

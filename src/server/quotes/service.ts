@@ -1,4 +1,5 @@
 import { modeAllowed, paymentConfig, payerSplit, type PayerSplit } from "@/server/payment-modes";
+import { shipmozoB2cTakesB2b } from "@/server/providers/shipmozo-rules";
 import { FOD_COD_ADAPTERS } from "@/lib/payment";
 import type { PaymentMode } from "@/server/providers/types";
 import "server-only";
@@ -99,10 +100,18 @@ async function quotingAccounts(orgId: string | null, only?: string) {
   });
 }
 
-export function accountServes(a: Account, mode: "B2C" | "B2B") {
-  const svc = (a.configPublic as Record<string, unknown>)?.service;
-  return svc !== "B2C" && svc !== "B2B" ? true : svc === mode;
+export function accountServes(a: Account, mode: "B2C" | "B2B", req?: Pick<QuoteRequest, "packages">) {
+  const cfg = (a.configPublic as Record<string, unknown>) ?? {};
+  const svc = cfg.service;
+  if (svc !== "B2C" && svc !== "B2B") return true;
+  if (svc === mode) return true;
+  // A heavy (B2B-class) parcel can also go by the B2C couriers of a Shipmozo account (TCI Express, Blue Dart, Ekart,
+  // Xpressbees, Amazon, Delhivery heavy …, as the Shipmozo panel shows them) — when that account can book it:
+  // one box, or several once its multi-carton (MPS) booking is verified.
+  if (a.adapter === "shipmozo" && svc === "B2C" && mode === "B2B" && req) return shipmozoB2cTakesB2b(req, cfg);
+  return false;
 }
+
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -127,7 +136,7 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
   const persist = opts.persist ?? true;
   const allowed = await (await import("@/server/couriers")).courierFilter(orgId);
   const db = await getDb();
-  const accounts = (await quotingAccounts(orgId, opts.onlyAccountId)).filter((a) => accountServes(a, req.mode));
+  const accounts = (await quotingAccounts(orgId, opts.onlyAccountId)).filter((a) => accountServes(a, req.mode, req));
   const gst = await getSetting<number>("gst_bps", 1800);
   const rules = await getSetting("component_rules", DEFAULT_COMPONENT_RULES);
   const markupRows = await loadMarkupRows();
@@ -188,7 +197,13 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     return { offers, error: null as string | null, status: st(offers.length ? "ok" : "no_service", offers.length ? undefined : "no courier for this shipment", offers.length ? undefined : "not_serviceable") };
   }));
 
-  const offers = results.flatMap((r) => r.offers).sort((a, b) => a.total - b.total);
+  // the same courier service from two accounts (e.g. "Delhivery Heavy MPS" on both Shipmozo accounts): the cheaper one
+  const best = new Map<string, QuoteOffer>();
+  for (const o of results.flatMap((r) => r.offers).sort((a, b) => a.total - b.total)) {
+    const k = `${o.carrierCode}|${o.serviceName.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}|${o.paymentMode}`;
+    if (!best.has(k)) best.set(k, o);
+  }
+  const offers = [...best.values()];
   const errors = results.map((r) => r.error).filter((e): e is string => !!e).map(hideProviders);
   // Say so instead of an empty list when no courier service is switched on for this shipment type.
   if (!offers.length && !errors.length && !opts.onlyAccountId) errors.push(`${req.mode} rates are not available right now — no ${req.mode} courier service is active yet. Please try again later.`);

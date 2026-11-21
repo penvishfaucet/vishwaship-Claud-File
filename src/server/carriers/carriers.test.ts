@@ -155,12 +155,39 @@ describe("quotes across providers", () => {
     expect(r.errors.join(" ")).not.toMatch(/shipmozo/i); // customers see the partner code, never the aggregator
   });
   it("B2C and B2B are separate: the B2B pilot account quotes only for its pilot customer", async () => {
-    const mine = await getQuotes(req("B2B"), ORG, { persist: false });
-    const other = await getQuotes(req("B2B"), OTHER, { persist: false });
+    const twoBoxes = { ...req("B2B"), packages: [{ ...req().packages[0], count: 2 }] }; // multi-carton: B2B accounts only
+    const mine = await getQuotes(twoBoxes, ORG, { persist: false });
+    const other = await getQuotes(twoBoxes, OTHER, { persist: false });
     expect(mine.offers.filter((o) => o.providerAccountId === SM_B2B).length).toBe(1);
     expect(mine.offers.find((o) => o.providerAccountId === SM_B2B)?.isPilot).toBe(true);
     expect(other.offers.some((o) => o.providerAccountId === SM_B2B)).toBe(false);
     expect((await getQuotes(req("B2C"), ORG, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2B)).toBe(false);
+  });
+  it("a heavy one-box (B2B) parcel also gets every courier of the Shipmozo B2C account, as the Shipmozo panel lists them", async () => {
+    const rows = [
+      { courier_id: 12, name: "Delhivery Heavy MPS", before_tax_total_charges: 900, gst: 162, total_charges: 1062 },
+      { courier_id: 21, name: "TCI Express 5kg+", before_tax_total_charges: 800, gst: 144, total_charges: 944 },
+      { courier_id: 22, name: "Bluedart 10Kg+", before_tax_total_charges: 1200, gst: 216, total_charges: 1416 },
+      { courier_id: 23, name: "Ekart 5Kg", before_tax_total_charges: 700, gst: 126, total_charges: 826 },
+      { courier_id: 24, name: "Gati Surface", before_tax_total_charges: 750, gst: 135, total_charges: 885 },
+      { courier_id: 25, name: "DTDC Surface 10kg", before_tax_total_charges: 760, gst: 136.8, total_charges: 896.8 },
+    ];
+    const sent: Array<{ url: string; body: string }> = [];
+    script = (url, body) => { if (url.endsWith("/rate-calculator")) { sent.push({ url, body: JSON.stringify(body) }); return { result: "1", data: rows }; } return shipmozoHappy(url, body); };
+    const heavy = { ...req("B2B"), packages: [{ count: 1, lengthMm: 410, breadthMm: 500, heightMm: 390, actualWeightGrams: 34_000 }] };
+    const r = await getQuotes(heavy, OTHER, { persist: false });
+    const fromB2c = r.offers.filter((o) => o.providerAccountId === SM_B2C);
+    expect(fromB2c.map((o) => o.carrierName).sort()).toEqual(["Allcargo Gati", "Blue Dart", "DTDC", "Delhivery", "Ekart", "TCI Express"]);
+    expect(fromB2c.every((o) => o.mode === "B2B")).toBe(true);
+    expect(sent.some((x) => /"type_of_package":"SPS"/.test(x.body))).toBe(true);
+    // several cartons: only once the B2C account's multi-carton booking is verified
+    const two = { ...heavy, packages: [{ ...heavy.packages[0], count: 2 }] };
+    expect((await getQuotes(two, OTHER, { persist: false })).offers.some((o) => o.providerAccountId === SM_B2C)).toBe(false);
+  });
+  it("the same courier service from two accounts is shown once, at the lower price", async () => {
+    script = (url, body) => (url.endsWith("/rate-calculator") ? { result: "1", data: [RATE_ROW] } : shipmozoHappy(url, body));
+    const r = await getQuotes(req("B2B"), ORG, { persist: false }); // both Shipmozo accounts answer "Delhivery Surface"
+    expect(r.offers.filter((o) => o.serviceName === "Delhivery Surface").length).toBe(1);
   });
   it("an Active account that is not fully verified never quotes", async () => {
     await db.update(schema.providerAccounts).set({ capabilities: {} }).where(eq(schema.providerAccounts.id, SM_B2C));
