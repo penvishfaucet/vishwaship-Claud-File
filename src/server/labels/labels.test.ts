@@ -84,7 +84,7 @@ async function ship(o: { org?: string; provider?: string; mode?: "B2B" | "B2C"; 
     consignee: { name: "Shree Balaji Traders Pvt Ltd", mobile: "9123456780", line1: o.address ?? "45 Ring Road", line2: "Lajpat Nagar", city: "New Delhi", state: "Delhi", pincode: "110024" } });
   await db.insert(schema.packages).values({ id: `p${id}`, orderId: `o${id}`, count: o.boxes ?? 1, lengthMm: 500, breadthMm: 400, heightMm: 400, actualWeightGrams: 20_000 });
   const awb = o.awb === undefined ? `2200${String(n).padStart(8, "0")}` : o.awb;
-  await db.insert(schema.shipments).values({ id: `s${id}`, orgId: o.org ?? ORG, orderId: `o${id}`, providerAccountId: "pa_live", provider: o.provider ?? "bluedart", carrierCode: "delhivery", carrierName: "Delhivery",
+  await db.insert(schema.shipments).values({ id: `s${id}`, orgId: o.org ?? ORG, orderId: `o${id}`, providerAccountId: "pa_live", provider: o.provider ?? "demo", carrierCode: "delhivery", carrierName: "Delhivery",
     serviceName: "B2B Surface", awb, lrNumber: (o.mode ?? "B2B") === "B2B" ? awb : null, pieceIds: o.pieces ?? null, bookingStatus: "confirmed", pickupStatus: "scheduled", status: o.status ?? "booked",
     quoteId: "q", sellPaise: 300_000, costPaise: 250_000, chargeableWeightGrams: 20_000 });
   return `s${id}`;
@@ -138,11 +138,13 @@ describe("Vishwaship B2B label", { timeout: 20_000 }, () => {
     pages.forEach((p, i) => { expect(p.text).toContain(`Box : ${i + 1}/3`); expect(p.text).toContain(i === 0 ? "MASTER" : "CHILD"); expect(p.text).toContain(`Master: ${pieces[0]}`); expect(decodeBarcodes(p)).toContain(pieces[i]); });
   });
 
-  it("multi-carton B2B without the carrier's carton barcodes is not guessed: skipped with Retry", async () => {
-    const sid = await ship({ boxes: 2 });
+  it("only Delhivery B2B has a shipment document: a B2B order with another courier gets carton labels only (AWB)", async () => {
+    const sid = await ship({ boxes: 2, provider: "bluedart", awb: "77001122334" });
     const r = await renderLabels(ORG, [sid], "thermal_4x6");
-    expect(r.pdf).toBeNull();
-    expect(r.skipped[0]).toMatchObject({ shipmentId: sid, retryable: true, reason: expect.stringMatching(/carton barcodes/) });
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(2); // 2 cartons, no document
+    expect(pages.map((pg) => pg.text).join(" ")).not.toMatch(/SHIPMENT DOCUMENT|MPS: Documents|LRN/);
+    expect(pages[0].text).toContain("AWB: 77001122334");
   });
 
   it("COD: the amount is not on the Vishwaship label nor in its PDF data", async () => {

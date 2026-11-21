@@ -121,7 +121,10 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
       const pieceIds = (Array.isArray(s.pieceIds) ? (s.pieceIds as unknown[]) : []).map(String).filter(Boolean);
       const cartons = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0), pieceIds.length);
-      const isB2B = o.mode === "B2B" || s.provider === "delhivery_b2b";
+      // Owner rule: only Delhivery B2B (an LR booking) has a shipment document and LRN labels. Every other courier
+      // (Shipmozo B2B / B2C — even its Delhivery services —, Delhivery B2C, TCI, …) gets carton labels only.
+      // The demo courier stands in for Delhivery B2B on B2B orders.
+      const isB2B = s.provider === "delhivery_b2b" || (s.provider === "demo" && o.mode === "B2B");
       // B2B cartons are scanned by their own waybill; without it a branded carton label would not match the carrier's records
       if (isB2B && cartons > 1 && s.provider !== "demo" && pieceIds.length < cartons) {
         skip(`The courier has not sent the carton barcodes for all ${cartons} cartons yet — download the Carrier label, or retry later`, true);
