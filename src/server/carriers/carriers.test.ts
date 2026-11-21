@@ -431,9 +431,26 @@ describe("Shipmozo B2B: LTL cargo rates are added, the usual rates stay", () => 
     ltlFails = true;
     const r2 = await getQuotes(one, ORG, { persist: false });
     expect(r2.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName)).toEqual(["Delhivery Heavy MPS"]);
-    // several boxes: no LTL request until multi-carton booking is verified
-    types.length = 0;
-    await getQuotes({ ...one, packages: [{ ...one.packages[0], count: 2 }] }, ORG, { persist: false });
-    expect(types).not.toContain("B2B");
+    // several boxes: LTL cargo is offered (booked with the box list); the MPS rates are not, as they cannot be booked yet
+    ltlFails = false;
+    const seven = { ...one, packages: [{ ...one.packages[0], count: 7, actualWeightGrams: 37_000 }] };
+    const r3 = await getQuotes(seven, ORG, { persist: false });
+    expect(r3.offers.filter((o) => o.providerAccountId === SM_B2B).map((o) => o.serviceName).sort()).toEqual(["Delhivery Heavy MPS", "GATI B2B LTL", "TCI Express LTL B2B"]); // all three came in the LTL (B2B) answer
+  });
+  it("an LTL booking of several boxes sends Shipmozo the box list; an MPS (non-LTL) one is still refused", async () => {
+    const pushed: Array<Record<string, unknown>> = [];
+    script = (url, body) => { if (url.endsWith("/push-order")) pushed.push(body as Record<string, unknown>); return shipmozoHappy(url, body); };
+    const ctx = { accountId: "x", mode: "live" as const, config: { service: "B2B", baseUrl: { live: "https://shipping-api.com/app/api/v1" } }, secrets: { publicKey: "pk", privateKey: "sk" }, fetch: (await import("@/server/security/safe-fetch")).safeFetch };
+    const base = {
+      vishwashipOrderId: "ordltl7", pickup: { providerWarehouseRef: "9001" }, paymentType: "prepaid", codAmount: 0, declaredValue: 2_000_000, ewayBill: null,
+      consignee: { name: "Raigarh Buyer", mobile: "9123456780", line1: "Market Road", pincode: "402301", city: "Raigarh", state: "Maharashtra" },
+      products: [{ name: "Fittings", qty: 7, unitPrice: 285_714 }],
+      packages: [{ count: 7, lengthMm: 300, breadthMm: 300, heightMm: 200, actualWeightGrams: 37_000 }],
+    };
+    const ltl = await shipmozoAdapter.book(ctx as never, { ...base, quote: { providerQuoteRef: "shipmozo_api:41:auto:ltl" } } as never);
+    expect(ltl.ok).toBe(true);
+    expect(pushed[0]).toMatchObject({ type_of_package: "B2B", no_of_box: 7, weight: 259_000, dimensions: [{ no_of_box: "7", length: "30", width: "30", height: "20", weight: "37000" }] });
+    const mps = await shipmozoAdapter.book(ctx as never, { ...base, vishwashipOrderId: "ordmps7", quote: { providerQuoteRef: "shipmozo_api:31:auto" } } as never);
+    expect(mps).toMatchObject({ ok: false, error: { category: "unsupported" } });
   });
 });

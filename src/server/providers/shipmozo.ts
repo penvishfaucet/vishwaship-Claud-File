@@ -227,24 +227,30 @@ export const shipmozoAdapter: ShippingAdapter = {
     const body = shipmozoQuoteBodies(ctx, req).rates;
     // A B2B account also asks for Shipmozo's LTL cargo rates (type_of_package "B2B": TCI Express LTL, Gati LTL,
     // Delhivery B2B LTL …) on top of its usual rates. The usual rates are unchanged; if the LTL request fails it is ignored.
-    // (one box, or several once multi-carton booking is verified — never a rate that cannot be booked)
-    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false && shipmozoBooksBoxes(req, ctx.config);
+    // LTL is cargo by the box: also for several boxes (booked with the box list — see book()).
+    const ltl = service === "B2B" && body.type_of_package !== "B2B" && ctx.config.ltlRates !== false;
+    // the usual (MPS) rates for several boxes only once that multi-carton booking is verified — never a rate that cannot be booked
+    const baseBookable = shipmozoBooksBoxes(req, ctx.config);
     const [r, rl] = await Promise.all([
       call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify(body) }),
       ltl ? call(ctx, "/rate-calculator", { method: "POST", body: JSON.stringify({ ...body, type_of_package: "B2B" }) }) : Promise.resolve(null),
     ]);
     if (!r.ok && !(rl && rl.ok)) return r;
-    const allRows = [...(r.ok ? dataRows(r.value.data) : []), ...(rl && rl.ok ? dataRows(rl.value.data) : [])];
+    const allRows: Array<{ row: Record<string, unknown>; ltl: boolean }> = [
+      ...(r.ok && baseBookable ? dataRows(r.value.data).map((row) => ({ row, ltl: false })) : []),
+      ...(rl && rl.ok ? dataRows(rl.value.data).map((row) => ({ row, ltl: true })) : []),
+    ];
     const allow = new Set(((ctx.config.courierIds as string[] | undefined) ?? []).map(String).filter(Boolean));
     const quotes: ProviderQuote[] = [];
     const skipped: string[] = [];
     const seen = new Set<string>();
-    for (const row of allRows) {
+    for (const { row, ltl: isLtl } of allRows) {
       const p = parseRateRow(row, { mode: req.mode, gstTreatment: String(ctx.config.gstTreatment ?? "auto"), actualGrams });
       if ("error" in p) { skipped.push(p.error); continue; }
       if (allow.size && !allow.has(p.courierId)) continue;
       if (seen.has(p.courierId)) continue; // the same courier from both requests
       seen.add(p.courierId);
+      if (isLtl) p.quote.providerQuoteRef = `${p.quote.providerQuoteRef}:ltl`; // booked as B2B cargo with the box list
       quotes.push(p.quote);
     }
     if (!quotes.length) return { ok: false, error: { category: skipped.length ? "upstream" : "not_serviceable", message: skipped.length ? `Courier partner rate could not be verified: ${skipped[0]}` : `Courier partner has no courier from ${req.originPincode} to ${req.destinationPincode} for this shipment`, retryable: false } };
@@ -272,12 +278,13 @@ export const shipmozoAdapter: ShippingAdapter = {
 
   async book(ctx, req) {
     const service = ctx.config.service === "B2B" ? "B2B" : "B2C";
-    const [kind, courierId, pickupMode] = (req.quote.providerQuoteRef ?? "").split(":");
+    const [kind, courierId, pickupMode, cargo] = (req.quote.providerQuoteRef ?? "").split(":");
+    const ltl = cargo === "ltl";
     if (kind !== "shipmozo_api" || !courierId) return { ok: false, error: { category: "validation", message: "This quote has no Courier partner courier_id — refresh rates", retryable: false } };
     if (!req.pickup.providerWarehouseRef) return { ok: false, error: { category: "validation", message: "Pickup address is not mapped to a Courier partner warehouse", retryable: false } };
     const boxes = req.packages.reduce((t, p) => t + p.count, 0);
     if (boxes > 1 && service === "B2C") return { ok: false, error: { category: "validation", message: "Courier partner B2C books one package per order — use B2B for multiple cartons", retryable: false } };
-    if (boxes > 1 && !ctx.config.mpsBookingVerified) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
+    if (boxes > 1 && !ctx.config.mpsBookingVerified && !ltl) return { ok: false, error: { category: "unsupported", message: "Courier partner multi-carton booking needs Courier partner's B2B push-order fields (pending documentation)", retryable: false } };
     const big = [...req.packages].sort((a, b) => b.lengthMm * b.breadthMm * b.heightMm - a.lengthMm * a.breadthMm * a.heightMm)[0];
     const orderId = smOrderId(req.vishwashipOrderId); // stable and globally unique → Shipmozo's duplicate check makes retries safe
 
@@ -293,6 +300,12 @@ export const shipmozoAdapter: ShippingAdapter = {
         weight: req.packages.reduce((t, p) => t + p.actualWeightGrams * p.count, 0),
         length: Math.ceil(big.lengthMm / 10), width: Math.ceil(big.breadthMm / 10), height: Math.ceil(big.heightMm / 10),
         warehouse_id: req.pickup.providerWarehouseRef, gst_ewaybill_number: req.ewayBill ?? "", gstin_number: "",
+        // LTL cargo: the box list as rate-calculator takes it (the push-order reference lists one size only). Checked on the
+        // first live booking that Shipmozo shows every box; extra fields are ignored if Shipmozo does not use them.
+        ...(ltl ? {
+          type_of_package: "B2B", no_of_box: boxes,
+          dimensions: req.packages.map((p) => ({ no_of_box: String(p.count), length: String(Math.ceil(p.lengthMm / 10)), width: String(Math.ceil(p.breadthMm / 10)), height: String(Math.ceil(p.heightMm / 10)), weight: String(p.actualWeightGrams) })),
+        } : {}),
       }),
     });
     if (!push.ok) return push.error.category === "timeout" || push.error.category === "upstream" ? { ok: false, error: { ...push.error, category: "ambiguous" } } : push;
