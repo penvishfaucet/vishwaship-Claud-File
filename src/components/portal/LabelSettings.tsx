@@ -36,14 +36,16 @@ export function LabelSettings({ initial }: { initial: V; carrierFormats?: Record
           {state === "error" && <span className="small t-debit" role="alert">{err}</span>}
         </div>
       </section>
-      <section className="card" style={{ padding: 18 }} aria-label="What you download">
-        <b className="small">What you download</b>
+      <section className="card" style={{ padding: 18 }} aria-label="What the Vishwaship label shows">
+        <b className="small">What the Vishwaship label shows</b>
         <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 4 }}>
-          <li>The courier&apos;s own label, exactly as the courier makes it, so every barcode scans at the hub</li>
-          <li>AWB shipments: the label only. LR shipments (B2B): the labels and the shipment document</li>
-          <li>If the courier does not make the size you chose, its label comes in the courier&apos;s own size</li>
+          <li>Vishwaship logo, with the courier partner&apos;s logo</li>
+          <li><b>DELIVER TO</b>: name, full address, large PIN, phone</li>
+          <li>AWB / LRN barcode (the courier&apos;s own number) and carton barcode for each box</li>
+          <li><b>SHIP FROM / PICKUP</b>: your company name, your GSTIN (from Invoice settings or profile), pickup address</li>
+          <li>Order ID, invoice number, invoice value, product names, weight, carton count</li>
         </ul>
-        <p className="tiny muted mt8">The courier prints the COD amount on its own label where it requires it.</p>
+        <p className="tiny muted mt8">The COD amount is never printed on the Vishwaship label. The courier&apos;s own label (Carrier label) is unchanged and may show it where the courier requires.</p>
       </section>
     </div>
   );
