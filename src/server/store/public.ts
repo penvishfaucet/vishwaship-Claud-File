@@ -9,7 +9,7 @@ import { planState } from "@/lib/store-plan";
 import { couponText, saleFor, salePrice } from "@/lib/store-sale";
 import { activeSales } from "./sales";
 import { publicTags } from "./marketing";
-import { razorpayReady } from "./razorpay";
+import { onlineMethods } from "./checkout";
 
 /**
  * Buyer-facing store lookup. Only live stores are public. The owner (customer session of the same org)
@@ -92,7 +92,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     }),
     sale: banner ? { name: banner.name, text: banner.bannerText || `${banner.name}: ${banner.percentOff}% off`, endsAt: banner.endsAt.toISOString() } : null,
     offers,
-    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live", ordersOpen: planState(s).ordersOpen, onlinePay: preview ? false : await razorpayReady(s.orgId),
+    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live", ordersOpen: planState(s).ordersOpen, onlinePay: preview ? false : (await onlineMethods(s.orgId)).length > 0,
     tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });

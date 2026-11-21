@@ -9,6 +9,23 @@ import { createOrder } from "@/server/orders/create";
 import { newId, randomToken } from "@/server/util/ids";
 import { readSettings } from "@/lib/store-themes";
 import { createMerchantOrder, fetchMerchantPayment, merchantOrderPayments, razorpayOverview, razorpayReady, verifyMerchantSignature, type RzPayment } from "./razorpay";
+import { type GatewayKey, type GatewayStart, type GatewayStatus, gatewayStatus, isGatewayKey, newPgOrderId, readyGateways, startGatewayPayment } from "./gateways";
+import { orgSetting } from "@/server/couriers";
+
+export const PAY_METHODS = ["cod", "razorpay", "cashfree", "phonepe", "paytm"] as const;
+export type PayMethod = (typeof PAY_METHODS)[number];
+export type OnlineMethod = Exclude<PayMethod, "cod">;
+
+/** Online methods whose keys passed a live check, merchant's preferred first. */
+export async function onlineMethods(orgId: string): Promise<OnlineMethod[]> {
+  const list: OnlineMethod[] = [...((await razorpayReady(orgId)) ? (["razorpay"] as const) : []), ...(await readyGateways(orgId))];
+  const pref = (await orgSetting<{ primary?: string }>(orgId, "store_payments"))?.primary;
+  return pref && list.includes(pref as OnlineMethod) ? [pref as OnlineMethod, ...list.filter((m) => m !== pref)] : list;
+}
+async function onlineInfo(orgId: string) {
+  const m = await onlineMethods(orgId);
+  return { onlineAllowed: m.length > 0, onlineMethod: m[0] ?? null };
+}
 
 /**
  * Store checkout. The browser cart is never trusted: every price, stock level, coupon and fee is re-read here.
@@ -31,14 +48,14 @@ export const CheckoutInput = z.object({
     city: z.string().trim().min(2, "Enter your city").max(60),
     state: z.string().trim().min(2, "Enter your state").max(60),
   }),
-  paymentMethod: z.enum(["cod", "razorpay"]),
+  paymentMethod: z.enum(PAY_METHODS),
   coupon: z.string().trim().toUpperCase().max(30).default(""),
   attribution: z.record(z.string().max(40), z.string().max(300)).default({}),
 });
 export type CheckoutInput = z.infer<typeof CheckoutInput>;
 
 export type Line = { productId: string; variantId: string | null; title: string; variantTitle: string | null; sku: string | null; qty: number; unitPaise: number; weightGrams: number; hsn: string | null; taxBps: number; image: string | null };
-export type Quote = { lines: Line[]; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: { id: string; code: string } | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean };
+export type Quote = { lines: Line[]; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: { id: string; code: string } | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean; onlineMethod: OnlineMethod | null };
 export class CheckoutError extends Error { constructor(message: string, public field?: string) { super(message); } }
 
 type Store = typeof schema.stores.$inferSelect;
@@ -58,7 +75,7 @@ export async function liveStore(slug: string): Promise<Store> {
 }
 
 /** Price a cart from the database (used for the checkout summary and again when placing the order). */
-export async function quoteCart(store: Store, lines: CheckoutInput["lines"], couponCode: string, method?: "cod" | "razorpay", q?: Db | Tx): Promise<Quote> {
+export async function quoteCart(store: Store, lines: CheckoutInput["lines"], couponCode: string, method?: PayMethod, q?: Db | Tx): Promise<Quote> {
   const db = q ?? (await getDb());
   const pids = [...new Set(lines.map((l) => l.productId))];
   const prods = await db.select().from(schema.storeProducts).where(and(eq(schema.storeProducts.storeId, store.id), inArray(schema.storeProducts.id, pids)));
@@ -109,7 +126,7 @@ export async function quoteCart(store: Store, lines: CheckoutInput["lines"], cou
   return {
     lines: out, subtotalPaise: subtotal, discountPaise: discount, shippingPaise: shipping, codFeePaise: codFee, totalPaise: afterDiscount + shipping + codFee,
     // inside a transaction we must not open a second connection; placeOrder checks Razorpay before the transaction
-    coupon, codAllowed: !codReason, codReason, onlineAllowed: q ? true : await razorpayReady(store.orgId),
+    coupon, codAllowed: !codReason, codReason, ...(q ? { onlineAllowed: true, onlineMethod: null } : await onlineInfo(store.orgId)),
   };
 }
 
@@ -121,7 +138,15 @@ async function nextNumber(tx: Tx, store: Store) {
 
 export type PlaceResult =
   | { kind: "placed"; orderId: string; number: string; token: string }
-  | { kind: "pay"; orderId: string; number: string; token: string; razorpay: { keyId: string; orderId: string; amount: number; name: string; prefill: { name: string; contact: string; email: string } } };
+  | { kind: "pay"; orderId: string; number: string; token: string; razorpay: { keyId: string; orderId: string; amount: number; name: string; prefill: { name: string; contact: string; email: string } } }
+  | { kind: "gateway"; orderId: string; number: string; token: string; start: GatewayStart };
+
+const appBase = () => (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/$/, "");
+/** Where the buyer comes back after Cashfree / PhonePe / Paytm (GET or POST); the server then asks the gateway. */
+export const payReturnUrl = (slug: string, orderId: string, token: string) => `${appBase()}/api/store/${encodeURIComponent(slug)}/pay-return/?o=${encodeURIComponent(orderId)}&t=${encodeURIComponent(token)}`;
+type PgSession = { pgOrderId: string; start: GatewayStart; at: number };
+/** How long a started gateway checkout can be reused before a fresh one is made (Paytm tokens last 15 min). */
+const SESSION_REUSE_MS: Record<GatewayKey, number> = { cashfree: 25 * 60_000, phonepe: 25 * 60_000, paytm: 12 * 60_000 };
 
 /** Create the order (idempotent per checkoutKey). COD orders are placed at once; online orders wait for payment. */
 export async function placeOrder(slug: string, input: CheckoutInput): Promise<PlaceResult> {
@@ -131,7 +156,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
   if (existing) return resume(store, existing);
   assertOrdersOpen(store);
 
-  if (input.paymentMethod === "razorpay" && !(await razorpayReady(store.orgId))) throw new CheckoutError("Online payment is not available. Please choose Cash on Delivery.");
+  if (input.paymentMethod !== "cod" && !(await onlineMethods(store.orgId)).includes(input.paymentMethod)) throw new CheckoutError("Online payment is not available. Please choose Cash on Delivery.");
   const settings = readSettings(store.settings);
   if (!settings.checkout.warehouseId) throw new CheckoutError("This store is not taking orders right now");
 
@@ -175,6 +200,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
 async function resume(store: Store, o: typeof schema.storeOrders.$inferSelect): Promise<PlaceResult> {
   if (o.status === "placed") { await ensureShippingOrder(o.id); await reportPurchase(o.id); return { kind: "placed", orderId: o.id, number: o.number, token: o.buyerToken }; }
   if (o.status === "cancelled") throw new CheckoutError("This order was cancelled. Please place a new order.");
+  if (isGatewayKey(o.paymentMethod)) return resumeGateway(store, o, o.paymentMethod);
   // pending online payment: create (once) the Razorpay order on the merchant's account
   let rzOrderId = o.razorpayOrderId, keyId = "";
   if (!rzOrderId) {
@@ -224,6 +250,74 @@ export async function confirmCheckoutPayment(slug: string, a: { orderId: string;
   const r = await applyPayment(store.orgId, p, "checkout");
   if (!r.ok) throw new CheckoutError(r.message);
   return { ok: true as const };
+}
+
+type StoreOrder = typeof schema.storeOrders.$inferSelect;
+
+/** Start (or reuse) the checkout at Cashfree / PhonePe / Paytm. One live gateway order per store order at a time. */
+async function resumeGateway(store: Store, o: StoreOrder, g: GatewayKey): Promise<PlaceResult> {
+  const db = await getDb();
+  const ids = { orderId: o.id, number: o.number, token: o.buyerToken };
+  const sess = o.pgSession as PgSession | null;
+  if (sess && Date.now() - sess.at < SESSION_REUSE_MS[g]) return { kind: "gateway", ...ids, start: sess.start };
+  if (sess) {
+    // the earlier checkout may have been paid already: never start a second one on top of a payment
+    const st = await gatewayStatus(store.orgId, g, sess.pgOrderId).catch(() => null);
+    if (st?.state === "paid") {
+      await applyGatewayPayment(o, st);
+      return { kind: "placed", ...ids };
+    }
+  }
+  const b = o.buyer as CheckoutInput["buyer"];
+  const pgOrderId = newPgOrderId(o.number);
+  const start = await startGatewayPayment(store.orgId, g, { pgOrderId, amountPaise: o.totalPaise, buyer: { name: b.name, mobile: b.mobile, email: b.email }, returnUrl: payReturnUrl(store.slug, o.id, o.buyerToken) });
+  const next: PgSession = { pgOrderId, start, at: Date.now() };
+  const won = await db.update(schema.storeOrders).set({ pgOrderId, pgSession: next })
+    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment"), sql`coalesce((${schema.storeOrders.pgSession}->>'at')::bigint, 0) = ${sess?.at ?? 0}`))
+    .returning({ id: schema.storeOrders.id });
+  if (!won.length) {
+    // a parallel retry already started a checkout: hand back that one
+    const [x] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, o.id));
+    if (x.status === "placed") return { kind: "placed", ...ids };
+    const xs = x.pgSession as PgSession | null;
+    if (!xs || x.status !== "pending_payment") throw new CheckoutError("This order was cancelled. Please place a new order.");
+    return { kind: "gateway", ...ids, start: xs.start };
+  }
+  return { kind: "gateway", ...ids, start };
+}
+
+/** Mark a Cashfree / PhonePe / Paytm order paid — exactly once, only for the full amount as reported by the gateway. */
+export async function applyGatewayPayment(o: StoreOrder, st: GatewayStatus) {
+  if (st.state !== "paid" || st.amountPaise !== o.totalPaise) return { ok: false as const, message: "Payment not completed" };
+  const db = await getDb();
+  if (o.status === "cancelled") {
+    await db.update(schema.storeOrders).set({ paymentStatus: "refund_due", pgPaymentId: st.paymentId, paidAt: new Date() }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.pgPaymentId)));
+    return { ok: false as const, message: "Order was cancelled; the payment will be refunded" };
+  }
+  await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", pgPaymentId: st.paymentId, paidAt: new Date(), placedAt: new Date() })
+    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment")));
+  await ensureShippingOrder(o.id);
+  await reportPurchase(o.id);
+  return { ok: true as const, orderId: o.id };
+}
+
+/** Buyer is back from the gateway: ask the gateway itself (never the redirect's query/form data) and update the order. */
+export async function confirmGatewayReturn(slug: string, orderId: string, token: string) {
+  const db = await getDb();
+  const [store] = await db.select().from(schema.stores).where(eq(schema.stores.slug, slug));
+  if (!store) throw new CheckoutError("Order not found");
+  const [o] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.id, orderId), eq(schema.storeOrders.storeId, store.id)));
+  if (!o || o.buyerToken !== token) throw new CheckoutError("Order not found");
+  let state: "paid" | "failed" | "pending" = o.status === "placed" ? "paid" : o.status === "cancelled" ? "failed" : "pending";
+  const sess = o.pgSession as PgSession | null;
+  if (o.status === "pending_payment" && isGatewayKey(o.paymentMethod) && sess) {
+    try {
+      const st = await gatewayStatus(o.orgId, o.paymentMethod, sess.pgOrderId);
+      if (st.state === "paid") state = (await applyGatewayPayment(o, st)).ok ? "paid" : "failed";
+      else state = st.state;
+    } catch (e) { console.error("[store gateway] status", (e as Error).message); }
+  }
+  return { number: o.number, token: o.buyerToken, state };
 }
 
 /** Create the linked Vishwaship shipping order once (idempotent via orders_store_ext). */
@@ -304,9 +398,31 @@ export async function markRefunded(orgId: string, id: string) {
  */
 export async function sweepStoreOrders(now = new Date()) {
   const db = await getDb();
+  // buyers who paid at Cashfree / PhonePe / Paytm but never came back: place their orders without waiting 30 min
+  const recent = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.status, "pending_payment"), inArray(schema.storeOrders.paymentMethod, ["cashfree", "phonepe", "paytm"]),
+    lt(schema.storeOrders.createdAt, new Date(now.getTime() - 2 * 60_000)), gte(schema.storeOrders.createdAt, new Date(now.getTime() - 30 * 60_000)))).limit(50);
+  for (const o of recent) {
+    const sess = o.pgSession as PgSession | null;
+    if (!sess || !isGatewayKey(o.paymentMethod)) continue;
+    try { const st = await gatewayStatus(o.orgId, o.paymentMethod, sess.pgOrderId); if (st.state === "paid") await applyGatewayPayment(o, st); } catch { /* next sweep */ }
+  }
   const stale = await db.select().from(schema.storeOrders)
     .where(and(eq(schema.storeOrders.status, "pending_payment"), lt(schema.storeOrders.createdAt, new Date(now.getTime() - 30 * 60_000)))).limit(50);
   for (const o of stale) {
+    if (isGatewayKey(o.paymentMethod)) {
+      const sess = o.pgSession as PgSession | null;
+      if (sess) {
+        let st: GatewayStatus;
+        try { st = await gatewayStatus(o.orgId, o.paymentMethod, sess.pgOrderId); } catch { continue; } // unreachable: never cancel blindly
+        if (st.state === "paid") { await applyGatewayPayment(o, st); continue; }
+      }
+      await db.transaction(async (tx) => {
+        const upd = await tx.update(schema.storeOrders).set({ status: "cancelled", paymentStatus: "failed", cancelledAt: now, note: "Payment not completed" })
+          .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment"))).returning({ id: schema.storeOrders.id });
+        if (upd.length) await releaseStock(tx, o);
+      });
+      continue;
+    }
     let paid: RzPayment | undefined;
     if (o.razorpayOrderId) {
       try { paid = (await merchantOrderPayments(o.orgId, o.razorpayOrderId)).find((p) => ["captured", "authorized"].includes(p.status)); }

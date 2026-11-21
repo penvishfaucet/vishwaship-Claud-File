@@ -534,5 +534,17 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795235026646,
   "hash": "f4e734edf9b20865e2e7ae486ba55385ff89508977885ff56e6cb74749675263"
+ },
+ {
+  "tag": "0025_store_gateways",
+  "sql": [
+   "ALTER TABLE \"store_orders\" ADD COLUMN \"pg_order_id\" text;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"pg_payment_id\" text;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"pg_session\" jsonb;",
+   "\nCREATE UNIQUE INDEX \"store_orders_pg_order\" ON \"store_orders\" USING btree (\"pg_order_id\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795239119387,
+  "hash": "c7c89ba41d4ca3480d42feaf7805162bc4eecdc93df6e32f26a4473dfc4da3c3"
  }
 ];

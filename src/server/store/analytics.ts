@@ -116,7 +116,7 @@ export async function storeAnalytics(orgId: string, from: string, to: string) {
       views, visitors, orders: placed.length, revenuePaise: revenue, aovPaise: placed.length ? Math.round(revenue / placed.length) : 0,
       // visitors are counted only for buyers who allowed analytics, so the rate is shown only when it can be meaningful
       conversionRate: visitors >= placed.length && visitors >= 20 ? ratio(placed.length, visitors) : null,
-      cod: placed.filter((o) => o.paymentMethod === "cod").length, online: placed.filter((o) => o.paymentMethod === "razorpay").length,
+      cod: placed.filter((o) => o.paymentMethod === "cod").length, online: placed.filter((o) => o.paymentMethod !== "cod").length,
       cancelled: orders.filter((o) => o.status === "cancelled").length, abandonedPayments: orders.filter((o) => o.status === "cancelled" && o.paymentStatus === "failed").length,
       topProducts: [...productUnits.values()].sort((a, b) => b.revenuePaise - a.revenuePaise).slice(0, 5),
     },

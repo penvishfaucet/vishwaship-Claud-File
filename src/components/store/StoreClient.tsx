@@ -1,7 +1,7 @@
 "use client";
 import { CheckCircle2, Menu, Minus, Plus, Search, ShoppingBag, Star, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type CartLine, MAX_QTY, addToCart, captureAttribution, cartCount, readCart, writeCart } from "./cart";
+import { type CartLine, MAX_QTY, addToCart, captureAttribution, cartCount, clearCart, readCart, writeCart } from "./cart";
 import type { SfVariant } from "./types";
 export { useCartState };
 
@@ -267,4 +267,13 @@ export function ReviewForm({ store, productId, demo }: { store: string; productI
       <div><button className="sf-btn" disabled={busy}>{busy ? "Posting…" : "Post review"}</button></div>
     </form>
   );
+}
+
+/** After an online payment is confirmed the buyer lands on the order page: empty the cart and the checkout key there. */
+export function ClearCartOnMount({ store }: { store: string }) {
+  useEffect(() => {
+    clearCart(store);
+    try { sessionStorage.removeItem(`sf-ck:${store}`); } catch { /* ignore */ }
+  }, [store]);
+  return null;
 }

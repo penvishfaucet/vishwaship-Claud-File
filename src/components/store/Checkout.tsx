@@ -5,9 +5,28 @@ import { useCartState } from "./StoreClient";
 import { browserIds, track } from "./Tracking";
 
 import { rupees } from "@/lib/store-themes";
-type Quote = { lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; qty: number; unitPaise: number }>; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: string | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean; codFeeIfCod: number };
+type Quote = { lines: Array<{ productId: string; variantId: string | null; title: string; variantTitle: string | null; qty: number; unitPaise: number }>; subtotalPaise: number; discountPaise: number; shippingPaise: number; codFeePaise: number; totalPaise: number; coupon: string | null; codAllowed: boolean; codReason: string | null; onlineAllowed: boolean; onlineMethod: string | null; codFeeIfCod: number };
 type Pay = { keyId: string; orderId: string; amount: number; name: string; prefill: { name: string; contact: string; email: string } };
 declare global { interface Window { Razorpay?: new (o: Record<string, unknown>) => { open: () => void; on: (e: string, cb: (r: unknown) => void) => void } } }
+type GatewayStart = { gateway: "cashfree"; mode: "test" | "live"; sessionId: string } | { gateway: "phonepe"; redirectUrl: string } | { gateway: "paytm"; action: string; fields: Record<string, string> };
+
+function loadScript(src: string): Promise<boolean> {
+  return new Promise((res) => { const s = document.createElement("script"); s.src = src; s.onload = () => res(true); s.onerror = () => res(false); document.body.appendChild(s); });
+}
+
+/** Hand the buyer to Cashfree / PhonePe / Paytm. They come back to our pay-return URL, which checks the payment with the gateway. */
+async function goToGateway(s: GatewayStart): Promise<boolean> {
+  if (s.gateway === "phonepe") { if (!s.redirectUrl.startsWith("https://")) return false; window.location.href = s.redirectUrl; return true; }
+  if (s.gateway === "paytm") {
+    const f = document.createElement("form"); f.method = "POST"; f.action = s.action;
+    for (const [k, v] of Object.entries(s.fields)) { const i = document.createElement("input"); i.type = "hidden"; i.name = k; i.value = v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit(); return true;
+  }
+  if (!window.Cashfree && !(await loadScript("https://sdk.cashfree.com/js/v3/cashfree.js"))) return false;
+  if (!window.Cashfree) return false;
+  await window.Cashfree({ mode: s.mode === "live" ? "production" : "sandbox" }).checkout({ paymentSessionId: s.sessionId, redirectTarget: "_self" });
+  return true;
+}
 
 const STATES = ["Andaman and Nicobar Islands", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chandigarh", "Chhattisgarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jammu and Kashmir", "Jharkhand", "Karnataka", "Kerala", "Ladakh", "Lakshadweep", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Puducherry", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal"];
 
@@ -30,7 +49,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
   const cart = useCartState(store);
   const api = `/api/store/${store}/checkout/`;
   const [b, setB] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: "", city: "", state: "" });
-  const [method, setMethod] = useState<"cod" | "razorpay" | null>(null);
+  const [method, setMethod] = useState<"cod" | "online" | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState("");
   const [q, setQ] = useState<Quote | null>(null);
@@ -46,9 +65,9 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
     catch { keyRef.current = newKey(); }
   }, [store]);
 
-  const refresh = useCallback(async (c: string, m: "cod" | "razorpay" | null) => {
+  const refresh = useCallback(async (c: string, m: "cod" | "online" | null) => {
     if (!lines.length) return;
-    const r = await fetch(api, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines, coupon: c, paymentMethod: m ?? undefined }) });
+    const r = await fetch(api, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ lines, coupon: c, paymentMethod: m === "cod" ? "cod" : undefined }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) {
       setErr({ msg: j?.error?.message ?? "Could not load prices", field: j?.error?.field });
@@ -57,7 +76,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
     }
     setErr(null); setQ(j);
     if (!began.current) { began.current = true; track({ name: "begin_checkout", value: j.totalPaise / 100, items: j.lines.map((l: Quote["lines"][number]) => ({ id: l.variantId ?? l.productId, name: l.title, price: l.unitPaise / 100, qty: l.qty })) }); }
-    setMethod((cur) => cur ?? (j.onlineAllowed ? "razorpay" : j.codAllowed ? "cod" : null));
+    setMethod((cur) => cur ?? (j.onlineAllowed ? "online" : j.codAllowed ? "cod" : null));
   }, [api, lines]);
 
   useEffect(() => { void refresh(coupon, method); }, [refresh, coupon, method]);
@@ -88,10 +107,14 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
     e.preventDefault();
     if (!method) { setErr({ msg: "Choose a payment method" }); return; }
     setBusy(true); setErr(null);
-    const r = await fetch(api, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutKey: keyRef.current, lines, buyer: b, paymentMethod: method, coupon, attribution: { ...readAttribution(store), ...browserIds(store) } }) });
+    const r = await fetch(api, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutKey: keyRef.current, lines, buyer: b, paymentMethod: method === "online" ? q?.onlineMethod : "cod", coupon, attribution: { ...readAttribution(store), ...browserIds(store) } }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { setBusy(false); setErr({ msg: j?.error?.message ?? "Could not place the order", field: j?.error?.field }); if (j?.error?.message?.includes("cancelled")) { keyRef.current = newKey(); try { sessionStorage.setItem(`sf-ck:${store}`, keyRef.current); } catch { /* ignore */ } } return; }
     if (j.kind === "placed") { done(j.orderId, j.number, j.token); return; }
+    if (j.kind === "gateway") {
+      if (!(await goToGateway(j.start as GatewayStart))) { setBusy(false); setErr({ msg: "Could not open the payment page. Check your connection and try again." }); }
+      return;
+    }
     const pay = j.razorpay as Pay;
     if (!(await loadRazorpay()) || !window.Razorpay) { setBusy(false); setErr({ msg: "Could not open the payment window. Check your connection and try again." }); return; }
     const rz = new window.Razorpay({
@@ -135,7 +158,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
         {q && (
           <div role="radiogroup" aria-label="Payment method" style={{ display: "grid", gap: 8 }}>
             <label className="sf-summary" style={{ padding: 14, cursor: q.onlineAllowed ? "pointer" : "not-allowed", opacity: q.onlineAllowed ? 1 : 0.5 }}>
-              <span style={{ display: "flex", gap: 10, alignItems: "center" }}><input type="radio" name="pm" checked={method === "razorpay"} disabled={!q.onlineAllowed} onChange={() => setMethod("razorpay")} /> <b>Pay online</b> <span className="sf-note">UPI, cards, netbanking</span></span>
+              <span style={{ display: "flex", gap: 10, alignItems: "center" }}><input type="radio" name="pm" checked={method === "online"} disabled={!q.onlineAllowed} onChange={() => setMethod("online")} /> <b>Pay online</b> <span className="sf-note">UPI, cards, netbanking</span></span>
               {!q.onlineAllowed && <span className="sf-note">Online payment is not available for this store yet.</span>}
             </label>
             <label className="sf-summary" style={{ padding: 14, cursor: q.codAllowed ? "pointer" : "not-allowed", opacity: q.codAllowed ? 1 : 0.5 }}>

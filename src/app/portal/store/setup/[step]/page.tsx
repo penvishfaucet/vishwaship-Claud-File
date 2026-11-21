@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { ONBOARDING_STEPS, readSettings, readTheme, rupees } from "@/lib/store-themes";
 import { StoreBasicsForm } from "@/components/portal/store/StoreBasicsForm";
+import { AiDesign } from "@/components/portal/store/AiDesign";
 import { ThemeEditor } from "@/components/portal/store/ThemeEditor";
+import { aiDesignReady } from "@/server/store/ai-design";
 import { CheckoutStep, PublishButton, StepNext } from "@/components/portal/store/SettingsForms";
 import { getDb, schema } from "@/server/db/client";
 import { appUrl, requireStorePage } from "@/server/store/portal";
@@ -23,7 +25,7 @@ export default async function SetupStep({ params }: { params: Promise<{ step: st
 
   let body: React.ReactNode = null;
   if (n === 1) body = <StoreBasicsForm initial={{ name: store.name, slug: store.slug }} appUrl={appUrl()} exists />;
-  if (n === 2) body = <ThemeEditor mode="step" slug={store.slug} hiddenThemes={(await storeBillingSetting()).disabledThemes} initial={{ themeKey: store.themeKey, config: readTheme(store.draftTheme, store.themeKey) }} status={{ status: store.status, publishedAt: null, customDesign: store.customDesign, hasUnpublished: false }} />;
+  if (n === 2) body = <>{!store.customDesign && <AiDesign ready={aiDesignReady()} />}<ThemeEditor mode="step" slug={store.slug} hiddenThemes={(await storeBillingSetting()).disabledThemes} initial={{ themeKey: store.themeKey, config: readTheme(store.draftTheme, store.themeKey) }} status={{ status: store.status, publishedAt: null, customDesign: store.customDesign, hasUnpublished: false }} /></>;
   if (n === 3) {
     const db = await getDb();
     const prods = await db.select({ id: schema.storeProducts.id, title: schema.storeProducts.title, price: schema.storeProducts.pricePaise, stock: schema.storeProducts.stock, status: schema.storeProducts.status })

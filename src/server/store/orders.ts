@@ -88,7 +88,8 @@ export async function listStoreOrders(orgId: string, f: OrderListFilters) {
   const db = await getDb();
   const conds: SQL[] = [eq(schema.storeOrders.orgId, orgId)];
   if (f.payment && Object.keys(PAYMENT_LABEL).includes(f.payment)) conds.push(eq(schema.storeOrders.paymentStatus, f.payment));
-  if (f.method === "cod" || f.method === "razorpay") conds.push(eq(schema.storeOrders.paymentMethod, f.method));
+  if (f.method === "cod") conds.push(eq(schema.storeOrders.paymentMethod, "cod"));
+  if (f.method === "online" || f.method === "razorpay") conds.push(ne(schema.storeOrders.paymentMethod, "cod"));
   if (f.from && /^\d{4}-\d{2}-\d{2}$/.test(f.from)) conds.push(gte(schema.storeOrders.createdAt, new Date(`${f.from}T00:00:00+05:30`)));
   if (f.to && /^\d{4}-\d{2}-\d{2}$/.test(f.to)) conds.push(lte(schema.storeOrders.createdAt, new Date(`${f.to}T23:59:59+05:30`)));
   const q = f.q?.trim().replace(/[%_]/g, "").slice(0, 60);

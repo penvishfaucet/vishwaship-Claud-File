@@ -1221,7 +1221,7 @@ export const storeOrders = pgTable("store_orders", {
   /** Random token that lets the buyer open the confirmation page. */
   buyerToken: text("buyer_token").notNull(),
   status: text("status").notNull(), // pending_payment | placed | cancelled
-  paymentMethod: text("payment_method").notNull(), // cod | razorpay
+  paymentMethod: text("payment_method").notNull(), // cod | razorpay | cashfree | phonepe | paytm
   paymentStatus: text("payment_status").notNull(), // pending | paid | failed | refund_due | refunded | cod_pending
   buyer: jsonb("buyer").notNull(), // name, mobile, email, line1, line2, pincode, city, state
   lines: jsonb("lines").notNull(), // [{productId, variantId, title, variantTitle, sku, qty, unitPaise, weightGrams, hsn, taxBps}]
@@ -1233,6 +1233,10 @@ export const storeOrders = pgTable("store_orders", {
   couponCode: text("coupon_code"),
   razorpayOrderId: text("razorpay_order_id"),
   razorpayPaymentId: text("razorpay_payment_id"),
+  /** Cashfree / PhonePe / Paytm: our order reference at the gateway, its payment id, and the checkout session to resume. */
+  pgOrderId: text("pg_order_id"),
+  pgPaymentId: text("pg_payment_id"),
+  pgSession: jsonb("pg_session"),
   /** Linked shipping order (orders.id) created once the order is placed. */
   shippingOrderId: text("shipping_order_id"),
   stockReleased: boolean("stock_released").notNull().default(false),
@@ -1248,6 +1252,7 @@ export const storeOrders = pgTable("store_orders", {
   uniqueIndex("store_orders_checkout").on(t.storeId, t.checkoutKey),
   uniqueIndex("store_orders_rzp_order").on(t.razorpayOrderId),
   uniqueIndex("store_orders_rzp_payment").on(t.razorpayPaymentId),
+  uniqueIndex("store_orders_pg_order").on(t.pgOrderId),
   index("store_orders_store_created").on(t.storeId, t.createdAt),
 ]);
 

@@ -1,5 +1,7 @@
 import { readTheme } from "@/lib/store-themes";
+import { AiDesign } from "@/components/portal/store/AiDesign";
 import { ThemeEditor } from "@/components/portal/store/ThemeEditor";
+import { aiDesignReady } from "@/server/store/ai-design";
 import { requireStorePage } from "@/server/store/portal";
 import { storeBillingSetting, themeVersions } from "@/server/store/service";
 import "@/styles/store.css";
@@ -16,6 +18,7 @@ export default async function ThemePage() {
   return (
     <>
       <div className="page-h"><div><p className="small muted" style={{ margin: 0 }}><a href="/portal/store/">Online Store</a></p><h1>Theme editor</h1></div></div>
+      {!store.customDesign && <AiDesign ready={aiDesignReady()} compact />}
       <ThemeEditor mode="full" slug={store.slug} hiddenThemes={cfg.disabledThemes}
         initial={{ themeKey: store.themeKey, config: draft }}
         status={{ status: store.status, publishedAt: store.publishedAt?.toISOString() ?? null, customDesign: store.customDesign, hasUnpublished }}

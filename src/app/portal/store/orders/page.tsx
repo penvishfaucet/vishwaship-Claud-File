@@ -22,7 +22,7 @@ export default async function StoreOrders({ searchParams }: { searchParams: SP }
         <div className="field"><label htmlFor="q">Search</label><input id="q" name="q" className="input" defaultValue={sp.q ?? ""} placeholder="Order no, name, mobile" /></div>
         <div className="field"><label htmlFor="pay">Payment</label><select id="pay" name="payment" className="input select" defaultValue={sp.payment ?? ""}><option value="">All</option>{Object.entries(PAYMENT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
         <div className="field"><label htmlFor="ful">Delivery</label><select id="ful" name="fulfilment" className="input select" defaultValue={sp.fulfilment ?? ""}><option value="">All</option>{Object.entries(FULFILMENT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-        <div className="field"><label htmlFor="m">Method</label><select id="m" name="method" className="input select" defaultValue={sp.method ?? ""}><option value="">All</option><option value="cod">Cash on Delivery</option><option value="razorpay">Online</option></select></div>
+        <div className="field"><label htmlFor="m">Method</label><select id="m" name="method" className="input select" defaultValue={sp.method ?? ""}><option value="">All</option><option value="cod">Cash on Delivery</option><option value="online">Online</option></select></div>
         <div className="field"><label htmlFor="from">From</label><input id="from" type="date" name="from" className="input" defaultValue={sp.from ?? ""} /></div>
         <div className="field"><label htmlFor="to">To</label><input id="to" type="date" name="to" className="input" defaultValue={sp.to ?? ""} /></div>
         <button className="btn btn-outline">Filter</button>

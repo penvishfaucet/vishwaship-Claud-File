@@ -2,6 +2,7 @@ import { CheckCircle2, Clock, XCircle } from "lucide-react";
 import { notFound } from "next/navigation";
 import { rupees } from "@/lib/store-themes";
 import { StoreShell } from "@/components/store/Storefront";
+import { ClearCartOnMount } from "@/components/store/StoreClient";
 import { TrackOnMount } from "@/components/store/Tracking";
 import { purchaseEventId } from "@/server/store/marketing";
 import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrder } from "@/server/store/orders";
@@ -18,7 +19,8 @@ export async function generateMetadata({ params, searchParams }: { params: P; se
 export default async function OrderConfirmation({ params, searchParams }: { params: P; searchParams: SfSearch }) {
   const sf = await resolveSf(params, searchParams);
   const { number } = await params;
-  const t = (await searchParams).t;
+  const sp = await searchParams;
+  const t = sp.t;
   const o = sf.demo ? null : await buyerOrder(sf.id, decodeURIComponent(number), typeof t === "string" ? t : "");
   if (!o) notFound();
   const waiting = o.status === "pending_payment";
@@ -33,7 +35,9 @@ export default async function OrderConfirmation({ params, searchParams }: { para
             <p className="sf-note" style={{ margin: 0 }}>Order <b>{o.number}</b> · {new Date(o.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
           </div>
         </div>
-        {waiting && <p className="sf-note">If you completed the payment, it will be confirmed here within a few minutes. Refresh this page to check.</p>}
+        {waiting && sp.pay === "failed" && <p role="alert" style={{ color: "#b42318", fontWeight: 600 }}>The payment did not go through. No money was taken for this order. <a href={`${sf.base}/checkout/`} style={{ textDecoration: "underline" }}>Try paying again</a></p>}
+        {waiting && sp.pay !== "failed" && <p className="sf-note">If you completed the payment, it will be confirmed here within a few minutes. Refresh this page to check. <a href={`${sf.base}/checkout/`} style={{ textDecoration: "underline" }}>Go back to payment</a></p>}
+        {o.status === "placed" && <ClearCartOnMount store={sf.slug} />}
         {o.paymentMethod === "cod" && o.status === "placed" && <p className="sf-note">Please keep {rupees(o.totalPaise)} ready at delivery. You may get a WhatsApp message to confirm your order.</p>}
         <div className="sf-summary" style={{ marginTop: 16 }}>
           <div className="row"><span>Payment</span><b>{PAYMENT_LABEL[o.paymentStatus] ?? o.paymentStatus}</b></div>
