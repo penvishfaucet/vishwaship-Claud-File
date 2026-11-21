@@ -455,3 +455,48 @@ describe("our account's name / logo on the courier's label becomes Vishwaship's"
     }
   });
 });
+
+describe("courier label images: true size, our account name replaced", { timeout: 30_000 }, () => {
+  const CLIENT = [
+    "#####..#####..##..####...####..####..#...##....#####...###..#####.",
+    "##..##.##.....##..##.#...####.##..##.#...##....##..##.##.##.#..##.",
+    "##..##.#......###.##.##..#.##.##.....##..##....#...##....##.#...#.",
+    "##..##.#......#.#.##.##.##.##.####...######....#####....##..#####.",
+    "#####..#####..#.####..#.##.##...####.##..##....##..##..###..#...##",
+    "##.....##.....#..###..###..##.....##.#...##....#...##..##...#...##",
+    "##.....##.....#..###..###..##.##..##.#...##....##..##.##....#...##",
+    "##.....######.#..###...##..##..####..#...##....#####..#####.#####."];
+  async function png(w: number, h: number, draw: Array<[string[], number, number]> = []) {
+    const UPNG = (await import("@pdf-lib/upng")).default as unknown as { encode: (a: ArrayBuffer[], w: number, h: number, c: number) => ArrayBuffer };
+    const px = new Uint8Array(w * h * 4).fill(255);
+    for (const [rows, x0, y0] of draw) rows.forEach((r, y) => { for (let x = 0; x < r.length; x++) if (r[x] === "#") { const p = ((y0 + y) * w + x0 + x) * 4; px[p] = px[p + 1] = px[p + 2] = 0; } });
+    // a barcode-like block that must stay untouched
+    for (let y = 20; y < 60; y++) for (let x = 40; x < 360 && x < w; x += 3) { const p = (y * w + x) * 4; px[p] = px[p + 1] = px[p + 2] = 0; }
+    return Buffer.from(UPNG.encode([px.buffer], w, h, 0)).toString("base64");
+  }
+  it("Delhivery B2B 400 px image: printed 4 in wide (not half size); PENVISH B2B → VISHWASHIP; 3 labels stay 3", async () => {
+    const sid = await ship({ mode: "B2B", provider: "delhivery_b2b", boxes: 2, pieces: ["1", "2", "3"], awb: "323196599" });
+    const img = await png(400, 247, [[CLIENT, 146, 133]]);
+    carrierReply = [() => ({ ok: true, value: { images: [1, 2, 3].map(() => `data:image/png;base64,${img}`), formatsAvailable: [] } })];
+    const r = await renderLabels(ORG, [sid], "thermal_4x4");
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(3);
+    expect(pages.map((p) => Math.round(p.w))).toEqual([288, 288, 288]); // 400 px at 100 dpi = 4 in
+    for (const p of pages) expect(p.text).toContain("VISHWASHIP");
+  });
+  it("an 812 px thermal image keeps 203 dpi (4 in); other couriers' images get no rename", async () => {
+    const sid = await ship({ mode: "B2C", provider: "delhivery_b2c" });
+    const img = await png(812, 1218, [[CLIENT, 300, 600]]);
+    carrierReply = [() => ({ ok: true, value: { images: [`data:image/png;base64,${img}`], formatsAvailable: [] } })];
+    const [p] = await pdfPages((await renderLabels(ORG, [sid], "thermal_4x6")).pdf!);
+    expect([Math.round(p.w), Math.round(p.h)]).toEqual([288, 432]);
+    expect(p.text).not.toContain("VISHWASHIP");
+  });
+  it("finds the name once per occurrence, not on other text", async () => {
+    const { findBrandInImage, decodePng } = await import("./image-brand");
+    const other = CLIENT.map((r) => r.split("").reverse().join(""));
+    const d = decodePng(Buffer.from(await png(400, 247, [[CLIENT, 146, 133], [other, 20, 200]]), "base64"));
+    expect(findBrandInImage("delhivery_b2b", d.rgba, d.width, d.height)).toEqual([{ x: 146, y: 133, w: 66, h: 8, bold: true }]);
+    expect(findBrandInImage("shipmozo", d.rgba, d.width, d.height)).toEqual([]);
+  });
+});

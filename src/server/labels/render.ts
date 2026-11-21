@@ -9,7 +9,8 @@ import { LABEL_TERMS, type PrintFormat, PRINT_FORMATS } from "@/lib/order-view";
 import type { LabelFormat } from "@/server/providers/types";
 import { CARRIER_POLICY, labelSource } from "./formats";
 import { coverBranding } from "./cover";
-import { replaceBrandText } from "./brand-text";
+import { BRAND_REPLACEMENT, replaceBrandText } from "./brand-text";
+import { decodePng, findBrandInImage } from "./image-brand";
 import { CARRIER_LOGOS, type LabelLogo, VISHWASHIP_LOGO } from "./logos.generated";
 import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
@@ -301,7 +302,7 @@ async function courierLabel(s: typeof schema.shipments.$inferSelect, carrierForm
     try {
       // into a scratch file first, so a half-read label never leaves stray pages in the download
       const one = await PDFDocument.create();
-      if (await placeCarrierLabel(one, r.value)) {
+      if (await placeCarrierLabel(one, r.value, s.provider)) {
         await db.update(schema.shipments).set({ labelStatus: "available" }).where(eq(schema.shipments.id, s.id));
         await noteCapability(acct.id, "label", true, { evidence: `AWB ${s.awb}` });
         return { doc: one };
@@ -327,16 +328,33 @@ function slotSize(format: PrintFormat): { w: number; h: number } {
 }
 
 /** Put the courier's label (PNG / JPEG / PDF bytes, base64 text, or HTTPS links) on pages at the courier's own size. */
-export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf?: Uint8Array; images?: string[] }): Promise<number> {
+export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf?: Uint8Array; images?: string[] }, provider?: string): Promise<number> {
   let added = 0;
+  const fontsFor = new Map<boolean, PDFFont>();
+  const fontFor = async (bold: boolean) => { if (!fontsFor.has(bold)) fontsFor.set(bold, await doc.embedFont(bold ? StandardFonts.HelveticaBold : StandardFonts.Helvetica)); return fontsFor.get(bold)!; };
   const place = async (raw: Uint8Array, depth = 0): Promise<void> => {
     const b = raw;
     const isPng = b[0] === 0x89 && b[1] === 0x50, isJpg = b[0] === 0xff && b[1] === 0xd8, isPdf = b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
     if (isPng || isJpg) {
       const im = isPng ? await doc.embedPng(b) : await doc.embedJpg(b);
-      // carrier label images are 203 dpi thermal renders: keep their physical size
-      const page = doc.addPage([(im.width / 203) * 72, (im.height / 203) * 72]);
+      // a courier label is at most 4 in wide: an 812 px thermal render prints at 203 dpi, Delhivery's 400 px images
+      // at 100 dpi — never smaller than the courier made it (a half-size label is hard to scan)
+      const dpi = Math.max(96, im.width / 4), k = 72 / dpi;
+      const page = doc.addPage([im.width * k, im.height * k]);
       page.drawImage(im, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+      if (isPng && provider) {
+        // our account's name in the image → VISHWASHIP, written over it in the same place (barcodes are elsewhere)
+        try {
+          const px = decodePng(b);
+          for (const h of findBrandInImage(provider, px.rgba, px.width, px.height)) {
+            const x = h.x * k, w = h.w * k, ht = h.h * k, y = page.getHeight() - (h.y + h.h) * k;
+            page.drawRectangle({ x: x - k, y: y - k, width: w + 2 * k, height: ht + 2 * k, color: rgb(1, 1, 1) });
+            const font = await fontFor(h.bold);
+            const size = Math.min(ht / 0.72, (ht / 0.72) * (w / font.widthOfTextAtSize(BRAND_REPLACEMENT, ht / 0.72)));
+            page.drawText(BRAND_REPLACEMENT, { x, y, size, font, color: rgb(0, 0, 0) });
+          }
+        } catch (e) { console.error("label image brand", (e as Error).message); }
+      }
       added++;
       return;
     }
