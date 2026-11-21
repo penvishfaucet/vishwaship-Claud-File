@@ -6,8 +6,10 @@ import { adapterFor, providerContext } from "@/server/providers/registry";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { code128Bars } from "@/lib/code128";
 import { LABEL_TERMS, type PrintFormat, PRINT_FORMATS } from "@/lib/order-view";
-import { AWB_COURIERS, CARRIER_POLICY, labelSource } from "./formats";
+import type { LabelFormat } from "@/server/providers/types";
+import { CARRIER_POLICY, labelSource } from "./formats";
 import { coverBranding } from "./cover";
+import { replaceBrandText } from "./brand-text";
 import { CARRIER_LOGOS, type LabelLogo, VISHWASHIP_LOGO } from "./logos.generated";
 import { noteCapability } from "@/server/carriers/verification";
 import { labelStrings } from "./strings";
@@ -111,28 +113,10 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
     if (src.kind === "branded") {
       const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
       const pieceIds = (Array.isArray(s.pieceIds) ? (s.pieceIds as unknown[]) : []).map(String).filter(Boolean);
-      const boxes = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0));
-      // Delhivery B2B makes one waybill per carton (the first is the master) plus one for the shipment document
-      // ("MPS: Documents", the last). Each Vishwaship label carries exactly that waybill: carton n → waybill n, the
-      // document → the document waybill (not the LRN).
-      let cartonWaybills = pieceIds, docWaybill: string | null = null;
-      if (s.provider === "delhivery_b2b" && pieceIds.length === boxes + 1) {
-        // Delhivery numbers them in sequence: master, other cartons, then the document (e.g. …181, …192, …203)
-        const ordered = pieceIds.every((x) => /^\d+$/.test(x)) ? [...pieceIds].sort((x, y) => (BigInt(x) < BigInt(y) ? -1 : 1)) : pieceIds;
-        cartonWaybills = ordered.slice(0, boxes); docWaybill = ordered[boxes];
-      }
-      let cartons = Math.max(boxes, cartonWaybills.length);
-      // An AWB courier (Shipmozo, Delhivery B2C) books an AWB, never an LR: no shipment document, whatever the order's
-      // weight class. Its labels carry the AWB barcode, as many as the courier itself made (read from its own label).
-      const awbCourier = AWB_COURIERS.has(s.provider);
-      const isB2B = !awbCourier && (o.mode === "B2B" || s.provider === "delhivery_b2b");
-      if (awbCourier) {
-        const got = await courierLabel(s);
-        if (!got.doc) { skip(got.error, got.retryable); continue; }
-        cartons = got.doc.getPageCount();
-      }
+      const cartons = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0), pieceIds.length);
+      const isB2B = o.mode === "B2B" || s.provider === "delhivery_b2b";
       // B2B cartons are scanned by their own waybill; without it a branded carton label would not match the carrier's records
-      if (isB2B && cartons > 1 && s.provider !== "demo" && cartonWaybills.length < cartons) {
+      if (isB2B && cartons > 1 && s.provider !== "demo" && pieceIds.length < cartons) {
         skip(`The courier has not sent the carton barcodes for all ${cartons} cartons yet — download the Carrier label, or retry later`, true);
         continue;
       }
@@ -162,28 +146,28 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         const doc: BrandedLabel = {
           demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
           payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
-          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: docWaybill,
+          idLabel: "LRN", parentId: s.lrNumber ?? s.awb, carton: 0, cartons, cartonId: null,
           to: o.consignee as Addr,
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
-          kind: "document", cartonIds: cartonWaybills.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
-          date: bookedOn, masterId: isB2B && cartons > 1 && cartonWaybills[0] ? cartonWaybills[0] : null,
+          kind: "document", cartonIds: pieceIds.filter((x) => x !== (s.lrNumber ?? s.awb)), ewayBill: o.ewayBill ?? null,
+          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
         };
         docLabel = doc;
       }
       for (let i = 0; i < cartons; i++) {
         const l: BrandedLabel = {
-          demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: awbCourier ? "B2C" : o.mode, service: s.serviceName, // an AWB courier ships it as B2C (no LR, no document)
+          demo: s.provider === "demo", carrier: s.carrierName, carrierLogo: logo, mode: o.mode, service: s.serviceName,
           payment: paymentLabel(o.paymentType, o.codAmountPaise).toUpperCase(),
           idLabel: isB2B ? "LRN" : "AWB", parentId: s.lrNumber && isB2B ? s.lrNumber : s.awb, carton: i + 1, cartons,
-          cartonId: !awbCourier && cartonWaybills[i] && cartonWaybills[i] !== (s.lrNumber ?? s.awb) ? cartonWaybills[i] : null,
+          cartonId: pieceIds[i] && pieceIds[i] !== (s.lrNumber ?? s.awb) ? pieceIds[i] : null,
           to: o.consignee as Addr,
           // the shipping customer's own company and GSTIN — never Vishwaship's
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
-          date: bookedOn, masterId: isB2B && cartons > 1 && cartonWaybills[0] ? cartonWaybills[0] : null,
+          date: bookedOn, masterId: isB2B && cartons > 1 && pieceIds[0] ? pieceIds[0] : null,
         };
         branded.push(l); brandedOf.set(l, s.id);
       }
@@ -192,12 +176,17 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       continue;
     }
 
-    // ---- Carrier label (courier's original, untouched)
-    if ((o.mode === "B2B" && !AWB_COURIERS.has(s.provider)) || s.provider === "delhivery_b2b") notices.add(B2B_HANDOVER.notice);
-    if (o.paymentType === "cod") notices.add("Carrier labels show the COD amount because the courier prints it on its own label. The Vishwaship label never shows it.");
-    const got = await courierLabel(s);
+    // ---- Courier label: exactly the courier's own file — same pages, same barcodes. Only the account name / logo
+    // the courier prints for our aggregator account is replaced by Vishwaship's.
+    if (o.paymentType === "cod") notices.add("Courier labels show the COD amount because the courier prints it on its own label.");
+    if (format !== "original" && src.carrierFormat !== format && !(src.carrierFormat === "a4" && PRINT_FORMATS.find((p) => p.key === format)?.group === "a4")) {
+      const size = PRINT_FORMATS.find((p) => p.key === src.carrierFormat)?.name ?? "A4";
+      notices.add(`${s.carrierName}: the courier's label comes in ${size}, so it is downloaded in that size.`);
+    }
+    const got = await courierLabel(s, src.carrierFormat);
     if (!got.doc) { skip(got.error, got.retryable); continue; }
     await coverBranding(got.doc, s.provider);
+    await replaceBrandText(got.doc, s.provider);
     for (const p of await doc.copyPages(got.doc, got.doc.getPageIndices())) doc.addPage(p);
   }
 
@@ -291,13 +280,11 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
 }
 
 /**
- * The courier's own label for a shipment as a separate PDF (one page per label the courier made), or why not.
+ * The courier's own label for a shipment as a separate PDF (one page per page the courier made), or why not.
  * Read-only: asks the courier for the label; never books or charges. Records whether the courier's label works.
  */
-async function courierLabel(s: typeof schema.shipments.$inferSelect): Promise<{ doc: PDFDocument; error?: never; retryable?: never } | { doc: null; error: string; retryable: boolean }> {
-  const src = labelSource(s.provider, "original");
-  const carrierFormat = src.kind === "carrier" ? src.carrierFormat : null;
-  if (!carrierFormat || !s.awb) return { doc: null, error: "This courier's own label is not available through Vishwaship yet", retryable: false };
+async function courierLabel(s: typeof schema.shipments.$inferSelect, carrierFormat: LabelFormat): Promise<{ doc: PDFDocument; error?: never; retryable?: never } | { doc: null; error: string; retryable: boolean }> {
+  if (!s.awb) return { doc: null, error: "Label pending — the courier has not assigned the AWB / LRN yet", retryable: true };
   const db = await getDb();
   const [acct] = await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, s.providerAccountId));
   const ad = acct && adapterFor(acct);
@@ -542,7 +529,6 @@ export function drawBranded(page: PDFPage, f: { r: PDFFont; b: PDFFont }, logos:
     };
     const docCodes = (c: ReturnType<typeof flow>) => {
       c.text(`${d.mode} | ${d.payment} | ${d.service}`, base - 0.5, f.b, { maxLines: 1 });
-      if (d.cartonId) { c.barcode(d.cartonId, small ? 6.5 : hMm > 120 ? 14 : wMm < 80 ? 9 : 11); c.text(`Document ${d.cartonId}`, base + (small ? 1 : 1.5), f.b, { center: true, maxLines: 1 }); c.text(`${d.idLabel} ${d.parentId}`, base, f.b, { center: true, maxLines: 1 }); c.text(`${d.cartons} CARTON${d.cartons > 1 ? "S" : ""}`, base + 1, f.b, { center: true, maxLines: 1 }); return; }
       c.barcode(d.parentId, small ? 6.5 : hMm > 120 ? 14 : wMm < 80 ? 9 : 11);
       c.text(`${d.idLabel} ${d.parentId}`, base + (small ? 1 : 1.5), f.b, { center: true, maxLines: 1 });
       c.text(`${d.cartons} CARTON${d.cartons > 1 ? "S" : ""}`, base + 1, f.b, { center: true, maxLines: 1 });

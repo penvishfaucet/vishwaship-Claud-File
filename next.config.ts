@@ -13,7 +13,7 @@ const config: NextConfig = {
   // local only: lets a second dev server run side by side (e.g. NEXT_DIST_DIR=.data/next-alt)
   distDir: process.env.NEXT_DIST_DIR || ".next",
   trailingSlash: true, // keeps existing public paths (/book/, /login/, /track/ …)
-  serverExternalPackages: ["@electric-sql/pglite", "pg"],
+  serverExternalPackages: ["@electric-sql/pglite", "pg", "pdfjs-dist"],
   // Admin uploads the UPI QR through a server action (QR images are capped at 2 MB in code)
   experimental: { serverActions: { bodySizeLimit: "3mb" } },
   async headers() {
