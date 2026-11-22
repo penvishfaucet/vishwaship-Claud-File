@@ -165,6 +165,9 @@ export async function scheduleSweeps() {
   // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
   try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }
   catch (e) { console.error("[store]", (e as Error).message); }
+  // store P&L: monthly copies of recurring expenses (rent, salaries …)
+  try { const { sweepRecurringExpenses } = await import("@/server/store/expenses"); await sweepRecurringExpenses(); }
+  catch (e) { console.error("[store expenses]", (e as Error).message); }
   // store marketing: purchases that reached their milestone, and one Meta ads sync per merchant per IST day (after 6 AM)
   try {
     const { sweepConversions } = await import("@/server/store/marketing");

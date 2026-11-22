@@ -1317,6 +1317,36 @@ export const storeStockMoves = pgTable("store_stock_moves", {
   createdAt: created(),
 }, (t) => [index("store_stock_moves_product").on(t.productId, t.createdAt), index("store_stock_moves_store").on(t.storeId, t.createdAt)]);
 
+/**
+ * Merchant expenses for the store P&L (packaging, rent, salaries, ads …). Amount is what was paid (GST included);
+ * gstPaise is the GST inside it. Tagged to an order when it belongs to one, else store-level overhead.
+ * A recurring expense is copied once per month by the background job (recurringOf + month is unique). Deleting keeps
+ * the row (deletedAt) for the audit trail.
+ */
+export const storeExpenses = pgTable("store_expenses", {
+  id: id(),
+  storeId: text("store_id").notNull(),
+  orgId: text("org_id").notNull(),
+  /** IST calendar date YYYY-MM-DD. */
+  spentOn: text("spent_on").notNull(),
+  category: text("category").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  gstPaise: paise("gst_paise").notNull().default(0),
+  /** GST on this bill can be claimed back (input tax credit). */
+  gstRecoverable: boolean("gst_recoverable").notNull().default(false),
+  note: text("note"),
+  storeOrderId: text("store_order_id"),
+  receiptKey: text("receipt_key"),
+  receiptMime: text("receipt_mime"),
+  recurring: boolean("recurring").notNull().default(false),
+  recurringOf: text("recurring_of"),
+  /** YYYY-MM of a generated recurring copy. */
+  recurringMonth: text("recurring_month"),
+  createdBy: text("created_by"),
+  deletedAt: ts("deleted_at"),
+  createdAt: created(),
+}, (t) => [index("store_expenses_store_day").on(t.storeId, t.spentOn), uniqueIndex("store_expenses_recurring").on(t.recurringOf, t.recurringMonth)]);
+
 /** Timeline of a store order (placed, paid, accepted, rejected, refund, dispatched …). */
 export const storeOrderEvents = pgTable("store_order_events", {
   id: id(),

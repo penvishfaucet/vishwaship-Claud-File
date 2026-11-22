@@ -676,5 +676,16 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795347785404,
   "hash": "27b23bfc7aba51a9cbe8b4b05ac3ebc920eb0757a2a0b4acdd5d95809cd3f32b"
+ },
+ {
+  "tag": "0034_store_expenses",
+  "sql": [
+   "CREATE TABLE \"store_expenses\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"spent_on\" text NOT NULL,\n\t\"category\" text NOT NULL,\n\t\"amount_paise\" bigint NOT NULL,\n\t\"gst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"gst_recoverable\" boolean DEFAULT false NOT NULL,\n\t\"note\" text,\n\t\"store_order_id\" text,\n\t\"receipt_key\" text,\n\t\"receipt_mime\" text,\n\t\"recurring\" boolean DEFAULT false NOT NULL,\n\t\"recurring_of\" text,\n\t\"recurring_month\" text,\n\t\"created_by\" text,\n\t\"deleted_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE INDEX \"store_expenses_store_day\" ON \"store_expenses\" USING btree (\"store_id\",\"spent_on\");",
+   "\nCREATE UNIQUE INDEX \"store_expenses_recurring\" ON \"store_expenses\" USING btree (\"recurring_of\",\"recurring_month\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795349926178,
+  "hash": "a8639c7c458fc5ab1f080fc942e0f4746b4254df09c0151fcd0813c09a7b8038"
  }
 ];

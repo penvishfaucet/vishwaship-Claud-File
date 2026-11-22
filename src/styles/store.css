@@ -309,3 +309,14 @@
 .inv-moves li{display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line-2,#edf1f8);padding-top:8px}
 .inv-ret{display:grid;gap:4px;padding:8px;border-radius:10px;background:var(--gray-soft,#eef2f9)}
 .so-dialog .so-tabs a{min-height:36px;padding:0 12px;font-size:12.5px}
+
+/* ---------- store P&L ---------- */
+.pl-bars{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.pl-bars>li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:13.5px;align-items:center}
+.pl-bars>li>i{grid-column:1/-1;display:block;height:6px;border-radius:4px;background:#1f7a4d;min-width:2px}
+.pl-bars>li>i.neg{background:#c2410c}
+.pl-bars>li.strong{border-top:1px solid var(--line,#e3e8f2);padding-top:8px;font-weight:700}
+.pl-bars summary{cursor:pointer}
+.pl-sub{list-style:none;margin:6px 0 0;padding:0 0 0 14px;display:grid;gap:4px;font-size:12.5px}
+.pl-sub li{display:flex;justify-content:space-between;gap:8px}
+.pl-ord{display:flex;justify-content:space-between;gap:8px;cursor:pointer;min-height:36px;align-items:center}
