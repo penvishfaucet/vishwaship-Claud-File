@@ -141,15 +141,20 @@ export async function tabCounts(orgId: string | null, f: OrderFilters): Promise<
 export type ChargeLine = { label: string; amount: number };
 type Addr = { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; district?: string; state?: string; pincode?: string; label?: string; contactName?: string };
 
-/** One page of orders with everything the row shows. Tenant-scoped by orgId (from the session, never input). */
-export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limit?: number; offset?: number } = {}) {
+/**
+ * One page of orders with everything the row shows. Tenant-scoped by orgId (from the session, never input).
+ * orgId = null → every account (Admin → Orders; callers must be staff with shipments.read).
+ */
+export async function listOrderRows(orgId: string | null, f: OrderFilters, opts: { limit?: number; offset?: number } = {}) {
   const db = await getDb();
+  const own = (col: Parameters<typeof eq>[0]) => (orgId ? eq(col, orgId) : undefined);
   const conds = baseConditions(orgId, f);
   const tc = tabCondition(f.tab); if (tc) conds.push(tc);
   const where = and(...conds);
   const limit = opts.limit ?? f.pageSize, offset = opts.offset ?? (f.page - 1) * f.pageSize;
-  const base = (await db.select({ o: O, s: S }).from(O).leftJoin(S, latestShipment).where(where).orderBy(desc(O.createdAt)).limit(limit).offset(offset))
-    .map((r) => (r.s?.bookingStatus === "failed" ? { o: r.o, s: null } : r)); // a failed booking is shown as not shipped (New)
+  const base = (await db.select({ o: O, s: S, org: { id: schema.orgs.id, name: schema.orgs.businessName } }).from(O).leftJoin(S, latestShipment)
+    .innerJoin(schema.orgs, eq(schema.orgs.id, O.orgId)).where(where).orderBy(desc(O.createdAt)).limit(limit).offset(offset))
+    .map((r) => (r.s?.bookingStatus === "failed" ? { ...r, s: null } : r)); // a failed booking is shown as not shipped (New)
   const [{ total }] = await db.select({ total: count() }).from(O).leftJoin(S, latestShipment).where(where);
   const orderIds = base.map((r) => r.o.id);
   const shipIds = base.flatMap((r) => (r.s ? [r.s.id] : []));
@@ -159,21 +164,24 @@ export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limi
   const [pkgs, quotes, warehouses, cods, msgs, disputes, lastEvents, tags] = await Promise.all([
     orderIds.length ? db.select().from(schema.packages).where(inArray(schema.packages.orderId, orderIds)) : none<typeof schema.packages.$inferSelect>(),
     quoteIds.length ? db.select({ id: schema.quotes.id, priced: schema.quotes.priced, total: schema.quotes.totalPaise }).from(schema.quotes).where(inArray(schema.quotes.id, quoteIds)) : none<{ id: string; priced: unknown; total: number }>(),
-    whIds.length ? db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, orgId), inArray(schema.warehouses.id, whIds))) : none<typeof schema.warehouses.$inferSelect>(),
-    orderIds.length ? db.select().from(schema.codConfirmations).where(and(eq(schema.codConfirmations.orgId, orgId), inArray(schema.codConfirmations.orderId, orderIds))) : none<typeof schema.codConfirmations.$inferSelect>(),
+    whIds.length ? db.select().from(schema.warehouses).where(and(own(schema.warehouses.orgId), inArray(schema.warehouses.id, whIds))) : none<typeof schema.warehouses.$inferSelect>(),
+    orderIds.length ? db.select().from(schema.codConfirmations).where(and(own(schema.codConfirmations.orgId), inArray(schema.codConfirmations.orderId, orderIds))) : none<typeof schema.codConfirmations.$inferSelect>(),
     orderIds.length ? db.select({ orderId: schema.whatsappMessages.orderId, status: schema.whatsappMessages.status, at: schema.whatsappMessages.updatedAt }).from(schema.whatsappMessages)
-      .where(and(eq(schema.whatsappMessages.orgId, orgId), eq(schema.whatsappMessages.event, "cod_confirmation"), inArray(schema.whatsappMessages.orderId, orderIds))).orderBy(desc(schema.whatsappMessages.createdAt)) : none<{ orderId: string | null; status: string; at: Date }>(),
-    shipIds.length ? db.select().from(schema.weightDisputes).where(and(eq(schema.weightDisputes.orgId, orgId), inArray(schema.weightDisputes.shipmentId, shipIds))) : none<typeof schema.weightDisputes.$inferSelect>(),
+      .where(and(own(schema.whatsappMessages.orgId), eq(schema.whatsappMessages.event, "cod_confirmation"), inArray(schema.whatsappMessages.orderId, orderIds))).orderBy(desc(schema.whatsappMessages.createdAt)) : none<{ orderId: string | null; status: string; at: Date }>(),
+    shipIds.length ? db.select().from(schema.weightDisputes).where(and(own(schema.weightDisputes.orgId), inArray(schema.weightDisputes.shipmentId, shipIds))) : none<typeof schema.weightDisputes.$inferSelect>(),
     shipIds.length ? db.selectDistinctOn([schema.shipmentEvents.shipmentId], { shipmentId: schema.shipmentEvents.shipmentId, location: schema.shipmentEvents.location, at: schema.shipmentEvents.occurredAt, raw: schema.shipmentEvents.rawStatus })
       .from(schema.shipmentEvents).where(inArray(schema.shipmentEvents.shipmentId, shipIds)).orderBy(schema.shipmentEvents.shipmentId, desc(schema.shipmentEvents.occurredAt)) : none<{ shipmentId: string; location: string | null; at: Date; raw: string | null }>(),
     orderIds.length ? db.select({ orderId: schema.orderTagLinks.orderId, id: schema.orderTags.id, name: schema.orderTags.name, color: schema.orderTags.color }).from(schema.orderTagLinks)
-      .innerJoin(schema.orderTags, eq(schema.orderTags.id, schema.orderTagLinks.tagId)).where(and(eq(schema.orderTags.orgId, orgId), inArray(schema.orderTagLinks.orderId, orderIds))) : none<{ orderId: string; id: string; name: string; color: string }>(),
+      .innerJoin(schema.orderTags, eq(schema.orderTags.id, schema.orderTagLinks.tagId)).where(and(own(schema.orderTags.orgId), inArray(schema.orderTagLinks.orderId, orderIds))) : none<{ orderId: string; id: string; name: string; color: string }>(),
   ]);
-  const codIncluded = await eventIncluded(orgId, "whatsapp:cod_confirmation");
-  const [toggle] = await db.select({ enabled: schema.notificationSettings.enabled }).from(schema.notificationSettings)
-    .where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
+  // WhatsApp COD confirmation access + switch, per account on the page (one account in the Customer Portal)
+  const orgIds = [...new Set(base.map((r) => r.o.orgId))];
+  const included = new Map(await Promise.all(orgIds.map(async (id) => [id, await eventIncluded(id, "whatsapp:cod_confirmation")] as const)));
+  const toggles = orgIds.length ? await db.select({ orgId: schema.notificationSettings.orgId, enabled: schema.notificationSettings.enabled }).from(schema.notificationSettings)
+    .where(and(inArray(schema.notificationSettings.orgId, orgIds), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation"))) : [];
 
-  const rows = base.map(({ o, s }) => {
+  const rows = base.map(({ o, s, org }) => {
+    const toggle = toggles.find((t) => t.orgId === o.orgId);
     const p = pkgs.filter((x) => x.orderId === o.id);
     const boxes = p.reduce((t, x) => t + x.count, 0);
     const actual = p.reduce((t, x) => t + x.count * x.actualWeightGrams, 0);
@@ -189,9 +197,10 @@ export async function listOrderRows(orgId: string, f: OrderFilters, opts: { limi
     const wh = warehouses.find((w) => w.id === o.warehouseId);
     const snap = (o.pickupSnapshot ?? null) as Addr | null;
     const pickup: Addr | null = snap ?? (wh ? { label: wh.label, contactName: wh.contactName, mobile: wh.mobile, line1: wh.line1, line2: wh.line2 ?? undefined, city: wh.city, state: wh.state, pincode: wh.pincode } : null);
-    const codIn: CodInputs = { paymentType: o.paymentType, codPaise: o.codAmountPaise, included: codIncluded, enabled: toggle ? toggle.enabled : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
+    const codIn: CodInputs = { paymentType: o.paymentType, codPaise: o.codAmountPaise, included: included.get(o.orgId) ?? false, enabled: toggle ? toggle.enabled : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
     return {
       id: o.id, orderNumber: o.orderNumber, createdAt: o.createdAt.toISOString(), source: o.source, mode: o.mode, direction: o.direction,
+      customer: org,
       orderStatus: o.status, archived: !!o.archivedAt, externalOrderId: o.externalOrderId, invoiceNumber: o.invoiceNumber,
       products: ((o.products as Array<{ name: string; sku?: string; qty: number; unitPrice?: number }>) ?? []).map((x) => ({ name: x.name, sku: x.sku ?? "", qty: x.qty })),
       boxes, isMps: o.mode === "B2C" && boxes > 1,

@@ -3,11 +3,11 @@ import { paymentLabel } from "@/lib/payment";
 import { fetchLabels } from "@/components/labels/LabelDownload";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive, ArchiveRestore, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Download, Eye, FileText, Filter,
   MessageCircle, PlusCircle, RefreshCw, Settings, Settings2, Tag, Truck, Upload, XCircle,
-  ClipboardList, CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, Receipt, SlidersHorizontal, Undo2, UserRound,
+  ClipboardList, CopyPlus, LifeBuoy, MoreHorizontal, Package, Pencil, Receipt, SlidersHorizontal, Undo2, UserRound, Building2, ExternalLink,
 } from "lucide-react";
 import { DateRangePicker } from "@/components/portal/DateRangePicker";
 import { carrierLogo } from "@/lib/site";
@@ -31,7 +31,13 @@ interface Props {
   features: { storeSync: boolean; tracking: boolean; international: boolean };
   defaultLabel: PrintFormat;
   walletPaise: number;
+  /** Admin → Orders: every customer's orders, a Customer column, staff-only links (no customer actions). */
+  admin?: { customers: Array<{ id: string; name: string }>; exportHref: string };
 }
+
+/** True inside Admin → Orders. Rows / menus switch links and hide customer-only actions. */
+const AdminMode = createContext(false);
+const adminHref = (r: OrderRow) => (r.shipment ? `/admin/shipments/${r.shipment.id}/` : `/admin/customers/${r.customer.id}/`);
 
 type DialogState = null | { kind: "track"; shipmentId: string } | { kind: "cod" | "breakdown" | "pickup"; row: OrderRow };
 type Toast = null | { text: string; bad?: boolean; retry?: { ids: string[]; format: PrintFormat }; sub?: string[] };
@@ -77,7 +83,7 @@ export function OrdersView(p: Props) {
     return s ? `${path}?${s}` : `${path}`;
   }, [params, path]);
   const go = (patch: Record<string, string | undefined>) => router.push(href(patch));
-  const exportHref = `/api/portal/orders/export?${new URLSearchParams({ ...Object.fromEntries(params.entries()), tab: f.tab, direction: f.direction, dateType: f.dateType, from: f.from, to: f.to }).toString()}`;
+  const exportHref = p.admin ? p.admin.exportHref : `/api/portal/orders/export?${new URLSearchParams({ ...Object.fromEntries(params.entries()), tab: f.tab, direction: f.direction, dateType: f.dateType, from: f.from, to: f.to }).toString()}`;
 
   // ------------------------------------------------------------ actions
   async function downloadLabels(ids: string[], format: PrintFormat) {
@@ -85,7 +91,7 @@ export function OrdersView(p: Props) {
     const w = window.open("about:blank", "_blank");
     setBusy("labels");
     try {
-      const r = await fetchLabels("/api/portal/labels", ids, format, w);
+      const r = await fetchLabels(p.admin ? "/api/admin/labels" : "/api/portal/labels", ids, format, w);
       const retryIds = r.skipped.filter((x) => x.retryable).map((x) => x.shipmentId);
       const retry = (r.ok ? retryIds : retryIds.length ? retryIds : r.skipped.length ? [] : ids);
       const sub = [...r.notices, PRINT_HINT];
@@ -138,10 +144,12 @@ export function OrdersView(p: Props) {
   const selLabelIds = selRows.flatMap((r) => (r.shipment?.awb ? [r.shipment.id] : []));
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const pages = Math.max(1, Math.ceil(p.total / f.pageSize));
-  const colCount = 4 + ["orderDate", "product", "package", "shipping", "pickup"].filter((c) => show(c as OptionalColumn)).length + 1;
+  const colCount = 4 + ["orderDate", "product", "package", "shipping", "pickup"].filter((c) => show(c as OptionalColumn)).length + 1 + (p.admin ? 1 : 0);
+  const admin = !!p.admin;
 
   return (
-    <div className="ov ovt">
+    <AdminMode.Provider value={admin}>
+    <div className={`ov ovt${admin ? " ovt-admin" : ""}`}>
       {/* desktop (≥1100px): direction tabs · region switch · Sync / Bulk Import / Add Order */}
       <div className="ovt-bar ovt-d">
         <nav className="ovt-dir" aria-label="Shipment direction">
@@ -152,11 +160,11 @@ export function OrdersView(p: Props) {
           <span className="on" aria-current="true">Domestic</span>
           <button type="button" onClick={() => setToast({ text: L("portal.orders.international", "International shipping is not enabled for your account."), bad: true })}>International</button>
         </div>
-        <div className="ovt-act">
+        {!admin && <div className="ovt-act">
           {p.features.storeSync && <button type="button" className="ov-btn navy" onClick={syncOrders} disabled={busy === "sync"}><RefreshCw size={16} aria-hidden className={busy === "sync" ? "spin" : undefined} /> {busy === "sync" ? "Syncing…" : "Sync Orders"}</button>}
           <Link className="ov-btn navy" href="/portal/orders/bulk/"><Upload size={16} aria-hidden /> Bulk Import</Link>
           <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />
-        </div>
+        </div>}
       </div>
       {/* phones: compact top: region switch · Add Order · options icon */}
       <div className="oc-head ovt-m">
@@ -165,11 +173,11 @@ export function OrdersView(p: Props) {
           <button type="button" onClick={() => setToast({ text: L("portal.orders.international", "International shipping is not enabled for your account."), bad: true })}>International</button>
         </div>
         <div className="oc-head-r">
-          <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />
+          {!admin && <AddOrder reverse={f.direction === "reverse"} onOpen={(o) => { menuOpen.current = o; }} />}
           <button type="button" className={`oc-opt${tools ? " on" : ""}`} aria-label="Filters and options" aria-expanded={tools} onClick={() => setTools((t) => !t)}><SlidersHorizontal size={22} aria-hidden /></button>
         </div>
       </div>
-      <DailyManifest couriers={p.options.couriers} warehouses={p.options.warehouses} />
+      {!admin && <DailyManifest couriers={p.options.couriers} warehouses={p.options.warehouses} />}
       {/* status tabs: one scrollable row with counts */}
       <nav className="oc-tabs ovt-m" aria-label="Order status">
         {TAB_GROUPS.flatMap((g) => g.tabs).map((t) => {
@@ -237,7 +245,7 @@ export function OrdersView(p: Props) {
             <b>{selected.size} selected</b>
             <LabelMenu label={`Download labels (${selLabelIds.length})`} formats={LABEL_CHOICES.flatMap((g) => g.items.map((i) => ({ key: i.key, name: g.group === "Thermal printer" ? `Thermal ${i.name}` : i.name, ok: true })))} disabled={!selLabelIds.length || busy === "labels"}
               onPick={(fmt) => downloadLabels(selLabelIds, fmt)} dark onOpen={(o) => { menuOpen.current = o; }} />
-            {f.tab === "archive"
+            {admin ? null : f.tab === "archive"
               ? <button type="button" className="ov-btn ghost sm" onClick={() => archive([...selected], false)}><ArchiveRestore size={14} aria-hidden /> Restore</button>
               : <button type="button" className="ov-btn ghost sm" onClick={() => archive([...selected], true)}><Archive size={14} aria-hidden /> Archive</button>}
             <button type="button" className="ov-btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
@@ -250,7 +258,7 @@ export function OrdersView(p: Props) {
             <p className="muted">No orders match these filters for {istDate(`${f.from}T12:00:00+05:30`)} – {istDate(`${f.to}T12:00:00+05:30`)}.</p>
             <div className="row" style={{ justifyContent: "center", gap: 8 }}>
               <Link className="ov-btn ghost" href={path}>Clear filters</Link>
-              <Link className="ov-btn orange" href={f.direction === "reverse" ? "/portal/orders/new/?direction=reverse" : "/portal/orders/new/"}><PlusCircle size={16} aria-hidden /> {f.direction === "reverse" ? "Add Return" : "Create Order"}</Link>
+              {!admin && <Link className="ov-btn orange" href={f.direction === "reverse" ? "/portal/orders/new/?direction=reverse" : "/portal/orders/new/"}><PlusCircle size={16} aria-hidden /> {f.direction === "reverse" ? "Add Return" : "Create Order"}</Link>}
             </div>
           </div>
         ) : (
@@ -271,6 +279,7 @@ export function OrdersView(p: Props) {
                     <th style={{ width: 36 }}><input type="checkbox" aria-label="Select all orders on this page" checked={allSel} onChange={() => setSelected(allSel ? new Set() : new Set(allIds))} /></th>
                     {show("orderDate") && <th>Order Date</th>}
                     <th>Order Details</th>
+                    {admin && <th>Customer</th>}
                     {show("product") && <th>Product Details</th>}
                     {show("package") && <th>Package Details</th>}
                     <th>Payment</th>
@@ -303,19 +312,20 @@ export function OrdersView(p: Props) {
       </section>
 
       <Pager total={p.total} page={f.page} pages={pages} pageSize={f.pageSize} href={href} onSize={async (n) => {
-        await fetch("/api/portal/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ordersPageSize: n }) }).catch(() => null);
+        if (!admin) await fetch("/api/portal/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ordersPageSize: n }) }).catch(() => null);
         go({ size: String(n) });
       }} />
 
       <Link className="oc-returns" href={f.direction === "reverse" ? href({ direction: undefined, tab: undefined }) : href({ direction: "reverse", tab: undefined })}>
         <Undo2 size={18} aria-hidden /> {f.direction === "reverse" ? "Forward" : "Returns"}
       </Link>
-      {dialog?.kind === "track" && <TrackDialog shipmentId={dialog.shipmentId} onClose={() => setDialog(null)} onChanged={refresh} />}
-      {dialog?.kind === "cod" && <CodDialog row={dialog.row} onClose={() => setDialog(null)} />}
-      {dialog?.kind === "breakdown" && <BreakdownDialog row={dialog.row} onClose={() => setDialog(null)} />}
-      {dialog?.kind === "pickup" && <PickupDialog row={dialog.row} onClose={() => setDialog(null)} />}
+      {dialog?.kind === "track" && <TrackDialog shipmentId={dialog.shipmentId} onClose={() => setDialog(null)} onChanged={refresh} admin={admin} />}
+      {dialog?.kind === "cod" && <CodDialog row={dialog.row} onClose={() => setDialog(null)} admin={admin} />}
+      {dialog?.kind === "breakdown" && <BreakdownDialog row={dialog.row} onClose={() => setDialog(null)} admin={admin} />}
+      {dialog?.kind === "pickup" && <PickupDialog row={dialog.row} onClose={() => setDialog(null)} admin={admin} />}
       {toast && <div className={`ov-toast${toast.bad ? " bad" : ""}`} role={toast.bad ? "alert" : "status"}><span>{toast.text}{toast.sub?.map((x) => <small key={x} style={{ display: "block", opacity: 0.85, marginTop: 4 }}>{x}</small>)}</span>{toast.retry && <button type="button" className="ov-btn sm ghost" onClick={() => { const t = toast.retry!; setToast(null); void downloadLabels(t.ids, t.format); }}>Retry {toast.retry.ids.length > 1 ? `${toast.retry.ids.length} ` : ""}failed</button>}<button type="button" onClick={() => setToast(null)} aria-label="Dismiss">✕</button></div>}
     </div>
+    </AdminMode.Provider>
   );
 }
 
@@ -357,11 +367,12 @@ function FilterBar({ p, go, exportHref, onRefresh, lastRefresh, hidden, setHidde
   const [ref, setRef] = useState(f.ref ?? "");
   const [awb, setAwb] = useState(f.awb ?? "");
   useEffect(() => { setRef(f.ref ?? ""); setAwb(f.awb ?? ""); }, [f.ref, f.awb]);
-  const activeMore = [f.courier, f.type, f.payment, f.warehouse, f.status, f.cod, f.tag].filter(Boolean).length;
+  const activeMore = [f.courier, f.type, f.payment, f.warehouse, f.status, f.cod, f.tag, p.admin ? f.customer : undefined].filter(Boolean).length;
   const chips: Array<[string, string]> = [];
   if (f.ref) chips.push(["ref", `Reference: ${f.ref}`]);
   if (f.awb) chips.push(["awb", `AWB/LR: ${f.awb}`]);
   if (f.q) chips.push(["q", `Search: ${f.q}`]);
+  if (p.admin && f.customer) chips.push(["customer", `Customer: ${p.admin.customers.find((c) => c.id === f.customer)?.name ?? f.customer}`]);
   if (f.courier) chips.push(["courier", `Courier: ${p.options.couriers.find((c) => c.code === f.courier)?.name ?? f.courier}`]);
   if (f.type) chips.push(["type", `Type: ${f.type}`]);
   if (f.payment) chips.push(["payment", `Payment: ${f.payment.toUpperCase()}`]);
@@ -405,10 +416,10 @@ function FilterBar({ p, go, exportHref, onRefresh, lastRefresh, hidden, setHidde
                     const n = new Set(hidden); if (n.has(c.key)) n.delete(c.key); else n.add(c.key); setHidden(n);
                   }} /> {c.label}</label>
                 ))}
-                <button type="button" className="ov-btn navy sm" onClick={async () => {
+                {!p.admin && <button type="button" className="ov-btn navy sm" onClick={async () => {
                   const r = await fetch("/api/portal/prefs", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ ordersHidden: [...hidden] }) });
                   setCfg(false); setToast(r.ok ? { text: "Column preference saved." } : { text: "Could not save preference", bad: true });
-                }}>Save preference</button>
+                }}>Save preference</button>}
               </div>
             )}
           </div>
@@ -425,19 +436,20 @@ function FilterBar({ p, go, exportHref, onRefresh, lastRefresh, hidden, setHidde
 
 function MoreFilters({ p, onApply }: { p: Props; onApply: (patch: Record<string, string | undefined>) => void }) {
   const f = p.filters;
-  const [v, setV] = useState({ courier: f.courier ?? "", type: f.type ?? "", payment: f.payment ?? "", warehouse: f.warehouse ?? "", status: f.status ?? "", cod: f.cod ?? "", tag: f.tag ?? "" });
+  const [v, setV] = useState({ customer: f.customer ?? "", courier: f.courier ?? "", type: f.type ?? "", payment: f.payment ?? "", warehouse: f.warehouse ?? "", status: f.status ?? "", cod: f.cod ?? "", tag: f.tag ?? "" });
   const set = (k: keyof typeof v) => (e: React.ChangeEvent<HTMLSelectElement>) => setV({ ...v, [k]: e.target.value });
   return (
     <form className="ov-panel" role="dialog" aria-label="More filters" onSubmit={(e) => { e.preventDefault(); onApply(Object.fromEntries(Object.entries(v).map(([k, x]) => [k, x || undefined]))); }}>
+      {p.admin && <label className="full">Customer<select className="ov-field" value={v.customer} onChange={set("customer")}><option value="">All customers</option>{p.admin.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>}
       <label>Courier<select className="ov-field" value={v.courier} onChange={set("courier")}><option value="">All couriers</option>{p.options.couriers.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
       <label>Shipment type<select className="ov-field" value={v.type} onChange={set("type")}><option value="">B2C, MPS and B2B</option><option value="B2C">B2C (single box)</option><option value="MPS">MPS (B2C multi-box)</option><option value="B2B">B2B</option></select></label>
       <label>Payment mode<select className="ov-field" value={v.payment} onChange={set("payment")}><option value="">All</option><option value="prepaid">Prepaid</option><option value="cod">COD</option><option value="fod">FOD</option></select></label>
-      <label>Warehouse<select className="ov-field" value={v.warehouse} onChange={set("warehouse")}><option value="">All warehouses</option>{p.options.warehouses.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}</select></label>
+      {p.options.warehouses.length > 0 && <label>Warehouse<select className="ov-field" value={v.warehouse} onChange={set("warehouse")}><option value="">All warehouses</option>{p.options.warehouses.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}</select></label>}
       <label>Shipment status<select className="ov-field" value={v.status} onChange={set("status")}><option value="">Any status</option>{SHIP_STATUSES.map((s) => <option key={s} value={s}>{s === "not_booked" ? "Not booked yet" : statusLabel(s)}</option>)}</select></label>
       <label>WhatsApp COD confirmation<select className="ov-field" value={v.cod} onChange={set("cod")}><option value="">Any</option>{COD_FILTERS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select></label>
       {p.options.tags.length > 0 && <label className="full">Tag<select className="ov-field" value={v.tag} onChange={set("tag")}><option value="">Any tag</option>{p.options.tags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
       <div className="full row" style={{ justifyContent: "flex-end", gap: 8 }}>
-        <button type="button" className="ov-btn ghost sm" onClick={() => onApply({ courier: undefined, type: undefined, payment: undefined, warehouse: undefined, status: undefined, cod: undefined, tag: undefined })}>Clear</button>
+        <button type="button" className="ov-btn ghost sm" onClick={() => onApply({ customer: undefined, courier: undefined, type: undefined, payment: undefined, warehouse: undefined, status: undefined, cod: undefined, tag: undefined })}>Clear</button>
         <button type="submit" className="ov-btn orange sm">Apply filters</button>
       </div>
     </form>
@@ -586,7 +598,7 @@ function PackageCell({ r }: { r: OrderRow }) {
       <div>{r.boxes} Boxe(s) - <span className="ov-tag">({type})</span></div>
       <div>Dead wt. : {kg(r.actualGrams)}</div>
       <div>Volumetric: {kg(r.volumetricGrams)}</div>
-      {r.packages.length > 0 && <div className="tiny muted">{r.packages.map((x) => `${x.count}× ${x.l}×${x.b}×${x.h} cm`).join(", ")}</div>}
+      {r.packages.length > 0 && <div className="tiny muted ov-dims" title={r.packages.map((x) => `${x.count}× ${x.l}×${x.b}×${x.h} cm`).join(", ")}>{r.packages.slice(0, 2).map((x, i) => <div key={i}>{x.count}× {x.l}×{x.b}×{x.h} cm</div>)}{r.packages.length > 2 && <div>+{r.packages.length - 2} more size{r.packages.length > 3 ? "s" : ""}</div>}</div>}
       {r.chargeableGrams != null && <div className="small">Chargeable: <b>{kg(r.chargeableGrams)}</b></div>}
       {r.carrierGrams != null && <div className="small">Courier wt.: <b>{kg(r.carrierGrams)}</b></div>}
     </div>
@@ -637,21 +649,23 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
   const b = bookingBadge(r);
   const s = r.shipment;
   const fmt = s?.labelFormats.find((x) => x.key === defaultLabel && x.ok) ?? s?.labelFormats.find((x) => x.ok);
-  const detail = !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
+  const admin = useContext(AdminMode);
+  const detail = admin ? adminHref(r) : !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (
     <>
       <tr className={`orow${selected ? " sel" : ""}`}>
         <td><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} /></td>
         {show("orderDate") && <td className="date">{istDate(r.createdAt)} | {istTime(r.createdAt)}<div className="b">{SOURCE[r.source] ?? r.source}</div></td>}
         <td className="ord">
-          <Link className="ov-link" href={`/portal/orders/${r.id}/`}>{r.orderNumber}</Link>
+          <Link className="ov-link" href={admin ? adminHref(r) : `/portal/orders/${r.id}/`}>{r.orderNumber}</Link>
           <div>Ref. ID: {r.externalOrderId ?? r.invoiceNumber ?? "--"}</div>
           <span className={`ov-badge ${b.cls}`}>{b.text}</span>
           <CodBadge r={r} open={open} />
           {r.tags.length > 0 && <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>{r.tags.map((t) => <span key={t.id} className="ov-badge" style={{ background: t.color, color: "#fff" }}><Tag size={10} aria-hidden /> {t.name}</span>)}</div>}
         </td>
+        {admin && <td className="cust"><Link className="ov-link" href={`/admin/customers/${r.customer.id}/`}>{r.customer.name}</Link><div className="tiny muted mono">{r.customer.id}</div></td>}
         {show("product") && <td className="wrap"><ProductCell r={r} /></td>}
-        {show("package") && <td><PackageCell r={r} /></td>}
+        {show("package") && <td className="pkg"><PackageCell r={r} /></td>}
         <td className="pay"><PaymentCell r={r} open={open} /></td>
         <td className="trk"><TrackingCell r={r} open={open} /></td>
         {show("shipping") && <td><Addr a={r.consignee} /></td>}
@@ -661,6 +675,7 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
             {s?.awb
               ? <LabelSplit formats={s.labelFormats} main={fmt?.key ?? "a4_4up"} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
               : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
+              : admin ? <Link className="oc-btn ghost" href={detail}>View</Link>
               : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
             <ActionMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onClone={onClone} onArchive={onArchive} onMenu={onMenu} />
           </div>
@@ -779,7 +794,8 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
   const kind = r.isMps ? "MPS" : r.mode;
   const status = orderStatusText(r);
   const amount = r.payment === "cod" ? r.codPaise : r.payment === "fod" ? r.receiverFreightPaise : r.invoicePaise;
-  const detail = !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
+  const admin = useContext(AdminMode);
+  const detail = admin ? adminHref(r) : !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (
     <article className="oc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
       <header className="oc-top">
@@ -790,6 +806,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
         <span className="oc-kind">({kind})</span>
         <ActionMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onClone={onClone} onArchive={onArchive} onMenu={onMenu} />
       </header>
+      {admin && <div className="oc-cust"><Building2 size={15} aria-hidden /> <Link href={`/admin/customers/${r.customer.id}/`}>{r.customer.name}</Link></div>}
       <div className="oc-mid">
         <div className="oc-svc">{s ? (s.serviceName && s.serviceName !== s.carrierName ? `${s.carrierName} ${s.serviceName}` : s.carrierName) : "Courier not assigned"}</div>
         {s && (
@@ -812,7 +829,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
         <div className="small">Order Date: {istDate(r.createdAt)} | {istTime(r.createdAt)}<br />Channel: <span className="oc-chan">{SOURCE[r.source] ?? r.source}</span></div>
         {s?.awb
           ? <LabelSplit formats={s.labelFormats} main={fmt?.key ?? "a4_4up"} onLabel={onLabel} busy={busy === "labels"} cartons={Math.max(r.boxes, s.pieces)} onMenu={onMenu} />
-          : r.orderStatus === "cancelled" || s ? <Link className="oc-btn ghost" href={detail}>View</Link>
+          : r.orderStatus === "cancelled" || s || admin ? <Link className="oc-btn ghost" href={detail}>View</Link>
           : <Link className="oc-btn" href={detail}>{r.orderStatus === "draft" ? "Edit Draft" : "Assign Courier"}</Link>}
       </footer>
       {busy === `cancel:${r.id}` && <div className="tiny muted" role="status">Cancelling…</div>}
@@ -837,7 +854,7 @@ function LabelSplit({ formats, main, onLabel, busy, cartons, onMenu }: { formats
   const first = LABEL_KEYS.find((k) => ok(k)?.ok) ?? "a4_4up";
   return (
     <div ref={m.ref} className="oc-split">
-      <button type="button" className="oc-btn main" onClick={() => onLabel(first)} disabled={busy} title={PRINT_FORMATS.find((x) => x.key === first)?.name}>Label</button>
+      <button type="button" className="oc-btn lbl-main" onClick={() => onLabel(first)} disabled={busy} title={PRINT_FORMATS.find((x) => x.key === first)?.name}>Label</button>
       <button ref={m.btn} type="button" className="oc-btn caret" aria-label="Choose label size" aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle} disabled={busy}><ChevronDown size={16} aria-hidden /></button>
       {m.pos && (
         <div className="ov-menu" role="menu" style={m.pos}>
@@ -874,6 +891,22 @@ function ActionMenu({ r, open, onLabel, onCancel, onClone, onArchive, onMenu }: 
   const canCancel = s ? s.cancellable : r.cancellableOrder;
   const editable = !s && ["draft", "ready", "booking_failed"].includes(r.orderStatus);
   const go = (fn: () => void) => () => { m.close(); fn(); };
+  const admin = useContext(AdminMode);
+  if (admin) return (
+    <div ref={m.ref} className="oc-more">
+      <button ref={m.btn} type="button" className="oc-dots" aria-label={`Actions for ${r.orderNumber}`} aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle}><MoreHorizontal size={22} aria-hidden /></button>
+      {m.pos && (
+        <div className="ov-menu" role="menu" style={m.pos}>
+          {s?.awb && <button role="menuitem" type="button" onClick={go(() => open({ kind: "track", shipmentId: s.id }))}><Truck size={14} aria-hidden /> Track shipment</button>}
+          {s && <Link role="menuitem" href={`/admin/shipments/${s.id}/`}><Eye size={14} aria-hidden /> Open shipment</Link>}
+          <Link role="menuitem" href={`/admin/customers/${r.customer.id}/`}><Building2 size={14} aria-hidden /> Open customer</Link>
+          <button role="menuitem" type="button" onClick={go(() => open({ kind: "cod", row: r }))}><MessageCircle size={14} aria-hidden /> WhatsApp COD confirmation</button>
+          {r.breakdown && <button role="menuitem" type="button" onClick={go(() => open({ kind: "breakdown", row: r }))}><Receipt size={14} aria-hidden /> Charge breakdown</button>}
+          {s && <a role="menuitem" href={`/admin/shipments/${s.id}/#tracking`} target="_blank" rel="noopener" onClick={() => m.close()}><ExternalLink size={14} aria-hidden /> Open in new tab</a>}
+        </div>
+      )}
+    </div>
+  );
   return (
     <div ref={m.ref} className="oc-more">
       <button ref={m.btn} type="button" className="oc-dots" aria-label={`Actions for ${r.orderNumber}`} aria-haspopup="menu" aria-expanded={!!m.pos} onClick={m.toggle}><MoreHorizontal size={22} aria-hidden /></button>

@@ -18,20 +18,21 @@ type Timeline = {
 };
 
 /** Track: provider events, timestamps, locations, current status, ETA and sync health with Retry. */
-export function TrackDialog({ shipmentId, onClose, onChanged }: { shipmentId: string; onClose: () => void; onChanged: () => void }) {
+export function TrackDialog({ shipmentId, onClose, onChanged, admin }: { shipmentId: string; onClose: () => void; onChanged: () => void; admin?: boolean }) {
+  const api = admin ? "/api/admin" : "/api/portal";
   const [d, setD] = useState<Timeline | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const load = useCallback(async () => {
-    const r = await fetch(`/api/portal/shipments/${shipmentId}/timeline`, { cache: "no-store" });
+    const r = await fetch(`${api}/shipments/${shipmentId}/timeline`, { cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (r.ok) { setD(j); setErr(null); } else setErr(j.error?.message ?? "Could not load tracking");
-  }, [shipmentId]);
+  }, [shipmentId, api]);
   useEffect(() => { void load(); }, [load]);
   async function retry() {
     setBusy(true); setNote(null);
-    const r = await fetch(`/api/portal/shipments/${shipmentId}/refresh`, { method: "POST" });
+    const r = await fetch(`${api}/shipments/${shipmentId}/refresh`, { method: "POST" });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     setNote(r.ok ? (j.inserted ? `${j.inserted} new update(s) from the courier.` : "Already up to date.") : (j.error?.message ?? "Sync failed"));
@@ -114,11 +115,11 @@ const ACTIVITY: Record<string, string> = {
 };
 
 /** WhatsApp COD confirmation: buyer status, message history, cancellation and refund. */
-export function CodDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+export function CodDialog({ row, onClose, admin }: { row: OrderRow; onClose: () => void; admin?: boolean }) {
   const [d, setD] = useState<CodHistory | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
-    fetch(`/api/portal/orders/${row.id}/cod`, { cache: "no-store" }).then(async (r) => { const j = await r.json().catch(() => ({})); if (r.ok) setD(j); else setErr(j.error?.message ?? "Could not load"); });
+    fetch(`${admin ? "/api/admin" : "/api/portal"}/orders/${row.id}/cod`, { cache: "no-store" }).then(async (r) => { const j = await r.json().catch(() => ({})); if (r.ok) setD(j); else setErr(j.error?.message ?? "Could not load"); });
   }, [row.id]);
   const st = codDisplay(row.cod);
   return (
@@ -132,7 +133,7 @@ export function CodDialog({ row, onClose }: { row: OrderRow; onClose: () => void
         {d?.confirmation?.cancellationReason && <><dt>Cancellation detail</dt><dd style={{ fontWeight: 400 }}>{d.confirmation.cancellationReason}</dd></>}
         {d?.refund && <><dt>Wallet refund</dt><dd className="t-ok">{inr(d.refund.amountPaise)} · {istFull(d.refund.at)}</dd></>}
       </dl>
-      {(st.buyer === "setup_required" || st.buyer === "disabled") && <p className="small"><Link className="ov-link" href="/portal/notifications/cod/">Open COD Confirmation settings →</Link></p>}
+      {!admin && (st.buyer === "setup_required" || st.buyer === "disabled") && <p className="small"><Link className="ov-link" href="/portal/notifications/cod/">Open COD Confirmation settings →</Link></p>}
       {err && <p className="t-bad small" role="alert">{err}</p>}
       {d && d.messages.length > 0 && (
         <section>
@@ -158,7 +159,7 @@ export function CodDialog({ row, onClose }: { row: OrderRow; onClose: () => void
 }
 
 /** Shipping charge breakdown: quote lines, GST, booked amount, later adjustments, final total. */
-export function BreakdownDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+export function BreakdownDialog({ row, onClose, admin }: { row: OrderRow; onClose: () => void; admin?: boolean }) {
   const b = row.breakdown!;
   const pre = b.lines.reduce((t, l) => t + l.amount, 0);
   return (
@@ -175,12 +176,12 @@ export function BreakdownDialog({ row, onClose }: { row: OrderRow; onClose: () =
       </table>
       {row.payment === "fod" && <p className="small">Freight payable by the receiver at delivery (FOD): <b>{inr(row.receiverFreightPaise)}</b></p>}
       {b.quoteTotal != null && b.quoteTotal !== b.booked && row.payment !== "fod" && <p className="tiny muted">Quoted total was {inr(b.quoteTotal)}; the booked amount above is what was actually charged.</p>}
-      <p className="small"><Link className="ov-link" href="/portal/billing/">View in Billing →</Link></p>
+      {!admin && <p className="small"><Link className="ov-link" href="/portal/billing/">View in Billing →</Link></p>}
     </Dialog>
   );
 }
 
-export function PickupDialog({ row, onClose }: { row: OrderRow; onClose: () => void }) {
+export function PickupDialog({ row, onClose, admin }: { row: OrderRow; onClose: () => void; admin?: boolean }) {
   const p = row.pickup;
   return (
     <Dialog title={p?.label ?? "Pickup address"} sub="Pickup warehouse" onClose={onClose}>
@@ -191,7 +192,7 @@ export function PickupDialog({ row, onClose }: { row: OrderRow; onClose: () => v
           {p.mobile && <><dt>Mobile</dt><dd><a className="ov-link" href={`tel:${p.mobile}`}>{p.mobile}</a></dd></>}
         </dl>
       ) : <p className="small muted">No pickup address on this order.</p>}
-      <p className="small"><Link className="ov-link" href="/portal/addresses/">Manage pickup addresses →</Link></p>
+      {!admin && <p className="small"><Link className="ov-link" href="/portal/addresses/">Manage pickup addresses →</Link></p>}
     </Dialog>
   );
 }

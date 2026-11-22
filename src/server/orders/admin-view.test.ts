@@ -55,4 +55,27 @@ describe("Admin All Shipments uses the portal's status logic", () => {
       expect(tabOf({ archived: a.archived, orderStatus: a.orderStatus, shipment: a.shipment })).toBe(tabOf({ archived: r.archived, orderStatus: r.orderStatus, shipment: r.shipment }));
     }
   });
+  it("Admin Orders (Shipmozo-style view): full rows for every customer, each with its customer", async () => {
+    const all = await V.listOrderRows(null, F());
+    expect(all.total).toBe(5);
+    expect(new Set(all.rows.map((r) => r.customer.name))).toEqual(new Set(["Xylo Traders", "Yarn House"]));
+    for (const r of all.rows) expect(r.customer.id).toBe(r.orderNumber.startsWith("VS-x") ? "org_x" : "org_y");
+    // same rows / tab counts as the customer sees, per customer
+    const onlyY = await V.listOrderRows(null, F({ customer: "org_y" }));
+    expect(onlyY.rows.map((r) => r.orderNumber).sort()).toEqual((await V.listOrderRows("org_y", F())).rows.map((r) => r.orderNumber).sort());
+    expect((await V.listOrderRows(null, F({ tab: "in_transit" }))).rows.map((r) => r.customer.name).sort()).toEqual(["Xylo Traders", "Yarn House"]);
+    // a customer's own list never carries another customer's rows
+    expect((await V.listOrderRows("org_x", F())).rows.every((r) => r.customer.id === "org_x")).toBe(true);
+  });
+});
+
+describe("Track / COD dialog data", () => {
+  it("customers only see their own shipment; Admin sees any", async () => {
+    const D = await import("./detail-views");
+    expect(await D.shipmentTimeline("s_y1", "org_x", { customerSafe: true })).toBeNull();
+    expect((await D.shipmentTimeline("s_y1", "org_y", { customerSafe: true }))?.awb).toBe("AWBy1");
+    expect((await D.shipmentTimeline("s_y1", null, { customerSafe: false }))?.awb).toBe("AWBy1");
+    expect(await D.codHistory("y1", "org_x")).toBeNull();
+    expect((await D.codHistory("y1", null))?.orderNumber).toBe("VS-y1");
+  });
 });
