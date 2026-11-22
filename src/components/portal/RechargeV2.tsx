@@ -22,6 +22,9 @@ export interface RechargeProps {
   online: { minPaise: number; maxPaise: number };
   manual: null | { upiId: string; payeeName: string; hasQr: boolean; instructions: string; discountBps: number; minPaise: number; maxPaise: number; reviewMessage: string };
   autoFocus?: boolean;
+  /** Pre-filled amount (₹) and where to continue after a successful payment (e.g. the store deposit). */
+  initialAmount?: string;
+  next?: { href: string; label: string };
 }
 
 const loadScript = (src: string, ok: () => boolean) => new Promise<void>((res, rej) => {
@@ -37,7 +40,7 @@ type Step = "form" | "manual-pay" | "manual-submit" | "manual-done" | "online-re
 
 export function RechargeV2(p: RechargeProps) {
   const router = useRouter();
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState(p.initialAmount ?? "1000");
   type Method = "razorpay" | "cashfree" | "demo" | "manual";
   const [method, setMethod] = useState<Method>(p.gateways[0] ?? (p.demo ? "demo" : "manual"));
   const [step, setStep] = useState<Step>("form");
@@ -154,6 +157,7 @@ export function RechargeV2(p: RechargeProps) {
         <div className={`rc-result ${ok ? "ok" : st === "payment_pending" ? "wait" : "bad"}`}>
           <h2>{head}</h2>
           <p>{body}</p>
+          {ok && p.next && <p><Link className="btn btn-orange" href={p.next.href}>{p.next.label}</Link></p>}
           <dl className="kv-list">
             <dt>Status</dt><dd>{receipt.statusLabel}</dd>
             <dt>Amount</dt><dd>{formatINR(receipt.creditPaise)}</dd>

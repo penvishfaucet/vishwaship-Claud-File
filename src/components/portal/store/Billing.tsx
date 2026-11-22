@@ -76,8 +76,8 @@ export function TermsAccept({ terms, version, accepted, capRupees }: { terms: st
       <pre className="small" style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", background: "var(--gray-soft)", borderRadius: 10, padding: 12, maxHeight: 260, overflow: "auto", margin: 0 }}>{terms}</pre>
       <p className="tiny muted" style={{ margin: "4px 0 10px" }}>Terms version {version}{accepted ? " · you accepted this version" : ""}</p>
       <div className="field" style={{ maxWidth: 320 }}><label htmlFor="cap">Monthly ad spend limit (₹)</label>
-        <input id="cap" className="input" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value.replace(/\D/g, ""))} placeholder="e.g. 15000" required />
-        <span className="small muted">We will never ask you to approve a plan above this. Meta charges this to your ad account, not your wallet.</span></div>
+        <input id="cap" className="input" inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value.replace(/\D/g, ""))} placeholder="e.g. 30000" required />
+        <span className="small muted">Minimum ₹30,000 a month (₹1,000 a day). We never ask you to approve a plan above this. Meta / Google charge this to your own ad account, not your wallet.</span></div>
       <label className="row" style={{ gap: 8, marginTop: 10 }}><input type="checkbox" checked={ok} onChange={(e) => setOk(e.target.checked)} /> I have read and accept these terms</label>
       <Msg m={msg} />
       <button className="btn btn-orange" style={{ marginTop: 10 }} disabled={!ok || busy || !cap}>{busy ? "Saving…" : accepted ? "Update limit / accept again" : "Accept terms"}</button>
@@ -114,7 +114,12 @@ export function DepositPay({ amountPaise, walletPaise, ready }: { amountPaise: n
   return (
     <div>
       <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} disabled={!ready} /> Hold {rupees(amountPaise)} from my wallet as a refundable security deposit</label>
-      {walletPaise < amountPaise && <p className="small red" style={{ margin: "6px 0 0" }}>Wallet balance is {rupees(walletPaise)}. <a className="orange" href="/portal/billing/recharges/">Recharge</a> first.</p>}
+      {walletPaise < amountPaise && (
+        <div style={{ margin: "8px 0 0" }}>
+          <p className="small" style={{ margin: 0 }}>Wallet balance is {rupees(walletPaise)}. Add {rupees(amountPaise - walletPaise)} with Razorpay (UPI, card or net banking), then pay the deposit here.</p>
+          <a className="btn btn-orange btn-sm" style={{ marginTop: 6 }} href={`/portal/billing/recharges/?amount=${Math.ceil((amountPaise - walletPaise) / 100)}&next=deposit`}>Pay {rupees(Math.ceil((amountPaise - walletPaise) / 100) * 100)} with Razorpay</a>
+        </div>
+      )}
       {!ready && <p className="small muted" style={{ margin: "6px 0 0" }}>Accept the terms first.</p>}
       <Msg m={msg} />
       <button className="btn btn-orange" style={{ marginTop: 10 }} onClick={pay} disabled={!confirm || !ready || busy || walletPaise < amountPaise}>{busy ? "Paying…" : `Pay ${rupees(amountPaise)} deposit`}</button>

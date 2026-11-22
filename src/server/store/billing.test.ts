@@ -65,6 +65,7 @@ describe("trial and plan state", () => {
   });
 
   it("buying a plan needs balance, charges once per key, and starts after the running trial", async () => {
+    await db.update(schema.storePlans).set({ active: true }).where(eq(schema.storePlans.id, "spl_monthly")); // plans are off by default (Growth Package); Admin can switch one on
     await expect(b.buyPlan(B, merchant, "spl_monthly", "idem-plan-0001")).rejects.toThrow(/Not enough wallet balance/);
     await db.update(schema.wallets).set({ postedPaise: 400_000 }).where(eq(schema.wallets.orgId, A));
     const [store] = await db.select().from(schema.stores).where(eq(schema.stores.id, "st_bl"));
@@ -86,20 +87,22 @@ describe("trial and plan state", () => {
 describe("managed Meta Ads: terms, deposit, refund", () => {
   it("deposit needs the current terms; is held once with its own ledger entry and receipt", async () => {
     await expect(b.payDeposit(A, merchant, "idem-dep-0001")).rejects.toThrow(/Accept the Managed Ads terms/);
-    await expect(b.acceptTerms(A, merchant, 99, 20000)).rejects.toThrow(/updated/);
-    await expect(b.acceptTerms(A, merchant, 1, 50)).rejects.toThrow(/limit/);
-    await b.acceptTerms(A, merchant, 1, 20000);
+    await expect(b.acceptTerms(A, merchant, 99, 30000)).rejects.toThrow(/updated/);
+    await expect(b.acceptTerms(A, merchant, 2, 20000)).rejects.toThrow(/at least ₹30,000/); // ₹1,000 a day minimum
+    await b.acceptTerms(A, merchant, 2, 30000);
     await db.update(schema.wallets).set({ postedPaise: 600_000 }).where(eq(schema.wallets.orgId, A));
     const r = await b.payDeposit(A, merchant, "idem-dep-0002");
     expect(r.dep.status).toBe("held");
-    expect(r.dep.amountPaise).toBe(500_000);
+    expect(r.dep.amountPaise).toBe(294_882); // Rs 2,499 + GST
+    const [st] = await db.select().from(schema.stores).where(eq(schema.stores.id, "st_bl"));
+    expect(st.paidUntil!.getTime()).toBe(b.DEPOSIT_OPEN_UNTIL.getTime()); // the deposit keeps the store open
     expect(r.dep.receiptNumber).toMatch(/^VSD-/);
     expect((await b.payDeposit(A, merchant, "idem-dep-0002")).replayed).toBe(true);
     await expect(b.payDeposit(A, merchant, "idem-dep-0003")).rejects.toThrow(/already held/);
-    expect(await walletPaise(A)).toBe(100_000);
+    expect(await walletPaise(A)).toBe(600_000 - 294_882);
     const led = await ledger(A, "store_deposit");
     expect(led.length).toBe(1);
-    expect(led[0].amountPaise).toBe(-500_000);
+    expect(led[0].amountPaise).toBe(-294_882);
   });
 
   it("service starts only from staff with a complete checklist; merchants can't tick staff items", async () => {
@@ -115,7 +118,7 @@ describe("managed Meta Ads: terms, deposit, refund", () => {
 
   it("spend changes need explicit merchant approval, within the monthly limit; tenant-scoped", async () => {
     await expect(b.proposeChange("u_staff", "st_bl", b.ChangeInput.parse({ kind: "new_campaign", campaignName: "Diwali" }))).rejects.toThrow(/budget/);
-    await expect(b.proposeChange("u_staff", "st_bl", b.ChangeInput.parse({ kind: "new_campaign", campaignName: "Diwali", dailyBudgetRupees: 1000 }))).rejects.toThrow(/monthly ad spend limit/);
+    await expect(b.proposeChange("u_staff", "st_bl", b.ChangeInput.parse({ kind: "new_campaign", campaignName: "Diwali", dailyBudgetRupees: 1100 }))).rejects.toThrow(/monthly ad spend limit/);
     const id = await b.proposeChange("u_staff", "st_bl", b.ChangeInput.parse({ kind: "new_campaign", campaignName: "Diwali", dailyBudgetRupees: 500 }));
     await expect(b.staffChangeAction("u_staff", id, "applied")).rejects.toThrow(/merchant-approved/);
     await expect(b.decideChange(B, merchant, id, true, true, "")).rejects.toThrow(/Create your store|not found/);
@@ -134,28 +137,32 @@ describe("managed Meta Ads: terms, deposit, refund", () => {
     const open = await b.proposeChange("u_staff", "st_bl", b.ChangeInput.parse({ kind: "budget_increase", campaignName: "Diwali", dailyBudgetRupees: 600 }));
     await b.setAdsStatus(A, merchant, "ended");
     expect((await b.adChanges("st_bl")).find((r) => r.id === open)!.status).toBe("withdrawn"); // nothing can go live after the end
+    await expect(b.requestDepositRefund(A, merchant, "closing")).rejects.toThrow(/3-month minimum term/);
+    await db.update(schema.storeDeposits).set({ createdAt: new Date(Date.now() - 91 * 86400_000) }).where(eq(schema.storeDeposits.storeId, "st_bl"));
     await b.requestDepositRefund(A, merchant, "closing");
     const dep = (await b.activeDeposit("st_bl"))!;
     expect(dep.status).toBe("refund_requested");
     await expect(b.decideDepositRefund("u_staff", dep.id, false, 0, "")).rejects.toThrow(/Write why/);
-    await expect(b.decideDepositRefund("u_staff", dep.id, true, 400_000, "")).rejects.toThrow(/Explain the deduction/);
-    await expect(b.decideDepositRefund("u_staff", dep.id, true, 600_000, "")).rejects.toThrow(/between/);
+    await expect(b.decideDepositRefund("u_staff", dep.id, true, 200_000, "")).rejects.toThrow(/Explain the deduction/);
+    await expect(b.decideDepositRefund("u_staff", dep.id, true, 300_000, "")).rejects.toThrow(/between/);
     const before = await walletPaise(A);
-    await b.decideDepositRefund("u_staff", dep.id, true, 400_000, "₹1,000 unpaid service dues");
-    await expect(b.decideDepositRefund("u_staff", dep.id, true, 400_000, "again")).rejects.toThrow(/no open refund/);
-    expect(await walletPaise(A)).toBe(before + 400_000);
+    await b.decideDepositRefund("u_staff", dep.id, true, 200_000, "₹948.82 unpaid service dues");
+    const [closed] = await db.select().from(schema.stores).where(eq(schema.stores.id, "st_bl"));
+    expect(closed.paidUntil!.getTime()).toBeLessThanOrEqual(Date.now()); // no deposit: the store stops taking new orders
+    await expect(b.decideDepositRefund("u_staff", dep.id, true, 200_000, "again")).rejects.toThrow(/no open refund/);
+    expect(await walletPaise(A)).toBe(before + 200_000);
     const refunds = await ledger(A, "store_deposit_refund");
     expect(refunds.length).toBe(1);
     const [d] = await db.select().from(schema.storeDeposits).where(eq(schema.storeDeposits.id, dep.id));
-    expect(d).toMatchObject({ status: "refunded", refundPaise: 400_000, decisionNote: "₹1,000 unpaid service dues" });
+    expect(d).toMatchObject({ status: "refunded", refundPaise: 200_000, decisionNote: "₹948.82 unpaid service dues" });
     expect(await b.activeDeposit("st_bl")).toBeNull();
   });
 
   it("terms change bumps the version and is audited", async () => {
     const cfg = await b.saveBillingConfig("u_staff", { trialDays: 15, depositRupees: 5000, terms: `${b.DEFAULT_TERMS}\n6. New rule.`, refundDays: 7, disabledThemes: [] });
-    expect(cfg.termsVersion).toBe(2);
+    expect(cfg.termsVersion).toBe(3);
     const same = await b.saveBillingConfig("u_staff", { trialDays: 20, depositRupees: 5000, terms: cfg.terms, refundDays: 7, disabledThemes: ["minimal"] });
-    expect(same.termsVersion).toBe(2);
+    expect(same.termsVersion).toBe(3);
     const logs = await db.select().from(schema.auditLog).where(eq(schema.auditLog.action, "store.billing_config"));
     expect(logs.length).toBe(2);
   });

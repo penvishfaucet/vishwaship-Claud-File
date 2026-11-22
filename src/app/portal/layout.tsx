@@ -16,6 +16,8 @@ import { weightCounts } from "@/server/weight/courier-dispute";
 import { pendingAcceptanceCount } from "@/server/store/ops";
 import { lowStockCount } from "@/server/store/inventory";
 import { readAvatar } from "@/server/portal/avatar";
+import { storeForOrg } from "@/server/store/service";
+import { GrowthRunBar } from "@/components/site/Growth";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,8 @@ export default async function PortalLayout({ children }: { children: React.React
     return n;
   })().catch(() => 0) : 0;
   const navBadges = { "store.dispatch": { n: toPrint, tone: "red" as const, title: `${toPrint} store order(s) waiting for a label` }, "store.inventory": { n: storeLow, tone: "red" as const, title: `${storeLow} store item(s) running low on stock` }, "store.orders": { n: storePending, tone: "red" as const, title: `${storePending} store order(s) waiting for you to accept` }, "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
+  // shipping-only accounts (no online store yet): a running bar promoting the Growth Package
+  const shippingOnly = !(await storeForOrg(ctx.org.id).catch(() => null));
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell
@@ -66,6 +70,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       )}
       {kycPending && !viewingAsAdmin && <KycReminder step={ob.step as "profile" | "kyc" | "review" | "resubmit"} sessionKey={sha256(ctx.session.sessionId).slice(0, 16)} />}
+      {shippingOnly && !viewingAsAdmin && <GrowthRunBar portal href={f.modules.online_store.enabled ? "/portal/store/" : "/online-store/"} />}
       {children}
     </PortalShell>
   );

@@ -726,5 +726,16 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795373650389,
   "hash": "c119e9192b8d4a9721111bf7d88679d8f626c968077f7a3fa560e8f3b9267c62"
+ },
+ {
+  "tag": "0038_store_package",
+  "sql": [
+   "ALTER TABLE \"store_orders\" ADD COLUMN \"fee_via\" text;",
+   "\n-- Growth Package (owner 2026-11-23): no monthly plan; a refundable Rs 2,499 + GST security deposit opens the store\nUPDATE \"store_plans\" SET \"active\" = false, \"updated_at\" = now() WHERE \"id\" IN ('spl_monthly', 'spl_yearly');",
+   "\nUPDATE \"pricing_settings\" SET \"value\" = \"value\" || jsonb_build_object('depositPaise', 294882, 'terms', '1. Vishwaship Growth Package: we build and run your online store, make Instagram and Facebook creatives, run Meta and Google ads in your own ad accounts, ship your orders, confirm COD orders on WhatsApp, call buyers on NDR and give you a dedicated account manager and a WhatsApp support group.' || chr(10) || '2. Security deposit: Rs 2,499 + GST (Rs 2,948.82), paid before the service starts. It is refundable and is not spent on ads.' || chr(10) || '3. Minimum term: give us at least 3 months from the deposit date to grow your account. You can ask for the deposit back after 3 months, when you end the service.' || chr(10) || '4. Minimum ad budget: Rs 1,000 per day. You pay it directly to Meta or Google in your own ad account; Vishwaship never takes ad spend.' || chr(10) || '5. Our fee: 1.5% + GST of the order value on DELIVERED orders only. No fee on RTO, cancelled or undelivered orders.' || chr(10) || '6. Prepaid orders: buyers pay into your own Razorpay account. The 1.5% + GST on delivered prepaid orders is taken from your Vishwaship wallet.' || chr(10) || '7. COD orders: Vishwaship deducts the 1.5% + GST from the COD amount and pays you the rest within 5 days of delivery (D+5).' || chr(10) || '8. Shipping is charged per shipment from your Vishwaship wallet at your courier rate.' || chr(10) || '9. No campaign, budget increase or restart goes live without your approval. Pauses and budget cuts can be made at once and are shown in the change history.' || chr(10) || '10. Vishwaship may deduct unpaid Vishwaship dues from the deposit and will explain any deduction in writing.' || chr(10) || '11. Ad results depend on Meta and Google and are not guaranteed.', 'termsVersion', coalesce((\"value\"->>'termsVersion')::int, 1) + 1), \"version\" = \"version\" + 1, \"updated_at\" = now() WHERE \"key\" = 'store_billing';\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795375120940,
+  "hash": "8eb6abc017f46e74d77bb41b79c887570b5bf1b326888f2bb3f1ceb1ac97e165"
  }
 ];

@@ -5,7 +5,7 @@
   --n:#051C46;--n2:#0b2a5e;--n3:#163a78;--o:#FE6519;--o2:#C2410C;--o3:#9A3412;--os:#fff3ec;--ol:#ffd9c4;
   --w:#fff;--ink:#0b1f45;--mut:#55627a;--ln:#e3e7ef;--bg:#f7f8fb;--ok:#15803d;--bad:#b42318;
   --r:16px;--r-sm:12px;--sh:0 1px 2px rgba(5,28,70,.06),0 6px 18px rgba(5,28,70,.07);--sh2:0 2px 6px rgba(5,28,70,.08),0 18px 44px rgba(5,28,70,.14);
-  font-family:Manrope,var(--font-roboto),Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-family:Roboto,var(--font-roboto),system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 .wv :focus-visible{outline:3px solid var(--o);outline-offset:2px}
 .wv h1,.wv h2,.wv h3{font-weight:700}
@@ -279,7 +279,7 @@ a.cc-ch:hover{border-color:var(--o2);box-shadow:var(--sh2)}
 .w-quote .w-slogan .o{color:var(--o)}
 
 /* ---------- precedence over the app-wide brand layer (brand.css uses "html .wv" and some !important) ---------- */
-html body .wv{--o2:#C2410C;--o3:#9A3412;--ink:#0b1f45;--mut:#55627a;--ln:#e3e7ef;--bg:#f7f8fb;font-family:Manrope,var(--font-roboto,Roboto),system-ui,-apple-system,"Segoe UI",sans-serif}
+html body .wv{--o2:#C2410C;--o3:#9A3412;--ink:#0b1f45;--mut:#55627a;--ln:#e3e7ef;--bg:#f7f8fb;font-family:Roboto,var(--font-roboto,Roboto),system-ui,-apple-system,"Segoe UI",sans-serif}
 html body .wv .w-sec.alt{background:var(--bg)}
 html body .wv .w-btn.pri{background:var(--o2)!important;border-color:var(--o2)!important;color:#fff!important;font-size:16px;box-shadow:0 6px 16px rgba(194,65,12,.28)}
 html body .wv .w-btn.pri:hover{background:var(--o3)!important;border-color:var(--o3)!important}

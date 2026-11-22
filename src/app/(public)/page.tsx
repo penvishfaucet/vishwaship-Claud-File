@@ -5,6 +5,8 @@ import { HeroCtas } from "@/components/site/HeroCtas";
 import { BikeRoad } from "@/components/site/BikeRoad";
 import { siteAuth } from "@/server/site/auth";
 import { PartnerCarousel } from "@/components/site/PartnerCarousel";
+import { GrowthHomeTeaser } from "@/components/site/Growth";
+import { GrowthPopup } from "@/components/site/GrowthPopup";
 import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
 import { b2bThresholdGrams, getSiteContent } from "@/server/site/content";
 
@@ -76,6 +78,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
       </div>
 
       <div className="w-strip"><div className="w-wrap"><PartnerCarousel partners={partners} heading={h.partnersHeading} strip /></div></div>
+
+      <section className="w-sec" aria-label="Vishwaship Growth Package" style={{ paddingTop: 40, paddingBottom: 40 }}>
+        <div className="w-wrap"><GrowthHomeTeaser /></div>
+      </section>
+      <GrowthPopup />
 
       <section className="w-sec alt" aria-labelledby="svc-h">
         <div className="w-wrap">

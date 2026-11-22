@@ -1281,6 +1281,8 @@ export const storeOrders = pgTable("store_orders", {
   feePaise: paise("fee_paise"),
   feeGstPaise: paise("fee_gst_paise"),
   feeChargedAt: ts("fee_charged_at"),
+  /** How the fee is collected: "wallet" (prepaid: the money went to the merchant's own gateway) or "cod" (deducted from the COD remittance). */
+  feeVia: text("fee_via"),
   /** Goods that came back (RTO or customer return), counted once: [{index, sellable, damaged, missing}] + who / when. */
   returnInspection: jsonb("return_inspection"),
   returnInspectedAt: ts("return_inspected_at"),

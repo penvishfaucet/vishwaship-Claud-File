@@ -5,6 +5,7 @@ import "@/styles/site-v5.css";
 import { SiteFooterV2, SiteHeaderV2 } from "@/components/site/SiteChromeV2";
 import { MobileTabBar } from "@/components/site/MobileTabBar";
 import { Reveal } from "@/components/site/Reveal";
+import { GrowthRunBar } from "@/components/site/Growth";
 import { DEFAULTS, accountHref } from "@/lib/site-content";
 import { customerLogout, staffLogout } from "@/server/auth/actions";
 import { type SiteAuth, siteAuth } from "@/server/site/auth";
@@ -27,6 +28,7 @@ export default async function PublicLayout({ children }: { children: React.React
   return (
     <div className="vs wv v4 v5">
       <a className="sr-only" href="#main">Skip to content</a>
+      <GrowthRunBar />
       <div className="v4-top">
         <div className="w-wrap in">
           <a className="v5-news" href="/shipping-rate-calculator/"><b>NEW</b><span>Compare B2C parcel and B2B cargo rates together — <u>Check your rates</u></span></a>

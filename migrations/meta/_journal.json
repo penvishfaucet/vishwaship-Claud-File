@@ -267,6 +267,13 @@
       "when": 1795373650389,
       "tag": "0037_store_fee",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795375120940,
+      "tag": "0038_store_package",
+      "breakpoints": true
     }
   ]
 }

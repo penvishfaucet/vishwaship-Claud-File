@@ -34,7 +34,9 @@ const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN", { t
 const dt = (x: Date) => x.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 const amt = (p: number | null | undefined) => (p == null ? "—" : formatINR(p));
 const R = { textAlign: "right" as const };
-type SP = { from?: string; to?: string; recharge?: string; q?: string; type?: string };
+type SP = { from?: string; to?: string; recharge?: string; q?: string; type?: string; amount?: string; next?: string };
+/** Continue links after a recharge: only our own pages. */
+const NEXT: Record<string, string> = { deposit: "/portal/store/managed-ads/" };
 
 export default async function BillingSection({ params, searchParams }: { params: Promise<{ section: string }>; searchParams: Promise<SP> }) {
   const { section } = await params;
@@ -73,7 +75,9 @@ export default async function BillingSection({ params, searchParams }: { params:
             demo={!gws.length && process.env.NODE_ENV !== "production"}
             online={{ minPaise: pay.onlineMinPaise, maxPaise: pay.onlineMaxPaise }}
             manual={pay.manual.enabled && pay.manual.upiId && pay.manual.qrKey ? { upiId: pay.manual.upiId, payeeName: pay.manual.payeeName, hasQr: !!pay.manual.qrKey, instructions: pay.manual.instructions, discountBps: pay.manual.discountBps, minPaise: pay.manual.minPaise, maxPaise: pay.manual.maxPaise, reviewMessage: pay.manual.reviewMessage } : null}
-            autoFocus={!!sp.recharge}
+            autoFocus={!!sp.recharge || !!sp.amount}
+            initialAmount={/^d{1,7}$/.test(sp.amount ?? "") ? sp.amount : undefined}
+            next={sp.next && NEXT[sp.next] ? { href: NEXT[sp.next], label: "Continue to pay the security deposit" } : undefined}
           />
         </div>
       )}

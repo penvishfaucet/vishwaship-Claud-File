@@ -6,7 +6,7 @@ import { CHANGE_KINDS, type ChangeKind, activeDeposit, adChanges, adsChecklist, 
 import { requireStorePage } from "@/server/store/portal";
 import "@/styles/store.css";
 
-export const metadata = { title: "Managed Meta Ads — Vishwaship" };
+export const metadata = { title: "Growth Package — Vishwaship" };
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" }) : "—");
 const STATUS: Record<string, [string, string]> = {
   onboarding: ["c-draft", "Getting ready"], active: ["c-active", "Running"], paused: ["c-draft", "Paused"], ended: ["c-cancelled", "Ended"],
@@ -28,8 +28,8 @@ export default async function ManagedAdsPage() {
   return (
     <>
       <div className="page-h">
-        <div><p className="small muted" style={{ margin: 0 }}><a href="/portal/store/">Online Store</a></p><h1>Managed Meta Ads</h1>
-          <p className="small muted" style={{ margin: "4px 0 0", maxWidth: 760 }}>Vishwaship&apos;s team runs Facebook & Instagram ads for your store in your own Meta ad account. Meta charges ad spend to your ad account; nothing is spent without your approval.</p></div>
+        <div><p className="small muted" style={{ margin: 0 }}><a href="/portal/store/">Online Store</a></p><h1>Growth Package</h1>
+          <p className="small muted" style={{ margin: "4px 0 0", maxWidth: 760 }}>Your store, Meta &amp; Google ads, Instagram &amp; Facebook creatives, shipping, WhatsApp COD confirmation, NDR calling and a dedicated account manager. Refundable security deposit ₹2,499 + GST; our fee is 1.5% + GST on delivered orders only. Ad spend (minimum ₹1,000 a day) is paid by you to Meta / Google directly.</p></div>
         <span className={`chip ${STATUS[status][0]}`}>{STATUS[status][1]}</span>
       </div>
 

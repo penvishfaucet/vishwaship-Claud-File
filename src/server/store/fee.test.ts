@@ -15,14 +15,14 @@ const ORG = "org_fee";
 let n = 0;
 
 /** A store order (₹1,000) with its shipment in the given status. */
-async function order(shipStatus: string, opts: { status?: string; total?: number } = {}) {
+async function order(shipStatus: string, opts: { status?: string; total?: number; cod?: boolean } = {}) {
   n++;
   await db.insert(schema.quotes).values({ id: `q_f${n}`, orgId: ORG, provider: "demo", carrierCode: "demo", serviceName: "S", mode: "B2C", request: {}, priced: {}, totalPaise: 11_800, expiresAt: new Date("2027-01-01") });
   await db.insert(schema.orders).values({ id: `o_f${n}`, orgId: ORG, orderNumber: `F${n}`, mode: "B2C", paymentType: "prepaid", codAmountPaise: 0, declaredValuePaise: 100_000, status: "booked", source: "online_store",
     consignee: { name: "B", mobile: "9876543210", line1: "x", city: "Delhi", state: "DL", pincode: "110001" } });
   await db.insert(schema.shipments).values({ id: `s_f${n}`, orgId: ORG, orderId: `o_f${n}`, providerAccountId: "pa", provider: "demo", carrierCode: "demo", carrierName: "Delhivery", serviceName: "S", awb: `AWBF${n}`,
     bookingStatus: "confirmed", status: shipStatus, quoteId: `q_f${n}`, sellPaise: 11_800, costPaise: 9_000, chargeableWeightGrams: 500 });
-  await db.insert(schema.storeOrders).values({ id: `so_f${n}`, storeId: "st_f", orgId: ORG, number: `VS-F${n}`, checkoutKey: `ck${n}`, buyerToken: `bt${n}`, status: opts.status ?? "placed", paymentMethod: "razorpay", paymentStatus: "paid",
+  await db.insert(schema.storeOrders).values({ id: `so_f${n}`, storeId: "st_f", orgId: ORG, number: `VS-F${n}`, checkoutKey: `ck${n}`, buyerToken: `bt${n}`, status: opts.status ?? "placed", paymentMethod: opts.cod ? "cod" : "razorpay", paymentStatus: opts.cod ? "cod_pending" : "paid",
     buyer: {}, lines: [], subtotalPaise: opts.total ?? 100_000, shippingPaise: 0, discountPaise: 0, taxPaise: 0, totalPaise: opts.total ?? 100_000, shippingOrderId: `o_f${n}` } as never);
   return `so_f${n}`;
 }
@@ -60,5 +60,19 @@ describe("Online Store fee", () => {
     // the in-transit order is charged when it is delivered
     await db.update(schema.shipments).set({ status: "delivered" }).where(eq(schema.shipments.orderId, "o_f4"));
     expect(await fee.sweepStoreFees()).toBe(1);
+  });
+
+  it("COD orders: never from the wallet; the fee comes out of the COD remittance, the same amount again after a cancelled remittance", async () => {
+    const before = await posted();
+    const cod = await order("delivered", { cod: true });
+    expect(await fee.sweepStoreFees()).toBe(0);
+    expect(await posted()).toBe(before);
+    const rates = await fee.feeRates();
+    const first = await fee.codFeesFor(db as never, [`s_f${n}`], rates, true);
+    expect(first).toEqual({ totalPaise: 1_770, gstPaise: 270, orders: 1 });
+    const [o] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, cod));
+    expect(o).toMatchObject({ feeVia: "cod", feePaise: 1_770 });
+    expect((await fee.codFeesFor(db as never, [`s_f${n}`], rates, true)).totalPaise).toBe(1_770); // re-scheduled after a cancel
+    expect((await fee.codFeesFor(db as never, ["s_f1"], rates)).totalPaise).toBe(0); // prepaid order: not part of a remittance
   });
 });

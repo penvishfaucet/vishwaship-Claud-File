@@ -12,6 +12,7 @@ import { apiError } from "@/server/http";
 import { withLedger } from "@/server/ledger/db-store";
 import { credit, debit } from "@/server/ledger/wallet";
 import { getSetting } from "@/server/quotes/service";
+import { codFeesFor, feeRates } from "@/server/store/fee";
 import { newId } from "@/server/util/ids";
 
 const code = z.string().regex(/^[a-z0-9-]{2,40}$/);
@@ -90,11 +91,18 @@ export async function POST(req: Request) {
       const fee = sub ? Math.round((gross * sub.feeBps) / 10_000) : 0;
       const gst = Math.round(fee * 0.18);
       const id = newId("rem");
+      let storeFee = 0;
+      const rates = await feeRates();
       await db.transaction(async (tx) => {
-        await tx.insert(schema.codRemittances).values({ id, orgId: b.orgId, cycleDate: new Date(), expectedPayoutAt: new Date(`${b.payoutDate}T12:00:00+05:30`), grossPaise: gross, deductionsPaise: fee + gst, netPaise: gross - fee - gst, deductionNote: fee ? `Early COD fee ${sub!.feeBps / 100}% + 18% GST` : null, status: "scheduled", earlyCod: !!sub, createdBy: s.userId });
+        // Online Store: 1.5% + GST on delivered COD store orders comes out of this remittance
+        const sf = await codFeesFor(tx, rows.map((r) => r.s.id), rates, true);
+        storeFee = sf.totalPaise;
+        const notes = [fee ? `Early COD fee ${sub!.feeBps / 100}% + 18% GST` : null, sf.orders ? `Online Store fee 1.5% + GST on ${sf.orders} delivered COD order${sf.orders === 1 ? "" : "s"} (₹${(sf.totalPaise / 100).toFixed(2)})` : null].filter(Boolean);
+        const ded = fee + gst + sf.totalPaise;
+        await tx.insert(schema.codRemittances).values({ id, orgId: b.orgId, cycleDate: new Date(), expectedPayoutAt: new Date(`${b.payoutDate}T12:00:00+05:30`), grossPaise: gross, deductionsPaise: ded, netPaise: gross - ded, deductionNote: notes.length ? notes.join(" · ") : null, status: "scheduled", earlyCod: !!sub, createdBy: s.userId });
         await tx.insert(schema.codRemittanceItems).values(rows.map((r) => ({ remittanceId: id, shipmentId: r.s.id, codPaise: r.o.codAmountPaise })));
       });
-      return done(`Remittance scheduled: ${rows.length} shipments, net ₹${((gross - fee - gst) / 100).toFixed(2)}`, { id, shipments: rows.length, gross, fee, gst }, b.orgId);
+      return done(`Remittance scheduled: ${rows.length} shipments, net ₹${((gross - fee - gst - storeFee) / 100).toFixed(2)}`, { id, shipments: rows.length, gross, fee, gst, storeFee }, b.orgId);
     }
     case "remittance_paid": {
       const u = await db.update(schema.codRemittances).set({ status: "paid", reference: b.reference, paidAt: new Date() }).where(and(eq(schema.codRemittances.id, b.id), eq(schema.codRemittances.status, "scheduled"))).returning();

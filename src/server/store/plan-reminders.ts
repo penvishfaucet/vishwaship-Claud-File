@@ -30,8 +30,8 @@ export async function sweepPlanReminders(now = new Date()) {
     await saveOrgSetting(s.orgId, KEY, { sent: [...prev, mark].slice(-12) });
     const what = st.state === "trial" || (ended && !s.paidUntil) ? "free trial" : "plan";
     const title = ended
-      ? `Your Online Store ${what} has ended: buyers now see "store unavailable". Renew to reopen at once.`
-      : `Your Online Store ${what} ends on ${day(st.until)} (${st.daysLeft} day${st.daysLeft === 1 ? "" : "s"} left). Renew to keep the store open.`;
+      ? `Your Online Store ${what} has ended: buyers now see "store unavailable". Pay the refundable security deposit to reopen at once.`
+      : `Your Online Store ${what} ends on ${day(st.until)} (${st.daysLeft} day${st.daysLeft === 1 ? "" : "s"} left). Pay the refundable security deposit (₹2,499 + GST) to keep it open.`;
     await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: s.orgId, kind: "billing", title: title.slice(0, 200), href: "/portal/store/plan/" });
     const [u] = await db.select({ name: schema.users.name, email: schema.users.email }).from(schema.users).where(and(eq(schema.users.orgId, s.orgId), eq(schema.users.kind, "customer"))).orderBy(asc(schema.users.createdAt)).limit(1);
     if (u?.email) {

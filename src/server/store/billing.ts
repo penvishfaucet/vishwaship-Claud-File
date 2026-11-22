@@ -43,13 +43,26 @@ export type BillingConfig = {
   disabledThemes: string[];
 };
 export const DEFAULT_TERMS = [
-  "1. Vishwaship staff plan and run ads in your own Meta ad account. Meta charges ad spend to the payment method in your ad account; Vishwaship never takes ad spend from your wallet.",
-  "2. No campaign, budget increase or restart goes live without your approval in Online Store → Managed Meta Ads. Pauses and budget cuts can be made at once and are shown in the change history.",
-  "3. A refundable security deposit is held from your Vishwaship wallet before the service starts. It is not a fee and is not spent on ads.",
-  "4. You can end the service at any time and ask for the deposit back. Vishwaship may deduct unpaid Vishwaship service dues from it and will explain any deduction in writing.",
-  "5. Ad results depend on Meta and are not guaranteed.",
+  "1. Vishwaship Growth Package: we build and run your online store, make Instagram and Facebook creatives, run Meta and Google ads in your own ad accounts, ship your orders, confirm COD orders on WhatsApp, call buyers on NDR and give you a dedicated account manager and a WhatsApp support group.",
+  "2. Security deposit: Rs 2,499 + GST (Rs 2,948.82), paid before the service starts. It is refundable and is not spent on ads.",
+  "3. Minimum term: give us at least 3 months from the deposit date to grow your account. You can ask for the deposit back after 3 months, when you end the service.",
+  "4. Minimum ad budget: Rs 1,000 per day. You pay it directly to Meta or Google in your own ad account; Vishwaship never takes ad spend.",
+  "5. Our fee: 1.5% + GST of the order value on DELIVERED orders only. No fee on RTO, cancelled or undelivered orders.",
+  "6. Prepaid orders: buyers pay into your own Razorpay account. The 1.5% + GST on delivered prepaid orders is taken from your Vishwaship wallet.",
+  "7. COD orders: Vishwaship deducts the 1.5% + GST from the COD amount and pays you the rest within 5 days of delivery (D+5).",
+  "8. Shipping is charged per shipment from your Vishwaship wallet at your courier rate.",
+  "9. No campaign, budget increase or restart goes live without your approval. Pauses and budget cuts can be made at once and are shown in the change history.",
+  "10. Vishwaship may deduct unpaid Vishwaship dues from the deposit and will explain any deduction in writing.",
+  "11. Ad results depend on Meta and Google and are not guaranteed.",
 ].join("\n");
-export const BILLING_DEFAULTS: BillingConfig = { trialDays: 15, depositPaise: 500_000, terms: DEFAULT_TERMS, termsVersion: 1, refundDays: 7, disabledThemes: [] };
+/** Growth Package: the deposit keeps the store open (no monthly plan) until it is refunded or forfeited. */
+export const DEPOSIT_OPEN_UNTIL = new Date("2099-12-31T18:29:59Z");
+/** Minimum term before the deposit can be asked back (owner rule: 3 months to grow the account). */
+export const MIN_TERM_DAYS = 90;
+/** Minimum ad budget the merchant runs in their own Meta / Google account (₹1,000 a day). */
+export const MIN_DAILY_AD_RUPEES = 1000;
+
+export const BILLING_DEFAULTS: BillingConfig = { trialDays: 15, depositPaise: 294_882, terms: DEFAULT_TERMS, termsVersion: 2, refundDays: 7, disabledThemes: [] };
 const CONFIG_KEY = "store_billing";
 
 export async function billingConfig(): Promise<BillingConfig> {
@@ -221,14 +234,14 @@ export async function adsChecklist(s: Store): Promise<AdsCheckItem[]> {
   const plan = planState(s);
   return [
     { key: "store_live", label: "Store is published", ok: s.status === "live", who: "auto", hint: "Publish your store from Store Overview.", href: "/portal/store/" },
-    { key: "plan", label: "Store plan or trial is running", ok: plan.ordersOpen, who: "auto", hint: "Buy a plan in Store Plan.", href: "/portal/store/plan/" },
+    { key: "plan", label: "Store is open (free trial or deposit)", ok: plan.ordersOpen, who: "auto", hint: "Pay the refundable security deposit below to keep your store open.", href: "/portal/store/plan/" },
     { key: "pixel", label: "Meta Pixel connected", ok: mk.meta?.check?.state === "connected", who: "auto", hint: "Add your Pixel ID and access token in Meta & Google, then Save & check.", href: "/portal/store/marketing/" },
     { key: "ad_account", label: "Meta ad account connected", ok: !!conn?.verified?.adAccount, who: "auto", hint: "Connect with Facebook in Meta & Google and pick your ad account.", href: "/portal/store/marketing/" },
     { key: "partner_added", label: "Vishwaship added as a partner on your ad account", ok: !!manual.partner_added, who: "merchant", hint: "Meta Business Settings → Ad accounts → your account → Assign partners → share with Vishwaship's Business ID (your account manager will send it)." },
     { key: "partner_verified", label: "Vishwaship confirmed partner access", ok: !!manual.partner_verified, who: "staff", hint: "Your account manager confirms this after checking access." },
     { key: "payment_method", label: "Payment method added in your Meta ad account", ok: !!manual.payment_method, who: "merchant", hint: "Meta charges ad spend to this card/UPI, not your Vishwaship wallet." },
     { key: "terms", label: "Managed Ads terms accepted", ok: !!m?.termsAcceptedAt && m.termsVersion === cfg.termsVersion, who: "auto", hint: m?.termsAcceptedAt && m.termsVersion !== cfg.termsVersion ? "The terms changed. Please read and accept them again." : "Read and accept the terms below." },
-    { key: "deposit", label: `Security deposit (${rupees(cfg.depositPaise)}) paid`, ok: dep?.status === "held", who: "auto", hint: "Paid from your wallet after accepting the terms." },
+    { key: "deposit", label: `Security deposit (${rupees(cfg.depositPaise)}) paid`, ok: dep?.status === "held", who: "auto", hint: "Paid after accepting the terms — from your wallet, or with Razorpay." },
   ];
 }
 
@@ -250,7 +263,7 @@ export async function acceptTerms(orgId: string, actor: Actor, version: number, 
   const s = await needStore(orgId);
   const cfg = await billingConfig();
   if (version !== cfg.termsVersion) throw new StoreError("The terms were just updated. Please read them again.");
-  if (!Number.isFinite(monthlyCapRupees) || monthlyCapRupees < 1000 || monthlyCapRupees > 10_000_000) throw new StoreError("Monthly ad spend limit must be between ₹1,000 and ₹1,00,00,000");
+  if (!Number.isFinite(monthlyCapRupees) || monthlyCapRupees < MIN_DAILY_AD_RUPEES * 30 || monthlyCapRupees > 10_000_000) throw new StoreError(`Monthly ad budget must be at least ₹${(MIN_DAILY_AD_RUPEES * 30).toLocaleString("en-IN")} (₹${MIN_DAILY_AD_RUPEES.toLocaleString("en-IN")} a day)`);
   const m = await ensureAdsRow(s);
   const db = await getDb();
   await db.update(schema.storeManagedAds).set({ termsVersion: version, termsAcceptedAt: new Date(), termsAcceptedBy: actor.userId, monthlyCapPaise: Math.round(monthlyCapRupees) * 100, updatedAt: new Date() }).where(eq(schema.storeManagedAds.id, m.id));
@@ -292,6 +305,8 @@ export async function payDeposit(orgId: string, actor: Actor, idem: string) {
       const [dep] = await tx.insert(schema.storeDeposits).values({
         id, storeId: s.id, orgId, amountPaise: cfg.depositPaise, status: "held", receiptNumber: receiptNo("VSD"), ledgerEntryId: e.entry.id, idempotencyKey: key, termsVersion: cfg.termsVersion, paidBy: actor.userId,
       }).returning();
+      // the deposit opens the store for as long as it is held (no monthly plan)
+      await tx.update(schema.stores).set({ paidUntil: DEPOSIT_OPEN_UNTIL, updatedAt: new Date() }).where(eq(schema.stores.id, s.id));
       return { dep, replayed: false };
     });
     if (!r.replayed) await audit({ actorUserId: actor.userId, actorKind: actor.kind, orgId, action: "store.deposit_paid", targetType: "store_deposit", targetId: r.dep.id, details: { amountPaise: r.dep.amountPaise, receipt: r.dep.receiptNumber } });
@@ -309,6 +324,8 @@ export async function requestDepositRefund(orgId: string, actor: Actor, reason: 
   if (!dep || dep.status !== "held") throw new StoreError(dep ? "A refund is already requested" : "No deposit is held");
   const m = await managedAdsRow(s.id);
   if (m && m.status === "active") throw new StoreError("End Managed Meta Ads first, then ask for the deposit back");
+  const canFrom = new Date(dep.createdAt.getTime() + MIN_TERM_DAYS * 86400_000);
+  if (canFrom > new Date()) throw new StoreError(`The deposit can be asked back after the 3-month minimum term, from ${canFrom.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric" })}`);
   const db = await getDb();
   await db.update(schema.storeDeposits).set({ status: "refund_requested", refundRequestedAt: new Date(), refundReason: reason.trim().slice(0, 500) || null }).where(and(eq(schema.storeDeposits.id, dep.id), eq(schema.storeDeposits.status, "held")));
   await audit({ actorUserId: actor.userId, actorKind: actor.kind, orgId, action: "store.deposit_refund_request", targetType: "store_deposit", targetId: dep.id });
@@ -341,6 +358,8 @@ export async function decideDepositRefund(staffId: string, depositId: string, ap
       const r = await credit(dbLedgerStore(tx), { walletId: wallet.id, amount: refundPaise, kind: "store_deposit_refund", idempotencyKey: `storedepref:${dep.id}`, refType: "store_deposit", refId: dep.id, memo: `Security deposit refund (${dep.receiptNumber})` });
       ledgerId = r.entry.id;
     }
+    // the deposit is no longer held: the store stops taking new orders (orders already placed keep shipping)
+    await tx.update(schema.stores).set({ paidUntil: new Date(), updatedAt: new Date() }).where(and(eq(schema.stores.id, dep.storeId), eq(schema.stores.paidUntil, DEPOSIT_OPEN_UNTIL)));
     await tx.update(schema.storeDeposits).set({ status: refundPaise > 0 ? "refunded" : "forfeited", refundPaise, refundLedgerEntryId: ledgerId, decidedBy: staffId, decidedAt: new Date(), decisionNote: n || null }).where(eq(schema.storeDeposits.id, dep.id));
   });
   await audit({ actorUserId: staffId, actorKind: "staff", orgId: dep.orgId, action: "store.deposit_refund_approve", targetType: "store_deposit", targetId: dep.id, details: { refundPaise, deductedPaise: dep.amountPaise - refundPaise, note: n || undefined } });
