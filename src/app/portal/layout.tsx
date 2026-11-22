@@ -37,7 +37,13 @@ export default async function PortalLayout({ children }: { children: React.React
   const wc = await weightCounts(ctx.org.id).catch(() => ({ open: 0, disputed: 0 }));
   const storePending = f.modules.online_store.enabled ? await pendingAcceptanceCount(ctx.org.id).catch(() => 0) : 0;
   const storeLow = f.modules.online_store.enabled ? await lowStockCount(ctx.org.id) : 0;
-  const navBadges = { "store.inventory": { n: storeLow, tone: "red" as const, title: `${storeLow} store item(s) running low on stock` }, "store.orders": { n: storePending, tone: "red" as const, title: `${storePending} store order(s) waiting for you to accept` }, "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
+  const toPrint = f.modules.online_store.enabled ? await (async () => {
+    const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.storeOrders).where(sql`${schema.storeOrders.orgId} = ${ctx.org.id} and ${schema.storeOrders.status} = 'placed' and ${schema.storeOrders.acceptance} = 'accepted' and ${schema.storeOrders.stockState} <> 'deducted'
+      and not exists (select 1 from shipments s where s.order_id = ${schema.storeOrders.shippingOrderId} and s.booking_status not in ('cancelled', 'failed') and s.status not in ('booked', 'pickup_pending', 'cancelled'))
+      and (${schema.storeOrders.labelPrintedAt} is null or not exists (select 1 from shipments s where s.order_id = ${schema.storeOrders.shippingOrderId} and s.booking_status not in ('cancelled', 'failed') and s.status <> 'cancelled'))`);
+    return n;
+  })().catch(() => 0) : 0;
+  const navBadges = { "store.dispatch": { n: toPrint, tone: "red" as const, title: `${toPrint} store order(s) waiting for a label` }, "store.inventory": { n: storeLow, tone: "red" as const, title: `${storeLow} store item(s) running low on stock` }, "store.orders": { n: storePending, tone: "red" as const, title: `${storePending} store order(s) waiting for you to accept` }, "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell

@@ -1,3 +1,6 @@
+import { ProcessSummaryCard } from "@/components/portal/store/ProcessSummaryCard";
+import { hasFeature } from "@/server/features";
+import { storeForOrg } from "@/server/store/service";
 import { CopyBtn } from "@/components/portal/orders/ui";
 import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
@@ -42,6 +45,7 @@ const dt = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata"
 export default async function Dashboard({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
+  const hasStore = (await hasFeature(ctx.org.id, "online_store")) && !!(await storeForOrg(ctx.org.id));
   const r = dashRange(sp);
   const tab = sp.tab === "status" ? "status" : "analytics";
   const rq = `from=${r.fromStr}&to=${r.toStr}`;
@@ -78,6 +82,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <Link href="/portal/billing/notification-credits/" className="dm-card"><IcoCoin size={56} /><b>{ctx.credits.toLocaleString("en-IN")}</b><span>Notification Credits</span></Link>
         </div>
       </div>
+      {hasStore && <div className="dash-m"><ProcessSummaryCard orgId={ctx.org.id} /></div>}
       {/* desktop only — on phones Analytics follows the balance cards directly (owner request 2026-11-19) */}
       <div className="dash-desk">
         {announcement && <p className="note small mb12">{announcement}</p>}
@@ -92,12 +97,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <Suspense fallback={<span className="small muted">{r.fromStr} to {r.toStr}</span>}><DateRangePicker from={r.fromStr} to={r.toStr} /></Suspense>
       </div>
 
-      {tab === "analytics" ? <Analytics orgId={ctx.org.id} walletId={ctx.walletId} counts={counts} href={href} r={r} rq={rq} /> : <OrderStatus orgId={ctx.org.id} counts={counts} stage={isBucket(sp.stage) ? sp.stage : "new"} r={r} rq={rq} />}
+      {tab === "analytics" ? <Analytics orgId={ctx.org.id} hasStore={hasStore} walletId={ctx.walletId} counts={counts} href={href} r={r} rq={rq} /> : <OrderStatus orgId={ctx.org.id} counts={counts} stage={isBucket(sp.stage) ? sp.stage : "new"} r={r} rq={rq} />}
     </>
   );
 }
 
-async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: string; walletId: string | null; counts: Record<BucketKey, number>; href: (b: BucketKey) => string; r: ReturnType<typeof dashRange>; rq: string }) {
+async function Analytics({ orgId, hasStore, walletId, counts, href, r, rq }: { orgId: string; hasStore: boolean; walletId: string | null; counts: Record<BucketKey, number>; href: (b: BucketKey) => string; r: ReturnType<typeof dashRange>; rq: string }) {
   const db = await getDb();
   const txns = walletId ? await db.select().from(schema.ledgerEntries).where(and(eq(schema.ledgerEntries.walletId, walletId), gte(schema.ledgerEntries.createdAt, r.from), lte(schema.ledgerEntries.createdAt, r.to))).orderBy(desc(schema.ledgerEntries.createdAt)).limit(7) : [];
   const recent = await listOrders(orgId, { from: r.fromStr, to: r.toStr, pageSize: 8 });
@@ -119,6 +124,8 @@ async function Analytics({ orgId, walletId, counts, href, r, rq }: { orgId: stri
         ))}
       </section>
 
+      {/* desktop: store dispatch work below the analytics icons, above Wallet Transactions (owner request) */}
+      {hasStore && <div className="dash-desk"><ProcessSummaryCard orgId={orgId} /></div>}
       <div className="dash-panels mb16 dash-desk">
         <section className="card p0" aria-labelledby="wt-h">
           <div className="row between card-h"><h2 id="wt-h" className="b" style={{ fontSize: 16, margin: 0 }}>Wallet Transactions</h2><Link className="btn btn-sm btn-soft" href={`/portal/billing/passbook/?${rq}`}>View All</Link></div>

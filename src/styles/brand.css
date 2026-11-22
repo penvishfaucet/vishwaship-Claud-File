@@ -246,3 +246,10 @@ html.dark .shell :is(a.link,.link){color:#7fb0ff}
 .shell .m-brand .logo-dark{display:none}
 html.dark .shell .m-brand .logo-dark{display:inline}
 html.dark .shell .m-brand .logo-light{display:none}
+/* mobile bottom bar with Process Orders in the middle */
+.bnav.bnav5{grid-template-columns:repeat(5,1fr)}
+.bnav a .bi{position:relative}
+.bnav a .bi i{position:absolute;top:-4px;right:2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#dc2626;color:#fff;font-size:10px;font-style:normal;font-weight:700;display:grid;place-items:center;line-height:1}
+.bnav a.bnav-c .bi{width:52px;height:52px;border-radius:50%;margin-top:-22px;background:#C94A0A!important;color:#fff;box-shadow:0 6px 16px rgba(201,74,10,.4);border:3px solid #051C46}
+.bnav a.bnav-c .bi svg{color:#fff!important}
+.bnav.bnav5 a .bi:not(.bnav-c .bi){width:44px}

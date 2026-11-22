@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
-  MessageCircleMore, Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, PlusCircle, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
+  MessageCircleMore, Bell, ChevronDown, Clock, CornerUpLeft, Home, LayoutGrid, Lock, Menu, Package, Phone, Pin, PinOff, Plus, PlusCircle, Printer, RefreshCw, Search, ShieldCheck, Ticket, Wallet, X, Zap, Calculator, Truck, MapPin, LifeBuoy,
 } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
@@ -230,15 +230,22 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
         <div className="content has-bnav" id="main">{children}</div>
         <button type="button" className="qa-fab" aria-label="Quick Actions" aria-haspopup="dialog" aria-expanded={sheet} onClick={() => setSheet(true)}><Zap size={26} aria-hidden /></button>
         {sheet && <QaSheet items={qa} onClose={() => setSheet(false)} />}
-        <nav className="bnav" aria-label="Quick navigation">
+        <nav className={`bnav${modules.online_store?.enabled ? " bnav5" : ""}`} aria-label="Quick navigation">
           {[
             { href: "/portal/", label: "Home", icon: Home },
             { href: "/portal/orders/", label: "Orders", icon: Package },
+            // Online Store accounts get Process Orders in the middle (owner request)
+            ...(modules.online_store?.enabled ? [{ href: "/portal/store/dispatch/", label: "Process", icon: Printer, center: true }] : []),
             { href: "/portal/ndr/", label: "NDR", icon: CornerUpLeft },
             { href: "/portal/more/", label: "More", icon: LayoutGrid },
-          ].map((n) => (
-            <Link key={n.href} href={n.href} className={matches(n.href) && (n.href !== "/portal/" || path.length <= 8) ? "on" : ""} aria-current={matches(n.href) ? "page" : undefined}><span className="bi"><n.icon size={20} /></span>{n.label}</Link>
-          ))}
+          ].map((n) => {
+            const b = n.href === "/portal/store/dispatch/" ? navBadges?.["store.dispatch"] : undefined;
+            return (
+              <Link key={n.href} href={n.href} className={`${matches(n.href) && (n.href !== "/portal/" || path.length <= 8) ? "on" : ""}${"center" in n ? " bnav-c" : ""}`} aria-current={matches(n.href) ? "page" : undefined}>
+                <span className="bi"><n.icon size={20} />{b && b.n > 0 && <i aria-label={b.title}>{b.n > 99 ? "99+" : b.n}</i>}</span>{n.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </div>
