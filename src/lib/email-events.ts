@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled" | "store_plan_reminder";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -115,6 +115,17 @@ Please review and confirm.
 Regards,
 Team Vishwaship`,
     defaults: { enabled: true, toClient: false, toRecipient: false } },
+  { key: "store_plan_reminder", label: "Online Store: plan / trial ending or ended (to the merchant)", audience: "shipment", button: "Renew store plan",
+    placeholders: ["customer_name", "store_name", "message", "tracking_link"],
+    subject: "{{store_name}}: Online Store plan reminder",
+    body: `Hello {{customer_name}},
+
+{{message}}
+
+Your dashboard, orders, labels, refunds, RTO, COD, inventory and reports keep working either way. Renewing reopens the same store, products and design.
+
+Team Vishwaship`,
+    defaults: { enabled: true, toClient: true, toRecipient: false } },
   { key: "store_order_cancelled", label: "Online Store: order cancelled by the seller (to the buyer)", audience: "shipment", button: "Track order",
     placeholders: ["customer_name", "order_id", "store_name", "reason", "refund_line", "tracking_link"],
     subject: "Your order {{order_id}} from {{store_name}} was cancelled",

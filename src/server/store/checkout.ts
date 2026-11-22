@@ -68,12 +68,18 @@ export function assertOrdersOpen(s: Store) {
   if (!planState(s).ordersOpen) throw new CheckoutError(ORDERS_PAUSED_TEXT);
 }
 
-export async function liveStore(slug: string): Promise<Store> {
+/**
+ * A published store, for the public store APIs. While its trial / plan is over the store is unavailable to buyers:
+ * every API refuses, except finishing an order that already exists (paying for it, or the retry of a placed order).
+ */
+export async function liveStore(slug: string, opts: { allowExpired?: boolean } = {}): Promise<Store> {
   const db = await getDb();
   const [s] = await db.select().from(schema.stores).where(eq(schema.stores.slug, slug));
   if (!s || s.status !== "live") throw new CheckoutError("This store is not taking orders right now");
+  if (!opts.allowExpired && planState(s).state === "expired") throw new CheckoutError(STORE_UNAVAILABLE_TEXT);
   return s;
 }
+export const STORE_UNAVAILABLE_TEXT = "This store is not available right now.";
 
 /** Price a cart from the database (used for the checkout summary and again when placing the order). */
 export async function quoteCart(store: Store, lines: CheckoutInput["lines"], couponCode: string, method?: PayMethod, q?: Db | Tx): Promise<Quote> {
@@ -151,7 +157,7 @@ const SESSION_REUSE_MS: Record<GatewayKey, number> = { cashfree: 25 * 60_000, ph
 
 /** Create the order (idempotent per checkoutKey). COD orders are placed at once; online orders wait for payment. */
 export async function placeOrder(slug: string, input: CheckoutInput): Promise<PlaceResult> {
-  const store = await liveStore(slug);
+  const store = await liveStore(slug, { allowExpired: true });
   const db = await getDb();
   const [existing] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.storeId, store.id), eq(schema.storeOrders.checkoutKey, input.checkoutKey)));
   if (existing) return resume(store, existing);
@@ -240,7 +246,7 @@ export async function applyPayment(orgId: string, p: RzPayment, _source: "checko
 
 /** Browser callback after Razorpay checkout. */
 export async function confirmCheckoutPayment(slug: string, a: { orderId: string; token: string; rzOrderId: string; paymentId: string; signature: string }) {
-  const store = await liveStore(slug);
+  const store = await liveStore(slug, { allowExpired: true });
   const db = await getDb();
   const [o] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.id, a.orderId), eq(schema.storeOrders.storeId, store.id)));
   if (!o || o.buyerToken !== a.token || o.razorpayOrderId !== a.rzOrderId) throw new CheckoutError("Order not found");

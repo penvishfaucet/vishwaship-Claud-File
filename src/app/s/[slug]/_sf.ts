@@ -1,7 +1,7 @@
 import "server-only";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { storeByHost } from "@/server/store/domains";
@@ -15,7 +15,14 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 export const keepQs = (sf: Storefront) => (sf.demo ? `theme=${sf.themeKey}` : sf.preview ? "preview=1" : "");
 
 /** "~d" is the internal slug custom-domain requests are rewritten to (next.config.ts); the store comes from the Host. */
-export async function resolveSf(params: SfParams, searchParams?: SfSearch): Promise<Storefront> {
+export async function resolveSf(params: SfParams, searchParams?: SfSearch, opts: { allowUnavailable?: boolean } = {}): Promise<Storefront> {
+  const sf = await resolveAny(params, searchParams);
+  // trial / plan over: every buyer page (custom domain or hosted link) shows the neutral "unavailable" page instead
+  if (sf.unavailable && !opts.allowUnavailable) redirect(`${sf.base}/unavailable/`);
+  return sf;
+}
+
+async function resolveAny(params: SfParams, searchParams?: SfSearch): Promise<Storefront> {
   const { slug } = await params;
   const sp = searchParams ? await searchParams : {};
   if (slug === "~d" || slug === "%7Ed") {

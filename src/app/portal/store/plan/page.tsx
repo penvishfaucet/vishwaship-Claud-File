@@ -20,8 +20,8 @@ export default async function StorePlanPage() {
         {st.state === "trial" && <><span className="chip c-draft">Free trial</span> <b>{st.daysLeft} {st.daysLeft === 1 ? "day" : "days"} left</b>{st.until && <span className="small muted"> · ends {day(st.until)}</span>}
           <p className="small muted" style={{ margin: "6px 0 0" }}>Your {cfg.trialDays}-day trial includes everything. After it ends your store stays visible, but new orders pause until you choose a plan. Orders already placed keep shipping.</p></>}
         {st.state === "active" && <><span className="chip c-active">Active</span> <b>Paid till {day(st.until!)}</b><span className="small muted"> · {st.daysLeft} days left</span></>}
-        {st.state === "expired" && <><span className="chip c-cancelled">Orders paused</span> <b>Your {store.paidUntil ? "plan" : "free trial"} ended on {day(st.until!)}</b>
-          <p className="small" style={{ margin: "6px 0 0" }}>Buyers can still see your store, but they can&apos;t place new orders. Choose a plan below to reopen at once.</p></>}
+        {st.state === "expired" && <><span className="chip c-cancelled">Store unavailable to buyers</span> <b>Your {store.paidUntil ? "plan" : "free trial"} ended on {day(st.until!)}</b>
+          <p className="small" style={{ margin: "6px 0 0" }}>Buyers now see a &ldquo;store unavailable&rdquo; page and cannot order. Your dashboard, orders, labels, refunds, RTO, COD, inventory and reports keep working. Choose a plan below: the same store, products and design reopen at once.</p></>}
       </div>
       {plans.length ? <BuyPlan plans={plans.map((p) => ({ id: p.id, name: p.name, interval: p.interval, pricePaise: p.pricePaise }))} walletPaise={ctx.walletAvailable} startsLabel={startsLabel} />
         : <p className="small muted">No plans are on sale right now. Please contact support.</p>}

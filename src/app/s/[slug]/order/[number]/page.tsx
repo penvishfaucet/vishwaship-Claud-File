@@ -12,12 +12,12 @@ export const dynamic = "force-dynamic";
 type P = Promise<{ slug: string; number: string }>;
 
 export async function generateMetadata({ params, searchParams }: { params: P; searchParams: SfSearch }) {
-  const m = await sfMeta(await resolveSf(params, searchParams), "/", "Your order");
+  const m = await sfMeta(await resolveSf(params, searchParams, { allowUnavailable: true }), "/", "Your order");
   return { ...m, robots: { index: false, follow: false } };
 }
 
 export default async function OrderConfirmation({ params, searchParams }: { params: P; searchParams: SfSearch }) {
-  const sf = await resolveSf(params, searchParams);
+  const sf = await resolveSf(params, searchParams, { allowUnavailable: true });
   const { number } = await params;
   const sp = await searchParams;
   const t = sp.t;

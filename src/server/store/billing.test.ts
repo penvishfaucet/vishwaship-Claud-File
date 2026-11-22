@@ -55,7 +55,8 @@ describe("trial and plan state", () => {
   });
 
   it("an expired store takes no new orders (quote and place), with the 'reopen soon' message", async () => {
-    const s = await co.liveStore("expired-store");
+    await expect(co.liveStore("expired-store")).rejects.toThrow(/not available right now/); // every public store API
+    const s = await co.liveStore("expired-store", { allowExpired: true }); // finishing an existing order
     expect(() => co.assertOrdersOpen(s)).toThrow(/reopen soon/);
     await expect(co.placeOrder("expired-store", co.CheckoutInput.parse({
       checkoutKey: "ck_expired_0123456789", lines: [{ productId: "p_x", variantId: null, qty: 1 }], paymentMethod: "cod", coupon: "",

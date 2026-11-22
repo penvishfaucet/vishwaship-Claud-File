@@ -6,6 +6,7 @@ import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { StoreBillingAdmin } from "./billing";
+import { StoreOps } from "./ops";
 
 const when = (d: Date | null) => (d ? d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
 
@@ -36,6 +37,7 @@ export default async function AdminStoreDetail({ params, searchParams }: { param
       </div>
       {sp.ok && <p className="note small mb12">{sp.ok}</p>}
       {sp.err && <p className="err-box small mb12" role="alert">{sp.err}</p>}
+      <StoreOps store={s} />
       <div className="grid2" style={{ alignItems: "start" }}>
         <div className="card" style={{ padding: 16 }}>
           <h3 style={{ fontSize: 14, marginBottom: 8 }}>Overview</h3>

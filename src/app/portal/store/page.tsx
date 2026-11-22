@@ -50,7 +50,7 @@ export default async function StoreOverview() {
         <div>
           <h1>{store.name}</h1>
           <p className="small" style={{ margin: "4px 0 0" }}>
-            <span className={`chip ${live ? "c-active" : store.status === "suspended" ? "c-cancelled" : "c-draft"}`}>{live ? "Live" : store.status === "suspended" ? "Paused by Vishwaship" : store.status === "paused" ? "Unpublished" : "Draft — not visible to buyers"}</span>
+            <span className={`chip ${live && plan.state !== "expired" ? "c-active" : store.status === "suspended" || plan.state === "expired" ? "c-cancelled" : "c-draft"}`}>{live ? (plan.state === "expired" ? "Hidden from buyers: plan ended" : "Live") : store.status === "suspended" ? "Paused by Vishwaship" : store.status === "paused" ? "Unpublished" : "Draft — not visible to buyers"}</span>
             {" "}<a href={live ? url : `${url}?preview=1`} target="_blank" rel="noopener" className="orange">{url.replace(/^https?:\/\//, "")} <ExternalLink size={12} aria-hidden /></a>
           </p>
           {store.status === "suspended" && store.suspendedReason && <p className="small red" style={{ margin: "6px 0 0" }}>{store.suspendedReason}</p>}
@@ -60,7 +60,8 @@ export default async function StoreOverview() {
           <a className="btn btn-orange" href="/portal/store/setup/7/">{live ? "Publish changes" : "Launch checklist"}</a>
         </div>
       </div>
-      {plan.state === "expired" && <div className="err-box small mb12" role="alert"><b>New orders are paused.</b> Your {store.paidUntil ? "plan" : "free trial"} has ended. Buyers can still see your store. <a className="orange" href="/portal/store/plan/">Choose a plan</a> to reopen at once.</div>}
+      {plan.state === "expired" && <div className="err-box small mb12" role="alert"><b>Your store is unavailable to buyers.</b> Your {store.paidUntil ? "plan" : "free trial"} has ended, so buyers see a &ldquo;store unavailable&rdquo; page and cannot order. Everything here keeps working. <a className="orange" href="/portal/store/plan/">Renew</a> to reopen the same store at once.</div>}
+      {plan.state === "active" && plan.until && plan.daysLeft <= 7 && <p className="note small mb12"><b>Plan ends on {plan.until.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })}</b> ({plan.daysLeft} day{plan.daysLeft === 1 ? "" : "s"} left). The store stays open until then. <a className="orange" href="/portal/store/plan/">Renew now</a>: the new period starts when the current one ends.</p>}
       {plan.state === "trial" && plan.until && <p className="note small mb12">Free trial: <b>{plan.daysLeft} {plan.daysLeft === 1 ? "day" : "days"} left</b>. <a className="orange" href="/portal/store/plan/">See plans</a></p>}
       <nav className="so-kpis" aria-label="Orders at a glance">
         {kpis.map((c) => <a key={c.k} className={`card so-kpi${c.hot ? " hot" : ""}`} href={c.href}><b>{c.n}</b><span>{c.label}</span></a>)}

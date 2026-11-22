@@ -21,8 +21,10 @@ export type Storefront = {
   settings: StoreSettings; theme: ThemeConfig; themeKey: string;
   categories: SfCategory[]; products: SfProduct[];
   base: string; preview: boolean; demo: boolean; indexable: boolean;
-  /** False when the trial ended and no plan is running: the store stays visible but takes no new orders. */
+  /** False when the trial ended and no plan is running (no new orders). */
   ordersOpen: boolean;
+  /** Trial / plan over: buyers see a neutral "store unavailable" page instead of the store (the owner's preview still works). */
+  unavailable: boolean;
   /** Biggest running sale, for the top bar countdown. */
   sale: { name: string; text: string; endsAt: string } | null;
   /** Coupons the merchant shows as offers on product pages. */
@@ -92,7 +94,8 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     }),
     sale: banner ? { name: banner.name, text: banner.bannerText || `${banner.name}: ${banner.percentOff}% off`, endsAt: banner.endsAt.toISOString() } : null,
     offers,
-    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live", ordersOpen: planState(s).ordersOpen, onlinePay: preview ? false : (await onlineMethods(s.orgId)).length > 0,
+    base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live" && planState(s).state !== "expired", ordersOpen: planState(s).ordersOpen,
+    unavailable: !preview && planState(s).state === "expired", onlinePay: preview ? false : (await onlineMethods(s.orgId)).length > 0,
     tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });
@@ -141,7 +144,7 @@ function demoStore(themeKey?: string): Storefront {
   });
   return {
     id: "demo", name: "Vishwa Crafts", slug: "demo", status: "live", settings, theme, themeKey: key,
-    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true, onlinePay: true,
+    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true, unavailable: false, onlinePay: true,
     sale: { name: "Festive Sale", text: "Festive Sale is on: up to 30% off", endsAt: new Date(Date.now() + 2 * 86400_000 + 5 * 3600_000).toISOString() },
     offers: [{ code: "WELCOME10", text: "10% off on orders above ₹999 (up to ₹200)" }, { code: "FREESHIP", text: "Free shipping" }],
   };
