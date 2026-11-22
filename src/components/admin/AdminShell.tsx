@@ -4,11 +4,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Bell, Menu, Search, X } from "lucide-react";
 import { ADMIN_NAV } from "./nav";
+import { NavBadge, type NavBadgeData } from "@/components/NavBadge";
 import { SidebarBrand } from "@/components/BrandLogo";
 
 type BellData = { items: Array<{ id: string; title: string; href: string | null; createdAt: string; unseen: boolean }>; unseen: number; pendingRecharges: number };
 
-export function AdminShell({ user, allowed, logout, children, bell, markSeen }: { user: { name: string; role: string }; allowed: string[]; logout: () => Promise<void>; children: React.ReactNode; bell?: BellData; markSeen?: () => Promise<void> }) {
+export function AdminShell({ user, allowed, logout, children, bell, markSeen, navBadges }: { user: { name: string; role: string }; allowed: string[]; logout: () => Promise<void>; children: React.ReactNode; bell?: BellData; markSeen?: () => Promise<void>; navBadges?: Record<string, NavBadgeData> }) {
   const [bellOpen, setBellOpen] = useState(false);
   const badge = bell?.unseen ?? 0;
   const path = usePathname();
@@ -38,7 +39,7 @@ export function AdminShell({ user, allowed, logout, children, bell, markSeen }: 
             return (
               <div key={g.group}>
                 <div className="grp">{g.group}</div>
-                {items.map((i) => <Link key={i.href} href={i.href} className={isOn(i.href) ? "item on" : "item"} aria-current={isOn(i.href) ? "page" : undefined} onClick={() => setDrawer(false)}><i.icon aria-hidden />{i.label}</Link>)}
+                {items.map((i) => <Link key={i.href} href={i.href} className={isOn(i.href) ? "item on" : "item"} aria-current={isOn(i.href) ? "page" : undefined} onClick={() => setDrawer(false)}><i.icon aria-hidden />{i.label}<NavBadge b={navBadges?.[i.href]} /></Link>)}
               </div>
             );
           })}

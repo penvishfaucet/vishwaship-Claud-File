@@ -84,6 +84,8 @@ If you believe the courier weight is wrong, raise a dispute with photos of the p
     : fod ? `This is a freight-on-delivery (FoD) shipment: nothing is charged to your Vishwaship wallet. The receiver pays the updated freight at delivery, and the courier informs the receiver. This email is for your information, so you can let your customer know.\n\nIf you believe the courier weight is wrong, raise a dispute with photos of the packed box (on a weighing scale, with dimensions) before ${due} using the button below, and we will take it up with the courier.` : "No extra amount will be debited from your wallet.";
   await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: sh.orgId, kind: "wallet", href: "/portal/tools/weight-discrepancy/",
     title: `Weight increased${sh.awb ? ` on ${sh.awb}` : ""}: ${kgs(sh.chargeableWeightGrams)} → ${kgs(grams)}.${fod && r.receiverExtra > 0 ? ` Receiver pays ${formatINR(recvAfter)} at delivery.` : ""}${r.walletCharge > 0 ? ` ${formatINR(r.walletCharge)} to be debited on ${due} unless disputed.` : ""}` });
+  await db.insert(schema.staffAlerts).values({ id: newId("sal"), kind: "weight_discrepancy", href: "/admin/disputes/", perm: "shipments.read",
+    title: `Weight discrepancy${sh.lrNumber ?? sh.awb ? ` LR ${sh.lrNumber ?? sh.awb}` : ""}: ${kgs(sh.chargeableWeightGrams)} → ${kgs(grams)}${fod ? " (FoD — receiver pays)" : ` · ${formatINR(r.walletCharge)} to client`}`.slice(0, 200) });
   try {
     const { clientEmail } = await import("@/server/client-email");
     const to = await clientEmail(sh.orgId);

@@ -12,6 +12,7 @@ import { getDb, schema } from "@/server/db/client";
 import { KycReminder } from "@/components/portal/KycReminder";
 import { onboardingState } from "@/server/onboarding";
 import { sha256 } from "@/server/security/crypto";
+import { weightCounts } from "@/server/weight/courier-dispute";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const kycPending = ob.step !== "active";
   // reminder in the bell until KYC is approved (not stored: disappears by itself once approved)
   const kycAlert = kycPending ? [{ id: "kyc-reminder", title: ob.step === "review" ? "KYC under review — the best (bulk) rates apply once it is approved" : "Complete KYC to unlock the best (bulk) shipping rates", href: ob.step === "profile" ? "/portal/onboarding/" : "/portal/kyc/", createdAt: new Date().toISOString() }] : [];
+  const wc = await weightCounts(ctx.org.id).catch(() => ({ open: 0, disputed: 0 }));
+  const navBadges = { "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell
@@ -42,6 +45,7 @@ export default async function PortalLayout({ children }: { children: React.React
       modules={modules}
       labels={labels}
       support={support}
+      navBadges={navBadges}
     >
       {viewingAsAdmin && (
         <div className="impersonation-bar" role="status">

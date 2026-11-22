@@ -96,7 +96,7 @@ const mask = (event: EmailEventKey, vars: Record<string, string>) => {
 
 // ------------------------------------------------------------------ send
 
-export type SendArgs = { event: EmailEventKey; to: string; toKind: "client" | "recipient" | "signup" | "test"; vars: Record<string, string>;
+export type SendArgs = { event: EmailEventKey; to: string; toKind: "client" | "recipient" | "signup" | "test" | "courier"; vars: Record<string, string>;
   orgId?: string | null; shipmentId?: string | null; dedupeKey?: string; senderId?: string | null; template?: { subject: string; body: string }; ignoreRule?: boolean };
 
 /**

@@ -240,3 +240,33 @@ describe("FoD dispute outcome", () => {
     expect((await wallet()).postedPaise).toBe(walletBefore);
   });
 });
+
+describe("send dispute to the courier, badges, admin alerts", () => {
+  it("saves the courier addresses, mails the client's dispute, records it; counts for badges", async () => {
+    const cd = await import("./courier-dispute");
+    const { devOutbox } = await import("@/server/email/transport");
+    await shipment("sh9", "LR9009", 30_000);
+    const r = await svc.raiseWeightDiscrepancy({ shipmentId: "sh9", carrierGrams: 41_000, source: "manual" });
+    if (r.status !== "created") throw new Error(r.status);
+    expect((await db.select().from(schema.staffAlerts)).some((a) => /LR LR9009: 30\.00 kg → 41\.00 kg/.test(a.title))).toBe(true);
+    // client disputes
+    const [w] = await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, r.disputeId));
+    await db.update(schema.weightDisputes).set({ status: "disputed", evidence: [...(w.evidence as object[]), { label: "Seller dispute", by: "seller", claimedGrams: 30_000, note: "Box is 34x26x11 cm, 30 kg", urls: ["https://example.com/p1.jpg"] }] }).where(eq(schema.weightDisputes.id, r.disputeId));
+    expect((await cd.weightCounts(ORG)).disputed).toBeGreaterThan(0);
+
+    expect((await cd.sendDisputeToCourier(r.disputeId, STAFF)).ok).toBe(false); // no address saved yet
+    expect((await cd.saveCourierMailSettings({ to: "not-an-email", cc: "" }, STAFF)).ok).toBe(false);
+    expect((await cd.saveCourierMailSettings({ to: "ltl.disputes@delhivery.example, b2b@delhivery.example", cc: "owner@example.com" }, STAFF)).ok).toBe(true);
+    const before = devOutbox.length;
+    const sent = await cd.sendDisputeToCourier(r.disputeId, STAFF);
+    expect(sent).toMatchObject({ ok: true });
+    const mails = devOutbox.slice(0, devOutbox.length - before);
+    expect(mails.map((m) => m.to).sort()).toEqual(["b2b@delhivery.example", "ltl.disputes@delhivery.example", "owner@example.com"]);
+    expect(mails[0].subject).toBe("Weight dispute — LR LR9009");
+    expect(mails[0].text).toMatch(/Revised charged weight \(your re-weigh\): 41\.00 kg/);
+    expect(mails[0].text).toMatch(/Correct weight as per the shipper: 30\.00 kg/);
+    expect(mails[0].text).toMatch(/https:\/\/example\.com\/p1\.jpg/);
+    const [after] = await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, r.disputeId));
+    expect((after.evidence as Array<{ by?: string; to?: string[] }>).some((e) => e.by === "vishwaship" && e.to?.length === 3)).toBe(true);
+  });
+});

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { formatINR } from "@/lib/money";
 import { type ModuleState, flatNav, isNavGroup, visibleNav } from "./nav";
+import { NavBadge, type NavBadgeData } from "@/components/NavBadge";
 import { QuickSearch } from "./QuickSearch";
 import { type QuickAction, quickActions } from "./quick-actions";
 import { BrandLogo, SidebarBrand } from "@/components/BrandLogo";
@@ -24,6 +25,8 @@ interface Props {
   /** CMS labels for sidebar entries (nav.<id>). */
   labels: Record<string, string>;
   support: { label: string; phone: string; hours: string };
+  /** Count pills on sidebar entries, by nav id (e.g. tools.weight). */
+  navBadges?: Record<string, NavBadgeData>;
   children: React.ReactNode;
 }
 
@@ -47,7 +50,7 @@ const ago = (iso: string) => {
   return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 };
 
-export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets, logout, modules, labels, support, children }: Props) {
+export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets, logout, modules, labels, support, navBadges, children }: Props) {
   const path = usePathname();
   const nav = useMemo(() => visibleNav(modules, labels), [modules, labels]);
   const links = useMemo(() => flatNav(nav), [nav]);
@@ -121,12 +124,12 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
           {nav.map((e) => isNavGroup(e) ? (
             <div key={e.id} className={`grp${e.items.some((n) => active(n.href)) ? " has-on" : ""}`}>
               <button type="button" className="item grp-h" aria-expanded={openGroups.has(e.id)} aria-controls={`grp-${e.id}`} title={e.group} onClick={() => toggleGroup(e.id)}>
-                <e.icon aria-hidden /><span className="lbl">{e.group}</span><ChevronDown className="chev" aria-hidden />
+                <e.icon aria-hidden /><span className="lbl">{e.group}</span>{!openGroups.has(e.id) && <NavBadge b={e.items.map((n) => navBadges?.[n.id]).find((b) => b && b.n > 0)} />}<ChevronDown className="chev" aria-hidden />
               </button>
               <div id={`grp-${e.id}`} className="sub" hidden={!openGroups.has(e.id)}>
                 {e.items.map((n) => (
                   <Link key={n.id} href={n.href} className={cls(n.href, (n as Locked).locked)} aria-current={active(n.href) ? "page" : undefined}>
-                    <n.icon aria-hidden /><span className="lbl">{n.label}</span>{(n as Locked).locked && <Lock className="lock" aria-label="Locked, upgrade to use" />}
+                    <n.icon aria-hidden /><span className="lbl">{n.label}</span><NavBadge b={navBadges?.[n.id]} />{(n as Locked).locked && <Lock className="lock" aria-label="Locked, upgrade to use" />}
                   </Link>
                 ))}
               </div>
