@@ -44,7 +44,7 @@ export const SERVICES: ServiceDef[] = [
       "Paste the key below → Save → Test connection → Turn ON.",
       "Then open Email & Sign-in → Sender Emails → Check verification: contact@vishwaship.in should show “verified”.",
       "Optional — read courier weight-discrepancy mails automatically: Resend must receive mail for vishwaship.com (Emails → Receiving).",
-      `Resend → Webhooks → Add webhook → URL ${appUrl()}/api/webhooks/courier-mail → event “email.received” → save, then copy its Signing secret (whsec_…) into the field above. Create a Full-access API key too if the key above is Sending-only.`,
+      `Resend → Webhooks → Add webhook → URL ${appUrl()}/api/webhooks/courier-mail/ (with the last /) → event “email.received” → save, then copy its Signing secret (whsec_…) into the field above. Create a Full-access API key too if the key above is Sending-only.`,
       "In the Gmail that receives the courier mails: Settings → Forwarding → Add a forwarding address → noreply@vishwaship.com. Gmail sends a confirmation code there: it appears in Admin → Weight Disputes → Courier mails received; enter it in Gmail.",
       "Gmail → Create a filter: From noreply@delhivery.com, Has the words “charged weight” → Forward to noreply@vishwaship.com. Done: every such mail now raises the discrepancy and informs the client automatically.",
     ],
