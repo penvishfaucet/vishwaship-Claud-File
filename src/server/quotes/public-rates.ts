@@ -50,7 +50,7 @@ export const EXPECTED_SERVICES = [
   { key: "delhivery_b2b", adapter: "delhivery_b2b", mode: "B2B", name: "Delhivery B2B" },
   { key: "shipmozo_b2c", adapter: "shipmozo", mode: "B2C", name: "Partner network B2C" },
   { key: "shipmozo_b2b", adapter: "shipmozo", mode: "B2B", name: "Partner network B2B" },
-  { key: "shiprocket_b2c", adapter: "shiprocket", mode: "B2C", name: "Shiprocket B2C" },
+  { key: "shiprocket_b2c", adapter: "shiprocket", mode: "B2C", name: "Partner network B2C (2)" },
 ] as const;
 
 export type PublicServiceState = {
@@ -71,7 +71,6 @@ export const serviceKey = (adapter: string, mode: "B2C" | "B2B") =>
 
 export function sourceName(adapter: string, mode: "B2C" | "B2B", config: Record<string, unknown> | null) {
   if (FIXED_MODE[adapter]) return `Delhivery ${FIXED_MODE[adapter]}`;
-  if (adapter === "shiprocket") return `Shiprocket ${mode}`;
   if (adapter === "demo") return `Sample network ${mode}`;
   const code = partnerCodeFor(adapter, config);
   return `Partner network ${mode}${code ? ` · ${code}` : ""}`;

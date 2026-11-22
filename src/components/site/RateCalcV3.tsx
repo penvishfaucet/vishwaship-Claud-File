@@ -219,7 +219,8 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/" }: {
     );
   }
 
-  const groups = (["B2C", "B2B"] as const).map((m) => ({ mode: m, list: offers.filter((o) => o.mode === m) }));
+  // one list across B2C and B2B, cheapest first (owner rule 2026-11-23); each rate carries its B2C / B2B tag
+  const groups = [{ mode: "ALL" as const, list: [...offers].sort((a, b) => a.total - b.total) }];
   const unavailable = services.filter((s) => s.state !== "available");
 
   return (
@@ -325,7 +326,7 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/" }: {
         {phase === "done" && offers.length > 0 && groups.map(({ mode, list }) => list.length > 0 && (
           <section key={mode} className="rc-group" aria-labelledby={`rc-g-${mode}`}>
             <header>
-              <h3 id={`rc-g-${mode}`}><span className={`rc-mode ${mode.toLowerCase()}`}>{mode}</span>{mode === "B2C" ? "Parcel services" : "Cargo services"}</h3>
+              <h3 id={`rc-g-${mode}`}>All courier services</h3>
               <span>{list.length} option{list.length > 1 ? "s" : ""} · lowest price first</span>
             </header>
             <div className="rc-list">
@@ -337,12 +338,12 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/" }: {
                   <article key={o.quoteId} className={`rc-offer${i === 0 ? " best" : ""}`}>
                     <div className="who">
                       <span className="lg">{logo ? <img src={logo} alt="" /> : <span className="ini">{o.carrierName.slice(0, 2).toUpperCase()}</span>}</span>
-                      <span className="nm"><b>{o.carrierName}</b><span>{o.serviceName}</span><span className="src">via {o.source.name}</span></span>
+                      <span className="nm"><b>{o.carrierName} <span className={`rc-mode ${o.mode.toLowerCase()}`}>{o.mode}</span></b><span>{o.serviceName}</span><span className="src">via {o.source.name}</span></span>
                     </div>
                     <ul className="facts">
                       <li><Scale size={15} aria-hidden="true" />{kgText(o.chargeableWeightGrams / 1000)} kg chargeable</li>
                       <li><Clock size={15} aria-hidden="true" />{o.etaDays ? `Est. ${o.etaDays} day${o.etaDays > 1 ? "s" : ""}` : "Transit time on booking"}</li>
-                      {i === 0 && <li className="best">Lowest {mode} price</li>}
+                      {i === 0 && <li className="best">Lowest price</li>}
                       {o.isDemo && <li>Sample rate</li>}
                     </ul>
                     <div className="price">

@@ -220,7 +220,7 @@ export async function POST(req: Request) {
       const rows = r.value.map((q) => {
         const pre = q.components.reduce((t, c) => t + (q.taxInclusive ? Math.round((c.amount * 10000) / (10000 + q.taxRateBps)) : c.amount), 0);
         const withGst = pre + Math.round((pre * q.taxRateBps) / 10000);
-        const courierId = q.providerQuoteRef?.startsWith("shipmozo_api:") ? q.providerQuoteRef.split(":")[1] : null;
+        const courierId = q.providerQuoteRef?.startsWith("shipmozo_api:") || q.providerQuoteRef?.startsWith("shiprocket:") ? q.providerQuoteRef.split(":")[1] : null;
         const key = [courierId, q.serviceName.toLowerCase(), q.carrierName.toLowerCase()].find((k) => k && panel.has(k)) ?? null;
         const panelPaise = key ? Math.round(panel.get(key)! * 100) : null;
         const cmp = b.panelIncludesGst ? withGst : pre;
