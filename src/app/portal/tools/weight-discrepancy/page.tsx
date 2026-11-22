@@ -22,7 +22,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
   const now = new Date();
   return (
     <>
-      <div className="page-h"><div><h1>Weight Discrepancy</h1><p className="small muted" style={{ margin: "4px 0 0" }}>When the courier’s measured weight is higher than what you booked, the extra charge appears here. Dispute it with photos before the deadline. The extra charge is your same rate for the courier’s weight minus what you paid at booking, plus GST; if it is not disputed within 7 days it is debited from your wallet.</p></div></div>
+      <div className="page-h"><div><h1>Weight Discrepancy</h1><p className="small muted" style={{ margin: "4px 0 0" }}>When the courier’s measured weight is higher than what you booked, the extra charge appears here. Dispute it with photos before the deadline. The extra charge is your same rate for the courier’s weight minus what you paid at booking, plus GST; if it is not disputed within 7 days it is debited from your wallet. For FoD (freight on delivery) shipments nothing is charged to you: the receiver pays the higher freight at delivery, and this list is for your information. You also get an email for each one.</p></div></div>
       <nav className="pills mb12" aria-label="Status">
         <Link className={!sp.status ? "pill on" : "pill"} href="/portal/tools/weight-discrepancy/">All {all.length}</Link>
         {Object.entries(STATUS).map(([k, [l]]) => <Link key={k} className={sp.status === k ? "pill on" : "pill"} href={`/portal/tools/weight-discrepancy/?status=${k}`}>{l} {all.filter((r) => r.w.status === k).length}</Link>)}
@@ -35,7 +35,8 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
             const actual = boxes.reduce((t, b) => t + b.actualWeightGrams * b.count, 0);
             const vol = boxes.reduce((t, b) => t + Math.ceil((b.lengthMm * b.breadthMm * b.heightMm) / 1000 / 5000 * 1000) * b.count, 0);
             const ev = w.evidence as Array<{ label: string; url?: string; urls?: string[]; note?: string; by?: string; claimedGrams?: number }>;
-            const [label, chip] = STATUS[w.status] ?? [w.status, "c-draft"];
+            const isFod = !!(w.calc as { fod?: boolean } | null)?.fod;
+            const [label, chip] = isFod && w.chargePaise === 0 ? ["For info (FoD)", "c-draft"] : STATUS[w.status] ?? [w.status, "c-draft"];
             const open = w.status === "open" && w.deadlineAt > now;
             return (
               <tr key={w.id}>
@@ -45,7 +46,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
                 <td className="small">{kg(s.chargeableWeightGrams)}</td>
                 <td className="small b">{kg(w.carrierGrams)}</td>
                 <td className="small">{kg(w.revisedChargeableGrams)}</td>
-                <td className="small b t-debit">{formatINR(w.chargePaise)}{(() => { const c = w.calc as { before?: { total: number }; after?: { total: number } } | null; return c?.before && c.after ? <div className="tiny muted" style={{ fontWeight: 400 }}>{formatINR(c.before.total)} → {formatINR(c.after.total)} incl. GST</div> : null; })()}</td>
+                <td className="small b t-debit">{isFod && w.chargePaise === 0 ? "No charge" : formatINR(w.chargePaise)}{(() => { const c = w.calc as { before?: { total: number }; after?: { total: number }; fod?: boolean; receiverBeforePaise?: number; receiverAfterPaise?: number } | null; if (c?.fod) return <div className="tiny muted" style={{ fontWeight: 400 }}>FoD: receiver pays {formatINR(c.receiverBeforePaise ?? 0)} → {formatINR(c.receiverAfterPaise ?? 0)} at delivery</div>; return c?.before && c.after ? <div className="tiny muted" style={{ fontWeight: 400 }}>{formatINR(c.before.total)} → {formatINR(c.after.total)} incl. GST</div> : null; })()}</td>
                 <td className="tiny">{ev.length ? ev.map((e, i) => <div key={i}>{e.url ? <a className="link" href={e.url} target="_blank" rel="noreferrer">{e.label}</a> : e.label}{e.by === "seller" && e.claimedGrams ? ` (you: ${kg(e.claimedGrams)})` : ""}{e.urls?.map((u, j) => <a key={j} className="link" href={u} target="_blank" rel="noreferrer" style={{ marginLeft: 4 }}>[{j + 1}]</a>)}</div>) : "—"}</td>
                 <td className="small">
                   <span className={`chip ${chip}`}>{label}</span>

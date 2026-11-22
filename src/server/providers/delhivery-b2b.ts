@@ -166,7 +166,7 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     const oda = odaFlag(sj);
     let pending: string | undefined;
 
-    const divisor = Number(ctx.config.volDivisor ?? 5000);
+    const divisor = Number(ctx.config.volDivisor ?? 3375); // Delhivery B2B (LTL): 8 kg per CFT = L×B×H cm ÷ 3375 (matches its re-weigh charges)
     const volG = req.packages.reduce((t, p) => t + Math.ceil(((p.lengthMm / 10) * (p.breadthMm / 10) * (p.heightMm / 10) * 1000) / divisor) * p.count, 0);
     let components: ProviderQuoteComponent[]; let chargeable = Math.max(totalG, volG); let source: string;
 

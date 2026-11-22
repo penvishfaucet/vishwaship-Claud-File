@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -76,6 +76,23 @@ Team Vishwaship`,
   { key: "shipment_rto", label: "Returning to origin (RTO)", audience: "shipment", placeholders: SHIP, status: "rto_initiated", button: "Track Shipment",
     subject: "Return to origin: order {{order_id}}", body: shipBody("Your shipment could not be delivered and is returning to the pickup address."),
     defaults: { enabled: false, toClient: true, toRecipient: false } },
+  { key: "weight_discrepancy", label: "Weight discrepancy (courier weight higher)", audience: "shipment", button: "View details / dispute",
+    placeholders: ["customer_name", "order_id", "awb_number", "courier_name", "booked_weight", "courier_weight", "charge_details", "dispute_by", "tracking_link"],
+    subject: "Weight discrepancy: order {{order_id}} (AWB {{awb_number}})",
+    body: `Hello {{customer_name}},
+
+The courier re-weighed your shipment and its charged weight is higher than the weight it was booked with.
+
+Order ID: {{order_id}}
+AWB number: {{awb_number}}
+Courier partner: {{courier_name}}
+Booked chargeable weight: {{booked_weight}}
+Courier charged weight: {{courier_weight}}
+
+{{charge_details}}
+
+Team Vishwaship`,
+    defaults: { enabled: true, toClient: true, toRecipient: false } },
 ];
 export const eventDef = (k: string) => EMAIL_EVENTS.find((e) => e.key === k);
 export const eventForStatus = (status: string) => EMAIL_EVENTS.find((e) => e.status === status || (e.key === "shipment_rto" && /^rto_/.test(status) && status !== "rto_delivered"));
@@ -84,6 +101,8 @@ export const eventForStatus = (status: string) => EMAIL_EVENTS.find((e) => e.sta
 export const SAMPLE_VARS: Record<string, string> = {
   customer_name: "Asha Traders", otp: "123456", otp_validity: "10 minutes", order_id: "VSMWN9IO35EA", awb_number: "1234567890123",
   courier_name: "Delhivery", pickup_time: "19 Nov 2026, 04:30 pm", status: "Picked up", tracking_link: "https://vishwaship.in/track/?awb=1234567890123",
+  booked_weight: "30.00 kg", courier_weight: "41.00 kg", dispute_by: "29 Nov 2026",
+  charge_details: "Extra shipping charge for you: ₹177.87 (incl. GST). It will be debited from your Vishwaship wallet on 29 Nov 2026 unless you raise a dispute before then.\n\nIf you believe the courier weight is wrong, raise a dispute with photos of the packed box (on a weighing scale, with dimensions) before 29 Nov 2026 using the button below.",
 };
 
 /** Replace {{placeholders}}; unknown ones become empty. */

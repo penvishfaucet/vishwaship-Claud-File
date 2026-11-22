@@ -14,7 +14,7 @@ export async function ensureDelhiveryAccount(service: "b2b" | "b2c") {
   const [a] = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.adapter, adapter), ne(schema.providerAccounts.status, "archived")));
   if (a) return a;
   const row = { id: newId("pa"), adapter, category: "shipping", label: `Delhivery Direct ${service.toUpperCase()}`, mode: "test", status: "disabled",
-    configPublic: { allowedHosts: HOSTS[service], payments: { prepaid: true, cod: true, fod: false, fodStatus: service === "b2b" ? "pending_activation" : "not_supported", fodBasis: "carrier_freight" }, rateSource: "api", shippingMode: "S", volDivisor: 5000 } };
+    configPublic: { allowedHosts: HOSTS[service], payments: { prepaid: true, cod: true, fod: false, fodStatus: service === "b2b" ? "pending_activation" : "not_supported", fodBasis: "carrier_freight" }, rateSource: "api", shippingMode: "S", volDivisor: service === "b2b" ? 3375 : 5000 } };
   await db.insert(schema.providerAccounts).values(row);
   return (await db.select().from(schema.providerAccounts).where(eq(schema.providerAccounts.id, row.id)))[0];
 }

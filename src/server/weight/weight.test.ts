@@ -150,3 +150,66 @@ describe("courier report import", () => {
     expect(svc.parseWeightReport("Foo,Bar\n1,2").error).toMatch(/AWB/);
   });
 });
+
+describe("courier e-mail paste (Delhivery B2B weight discrepancy mail)", () => {
+  const mail = `Dear Client,
+LR 323198958 (FoD order) was manifested on 20-11-2026 with an initial charged weight of 30 kg. However, based on a verified and accurate source of weight & dimension capture at our facility, we found that the charged weight of this LR is 41 kg.
+As a result, the freight charge of this LR has been increased from INR 739.19 to INR 885.74. Please find the detailed breakup below:
+Description Units Invoice Amount
+Minimum Charged Weight 20.0Kg/LR
+Forward Freight 885.74
+Base Charge ₹9.3/Kg 385.16
+Pre-tax Freight Charges 750.63
+Sub Total 750.63
+GST 135.11
+Total Rs.885.74
+
+Dear Client,
+LR 323196522 (Prepaid order) was manifested on 20-11-2026 with an initial charged weight of 80 kg. ... we found that the charged weight of this LR is 90 kg.
+As a result, the freight charge of this LR has been increased from INR 1,500.00 to INR 1,677.00.`;
+
+  it("reads LR, charged weight and the courier's extra (pre-tax) from each mail", () => {
+    const rows = svc.parseCourierMails(mail);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ ref: "323198958", grams: 41_000, extraPaise: 75_063 - Math.round(73_919 * 100 / 118) });
+    expect(rows[0].extraPaise).toBe(12_420); // ₹750.63 − ₹739.19/1.18
+    expect(rows[0].note).toMatch(/30 kg → 41 kg/);
+    expect(rows[1]).toMatchObject({ ref: "323196522", grams: 90_000, extraPaise: 15_000 }); // (1677 − 1500)/1.18
+    expect(svc.parseWeightReport(mail).rows).toHaveLength(2);
+  });
+
+  it("FoD: receiver pays the courier's higher freight; nothing is ever charged to the wallet, client is informed", async () => {
+    // FoD booking at 30 kg: freight ₹279 (markup 25%), fuel 15% ₹41.85, other ₹305.58 at cost.
+    const fodPriced = { lines: [
+      { code: "freight", costPreTax: 27_900, markupEligible: true }, { code: "fuel", costPreTax: 4_185, markupEligible: false }, { code: "other", costPreTax: 30_558, markupEligible: false },
+    ], markup: { bps: 2500 }, gstBps: 1800, payer: { basis: "carrier_freight" } };
+    await shipment("sh6", "323198958", 30_000, fodPriced);
+    const costGst = 62_643 + Math.round(62_643 * 0.18);
+    await db.update(schema.shipments).set({ freightPayer: "receiver", receiverFreightPaise: costGst }).where(eq(schema.shipments.id, "sh6"));
+    const p = await svc.importWeightReport(mail, { commit: false, actorUserId: STAFF });
+    const row = p.rows.find((r) => r.ref === "323198958")!;
+    expect(row.status).toBe("ok");
+    expect(row.receiverExtraPaise).toBe(14_655); // ₹885.74 − ₹739.19, exactly the courier mail, paid by the receiver
+    const c = await svc.importWeightReport(mail, { commit: true, actorUserId: STAFF });
+    expect(c.created).toBe(1);
+    const [d] = await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.shipmentId, "sh6"));
+    const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, "sh6"));
+    expect(sh.receiverFreightPaise).toBe(costGst + row.receiverExtraPaise!);
+    expect(row.chargePaise ?? 0).toBe(0);
+    expect(d).toMatchObject({ chargePaise: 0, status: "accepted" });
+    await svc.chargeDueDisputes(new Date(Date.now() + 30 * 86400_000));
+    expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, d.id)))[0].status).toBe("accepted");
+    expect((d.evidence as Array<{ label: string }>)[0].label).toMatch(/739\.19 → ₹885\.74/);
+    const alerts = await db.select().from(schema.inAppAlerts).where(eq(schema.inAppAlerts.orgId, ORG));
+    expect(alerts.some((a) => /Receiver pays/.test(a.title))).toBe(true);
+  });
+
+  it("splitForPayer: sender pays all; FoD at Vishwaship rate charges the wallet nothing", () => {
+    const calc = computeWeightCharge({ priced: B2B, bookedGrams: 50_000, revisedGrams: 70_000 })!;
+    expect(svc.splitForPayer(calc, "sender", undefined)).toEqual({ walletCharge: 31_860, receiverExtra: 0 });
+    expect(svc.splitForPayer(calc, "receiver", "vishwaship_rate")).toEqual({ walletCharge: 0, receiverExtra: 31_860 });
+    const cf = svc.splitForPayer(calc, "receiver", "carrier_freight");
+    expect(cf.receiverExtra).toBe(22_000 + 3_960);
+    expect(cf.walletCharge).toBe(0);
+  });
+});

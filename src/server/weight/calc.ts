@@ -48,7 +48,9 @@ function price(eligible: number, pass: number, markupBps: number, gstBps: number
 
 export function computeWeightCharge(a: { priced: PricedSnapshot; bookedGrams: number; revisedGrams: number; courierExtraPreTax?: number | null; defaultGstBps?: number }): WeightCalc | null {
   const booked = Math.round(a.bookedGrams), revised = Math.round(a.revisedGrams);
-  if (!(booked > 0) || !(revised > booked)) return null;
+  const courier = a.courierExtraPreTax != null && Number.isFinite(a.courierExtraPreTax) && a.courierExtraPreTax > 0 ? Math.round(a.courierExtraPreTax) : null;
+  // A courier-stated extra amount is always passed on (the courier billed it), even if our stored booked weight differs.
+  if (!(booked > 0) || (!(revised > booked) && courier == null)) return null;
   const markupBps = Math.max(0, Math.round(a.priced.markup?.bps ?? 0));
   const gstBps = Math.max(0, Math.round(a.priced.gstBps ?? a.defaultGstBps ?? 1800));
   const src = a.priced.lines?.length
@@ -60,17 +62,16 @@ export function computeWeightCharge(a: { priced: PricedSnapshot; bookedGrams: nu
   // Re-rate the weight-driven lines at the booking rate.
   const driven = lines.filter((l) => WEIGHT_DRIVEN.has(l.code) && l.beforeCost > 0);
   const rerate = driven.length ? driven : [lines.find((l) => l.beforeCost > 0)!];
-  for (const l of rerate) l.afterCost = mulDivRound(l.beforeCost, revised, booked);
+  for (const l of rerate) l.afterCost = mulDivRound(l.beforeCost, Math.max(revised, booked), booked);
   const reratedExtra = rerate.reduce((t, l) => t + l.afterCost - l.beforeCost, 0);
 
   let basis: WeightCalc["basis"] = "rerated";
-  const courier = a.courierExtraPreTax != null && Number.isFinite(a.courierExtraPreTax) ? Math.round(a.courierExtraPreTax) : null;
-  if (courier != null && courier > 0) {
+  if (courier != null) {
     // Courier's real extra amount, split over the same lines in the re-rated proportion (last line absorbs rounding).
     basis = "courier";
     let left = courier;
     rerate.forEach((l, i) => {
-      const share = i === rerate.length - 1 ? left : reratedExtra > 0 ? mulDivRound(courier, l.afterCost - l.beforeCost, reratedExtra) : 0;
+      const share = reratedExtra > 0 ? (i === rerate.length - 1 ? left : mulDivRound(courier, l.afterCost - l.beforeCost, reratedExtra)) : i === 0 ? courier : 0;
       l.afterCost = l.beforeCost + share;
       left -= share;
     });
