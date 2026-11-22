@@ -548,3 +548,22 @@ html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
 .pl-up{color:#15803D}.pl-down{color:#B42318}
 @media (max-width:1100px){.pl-tiles{grid-template-columns:1fr 1fr}.pl-flow{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:600px){.pl-tiles,.pl-flow{grid-template-columns:1fr 1fr}}
+/* Weight discrepancy: phone cards (client portal + Admin) */
+.wd-cards{display:none}
+@media (max-width:900px){
+.wd-cards{display:flex;flex-direction:column;gap:10px}
+.wd-card{padding:12px 14px;min-width:0}
+.wd-card-h{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.wd-card-h .chip{flex-shrink:0;white-space:nowrap}
+.wd-ids{min-width:0;overflow-wrap:anywhere}
+.wd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin:10px 0 0}
+.wd-grid>div{min-width:0}
+.wd-grid dt{font-size:10.5px;color:var(--muted);margin:0}
+.wd-grid dd{margin:2px 0 0;font-size:12.5px;overflow-wrap:anywhere}
+.wd-grid .wd-full{grid-column:1/-1}
+.wd-form form{min-width:0!important;width:100%}
+.wd-form .btn{min-height:40px}
+.wd-pills{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.wd-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.wd-actions .btn{min-height:40px;flex:1 1 auto}
+}

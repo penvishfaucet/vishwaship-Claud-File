@@ -36,11 +36,37 @@ export default async function Disputes() {
           )}
         </div>
       )}
-      <div className="card p0 tbl-wrap"><table className="tbl"><thead><tr><th>Customer</th><th>AWB</th><th>Declared</th><th>Carrier</th><th>Revised</th><th>Charge</th><th>Courier extra</th><th>Deadline</th><th>Status</th><th /></tr></thead>
+      <div className="card p0 tbl-wrap only-desktop"><table className="tbl"><thead><tr><th>Customer</th><th>AWB</th><th>Declared</th><th>Carrier</th><th>Revised</th><th>Charge</th><th>Courier extra</th><th>Deadline</th><th>Status</th><th /></tr></thead>
         <tbody>{rows.map(({ d, sh, o }) => (
           <tr key={d.id}><td className="small">{o.businessName}</td><td className="mono tiny">{sh.awb}</td><td>{d.declaredGrams / 1000} kg</td><td>{d.carrierGrams / 1000} kg</td><td>{d.revisedChargeableGrams / 1000} kg</td><td>{formatINR(d.chargePaise)}<div className="tiny muted">{d.source}</div></td><td className="small">{(() => { const c = d.calc as { extraCostPreTax?: number; basis?: string } | null; return c?.extraCostPreTax != null ? <>{formatINR(c.extraCostPreTax)}<div className="tiny muted">{c.basis === "courier" ? "from report" : "re-rated"} · pre-GST</div></> : "—"; })()}</td><td className="small">{d.deadlineAt.toLocaleDateString("en-IN")}</td><td><span className={`chip ${d.status === "disputed" ? "c-failed" : d.status === "open" ? "c-active" : "c-draft"}`}>{d.status === "disputed" ? "● client disputed" : d.status === "open" ? "● open" : d.status}</span>{(d.evidence as Array<{ by?: string; note?: string; claimedGrams?: number; urls?: string[] }>).filter((e) => e.by === "seller").map((e, i) => <div key={i} className="tiny" style={{ maxWidth: 260 }}><b>Seller:</b> {e.claimedGrams ? `${e.claimedGrams / 1000} kg — ` : ""}{e.note}{e.urls?.map((u, j) => <a key={j} className="link" href={u} target="_blank" rel="noreferrer noopener" style={{ marginLeft: 4 }}>[{j + 1}]</a>)}</div>)}</td>
             <td>{fin && d.status !== "waived" && <DisputeButtons id={d.id} status={d.status} fod={!!(d.calc as { fod?: boolean } | null)?.fod && d.chargePaise === 0} courier={sh.carrierName} canSend={cmail.to.length > 0} sentAt={[...(d.evidence as Array<{ by?: string; at?: string }>)].reverse().find((e) => e.by === "vishwaship")?.at ?? null} />}</td></tr>
         ))}</tbody></table></div>
+      {/* Phone: one card per discrepancy */}
+      <div className="wd-cards" style={{ marginTop: -8 }}>
+        {rows.map(({ d, sh, o }) => {
+          const c = d.calc as { extraCostPreTax?: number; basis?: string; fod?: boolean } | null;
+          const seller = (d.evidence as Array<{ by?: string; note?: string; claimedGrams?: number; urls?: string[] }>).filter((e) => e.by === "seller");
+          return (
+            <article key={d.id} className="card wd-card">
+              <div className="wd-card-h">
+                <div className="wd-ids"><b className="small">{o.businessName}</b><div className="mono tiny">LR / AWB {sh.lrNumber ?? sh.awb ?? "—"}</div><div className="tiny muted">{sh.carrierName}{c?.fod ? " · FoD" : ""}</div></div>
+                <span className={`chip ${d.status === "disputed" ? "c-failed" : d.status === "open" ? "c-active" : "c-draft"}`}>{d.status === "disputed" ? "● client disputed" : d.status === "open" ? "● open" : d.status}</span>
+              </div>
+              <dl className="wd-grid">
+                <div><dt>Booked</dt><dd>{d.declaredGrams / 1000} kg</dd></div>
+                <div><dt>Courier</dt><dd className="b">{d.carrierGrams / 1000} kg</dd></div>
+                <div><dt>Client charge</dt><dd className="b">{c?.fod && d.chargePaise === 0 ? "No charge (FoD)" : formatINR(d.chargePaise)}</dd></div>
+                <div><dt>Courier extra (pre-GST)</dt><dd>{c?.extraCostPreTax != null ? formatINR(c.extraCostPreTax) : "—"}</dd></div>
+                <div><dt>Dispute deadline</dt><dd>{d.deadlineAt.toLocaleDateString("en-IN")}</dd></div>
+                <div><dt>Source</dt><dd>{d.source}</dd></div>
+                {seller.length > 0 && <div className="wd-full"><dt>Client says</dt><dd className="tiny">{seller.map((e, i) => <div key={i}>{e.claimedGrams ? `${e.claimedGrams / 1000} kg — ` : ""}{e.note}{e.urls?.map((u, j) => <a key={j} className="link" href={u} target="_blank" rel="noreferrer noopener" style={{ marginLeft: 4 }}>[photo {j + 1}]</a>)}</div>)}</dd></div>}
+                {d.resolution && <div className="wd-full"><dt>Result</dt><dd className="tiny">{d.resolution}</dd></div>}
+              </dl>
+              {fin && d.status !== "waived" && <div className="wd-actions"><DisputeButtons id={d.id} status={d.status} fod={!!c?.fod && d.chargePaise === 0} courier={sh.carrierName} canSend={cmail.to.length > 0} sentAt={[...(d.evidence as Array<{ by?: string; at?: string }>)].reverse().find((e) => e.by === "vishwaship")?.at ?? null} /></div>}
+            </article>
+          );
+        })}
+      </div>
     </>
   );
 }
