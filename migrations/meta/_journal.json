@@ -232,6 +232,13 @@
       "when": 1795345284055,
       "tag": "0032_store_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795347785404,
+      "tag": "0033_store_inventory",
+      "breakpoints": true
     }
   ]
 }

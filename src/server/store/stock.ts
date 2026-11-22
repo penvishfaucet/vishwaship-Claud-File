@@ -21,7 +21,7 @@ export async function logOrderEvent(q: Q, o: { id: string; orgId: string }, kind
   await q.insert(schema.storeOrderEvents).values({ id: newId("soe"), storeOrderId: o.id, orgId: o.orgId, kind, message: message.slice(0, 500), actorUserId });
 }
 
-async function move(q: Q, o: { storeId: string; orgId: string; id?: string }, l: Line, kind: string, d: { available?: number; reserved?: number; damaged?: number }, extra: { unitCostPaise?: number | null; reason?: string | null; actorUserId?: string | null } = {}) {
+export async function move(q: Q, o: { storeId: string; orgId: string; id?: string }, l: Pick<Line, "productId" | "variantId">, kind: string, d: { available?: number; reserved?: number; damaged?: number }, extra: { unitCostPaise?: number | null; reason?: string | null; actorUserId?: string | null } = {}) {
   await q.insert(schema.storeStockMoves).values({
     id: newId("smv"), storeId: o.storeId, orgId: o.orgId, productId: l.productId, variantId: l.variantId, kind,
     available: d.available ?? 0, reserved: d.reserved ?? 0, damaged: d.damaged ?? 0, unitCostPaise: extra.unitCostPaise ?? null,

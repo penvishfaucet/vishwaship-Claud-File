@@ -14,6 +14,7 @@ import { onboardingState } from "@/server/onboarding";
 import { sha256 } from "@/server/security/crypto";
 import { weightCounts } from "@/server/weight/courier-dispute";
 import { pendingAcceptanceCount } from "@/server/store/ops";
+import { lowStockCount } from "@/server/store/inventory";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,8 @@ export default async function PortalLayout({ children }: { children: React.React
   const kycAlert = kycPending ? [{ id: "kyc-reminder", title: ob.step === "review" ? "KYC under review — the best (bulk) rates apply once it is approved" : "Complete KYC to unlock the best (bulk) shipping rates", href: ob.step === "profile" ? "/portal/onboarding/" : "/portal/kyc/", createdAt: new Date().toISOString() }] : [];
   const wc = await weightCounts(ctx.org.id).catch(() => ({ open: 0, disputed: 0 }));
   const storePending = f.modules.online_store.enabled ? await pendingAcceptanceCount(ctx.org.id).catch(() => 0) : 0;
-  const navBadges = { "store.orders": { n: storePending, tone: "red" as const, title: `${storePending} store order(s) waiting for you to accept` }, "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
+  const storeLow = f.modules.online_store.enabled ? await lowStockCount(ctx.org.id) : 0;
+  const navBadges = { "store.inventory": { n: storeLow, tone: "red" as const, title: `${storeLow} store item(s) running low on stock` }, "store.orders": { n: storePending, tone: "red" as const, title: `${storePending} store order(s) waiting for you to accept` }, "tools.weight": wc.open ? { n: wc.open, tone: "red" as const, title: `${wc.open} weight discrepancy(ies) — check and dispute if wrong` } : { n: wc.disputed, tone: "green" as const, title: `${wc.disputed} dispute(s) under review` } };
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell

@@ -64,7 +64,11 @@ export default async function StoreOrderDetail({ params }: { params: Promise<{ i
               {o.paymentMethod === "cod" && o.acceptance === "accepted" && <><dt>COD money</dt><dd>{COD_LABEL[o.cod]}</dd></>}
               <dt>Stock</dt><dd>{o.stockState === "reserved" ? "Held for this order" : o.stockState === "deducted" ? "Deducted (goods left the warehouse)" : o.stockState === "released" ? "Returned to stock" : "—"}</dd>
               {o.shippingOrderId && <><dt>Shipment</dt><dd><a className="orange" href={`/portal/orders/${o.shippingOrderId}/`}>Open in Orders</a></dd></>}
+              {o.returnInspectedAt && <><dt>Return</dt><dd>Counted {ist(o.returnInspectedAt)}</dd></>}
             </dl>
+            {o.stockState === "deducted" && !o.returnInspectedAt && ["delivered", "rto_delivered"].includes(o.stage) && (
+              <p className="small" style={{ marginBottom: 0 }}><a className="orange" href={`/portal/store/inventory/?return=${o.id}`}>{o.stage === "rto_delivered" ? "Count the returned goods" : "Record a customer return"}</a></p>
+            )}
             {o.paymentStatus === "refund_due" && <p className="small red" style={{ marginBottom: 0 }}>The refund could not be made automatically. Refund the buyer from your payment gateway dashboard, then tap “Mark refunded”.</p>}
           </div>
           <div className="card" style={{ padding: 16 }}>

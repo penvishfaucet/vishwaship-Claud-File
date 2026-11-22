@@ -41,7 +41,7 @@ export default async function StoreOverview() {
     { k: "ready", label: "Ready to ship", n: counts.ready ?? 0, href: "/portal/store/orders/?tab=ready", hot: false },
     { k: "transit", label: "In transit", n: counts.transit ?? 0, href: "/portal/store/orders/?tab=transit", hot: false },
     { k: "rto", label: "RTO", n: counts.rto ?? 0, href: "/portal/store/orders/?tab=rto", hot: (counts.rto ?? 0) > 0 },
-    { k: "low", label: "Low on stock", n: low, href: "/portal/store/products/", hot: low > 0 },
+    { k: "low", label: "Low on stock", n: low, href: "/portal/store/inventory/?view=low", hot: low > 0 },
   ];
   const [{ pendingAds }] = await db0.select({ pendingAds: sql<number>`count(*)::int` }).from(schema.storeAdChanges).where(and(eq(schema.storeAdChanges.storeId, store.id), eq(schema.storeAdChanges.status, "pending")));
   return (

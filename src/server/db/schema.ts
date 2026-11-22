@@ -1274,6 +1274,9 @@ export const storeOrders = pgTable("store_orders", {
   /** Merchant confirmed the parcel is packed (Packing & Dispatch). */
   packedAt: ts("packed_at"),
   packedBy: text("packed_by"),
+  /** Goods that came back (RTO or customer return), counted once: [{index, sellable, damaged, missing}] + who / when. */
+  returnInspection: jsonb("return_inspection"),
+  returnInspectedAt: ts("return_inspected_at"),
   /** Refund at the gateway: {gateway, refId, gatewayRefundId, amountPaise, status: pending|processed|failed, message, startedAt, updatedAt}. */
   refund: jsonb("refund"),
   /** Unit cost of each line when the goods left the warehouse: [{productId, variantId, qty, unitCostPaise|null}]. */

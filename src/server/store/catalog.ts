@@ -6,6 +6,7 @@ import { newId, randomToken } from "@/server/util/ids";
 import { sniffUpload } from "@/server/storage";
 import { slugify } from "@/lib/store-themes";
 import { markStep, storeForOrg } from "./service";
+import { move } from "./stock";
 
 /** Catalog: products (optionally with variants), categories, coupons and store images. All scoped by the session org. */
 
@@ -123,6 +124,9 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
   };
   const pid = id ?? newId("sp");
   await db.transaction(async (tx) => {
+    // stock typed in the editor is "available": remember what it was so the change is in the stock history
+    const [before] = id ? await tx.select({ stock: schema.storeProducts.stock }).from(schema.storeProducts).where(and(eq(schema.storeProducts.id, id), eq(schema.storeProducts.storeId, s.id))) : [];
+    const beforeV = id ? await tx.select({ id: schema.storeProductVariants.id, stock: schema.storeProductVariants.stock }).from(schema.storeProductVariants).where(eq(schema.storeProductVariants.productId, id)) : [];
     if (id) {
       const res = await tx.update(schema.storeProducts).set(values).where(and(eq(schema.storeProducts.id, id), eq(schema.storeProducts.storeId, s.id))).returning({ id: schema.storeProducts.id });
       if (!res.length) throw new StoreError("Product not found");
@@ -135,9 +139,17 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     const kept = new Set<string>();
     for (const [i, v] of input.variants.entries()) {
       const row = { title: v.values.join(" / "), optionValues: v.values, sku: v.sku || null, pricePaise: toPaise(v.priceRupees), comparePaise: v.compareRupees ? toPaise(v.compareRupees) : null, stock: v.stock, weightGrams: v.weightGrams, sort: i, archived: false };
-      if (v.id && known.has(v.id)) { await tx.update(schema.storeProductVariants).set(row).where(eq(schema.storeProductVariants.id, v.id)); kept.add(v.id); }
-      else await tx.insert(schema.storeProductVariants).values({ id: newId("spv"), productId: pid, storeId: s.id, orgId, ...row });
+      if (v.id && known.has(v.id)) {
+        await tx.update(schema.storeProductVariants).set(row).where(eq(schema.storeProductVariants.id, v.id)); kept.add(v.id);
+        const was = beforeV.find((b) => b.id === v.id)?.stock ?? 0;
+        if (v.stock !== was) await move(tx, { storeId: s.id, orgId }, { productId: pid, variantId: v.id }, "edit", { available: v.stock - was }, { reason: "Changed in the product editor" });
+      } else {
+        const vid = newId("spv");
+        await tx.insert(schema.storeProductVariants).values({ id: vid, productId: pid, storeId: s.id, orgId, ...row });
+        if (v.stock) await move(tx, { storeId: s.id, orgId }, { productId: pid, variantId: vid }, "opening", { available: v.stock }, { reason: "New option" });
+      }
     }
+    if (!hasVariants && input.stock !== (before?.stock ?? 0)) await move(tx, { storeId: s.id, orgId }, { productId: pid, variantId: null }, before ? "edit" : "opening", { available: input.stock - (before?.stock ?? 0) }, { reason: before ? "Changed in the product editor" : "New product" });
     const gone = [...known].filter((x) => !kept.has(x));
     if (gone.length) await tx.update(schema.storeProductVariants).set({ archived: true }).where(inArray(schema.storeProductVariants.id, gone));
   });
