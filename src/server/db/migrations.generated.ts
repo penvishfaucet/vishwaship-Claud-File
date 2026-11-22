@@ -712,5 +712,19 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795361431421,
   "hash": "93b4fafcc82228a53b9b10f7c0334caaae193d7acb2ec42a83b11ef88b780cee"
+ },
+ {
+  "tag": "0037_store_fee",
+  "sql": [
+   "ALTER TABLE \"store_orders\" ADD COLUMN \"fee_paise\" bigint;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"fee_gst_paise\" bigint;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"fee_charged_at\" timestamp with time zone;",
+   "\n-- the 1.5% delivered-order fee applies to orders placed from now on: existing orders are marked as not charged\nUPDATE \"store_orders\" SET \"fee_charged_at\" = now(), \"fee_paise\" = 0, \"fee_gst_paise\" = 0 WHERE \"fee_charged_at\" IS NULL;",
+   "\n-- Online Store plan (owner 2026-11-23): Rs 2,499 + GST a month; plan prices are now before GST. Yearly is off until it is re-priced.\nUPDATE \"store_plans\" SET \"price_paise\" = 249900, \"updated_at\" = now() WHERE \"id\" = 'spl_monthly';",
+   "\nUPDATE \"store_plans\" SET \"active\" = false, \"updated_at\" = now() WHERE \"id\" = 'spl_yearly';\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795373650389,
+  "hash": "c119e9192b8d4a9721111bf7d88679d8f626c968077f7a3fa560e8f3b9267c62"
  }
 ];

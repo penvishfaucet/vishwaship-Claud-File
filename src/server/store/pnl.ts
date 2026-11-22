@@ -124,7 +124,10 @@ async function compute(orgId: string, r: Range) {
     const paymentFees = o.paymentMethod !== "cod" && st.gatewayFeeBps ? Math.round((o.totalPaise * st.gatewayFeeBps) / 10_000) : 0;
     if (paymentFees) flags.push("payment fee estimated");
     const mine = tagged.filter((e) => e.storeOrderId === o.id);
-    const orderExpenses = mine.reduce((t, e) => t + expNet(e), 0);
+    // Vishwaship 1.5% fee on this delivered order (its GST is input credit when GST-registered)
+    const fee = o.feePaise ?? 0, feeGst = o.feeGstPaise ?? 0;
+    const orderExpenses = mine.reduce((t, e) => t + expNet(e), 0) + (st.gstRegistered ? fee - feeGst : fee);
+    if (st.gstRegistered) inputGst += feeGst;
     inputGst += mine.filter((e) => st.gstRegistered && e.gstRecoverable).reduce((t, e) => t + e.gstPaise, 0);
     const R = Math.round;
     const row = { netSales: R(netSales), shippingCollected: R(shippingCollected), productCost: R(productCost), shippingPaid, paymentFees, orderExpenses };

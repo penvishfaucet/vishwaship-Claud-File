@@ -1277,6 +1277,10 @@ export const storeOrders = pgTable("store_orders", {
   /** Process Orders steps: label printed (Print → Pack) and parcel handed to the courier (Handover). */
   labelPrintedAt: ts("label_printed_at"),
   handedOverAt: ts("handed_over_at"),
+  /** Vishwaship platform fee on a delivered order (1.5% of the order value + GST, from the wallet). RTO / cancelled orders: none. */
+  feePaise: paise("fee_paise"),
+  feeGstPaise: paise("fee_gst_paise"),
+  feeChargedAt: ts("fee_charged_at"),
   /** Goods that came back (RTO or customer return), counted once: [{index, sellable, damaged, missing}] + who / when. */
   returnInspection: jsonb("return_inspection"),
   returnInspectedAt: ts("return_inspected_at"),

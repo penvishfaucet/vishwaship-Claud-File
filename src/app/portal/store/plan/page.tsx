@@ -1,6 +1,7 @@
 import { BuyPlan } from "@/components/portal/store/Billing";
 import { rupees } from "@/lib/store-themes";
-import { billingConfig, listPlans, planHistory, planState } from "@/server/store/billing";
+import { billingConfig, listPlans, planGross, planHistory, planState } from "@/server/store/billing";
+import { getSetting } from "@/server/quotes/service";
 import { requireStorePage } from "@/server/store/portal";
 import "@/styles/store.css";
 
@@ -9,7 +10,7 @@ const day = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata
 
 export default async function StorePlanPage() {
   const { ctx, store } = await requireStorePage();
-  const [plans, history, cfg] = await Promise.all([listPlans(), planHistory(store.id), billingConfig()]);
+  const [plans, history, cfg, gst] = await Promise.all([listPlans(), planHistory(store.id), billingConfig(), getSetting<number>("gst_bps", 1800)]);
   const st = planState(store);
   const runningTill = new Date(Math.max(Date.now(), store.paidUntil?.getTime() ?? 0, store.trialEndsAt?.getTime() ?? 0));
   const startsLabel = runningTill.getTime() > Date.now() + 60_000 ? `It starts on ${day(runningTill)}, after your current ${st.state === "trial" ? "free trial" : "plan"} ends, so you lose no days.` : "It starts today.";
@@ -23,7 +24,7 @@ export default async function StorePlanPage() {
         {st.state === "expired" && <><span className="chip c-cancelled">Store unavailable to buyers</span> <b>Your {store.paidUntil ? "plan" : "free trial"} ended on {day(st.until!)}</b>
           <p className="small" style={{ margin: "6px 0 0" }}>Buyers now see a &ldquo;store unavailable&rdquo; page and cannot order. Your dashboard, orders, labels, refunds, RTO, COD, inventory and reports keep working. Choose a plan below: the same store, products and design reopen at once.</p></>}
       </div>
-      {plans.length ? <BuyPlan plans={plans.map((p) => ({ id: p.id, name: p.name, interval: p.interval, pricePaise: p.pricePaise }))} walletPaise={ctx.walletAvailable} startsLabel={startsLabel} />
+      {plans.length ? <BuyPlan plans={plans.map((p) => ({ id: p.id, name: p.name, interval: p.interval, pricePaise: p.pricePaise, grossPaise: planGross(p.pricePaise, gst.value) }))} walletPaise={ctx.walletAvailable} startsLabel={startsLabel} />
         : <p className="small muted">No plans are on sale right now. Please contact support.</p>}
       <div className="card p0" style={{ marginTop: 20, maxWidth: 860 }}>
         <div className="card-h"><b>Plan payments</b></div>

@@ -7,7 +7,8 @@ import { Msg, api } from "./ui";
 const idemKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 type M = { ok?: string; err?: string } | null;
 
-export type PlanView = { id: string; name: string; interval: string; pricePaise: number };
+/** pricePaise is before GST; grossPaise = price + GST (what the wallet pays). */
+export type PlanView = { id: string; name: string; interval: string; pricePaise: number; grossPaise: number };
 
 /** Plan cards. One idempotency key per opened confirmation, so a double click or retry charges once. */
 export function BuyPlan({ plans, walletPaise, startsLabel }: { plans: PlanView[]; walletPaise: number; startsLabel: string }) {
@@ -33,19 +34,19 @@ export function BuyPlan({ plans, walletPaise, startsLabel }: { plans: PlanView[]
         {plans.map((p) => (
           <div key={p.id} className="card" style={{ padding: 16 }}>
             <div className="small muted">{p.name}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--navy)", margin: "4px 0" }}>{rupees(p.pricePaise)}<span className="small muted" style={{ fontWeight: 400 }}> / {p.interval}</span></div>
-            <div className="tiny muted">Includes GST · paid from your wallet</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: "var(--navy)", margin: "4px 0" }}>{rupees(p.pricePaise)}<span className="small muted" style={{ fontWeight: 400 }}> + GST / {p.interval}</span></div>
+            <div className="tiny muted">{rupees(p.grossPaise)} incl. GST · paid from your wallet · plus 1.5% + GST on delivered orders only</div>
             <button className="btn btn-orange" style={{ marginTop: 10, width: "100%" }} onClick={() => open(p)}>Choose {p.name}</button>
           </div>
         ))}
       </div>
       {pick && (
         <div className="card" style={{ padding: 16, marginTop: 12, maxWidth: 560, borderColor: "var(--orange)" }} role="dialog" aria-label="Confirm plan">
-          <b>Confirm: {pick.name} plan for {rupees(pick.pricePaise)}</b>
-          <p className="small" style={{ margin: "6px 0" }}>{rupees(pick.pricePaise)} will be taken from your wallet (available {rupees(walletPaise)}). {startsLabel}</p>
-          {walletPaise < pick.pricePaise && <p className="small red" style={{ margin: "6px 0" }}>Not enough balance. <a className="orange" href="/portal/billing/recharges/">Recharge your wallet</a> first.</p>}
+          <b>Confirm: {pick.name} plan for {rupees(pick.pricePaise)} + GST = {rupees(pick.grossPaise)}</b>
+          <p className="small" style={{ margin: "6px 0" }}>{rupees(pick.grossPaise)} will be taken from your wallet (available {rupees(walletPaise)}). {startsLabel}</p>
+          {walletPaise < pick.grossPaise && <p className="small red" style={{ margin: "6px 0" }}>Not enough balance. <a className="orange" href="/portal/billing/recharges/">Recharge your wallet</a> first.</p>}
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn-orange" onClick={buy} disabled={busy || walletPaise < pick.pricePaise}>{busy ? "Paying…" : `Pay ${rupees(pick.pricePaise)} from wallet`}</button>
+            <button className="btn btn-orange" onClick={buy} disabled={busy || walletPaise < pick.grossPaise}>{busy ? "Paying…" : `Pay ${rupees(pick.grossPaise)} from wallet`}</button>
             <button className="btn btn-outline" onClick={() => setPick(null)} disabled={busy}>Cancel</button>
           </div>
         </div>

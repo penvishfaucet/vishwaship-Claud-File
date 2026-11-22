@@ -117,6 +117,9 @@ export function gstSplit(totalPaise: number, gstBps: number) {
   return { basePaise: base, gstPaise: totalPaise - base };
 }
 
+/** Plan price (before GST) + GST = what the wallet pays. */
+export const planGross = (pricePaise: number, gstBps: number) => pricePaise + Math.round((pricePaise * gstBps) / 10_000);
+
 export function addInterval(d: Date, interval: string) {
   const x = new Date(d);
   if (interval === "year") x.setUTCFullYear(x.getUTCFullYear() + 1);
@@ -148,6 +151,7 @@ export async function buyPlan(orgId: string, actor: Actor, planId: string, idem:
   const key = `storeplan:${orgId}:${idem}`;
   const gstBps = (await getSetting<number>("gst_bps", 1800)).value;
   const wallet = await walletFor(orgId, db);
+  const gross = planGross(plan.pricePaise, gstBps); // plan prices are before GST (owner 2026-11-23: Rs 2,499 + GST)
   try {
     const sub = await db.transaction(async (tx) => {
       const [prev] = await tx.select().from(schema.storeSubscriptions).where(eq(schema.storeSubscriptions.idempotencyKey, key));
@@ -156,18 +160,18 @@ export async function buyPlan(orgId: string, actor: Actor, planId: string, idem:
       const start = new Date(Math.max(now.getTime(), locked.paidUntil?.getTime() ?? 0, locked.trialEndsAt?.getTime() ?? 0));
       const end = addInterval(start, plan.interval);
       const id = newId("ssub");
-      const r = await debit(dbLedgerStore(tx), { walletId: wallet.id, amount: plan.pricePaise, kind: "store_plan", idempotencyKey: key, refType: "store_subscription", refId: id, memo: `Online Store ${plan.name} plan` });
+      const r = await debit(dbLedgerStore(tx), { walletId: wallet.id, amount: gross, kind: "store_plan", idempotencyKey: key, refType: "store_subscription", refId: id, memo: `Online Store ${plan.name} plan` });
       const [row] = await tx.insert(schema.storeSubscriptions).values({
-        id, storeId: s.id, orgId, planId: plan.id, planName: plan.name, interval: plan.interval, amountPaise: plan.pricePaise, ...gstSplit(plan.pricePaise, gstBps),
+        id, storeId: s.id, orgId, planId: plan.id, planName: plan.name, interval: plan.interval, amountPaise: gross, basePaise: plan.pricePaise, gstPaise: gross - plan.pricePaise,
         periodStart: start, periodEnd: end, receiptNumber: receiptNo("VSP", now), ledgerEntryId: r.entry.id, idempotencyKey: key, createdBy: actor.userId,
       }).returning();
       await tx.update(schema.stores).set({ paidUntil: end, planId: plan.id, updatedAt: new Date() }).where(eq(schema.stores.id, s.id));
       return { sub: row, replayed: false };
     });
-    if (!sub.replayed) await audit({ actorUserId: actor.userId, actorKind: actor.kind, orgId, action: "store.plan_purchase", targetType: "store_subscription", targetId: sub.sub.id, details: { plan: plan.name, amountPaise: plan.pricePaise, until: sub.sub.periodEnd.toISOString() } });
+    if (!sub.replayed) await audit({ actorUserId: actor.userId, actorKind: actor.kind, orgId, action: "store.plan_purchase", targetType: "store_subscription", targetId: sub.sub.id, details: { plan: plan.name, amountPaise: gross, until: sub.sub.periodEnd.toISOString() } });
     return sub;
   } catch (e) {
-    if (e instanceof InsufficientBalanceError) throw insufficient(plan.pricePaise);
+    if (e instanceof InsufficientBalanceError) throw insufficient(gross);
     throw e;
   }
 }

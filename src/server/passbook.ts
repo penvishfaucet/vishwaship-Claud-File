@@ -35,6 +35,7 @@ const KIND: Record<string, { type: PassbookType; title: string }> = {
   adjustment_debit: { type: "adjustment", title: "Adjustment (debit)" },
   credits_purchase: { type: "other", title: "Notification Credits" },
   store_plan: { type: "other", title: "Online Store Plan" },
+  store_fee: { type: "other", title: "Online Store Fee (delivered order)" },
   store_deposit: { type: "other", title: "Managed Ads Security Deposit" },
   store_deposit_refund: { type: "refund", title: "Security Deposit Refund" },
 };

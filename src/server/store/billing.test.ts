@@ -66,16 +66,16 @@ describe("trial and plan state", () => {
 
   it("buying a plan needs balance, charges once per key, and starts after the running trial", async () => {
     await expect(b.buyPlan(B, merchant, "spl_monthly", "idem-plan-0001")).rejects.toThrow(/Not enough wallet balance/);
-    await db.update(schema.wallets).set({ postedPaise: 200_000 }).where(eq(schema.wallets.orgId, A));
+    await db.update(schema.wallets).set({ postedPaise: 400_000 }).where(eq(schema.wallets.orgId, A));
     const [store] = await db.select().from(schema.stores).where(eq(schema.stores.id, "st_bl"));
     const r1 = await b.buyPlan(A, merchant, "spl_monthly", "idem-plan-0002");
     const r2 = await b.buyPlan(A, merchant, "spl_monthly", "idem-plan-0002");
     expect(r2.replayed).toBe(true);
     expect(r2.sub.id).toBe(r1.sub.id);
-    expect(await walletPaise(A)).toBe(200_000 - 99_900);
+    expect(await walletPaise(A)).toBe(400_000 - 294_882); // Rs 2,499 + 18% GST
     expect((await ledger(A, "store_plan")).length).toBe(1);
     expect(r1.sub.periodStart.getTime()).toBe(store.trialEndsAt!.getTime()); // trial days are kept
-    expect(r1.sub.basePaise + r1.sub.gstPaise).toBe(99_900);
+    expect([r1.sub.basePaise, r1.sub.gstPaise, r1.sub.amountPaise]).toEqual([249_900, 44_982, 294_882]);
     expect(r1.sub.receiptNumber).toMatch(/^VSP-\d{4}-[0-9A-F]{10}$/);
     const [after] = await db.select().from(schema.stores).where(eq(schema.stores.id, "st_bl"));
     expect(after.paidUntil!.getTime()).toBe(r1.sub.periodEnd.getTime());
