@@ -31,7 +31,11 @@ export const SERVICES: ServiceDef[] = [
   {
     adapter: "resend", group: "Email", name: "Resend (email)",
     purpose: "Sends the signup OTP and shipment emails (Picked Up, In Transit, Delivered …).",
-    fields: [{ key: "apiKey", label: "API key", secret: true, required: true, placeholder: "re_…", help: "Resend → API Keys → Create API Key (Sending access)" }],
+    fields: [
+      { key: "apiKey", label: "API key", secret: true, required: true, placeholder: "re_…", help: "Resend → API Keys → Create API Key (Sending access)" },
+      { key: "inboundSecret", label: "Courier mail webhook signing secret (optional)", secret: true, required: false, placeholder: "whsec_…", help: "Only for reading courier weight-discrepancy mails automatically: Resend → Webhooks → the email.received webhook → Signing secret" },
+      { key: "inboundApiKey", label: "Full-access API key for reading mails (optional)", secret: true, required: false, placeholder: "re_…", help: "Resend → API Keys → Create API Key with Full access. Leave blank if the key above already has Full access." },
+    ],
     guide: [
       "Open resend.com and sign in (or sign up) with the company email.",
       "Domains → Add Domain → enter vishwaship.in. Resend shows DNS records (TXT / MX / DKIM).",
@@ -39,6 +43,10 @@ export const SERVICES: ServiceDef[] = [
       "API Keys → Create API Key → permission “Sending access” → copy the key (it is shown only once).",
       "Paste the key below → Save → Test connection → Turn ON.",
       "Then open Email & Sign-in → Sender Emails → Check verification: contact@vishwaship.in should show “verified”.",
+      "Optional — read courier weight-discrepancy mails automatically: Resend must receive mail for vishwaship.com (Emails → Receiving).",
+      `Resend → Webhooks → Add webhook → URL ${appUrl()}/api/webhooks/courier-mail → event “email.received” → save, then copy its Signing secret (whsec_…) into the field above. Create a Full-access API key too if the key above is Sending-only.`,
+      "In the Gmail that receives the courier mails: Settings → Forwarding → Add a forwarding address → noreply@vishwaship.com. Gmail sends a confirmation code there: it appears in Admin → Weight Disputes → Courier mails received; enter it in Gmail.",
+      "Gmail → Create a filter: From noreply@delhivery.com, Has the words “charged weight” → Forward to noreply@vishwaship.com. Done: every such mail now raises the discrepancy and informs the client automatically.",
     ],
     links: [{ label: "Resend dashboard", url: "https://resend.com/domains" }, { label: "Hostinger DNS", url: "https://hpanel.hostinger.com/domains" }],
   },

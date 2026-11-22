@@ -196,7 +196,7 @@ export function parseWeightReport(text: string): { rows: ReportRow[]; error?: st
 }
 
 /** Preview (commit = false) or apply (commit = true) a courier weight report. Preview writes nothing. */
-export async function importWeightReport(text: string, opts: { commit: boolean; actorUserId: string }): Promise<{ rows: ImportRow[]; error?: string; created: number; totalChargePaise: number }> {
+export async function importWeightReport(text: string, opts: { commit: boolean; actorUserId: string | null }): Promise<{ rows: ImportRow[]; error?: string; created: number; totalChargePaise: number }> {
   const parsed = parseWeightReport(text);
   if (parsed.error) return { rows: [], error: parsed.error, created: 0, totalChargePaise: 0 };
   const db = await getDb();
@@ -226,6 +226,6 @@ export async function importWeightReport(text: string, opts: { commit: boolean; 
       else out.push({ ...base, ...info, status: res.status, message: res.message });
     }
   }
-  if (opts.commit) await audit({ actorUserId: opts.actorUserId, actorKind: "staff", action: "weight_dispute.import", targetType: "weight_dispute", targetId: "import", details: { rows: parsed.rows.length, created, totalChargePaise: total } });
+  if (opts.commit) await audit({ actorUserId: opts.actorUserId, actorKind: opts.actorUserId ? "staff" : "system", action: "weight_dispute.import", targetType: "weight_dispute", targetId: "import", details: { rows: parsed.rows.length, created, totalChargePaise: total } });
   return { rows: out, created, totalChargePaise: total };
 }
