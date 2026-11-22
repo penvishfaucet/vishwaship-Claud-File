@@ -37,7 +37,7 @@ export default async function StoreOverview() {
   const [{ low }] = await db0.select({ low: sql<number>`count(*)::int` }).from(schema.storeProducts).where(and(eq(schema.storeProducts.storeId, store.id), eq(schema.storeProducts.status, "active"), sql`${schema.storeProducts.stock} <= ${schema.storeProducts.lowStockAt}`));
   const kpis = [
     { k: "pending", label: "Waiting for acceptance", n: counts.pending ?? 0, href: "/portal/store/orders/?tab=pending", hot: (counts.pending ?? 0) > 0 },
-    { k: "to_pack", label: "To pack", n: counts.to_pack ?? 0, href: "/portal/store/orders/?tab=to_pack", hot: false },
+    { k: "to_pack", label: "To pack", n: counts.to_pack ?? 0, href: "/portal/store/dispatch/?view=all", hot: false },
     { k: "ready", label: "Ready to ship", n: counts.ready ?? 0, href: "/portal/store/orders/?tab=ready", hot: false },
     { k: "transit", label: "In transit", n: counts.transit ?? 0, href: "/portal/store/orders/?tab=transit", hot: false },
     { k: "rto", label: "RTO", n: counts.rto ?? 0, href: "/portal/store/orders/?tab=rto", hot: (counts.rto ?? 0) > 0 },

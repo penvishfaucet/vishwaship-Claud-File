@@ -656,5 +656,15 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795341690766,
   "hash": "4da605467ac8d9720bf166f7faee97e358f37f217c017f382d6eaafb7269bd61"
+ },
+ {
+  "tag": "0032_store_dispatch",
+  "sql": [
+   "ALTER TABLE \"store_orders\" ADD COLUMN \"packed_at\" timestamp with time zone;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"packed_by\" text;"
+  ],
+  "bps": true,
+  "folderMillis": 1795345284055,
+  "hash": "371f7bec16185f6af630dc70f8f1c98149d7b953f9af98a73b6d02e7f5abcf54"
  }
 ];

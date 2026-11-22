@@ -36,7 +36,8 @@ export function OrderActions({ id, stage, paymentStatus, shippingOrderId, canCan
           <button className="btn btn-orange" onClick={() => act("accept")} disabled={!!busy}>{busy === "accept" ? "Accepting…" : "Accept order"}</button>
           <button className="btn btn-outline" onClick={() => ask("reject")} disabled={!!busy}>Reject</button>
         </>}
-        {stage === "to_pack" && <button className="btn btn-orange" onClick={() => act("ship")} disabled={!!busy}>{busy === "ship" ? "Opening…" : shippingOrderId ? "Book courier / view shipment" : "Ship this order"}</button>}
+        {stage === "to_pack" && <a className="btn btn-orange" href="/portal/store/dispatch/?view=all">Pack &amp; ship</a>}
+        {stage === "to_pack" && <button className="btn btn-outline" onClick={() => act("ship")} disabled={!!busy}>{busy === "ship" ? "Opening…" : "Choose courier myself"}</button>}
         {stage !== "to_pack" && stage !== "pending_acceptance" && shippingOrderId && <a className="btn btn-outline" href={`/portal/orders/${shippingOrderId}/`}>View shipment</a>}
         {canCancel && <button className="btn btn-outline" onClick={() => ask("cancel")} disabled={!!busy}>Cancel order</button>}
         {paymentStatus === "refund_due" && prepaid && refundStatus !== "processed" && <button className="btn btn-outline" onClick={() => act("refund")} disabled={!!busy}>{busy === "refund" ? "Trying…" : "Try refund again"}</button>}

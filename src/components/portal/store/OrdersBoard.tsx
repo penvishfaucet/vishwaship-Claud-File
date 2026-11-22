@@ -171,6 +171,6 @@ function NextAction({ o, busy, onAccept, onReject }: { o: BoardRow; busy: string
       <button className="btn btn-outline btn-sm" disabled={!!busy} onClick={onReject}><X size={14} aria-hidden /> Reject</button>
     </div>
   );
-  if (o.stage === "to_pack") return <a className="btn btn-outline btn-sm" href={`/portal/store/orders/${o.id}/`}>Pack & ship</a>;
+  if (o.stage === "to_pack") return <a className="btn btn-outline btn-sm" href="/portal/store/dispatch/?view=all">Pack & ship</a>;
   return <a className="small orange" href={`/portal/store/orders/${o.id}/`}>View</a>;
 }

@@ -1271,6 +1271,9 @@ export const storeOrders = pgTable("store_orders", {
   acceptedAt: ts("accepted_at"),
   acceptedBy: text("accepted_by"),
   rejectReason: text("reject_reason"),
+  /** Merchant confirmed the parcel is packed (Packing & Dispatch). */
+  packedAt: ts("packed_at"),
+  packedBy: text("packed_by"),
   /** Refund at the gateway: {gateway, refId, gatewayRefundId, amountPaise, status: pending|processed|failed, message, startedAt, updatedAt}. */
   refund: jsonb("refund"),
   /** Unit cost of each line when the goods left the warehouse: [{productId, variantId, qty, unitCostPaise|null}]. */

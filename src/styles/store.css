@@ -286,3 +286,14 @@
   .so-bulk{bottom:calc(78px + env(safe-area-inset-bottom));z-index:46;padding-bottom:10px}
   .so-detail-actions .btn{flex:1;min-height:46px;justify-content:center}
 }
+
+/* ---------- packing & dispatch ---------- */
+.dp-tools{padding:12px;display:grid;gap:10px}
+.dp-tools .btn{min-height:40px}
+.seg{display:inline-flex;border:1px solid var(--line,#e3e8f2);border-radius:10px;overflow:hidden}
+.seg button{border:0;background:var(--card,#fff);padding:0 12px;min-height:38px;font:inherit;font-size:12.5px;color:var(--navy,#0b2c6a);cursor:pointer}
+.seg button.on{background:var(--navy,#0b2c6a);color:#fff;font-weight:600}
+.dp-files{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}
+.dp-files li{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid var(--line-2,#edf1f8);padding-top:8px}
+.dp-files .btn{min-height:38px}
+@media (min-width:901px){.dp-grid{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}}
