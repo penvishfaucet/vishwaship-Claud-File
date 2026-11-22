@@ -185,15 +185,19 @@ export async function pickListPdf(orgId: string, ids: string[]) {
 }
 
 // ---------------------------------------------------------------- pack & book
-export type PackResult = { id: string; number: string; ok: boolean; message: string; shipmentId: string | null; awb: string | null; carrier: string | null; booked: boolean };
+export type PackResult = { id: string; number: string; ok: boolean; message: string; shipmentId: string | null; awb: string | null; carrier: string | null; booked: boolean; codHold?: boolean };
 
 /**
  * Confirm packing and make sure each order has a booked courier. Orders already booked just return their shipment
  * (their saved AWB and label are reused); others are booked with Auto-Assign. Every order reports on its own.
  */
-export async function packAndBook(orgId: string, userId: string, ids: string[]): Promise<PackResult[]> {
+export async function packAndBook(orgId: string, userId: string, ids: string[], opts: { shipWithoutCodConfirmation?: string[] } = {}): Promise<PackResult[]> {
   const db = await getDb();
   const out: PackResult[] = [];
+  const override = new Set(opts.shipWithoutCodConfirmation ?? []);
+  const [codSetting] = await db.select({ enabled: schema.notificationSettings.enabled }).from(schema.notificationSettings)
+    .where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
+  const codConfirmOn = !!codSetting?.enabled;
   for (const o of await ordersFor(orgId, ids)) {
     const res = (ok: boolean, message: string, extra: Partial<PackResult> = {}): PackResult => ({ id: o.id, number: o.number, ok, message: hideProviders(message), shipmentId: null, awb: null, carrier: null, booked: false, ...extra });
     if (o.status !== "placed" || o.acceptance !== "accepted") { out.push(res(false, o.status === "cancelled" ? "Order is cancelled" : "Accept the order first")); continue; }
@@ -207,6 +211,19 @@ export async function packAndBook(orgId: string, userId: string, ids: string[]):
     if (ship) { out.push(res(true, ship.awb ? "Already booked: label reused" : "Booked; waiting for the courier's AWB", { shipmentId: ship.id, awb: ship.awb, carrier: ship.carrierName })); continue; }
     const [so] = await db.select({ status: schema.orders.status }).from(schema.orders).where(eq(schema.orders.id, sid));
     if (so?.status === "booking" || so?.status === "needs_reconcile") { out.push(res(false, "Booking is in progress with the courier. Try again in a minute")); continue; }
+    if (so?.status === "cod_hold") {
+      // WhatsApp COD confirmation: with the service off there is nothing to wait for; with it on, ship only when the
+      // merchant chose to ship without the buyer's reply (recorded as the merchant's decision)
+      if (codConfirmOn && !override.has(o.id)) { out.push(res(false, "Waiting for the buyer's COD confirmation on WhatsApp", { codHold: true })); continue; }
+      const [c] = await db.select({ id: schema.codConfirmations.id }).from(schema.codConfirmations)
+        .where(and(eq(schema.codConfirmations.orderId, sid), inArray(schema.codConfirmations.status, ["pending", "no_response", "needs_review", "send_failed", "expired"])));
+      if (c) {
+        const { applyDecision } = await import("@/server/whatsapp/service");
+        await applyDecision({ confirmationId: c.id, decision: "confirm", source: "customer", actorUserId: userId });
+      }
+      await db.update(schema.orders).set({ status: "ready" }).where(and(eq(schema.orders.id, sid), eq(schema.orders.status, "cod_hold")));
+      await logOrderEvent(db, o, "cod_hold_released", codConfirmOn ? "Shipped without the buyer's COD confirmation (seller's decision)" : "COD confirmation is switched off: hold released", userId);
+    }
     const pick = await autoAssign(orgId, sid);
     if (!pick.ok) { out.push(res(false, pick.message)); continue; }
     const b = await bookOrder({ orgId, orderId: sid, quoteId: pick.offer.quoteId, actorUserId: userId });

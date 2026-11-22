@@ -102,6 +102,32 @@ describe("packing & dispatch", () => {
     expect((await ops.orderTimeline(A, bad)).map((e) => e.kind)).toEqual(["placed", "accepted", "packed", "booked"]);
   });
 
+  it("COD confirmation on: the order waits, unless the seller ships without it; switched off: no wait at all", async () => {
+    await db.insert(schema.notificationSettings).values({ id: "ns_dp", orgId: A, channel: "whatsapp", event: "cod_confirmation", enabled: true });
+    const held = await place("cod1", [{ productId: p1, qty: 1 }]);
+    await ops.acceptOrders(A, "u", [held]);
+    const [so] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, held));
+    expect((await db.select().from(schema.orders).where(eq(schema.orders.id, so.shippingOrderId!)))[0].status).toBe("cod_hold");
+    const before = booked.length;
+    expect(await dp.packAndBook(A, "u", [held])).toMatchObject([{ ok: false, codHold: true, message: "Waiting for the buyer's COD confirmation on WhatsApp" }]);
+    expect(booked.length).toBe(before);
+    const [r] = await dp.packAndBook(A, "u", [held], { shipWithoutCodConfirmation: [held] });
+    expect(r).toMatchObject({ ok: true, booked: true });
+    const [c] = await db.select().from(schema.codConfirmations).where(eq(schema.codConfirmations.orderId, so.shippingOrderId!));
+    expect(c.status).toBe("confirmed");
+    expect((await ops.orderTimeline(A, held)).map((e) => e.message)).toContain("Shipped without the buyer's COD confirmation (seller's decision)");
+
+    // an order held while the service was on is released once the service is switched off
+    const held2 = await place("cod2", [{ productId: p1, qty: 1 }]);
+    await ops.acceptOrders(A, "u", [held2]);
+    await db.update(schema.notificationSettings).set({ enabled: false }).where(eq(schema.notificationSettings.id, "ns_dp"));
+    expect((await dp.packAndBook(A, "u", [held2]))[0]).toMatchObject({ ok: true, booked: true });
+    const held3 = await place("cod3", [{ productId: p1, qty: 1 }]);
+    await ops.acceptOrders(A, "u", [held3]);
+    const [so3] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, held3));
+    expect((await db.select().from(schema.orders).where(eq(schema.orders.id, so3.shippingOrderId!)))[0].status).toBe("ready"); // new orders are never held
+  });
+
   it("orders that are not accepted, or belong to someone else, are refused", async () => {
     const pending = await place("e", [{ productId: p1, qty: 1 }]);
     expect(await dp.packAndBook(A, "u", [pending])).toMatchObject([{ ok: false, message: "Accept the order first" }]);

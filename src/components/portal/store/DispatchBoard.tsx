@@ -8,7 +8,7 @@ export type DispatchRow = {
   id: string; number: string; at: string; stage: "to_pack" | "ready_to_ship"; buyer: string; place: string; items: number; lines: string;
   totalPaise: number; cod: boolean; packed: boolean; awb: string | null; carrier: string | null; overdue: boolean;
 };
-type Result = { id: string; number: string; ok: boolean; message: string; awb: string | null; carrier: string | null; booked: boolean };
+type Result = { id: string; number: string; ok: boolean; message: string; awb: string | null; carrier: string | null; booked: boolean; codHold?: boolean };
 type FileLink = { label: string; url: string; at: number };
 
 const rs = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
@@ -64,10 +64,10 @@ export function DispatchBoard({ rows, view, warehouseId, today }: { rows: Dispat
     addFile(`Labels · ${n} order${n === 1 ? "" : "s"} · ${FORMATS.find((f) => f.key === format)?.label ?? ""}`, url);
   }
 
-  async function packAndLabels(onlyIds = ids) {
+  async function packAndLabels(onlyIds = ids, shipWithoutCodConfirmation: string[] = []) {
     if (!onlyIds.length) return;
     setBusy("pack"); setError(""); setResults(null);
-    const r = await api<{ results: Result[]; shipmentIds: string[] }>("POST", "/api/portal/store/dispatch", { action: "pack", ids: onlyIds });
+    const r = await api<{ results: Result[]; shipmentIds: string[] }>("POST", "/api/portal/store/dispatch", { action: "pack", ids: onlyIds, shipWithoutCodConfirmation });
     if (!r.ok) { setBusy(null); setError(r.error); return; }
     setResults(r.data.results);
     await labelsFor(r.data.shipmentIds, r.data.shipmentIds.length);
@@ -108,6 +108,14 @@ export function DispatchBoard({ rows, view, warehouseId, today }: { rows: Dispat
   }
 
   const failed = results?.filter((r) => !r.ok) ?? [];
+  const codWaiting = failed.filter((r) => r.codHold);
+  function shipAnyway() {
+    const list = codWaiting.map((r) => r.number).join(", ");
+    if (!confirm(`Ship ${codWaiting.length === 1 ? "this COD order" : `these ${codWaiting.length} COD orders`} (${list}) without the buyer's WhatsApp confirmation?
+
+The buyer has not confirmed yet, so the risk of RTO is higher. This is recorded as your decision.`)) return;
+    void packAndLabels(codWaiting.map((r) => r.id), codWaiting.map((r) => r.id));
+  }
   const okN = (results?.length ?? 0) - failed.length;
   return (
     <>
@@ -130,13 +138,19 @@ export function DispatchBoard({ rows, view, warehouseId, today }: { rows: Dispat
           <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <b className="small">{okN} ready{failed.length ? `, ${failed.length} not done` : ""}</b>
             <div className="row" style={{ gap: 6 }}>
-              {failed.length > 0 && <button className="btn btn-orange btn-sm" disabled={!!busy} onClick={() => packAndLabels(failed.map((f) => f.id))}>Retry {failed.length} failed</button>}
+              {failed.length > codWaiting.length && <button className="btn btn-orange btn-sm" disabled={!!busy} onClick={() => packAndLabels(failed.filter((f) => !f.codHold).map((f) => f.id))}>Retry {failed.length - codWaiting.length} failed</button>}
               <button className="btn btn-outline btn-sm" onClick={() => setResults(null)}>Close</button>
             </div>
           </div>
           <ul className="small" style={{ margin: "8px 0 0", paddingLeft: 18, display: "grid", gap: 3 }}>
             {results.map((r) => <li key={r.id} style={{ color: r.ok ? undefined : "var(--red, #b42318)" }}><b>{r.number}</b>: {r.message}{r.awb ? ` · ${r.carrier ?? ""} ${r.awb}` : ""}</li>)}
           </ul>
+          {codWaiting.length > 0 && (
+            <div className="note small" style={{ marginTop: 10, display: "grid", gap: 8 }}>
+              <span><b>{codWaiting.length} COD order{codWaiting.length === 1 ? " is" : "s are"} waiting for the buyer&apos;s reply on WhatsApp.</b> You can wait, or ship now if you are sure about the buyer (for example you spoke to them on the phone).</span>
+              <div><button type="button" className="btn btn-outline btn-sm" disabled={!!busy} onClick={shipAnyway}>Ship without confirmation &amp; download label{codWaiting.length === 1 ? "" : "s"}</button></div>
+            </div>
+          )}
         </div>
       )}
       {error && <div className="err-box small mb12" role="alert">{error}</div>}
