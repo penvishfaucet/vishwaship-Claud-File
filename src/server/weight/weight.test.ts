@@ -196,7 +196,9 @@ As a result, the freight charge of this LR has been increased from INR 1,500.00 
     const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, "sh6"));
     expect(sh.receiverFreightPaise).toBe(costGst + row.receiverExtraPaise!);
     expect(row.chargePaise ?? 0).toBe(0);
-    expect(d).toMatchObject({ chargePaise: 0, status: "accepted" });
+    expect(d).toMatchObject({ chargePaise: 0, status: "open" }); // client can still dispute (FoD)
+    expect((await svc.chargeDueDisputes(new Date())).charged).toBe(0);
+    expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, d.id)))[0].status).toBe("open");
     await svc.chargeDueDisputes(new Date(Date.now() + 30 * 86400_000));
     expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, d.id)))[0].status).toBe("accepted");
     expect((d.evidence as Array<{ label: string }>)[0].label).toMatch(/739\.19 → ₹885\.74/);
@@ -211,5 +213,30 @@ As a result, the freight charge of this LR has been increased from INR 1,500.00 
     const cf = svc.splitForPayer(calc, "receiver", "carrier_freight");
     expect(cf.receiverExtra).toBe(22_000 + 3_960);
     expect(cf.walletCharge).toBe(0);
+  });
+});
+
+describe("FoD dispute outcome", () => {
+  it("courier accepts the dispute: receiver freight goes back; upheld: closed without any wallet charge", async () => {
+    const { resolveWeightDispute } = await import("@/server/admin/disputes");
+    const fodPriced = { lines: [{ code: "freight", costPreTax: 27_900, markupEligible: true }], markup: { bps: 2500 }, gstBps: 1800, payer: { basis: "carrier_freight" } };
+    for (const id of ["sh7", "sh8"]) {
+      await shipment(id, `LR${id}`, 30_000, fodPriced);
+      await db.update(schema.shipments).set({ freightPayer: "receiver", receiverFreightPaise: 32_922 }).where(eq(schema.shipments.id, id));
+    }
+    const a = await svc.raiseWeightDiscrepancy({ shipmentId: "sh7", carrierGrams: 41_000, source: "manual" });
+    const b = await svc.raiseWeightDiscrepancy({ shipmentId: "sh8", carrierGrams: 41_000, source: "manual" });
+    if (a.status !== "created" || b.status !== "created") throw new Error("not created");
+    expect(a.chargePaise).toBe(0);
+    const walletBefore = (await wallet()).postedPaise;
+    // sh7: client disputed, courier accepted → receiver pays the original freight
+    await db.update(schema.weightDisputes).set({ status: "disputed" }).where(eq(schema.weightDisputes.id, a.disputeId));
+    expect((await resolveWeightDispute(a.disputeId, "waive", STAFF)).ok).toBe(true);
+    expect((await db.select().from(schema.shipments).where(eq(schema.shipments.id, "sh7")))[0].receiverFreightPaise).toBe(32_922);
+    // sh8: courier weight stands
+    expect((await resolveWeightDispute(b.disputeId, "charge", STAFF)).ok).toBe(true);
+    expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, b.disputeId)))[0].status).toBe("accepted");
+    expect((await db.select().from(schema.shipments).where(eq(schema.shipments.id, "sh8")))[0].receiverFreightPaise).toBeGreaterThan(32_922);
+    expect((await wallet()).postedPaise).toBe(walletBefore);
   });
 });

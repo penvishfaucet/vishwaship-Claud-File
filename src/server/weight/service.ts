@@ -64,7 +64,6 @@ export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGra
   const fod = sh.freightPayer === "receiver";
   const label = a.source === "csv" ? "Courier weight report" : a.source === "api" ? "Courier re-weigh (tracking)" : "Courier re-weigh";
   const deadline = new Date(Date.now() + DISPUTE_WINDOW_DAYS * 86400_000);
-  const nothingToCharge = r.walletCharge <= 0;
   const recvAfter = sh.receiverFreightPaise + r.receiverExtra;
   await db.insert(schema.weightDisputes).values({
     id, orgId: sh.orgId, shipmentId: sh.id, declaredGrams: sh.chargeableWeightGrams, carrierGrams: grams, revisedChargeableGrams: grams,
@@ -72,7 +71,6 @@ export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGra
     calc: { ...r.calc, walletChargePaise: r.walletCharge, ...(fod ? { fod: true, receiverExtraPaise: r.receiverExtra, receiverBeforePaise: sh.receiverFreightPaise, receiverAfterPaise: recvAfter } : {}) },
     evidence: a.evidence?.length ? a.evidence : [{ kind: "courier", label: `${label}: ${(grams / 1000).toFixed(2)} kg` }],
     deadlineAt: deadline, source: a.source,
-    ...(nothingToCharge ? { status: "accepted", resolution: "FoD — the receiver pays the higher freight at delivery. No wallet charge; for your information." } : {}),
   });
   if (fod && r.receiverExtra > 0) await db.update(schema.shipments).set({ receiverFreightPaise: recvAfter }).where(eq(schema.shipments.id, sh.id));
 
@@ -83,7 +81,7 @@ export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGra
     ? `Extra shipping charge for you: ${formatINR(r.walletCharge)} (incl. GST). It will be debited from your Vishwaship wallet on ${due} unless you raise a dispute before then.
 
 If you believe the courier weight is wrong, raise a dispute with photos of the packed box (on a weighing scale, with dimensions) before ${due} using the button below.`
-    : fod ? "This is a freight-on-delivery (FoD) shipment: nothing is charged to your Vishwaship wallet. The receiver pays the updated freight at delivery, and the courier informs the receiver. This email is for your information, so you can let your customer know." : "No extra amount will be debited from your wallet.";
+    : fod ? `This is a freight-on-delivery (FoD) shipment: nothing is charged to your Vishwaship wallet. The receiver pays the updated freight at delivery, and the courier informs the receiver. This email is for your information, so you can let your customer know.\n\nIf you believe the courier weight is wrong, raise a dispute with photos of the packed box (on a weighing scale, with dimensions) before ${due} using the button below, and we will take it up with the courier.` : "No extra amount will be debited from your wallet.";
   await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: sh.orgId, kind: "wallet", href: "/portal/tools/weight-discrepancy/",
     title: `Weight increased${sh.awb ? ` on ${sh.awb}` : ""}: ${kgs(sh.chargeableWeightGrams)} → ${kgs(grams)}.${fod && r.receiverExtra > 0 ? ` Receiver pays ${formatINR(recvAfter)} at delivery.` : ""}${r.walletCharge > 0 ? ` ${formatINR(r.walletCharge)} to be debited on ${due} unless disputed.` : ""}` });
   try {
@@ -105,12 +103,13 @@ If you believe the courier weight is wrong, raise a dispute with photos of the p
 /** Undisputed discrepancies past their deadline: debit the wallet (once — ledger key wd-charge:<id>). */
 export async function chargeDueDisputes(now = new Date(), limit = 100) {
   const db = await getDb();
-  const due = await db.select({ id: schema.weightDisputes.id }).from(schema.weightDisputes)
+  const due = await db.select({ id: schema.weightDisputes.id, chargePaise: schema.weightDisputes.chargePaise }).from(schema.weightDisputes)
     .where(and(eq(schema.weightDisputes.status, "open"), lte(schema.weightDisputes.deadlineAt, now))).limit(limit);
   const { resolveWeightDispute } = await import("@/server/admin/disputes");
   let charged = 0;
   for (const d of due) {
-    try { if ((await resolveWeightDispute(d.id, "charge", null)).ok) charged++; }
+    // FoD rows (nothing to charge) are simply closed: the courier weight stands, the receiver pays at delivery.
+    try { if ((await resolveWeightDispute(d.id, "charge", null)).ok && d.chargePaise > 0) charged++; }
     catch (e) { console.error("[weight]", d.id, (e as Error).message); }
   }
   return { charged };

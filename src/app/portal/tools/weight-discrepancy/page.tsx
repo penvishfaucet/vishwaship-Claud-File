@@ -36,7 +36,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
             const vol = boxes.reduce((t, b) => t + Math.ceil((b.lengthMm * b.breadthMm * b.heightMm) / 1000 / 5000 * 1000) * b.count, 0);
             const ev = w.evidence as Array<{ label: string; url?: string; urls?: string[]; note?: string; by?: string; claimedGrams?: number }>;
             const isFod = !!(w.calc as { fod?: boolean } | null)?.fod;
-            const [label, chip] = isFod && w.chargePaise === 0 ? ["For info (FoD)", "c-draft"] : STATUS[w.status] ?? [w.status, "c-draft"];
+            const [label, chip] = isFod && w.chargePaise === 0 && w.status === "open" ? ["FoD — receiver pays", "c-pending"] : isFod && w.chargePaise === 0 && w.status === "accepted" ? ["FoD — closed", "c-draft"] : STATUS[w.status] ?? [w.status, "c-draft"];
             const open = w.status === "open" && w.deadlineAt > now;
             return (
               <tr key={w.id}>
@@ -51,7 +51,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
                 <td className="small">
                   <span className={`chip ${chip}`}>{label}</span>
                   {w.resolution && <div className="tiny muted">{w.resolution}</div>}
-                  {w.status === "open" && <div className="tiny muted">{open ? `Dispute by ${w.deadlineAt.toLocaleDateString("en-IN")} — otherwise charged to wallet` : "Dispute window closed"}</div>}
+                  {w.status === "open" && <div className="tiny muted">{open ? `Dispute by ${w.deadlineAt.toLocaleDateString("en-IN")}${isFod && w.chargePaise === 0 ? " if the courier weight is wrong" : " — otherwise charged to wallet"}` : "Dispute window closed"}</div>}
                   {open && <div className="mt8"><DisputeForm id={w.id} declaredKg={Number(((actual || w.declaredGrams) / 1000).toFixed(2))} /></div>}
                 </td>
               </tr>

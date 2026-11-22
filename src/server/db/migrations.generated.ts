@@ -620,5 +620,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795320093287,
   "hash": "32984c426d19f98a2322b03b9d7d6e97d05609e7c75c67518aa7c44b6ff0c175"
+ },
+ {
+  "tag": "0030_reopen_fod_discrepancies",
+  "sql": [
+   "-- FoD weight discrepancies were first raised as \"accepted\" (for information only), which hid the client's dispute\n-- button. Reopen those still inside their dispute window; nothing is ever charged to a wallet for FoD.\nUPDATE \"weight_disputes\" SET \"status\" = 'open', \"resolution\" = NULL\nWHERE \"status\" = 'accepted' AND \"charge_paise\" = 0 AND (\"calc\" ->> 'fod') = 'true' AND \"deadline_at\" > now();\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795327129554,
+  "hash": "b1b33947ea0de551b90f9b3e25fdca524ae3cb6df0f68e903844f305a88fd61b"
  }
 ];
