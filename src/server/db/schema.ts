@@ -1178,6 +1178,12 @@ export const storeProducts = pgTable("store_products", {
   heightMm: integer("height_mm").notNull().default(0),
   /** Option names when the product has variants, e.g. ["Size","Colour"]. Empty = no variants (stock on the product). */
   options: jsonb("options").notNull().default([]),
+  /** Units held for orders that have not left the warehouse yet (`stock` is what can still be sold). */
+  reserved: integer("reserved").notNull().default(0),
+  /** Units set aside as damaged (not sellable). */
+  damaged: integer("damaged").notNull().default(0),
+  /** Purchase cost per unit (for profit). Null = not entered yet. */
+  unitCostPaise: paise("unit_cost_paise"),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);
@@ -1197,6 +1203,10 @@ export const storeProductVariants = pgTable("store_product_variants", {
   weightGrams: integer("weight_grams"),
   sort: integer("sort").notNull().default(0),
   archived: boolean("archived").notNull().default(false),
+  reserved: integer("reserved").notNull().default(0),
+  damaged: integer("damaged").notNull().default(0),
+  /** Null = use the product's unit cost. */
+  unitCostPaise: paise("unit_cost_paise"),
   createdAt: created(),
 }, (t) => [index("store_variants_product").on(t.productId)]);
 
@@ -1254,6 +1264,17 @@ export const storeOrders = pgTable("store_orders", {
   /** Linked shipping order (orders.id) created once the order is placed. */
   shippingOrderId: text("shipping_order_id"),
   stockReleased: boolean("stock_released").notNull().default(false),
+  /** reserved (held for this order) | deducted (left the warehouse) | legacy (orders from before reservations). */
+  stockState: text("stock_state").notNull().default("reserved"),
+  /** Merchant decision on a placed order: pending | accepted | rejected. */
+  acceptance: text("acceptance").notNull().default("pending"),
+  acceptedAt: ts("accepted_at"),
+  acceptedBy: text("accepted_by"),
+  rejectReason: text("reject_reason"),
+  /** Refund at the gateway: {gateway, refId, gatewayRefundId, amountPaise, status: pending|processed|failed, message, startedAt, updatedAt}. */
+  refund: jsonb("refund"),
+  /** Unit cost of each line when the goods left the warehouse: [{productId, variantId, qty, unitCostPaise|null}]. */
+  costs: jsonb("costs"),
   /** UTM / click ids captured on the storefront (used by marketing attribution). */
   attribution: jsonb("attribution").notNull().default({}),
   note: text("note"),
@@ -1269,6 +1290,37 @@ export const storeOrders = pgTable("store_orders", {
   uniqueIndex("store_orders_pg_order").on(t.pgOrderId),
   index("store_orders_store_created").on(t.storeId, t.createdAt),
 ]);
+
+/** Every stock change on a store product/variant (orders, receipts, corrections, damage, returns). */
+export const storeStockMoves = pgTable("store_stock_moves", {
+  id: id(),
+  storeId: text("store_id").notNull(),
+  orgId: text("org_id").notNull(),
+  productId: text("product_id").notNull(),
+  variantId: text("variant_id"),
+  /** order_reserved | order_released | order_dispatched | receipt | adjust | damage | return_sellable | return_damaged | return_missing */
+  kind: text("kind").notNull(),
+  /** Change in sellable, held and damaged units. */
+  available: integer("available").notNull().default(0),
+  reserved: integer("reserved").notNull().default(0),
+  damaged: integer("damaged").notNull().default(0),
+  unitCostPaise: paise("unit_cost_paise"),
+  storeOrderId: text("store_order_id"),
+  reason: text("reason"),
+  actorUserId: text("actor_user_id"),
+  createdAt: created(),
+}, (t) => [index("store_stock_moves_product").on(t.productId, t.createdAt), index("store_stock_moves_store").on(t.storeId, t.createdAt)]);
+
+/** Timeline of a store order (placed, paid, accepted, rejected, refund, dispatched …). */
+export const storeOrderEvents = pgTable("store_order_events", {
+  id: id(),
+  storeOrderId: text("store_order_id").notNull(),
+  orgId: text("org_id").notNull(),
+  kind: text("kind").notNull(),
+  message: text("message").notNull(),
+  actorUserId: text("actor_user_id"),
+  createdAt: created(),
+}, (t) => [index("store_order_events_order").on(t.storeOrderId, t.createdAt)]);
 
 /** Store images (logo, banners, product photos). Kept in the database so redeploys never lose them. */
 export const storeMedia = pgTable("store_media", {

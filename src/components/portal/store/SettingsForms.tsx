@@ -10,6 +10,7 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
   const [f, setF] = useState({
     codEnabled: initial.codEnabled, codFee: toRupees(initial.codFeePaise), codMin: toRupees(initial.codMinPaise), codMax: toRupees(initial.codMaxPaise),
     ship: toRupees(initial.shippingFeePaise), freeAbove: toRupees(initial.freeShippingAbovePaise), warehouseId: initial.warehouseId ?? warehouses[0]?.id ?? "",
+    autoAccept: initial.autoAccept, acceptHours: String(initial.acceptWithinHours),
   });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: string; err?: string } | null>(null);
@@ -22,6 +23,7 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
     const r = await api("PUT", "/api/portal/store/settings", { step: 4, patch: { checkout: {
       codEnabled: f.codEnabled, codFeePaise: toPaise(f.codFee), codMinPaise: toPaise(f.codMin), codMaxPaise: toPaise(f.codMax),
       shippingFeePaise: toPaise(f.ship), freeShippingAbovePaise: toPaise(f.freeAbove), warehouseId: f.warehouseId,
+      autoAccept: f.autoAccept, acceptWithinHours: Math.min(168, Math.max(1, Math.round(Number(f.acceptHours) || 24))),
     } } });
     setBusy(false);
     if (!r.ok) { setMsg({ err: r.error }); return; }
@@ -42,6 +44,13 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
           <select id="wh" className="input select" value={f.warehouseId} onChange={(e) => set("warehouseId", e.target.value)}>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.label}</option>)}</select>
         ) : <p className="small">No warehouse yet. <a className="orange" href="/portal/addresses/">Add a pickup warehouse</a>, then come back.</p>}
       </div>
+      <h3 style={{ margin: "20px 0 8px" }}>New orders</h3>
+      <label className="row" style={{ gap: 8, alignItems: "center", fontWeight: 500, minHeight: 40 }}>
+        <input type="checkbox" checked={f.autoAccept} onChange={(e) => set("autoAccept", e.target.checked)} style={{ width: 20, height: 20 }} /> Accept new orders automatically
+      </label>
+      <p className="small muted" style={{ margin: "4px 0 0" }}>{f.autoAccept ? "Orders go straight to To Pack." : "Every new order waits in Pending Acceptance until you accept or reject it. Stock is held for it meanwhile."}</p>
+      {!f.autoAccept && <div className="field" style={{ marginTop: 10, maxWidth: 260 }}><label htmlFor="acch">Show as overdue after (hours)</label>
+        <input id="acch" className="input" inputMode="numeric" value={f.acceptHours} onChange={(e) => set("acceptHours", e.target.value.replace(/\D/g, "").slice(0, 3))} /></div>}
       <h3 style={{ margin: "20px 0 8px" }}>Shipping charge to buyers</h3>
       <div className="grid2">{money("ship", "Shipping fee (₹)", "0 = free shipping")}{money("freeAbove", "Free shipping above (₹)", "0 = off")}</div>
       <h3 style={{ margin: "20px 0 8px" }}>Cash on Delivery</h3>

@@ -242,3 +242,47 @@
 .sf-rate button{background:none;border:0;padding:2px;cursor:pointer;color:#d6d3d1}
 .sf-rate button.on{color:#f59e0b}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ---------- store orders board (phone cards, desktop table, bulk bar) ---------- */
+.so-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.so-tabs a{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line,#e3e8f2);background:var(--card,#fff);font-size:13px;font-weight:500;color:var(--navy,#0b2c6a);white-space:nowrap;text-decoration:none}
+.so-tabs a.on{background:var(--navy,#0b2c6a);border-color:var(--navy,#0b2c6a);color:#fff}
+.so-tabs .n{font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;background:var(--gray-soft,#eef2f9);color:var(--navy,#0b2c6a)}
+.so-tabs a.on .n{background:#fff;color:var(--navy,#0b2c6a)}
+.so-tabs a.hot .n{background:#dc2626;color:#fff}
+.so-table tr.so-overdue td{background:#fff6f0}
+.so-cards{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.so-card{padding:12px;min-width:0;border:1.5px solid transparent}
+.so-card.so-on{border-color:var(--orange,#e5540c)}
+.so-card.so-overdue{background:#fff6f0}
+.so-card-h{display:flex;align-items:flex-start;gap:10px}
+.so-card-h .chip{flex-shrink:0;white-space:nowrap}
+.so-check{width:22px;height:22px;flex-shrink:0;margin:2px 0 0;accent-color:var(--orange,#e5540c)}
+.so-card-link{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-decoration:none;color:inherit}
+.so-num{font-weight:700;font-size:15px;color:var(--navy,#0b2c6a)}
+.so-card-b{display:flex;flex-direction:column;gap:3px;margin-top:8px;text-decoration:none;color:inherit;font-size:14px;overflow-wrap:anywhere}
+.so-card-a{margin-top:10px}
+.so-card-a .btn{flex:1;min-height:44px;justify-content:center}
+.so-selall{min-height:40px;margin-bottom:6px}
+.so-selall input{width:20px;height:20px;accent-color:var(--orange,#e5540c)}
+.so-bulk{position:sticky;bottom:0;z-index:20;margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:var(--card,#fff);border:1px solid var(--line,#e3e8f2);border-radius:14px;box-shadow:0 -6px 24px rgba(11,44,106,.12)}
+.so-bulk .btn{min-height:44px}
+.so-dialog{border:0;border-radius:16px;padding:18px;width:min(520px,calc(100vw - 24px));box-shadow:0 20px 60px rgba(0,0,0,.25);color:var(--text,#102a5c);background:var(--card,#fff)}
+.so-dialog::backdrop{background:rgba(5,28,70,.45)}
+.so-dialog .btn{min-height:42px}
+.so-filters summary{cursor:pointer;min-height:40px;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--navy,#0b2c6a)}
+.so-kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.so-kpi{display:flex;flex-direction:column;gap:2px;padding:12px 14px;text-decoration:none;color:inherit;min-height:72px}
+.so-kpi b{font-size:22px;color:var(--navy,#0b2c6a);line-height:1.2}
+.so-kpi span{font-size:12.5px;color:var(--muted,#56637d)}
+.so-kpi.hot b{color:#c2410c}
+.so-timeline{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.so-timeline li{display:grid;grid-template-columns:12px 1fr;gap:10px;font-size:13px}
+.so-timeline li::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--orange,#e5540c);margin-top:4px}
+.so-pager{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
+.so-pager .btn{min-height:42px}
+@media (max-width:900px){
+  .so-head-actions{width:100%}
+  .so-bulk{bottom:calc(78px + env(safe-area-inset-bottom));z-index:46;padding-bottom:10px}
+  .so-detail-actions .btn{flex:1;min-height:46px;justify-content:center}
+}

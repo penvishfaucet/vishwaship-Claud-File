@@ -2,7 +2,7 @@ import { saleFor, salePrice } from "@/lib/store-sale";
 import { activeSales } from "./sales";
 import { ORDERS_PAUSED_TEXT, planState } from "@/lib/store-plan";
 import "server-only";
-import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
 import { createOrder } from "@/server/orders/create";
@@ -11,6 +11,7 @@ import { readSettings } from "@/lib/store-themes";
 import { createMerchantOrder, fetchMerchantPayment, merchantOrderPayments, razorpayOverview, razorpayReady, verifyMerchantSignature, type RzPayment } from "./razorpay";
 import { type GatewayKey, type GatewayStart, type GatewayStatus, gatewayStatus, isGatewayKey, newPgOrderId, readyGateways, startGatewayPayment } from "./gateways";
 import { orgSetting } from "@/server/couriers";
+import { logOrderEvent, releaseOrderStock, reserveLine, sweepDispatched } from "./stock";
 
 export const PAY_METHODS = ["cod", "razorpay", "cashfree", "phonepe", "paytm"] as const;
 export type PayMethod = (typeof PAY_METHODS)[number];
@@ -165,14 +166,10 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
     created = await db.transaction(async (tx) => {
       const q = await quoteCart(store, input.lines, input.coupon, input.paymentMethod, tx);
       if (input.paymentMethod === "cod" && !q.codAllowed) throw new CheckoutError(q.codReason ?? "Cash on Delivery is not available");
-      // take stock: each update only succeeds if enough is left (concurrent checkouts can't oversell)
+      const oid = newId("so");
+      // hold stock: each update only succeeds if enough is left (concurrent checkouts can't oversell)
       for (const l of q.lines) {
-        const res = l.variantId
-          ? await tx.update(schema.storeProductVariants).set({ stock: sql`${schema.storeProductVariants.stock} - ${l.qty}` }).where(and(eq(schema.storeProductVariants.id, l.variantId), gte(schema.storeProductVariants.stock, l.qty))).returning({ id: schema.storeProductVariants.id })
-          : await tx.update(schema.storeProducts).set({ stock: sql`${schema.storeProducts.stock} - ${l.qty}` }).where(and(eq(schema.storeProducts.id, l.productId), gte(schema.storeProducts.stock, l.qty))).returning({ id: schema.storeProducts.id });
-        if (!res.length) throw new CheckoutError(`${l.title} just sold out. Please update your cart.`);
-        // keep the product's total (shown in lists) in step with its variants
-        if (l.variantId) await tx.update(schema.storeProducts).set({ stock: sql`greatest(${schema.storeProducts.stock} - ${l.qty}, 0)` }).where(eq(schema.storeProducts.id, l.productId));
+        if (!(await reserveLine(tx, { id: oid, storeId: store.id, orgId: store.orgId }, l))) throw new CheckoutError(`${l.title} just sold out. Please update your cart.`);
       }
       if (q.coupon) {
         const ok = await tx.update(schema.storeCoupons).set({ used: sql`${schema.storeCoupons.used} + 1` })
@@ -181,11 +178,12 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
       }
       const cod = input.paymentMethod === "cod";
       const [row] = await tx.insert(schema.storeOrders).values({
-        id: newId("so"), storeId: store.id, orgId: store.orgId, number: await nextNumber(tx, store), checkoutKey: input.checkoutKey,
+        id: oid, storeId: store.id, orgId: store.orgId, number: await nextNumber(tx, store), checkoutKey: input.checkoutKey,
         buyerToken: randomToken(18), status: cod ? "placed" : "pending_payment", paymentMethod: input.paymentMethod, paymentStatus: cod ? "cod_pending" : "pending",
         buyer: { ...input.buyer }, lines: q.lines, subtotalPaise: q.subtotalPaise, discountPaise: q.discountPaise, shippingPaise: q.shippingPaise,
         codFeePaise: q.codFeePaise, totalPaise: q.totalPaise, couponCode: q.coupon?.code ?? null, attribution: input.attribution, placedAt: cod ? new Date() : null,
       }).returning();
+      await logOrderEvent(tx, row, "placed", cod ? "Order placed (Cash on Delivery)" : `Order created; waiting for ${input.paymentMethod} payment`);
       return row;
     });
   } catch (e) {
@@ -198,7 +196,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
 }
 
 async function resume(store: Store, o: typeof schema.storeOrders.$inferSelect): Promise<PlaceResult> {
-  if (o.status === "placed") { await ensureShippingOrder(o.id); await reportPurchase(o.id); return { kind: "placed", orderId: o.id, number: o.number, token: o.buyerToken }; }
+  if (o.status === "placed") { await afterPlaced(o.id); await reportPurchase(o.id); return { kind: "placed", orderId: o.id, number: o.number, token: o.buyerToken }; }
   if (o.status === "cancelled") throw new CheckoutError("This order was cancelled. Please place a new order.");
   if (isGatewayKey(o.paymentMethod)) return resumeGateway(store, o, o.paymentMethod);
   // pending online payment: create (once) the Razorpay order on the merchant's account
@@ -228,12 +226,14 @@ export async function applyPayment(orgId: string, p: RzPayment, _source: "checko
   if (!["captured", "authorized"].includes(p.status) || p.amount !== o.totalPaise || p.currency !== "INR") return { ok: false as const, message: "Payment not completed" };
   if (o.status === "cancelled") {
     // paid after we gave up on it: keep the money visible so the merchant refunds it
-    await db.update(schema.storeOrders).set({ paymentStatus: "refund_due", razorpayPaymentId: p.id, paidAt: new Date() }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.razorpayPaymentId)));
+    const late = await db.update(schema.storeOrders).set({ paymentStatus: "refund_due", razorpayPaymentId: p.id, paidAt: new Date() }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.razorpayPaymentId))).returning({ id: schema.storeOrders.id });
+    if (late.length) await refundLatePayment(o);
     return { ok: false as const, message: "Order was cancelled; the payment will be refunded" };
   }
-  await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", razorpayPaymentId: p.id, paidAt: new Date(), placedAt: new Date() })
-    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment")));
-  await ensureShippingOrder(o.id);
+  const paid = await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", razorpayPaymentId: p.id, paidAt: new Date(), placedAt: new Date() })
+    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment"))).returning({ id: schema.storeOrders.id });
+  if (paid.length) await logOrderEvent(db, o, "paid", `Paid online (Razorpay ${p.id})`);
+  await afterPlaced(o.id);
   await reportPurchase(o.id);
   return { ok: true as const, orderId: o.id };
 }
@@ -291,12 +291,14 @@ export async function applyGatewayPayment(o: StoreOrder, st: GatewayStatus) {
   if (st.state !== "paid" || st.amountPaise !== o.totalPaise) return { ok: false as const, message: "Payment not completed" };
   const db = await getDb();
   if (o.status === "cancelled") {
-    await db.update(schema.storeOrders).set({ paymentStatus: "refund_due", pgPaymentId: st.paymentId, paidAt: new Date() }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.pgPaymentId)));
+    const late = await db.update(schema.storeOrders).set({ paymentStatus: "refund_due", pgPaymentId: st.paymentId, paidAt: new Date() }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.pgPaymentId))).returning({ id: schema.storeOrders.id });
+    if (late.length) await refundLatePayment(o);
     return { ok: false as const, message: "Order was cancelled; the payment will be refunded" };
   }
-  await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", pgPaymentId: st.paymentId, paidAt: new Date(), placedAt: new Date() })
-    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment")));
-  await ensureShippingOrder(o.id);
+  const paid = await db.update(schema.storeOrders).set({ status: "placed", paymentStatus: "paid", pgPaymentId: st.paymentId, paidAt: new Date(), placedAt: new Date() })
+    .where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.status, "pending_payment"))).returning({ id: schema.storeOrders.id });
+  if (paid.length) await logOrderEvent(db, o, "paid", `Paid online (${o.paymentMethod})`);
+  await afterPlaced(o.id);
   await reportPurchase(o.id);
   return { ok: true as const, orderId: o.id };
 }
@@ -320,11 +322,25 @@ export async function confirmGatewayReturn(slug: string, orderId: string, token:
   return { number: o.number, token: o.buyerToken, state };
 }
 
-/** Create the linked Vishwaship shipping order once (idempotent via orders_store_ext). */
+/** A paid / COD order is in: accept it at once if the store does not ask for manual acceptance. */
+async function afterPlaced(storeOrderId: string) {
+  try { const { autoAccept } = await import("./ops"); await autoAccept(storeOrderId); }
+  catch (e) { console.error("[store] auto-accept", storeOrderId, (e as Error).message); }
+}
+
+/** A payment that arrived after the order was given up: send it back to the buyer. */
+async function refundLatePayment(o: StoreOrder) {
+  const db = await getDb();
+  await logOrderEvent(db, o, "paid_late", "Payment arrived after the order was cancelled; refunding it");
+  const { startRefund } = await import("./refunds");
+  await startRefund(o.id);
+}
+
+/** Create the linked Vishwaship shipping order once (idempotent via orders_store_ext). Only for accepted orders. */
 export async function ensureShippingOrder(storeOrderId: string) {
   const db = await getDb();
   const [o] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, storeOrderId));
-  if (!o || o.status !== "placed" || o.shippingOrderId) return o?.shippingOrderId ?? null;
+  if (!o || o.status !== "placed" || o.acceptance !== "accepted" || o.shippingOrderId) return o?.shippingOrderId ?? null;
   const [hit] = await db.select({ id: schema.orders.id }).from(schema.orders).where(and(eq(schema.orders.orgId, o.orgId), eq(schema.orders.externalStoreId, o.storeId), eq(schema.orders.externalOrderId, o.id)));
   let shippingId = hit?.id ?? null;
   if (!shippingId) {
@@ -354,35 +370,44 @@ export async function ensureShippingOrder(storeOrderId: string) {
   return shippingId;
 }
 
-/** Give stock (and a coupon use) back exactly once. */
-async function releaseStock(tx: Tx, o: typeof schema.storeOrders.$inferSelect) {
-  const claimed = await tx.update(schema.storeOrders).set({ stockReleased: true }).where(and(eq(schema.storeOrders.id, o.id), eq(schema.storeOrders.stockReleased, false))).returning({ id: schema.storeOrders.id });
-  if (!claimed.length) return;
-  for (const l of o.lines as Line[]) {
-    if (l.variantId) await tx.update(schema.storeProductVariants).set({ stock: sql`${schema.storeProductVariants.stock} + ${l.qty}` }).where(eq(schema.storeProductVariants.id, l.variantId));
-    await tx.update(schema.storeProducts).set({ stock: sql`${schema.storeProducts.stock} + ${l.qty}` }).where(eq(schema.storeProducts.id, l.productId));
-  }
-  if (o.couponCode) await tx.update(schema.storeCoupons).set({ used: sql`greatest(${schema.storeCoupons.used} - 1, 0)` }).where(and(eq(schema.storeCoupons.storeId, o.storeId), eq(schema.storeCoupons.code, o.couponCode)));
-}
+const releaseStock = releaseOrderStock;
 
-/** Merchant cancels an order that has not been booked with a courier. Paid orders become "refund due". */
-export async function cancelStoreOrder(orgId: string, id: string, reason: string) {
+/**
+ * Merchant cancels (or rejects, while it waits for acceptance) an order that has not been booked with a courier.
+ * Stock comes back once; a paid order is refunded at the gateway at once (status followed by the sweep).
+ */
+export async function cancelStoreOrder(orgId: string, id: string, reason: string, actorUserId: string | null = null) {
   const db = await getDb();
   const [o] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.id, id), eq(schema.storeOrders.orgId, orgId)));
   if (!o) return { ok: false as const, message: "Order not found" };
-  if (o.status === "cancelled") return { ok: true as const };
+  if (o.status === "cancelled") return { ok: true as const, refund: (o.refund as { status: string } | null)?.status ?? null };
   if (o.shippingOrderId) {
     const done = await db.update(schema.orders).set({ status: "cancelled" })
       .where(and(eq(schema.orders.id, o.shippingOrderId), eq(schema.orders.orgId, orgId), inArray(schema.orders.status, ["draft", "ready", "cod_hold", "booking_failed", "cancelled"]))).returning({ id: schema.orders.id });
     if (!done.length) return { ok: false as const, message: "This order is already booked with a courier. Cancel the shipment from Orders first." };
   }
-  await db.transaction(async (tx) => {
-    await tx.update(schema.storeOrders).set({ status: "cancelled", cancelledAt: new Date(), note: reason.slice(0, 300) || null,
-      paymentStatus: o.paymentStatus === "paid" ? "refund_due" : o.paymentStatus === "pending" ? "failed" : o.paymentStatus === "cod_pending" ? "cod_pending" : o.paymentStatus })
-      .where(eq(schema.storeOrders.id, o.id));
+  const reject = o.status === "placed" && o.acceptance === "pending";
+  const won = await db.transaction(async (tx) => {
+    const upd = await tx.update(schema.storeOrders).set({
+      status: "cancelled", cancelledAt: new Date(), note: reason.slice(0, 300) || null,
+      ...(reject ? { acceptance: "rejected", rejectReason: reason.slice(0, 300) || null } : {}),
+      paymentStatus: o.paymentStatus === "paid" ? "refund_due" : o.paymentStatus === "pending" ? "failed" : o.paymentStatus,
+    }).where(and(eq(schema.storeOrders.id, o.id), ne(schema.storeOrders.status, "cancelled"))).returning({ id: schema.storeOrders.id });
+    if (!upd.length) return false;
     await releaseStock(tx, o);
+    await logOrderEvent(tx, o, reject ? "rejected" : "cancelled", `${reject ? "Rejected" : "Cancelled"} by the seller${reason ? `: ${reason}` : ""}. Stock returned.`, actorUserId);
+    return true;
   });
-  return { ok: true as const };
+  let refund: string | null = null;
+  if (won && o.paymentStatus === "paid") {
+    const { startRefund } = await import("./refunds");
+    refund = (await startRefund(o.id, actorUserId))?.status ?? null;
+  }
+  if (won) {
+    const { notifyBuyerCancelled } = await import("./ops");
+    await notifyBuyerCancelled(o.id).catch((e) => console.error("[store] buyer notice", (e as Error).message));
+  }
+  return { ok: true as const, refund };
 }
 
 export async function markRefunded(orgId: string, id: string) {
@@ -439,13 +464,21 @@ export async function sweepStoreOrders(now = new Date()) {
     .innerJoin(schema.orders, eq(schema.orders.id, schema.storeOrders.shippingOrderId))
     .where(and(eq(schema.storeOrders.status, "placed"), eq(schema.orders.status, "cancelled"))).limit(50);
   for (const { so } of orphaned) {
-    await db.transaction(async (tx) => {
-      await tx.update(schema.storeOrders).set({ status: "cancelled", cancelledAt: now, note: so.note ?? "Shipping order cancelled",
-        paymentStatus: so.paymentStatus === "paid" ? "refund_due" : so.paymentStatus }).where(eq(schema.storeOrders.id, so.id));
+    const won = await db.transaction(async (tx) => {
+      const upd = await tx.update(schema.storeOrders).set({ status: "cancelled", cancelledAt: now, note: so.note ?? "Shipping order cancelled",
+        paymentStatus: so.paymentStatus === "paid" ? "refund_due" : so.paymentStatus }).where(and(eq(schema.storeOrders.id, so.id), eq(schema.storeOrders.status, "placed"))).returning({ id: schema.storeOrders.id });
+      if (!upd.length) return false;
       await releaseStock(tx, so);
+      await logOrderEvent(tx, so, "cancelled", "Shipping order was cancelled in Orders; store order cancelled and stock returned");
+      return true;
     });
+    if (won && so.paymentStatus === "paid") { const { startRefund } = await import("./refunds"); await startRefund(so.id); }
   }
-  return { stale: stale.length, orphaned: orphaned.length };
+  // goods that left the warehouse: stop holding their stock; refunds: follow the gateway
+  let dispatched = 0, refunds = 0;
+  try { dispatched = await sweepDispatched(); } catch (e) { console.error("[store] dispatch sweep", (e as Error).message); }
+  try { const { sweepRefunds } = await import("./refunds"); refunds = await sweepRefunds(now); } catch (e) { console.error("[store] refund sweep", (e as Error).message); }
+  return { stale: stale.length, orphaned: orphaned.length, dispatched, refunds };
 }
 
 /** Queue server-side purchase events when the order's milestone is reached. Never blocks or fails a checkout. */

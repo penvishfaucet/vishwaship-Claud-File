@@ -6,6 +6,7 @@ import { StoreBasicsForm } from "@/components/portal/store/StoreBasicsForm";
 import { getDb, schema } from "@/server/db/client";
 import { appUrl, storePage } from "@/server/store/portal";
 import { launchChecklist } from "@/server/store/service";
+import { tabCounts } from "@/server/store/orders";
 import "@/styles/store.css";
 
 export const metadata = { title: "Online Store — Vishwaship" };
@@ -32,6 +33,16 @@ export default async function StoreOverview() {
   const live = store.status === "live";
   const plan = planState(store);
   const db0 = await getDb();
+  const counts = await tabCounts(ctx.org.id);
+  const [{ low }] = await db0.select({ low: sql<number>`count(*)::int` }).from(schema.storeProducts).where(and(eq(schema.storeProducts.storeId, store.id), eq(schema.storeProducts.status, "active"), sql`${schema.storeProducts.stock} <= ${schema.storeProducts.lowStockAt}`));
+  const kpis = [
+    { k: "pending", label: "Waiting for acceptance", n: counts.pending ?? 0, href: "/portal/store/orders/?tab=pending", hot: (counts.pending ?? 0) > 0 },
+    { k: "to_pack", label: "To pack", n: counts.to_pack ?? 0, href: "/portal/store/orders/?tab=to_pack", hot: false },
+    { k: "ready", label: "Ready to ship", n: counts.ready ?? 0, href: "/portal/store/orders/?tab=ready", hot: false },
+    { k: "transit", label: "In transit", n: counts.transit ?? 0, href: "/portal/store/orders/?tab=transit", hot: false },
+    { k: "rto", label: "RTO", n: counts.rto ?? 0, href: "/portal/store/orders/?tab=rto", hot: (counts.rto ?? 0) > 0 },
+    { k: "low", label: "Low on stock", n: low, href: "/portal/store/products/", hot: low > 0 },
+  ];
   const [{ pendingAds }] = await db0.select({ pendingAds: sql<number>`count(*)::int` }).from(schema.storeAdChanges).where(and(eq(schema.storeAdChanges.storeId, store.id), eq(schema.storeAdChanges.status, "pending")));
   return (
     <>
@@ -51,6 +62,9 @@ export default async function StoreOverview() {
       </div>
       {plan.state === "expired" && <div className="err-box small mb12" role="alert"><b>New orders are paused.</b> Your {store.paidUntil ? "plan" : "free trial"} has ended. Buyers can still see your store. <a className="orange" href="/portal/store/plan/">Choose a plan</a> to reopen at once.</div>}
       {plan.state === "trial" && plan.until && <p className="note small mb12">Free trial: <b>{plan.daysLeft} {plan.daysLeft === 1 ? "day" : "days"} left</b>. <a className="orange" href="/portal/store/plan/">See plans</a></p>}
+      <nav className="so-kpis" aria-label="Orders at a glance">
+        {kpis.map((c) => <a key={c.k} className={`card so-kpi${c.hot ? " hot" : ""}`} href={c.href}><b>{c.n}</b><span>{c.label}</span></a>)}
+      </nav>
       {pendingAds > 0 && <p className="note small mb12"><b>{pendingAds} ad {pendingAds === 1 ? "change needs" : "changes need"} your approval.</b> <a className="orange" href="/portal/store/managed-ads/">Review in Managed Meta Ads</a></p>}
       <div className="grid2" style={{ alignItems: "start" }}>
         <div className="card" style={{ padding: 16 }}>

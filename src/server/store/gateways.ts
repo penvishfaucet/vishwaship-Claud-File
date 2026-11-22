@@ -251,3 +251,84 @@ export async function gatewayStatus(orgId: string, g: GatewayKey, pgOrderId: str
   const st = j.body?.resultInfo?.resultStatus;
   return { state: st === "TXN_SUCCESS" ? "paid" : st === "TXN_FAILURE" ? "failed" : "pending", amountPaise: j.body?.txnAmount ? Math.round(Number(j.body.txnAmount) * 100) : null, paymentId: j.body?.txnId ?? null };
 }
+
+// ---------------- refunds (full amount back to the buyer on the merchant's account) ----------------
+export type GwRefund = { id: string | null; status: "pending" | "processed" | "failed"; message: string };
+/** The gateway said no for good (not a network problem): the merchant refunds by hand. */
+export class RefundRejected extends Error {}
+export type RefundRef = { pgOrderId: string; paymentId: string | null; refId: string; amountPaise: number };
+
+const cfRefund = (j: { cf_refund_id?: string | number; refund_status?: string; status_description?: string }): GwRefund => ({
+  id: j.cf_refund_id != null ? String(j.cf_refund_id) : null,
+  status: j.refund_status === "SUCCESS" ? "processed" : j.refund_status === "CANCELLED" || j.refund_status === "REJECTED" ? "failed" : "pending",
+  message: j.status_description ?? j.refund_status ?? "",
+});
+const ppRefund = (j: { refundId?: string; state?: string; errorCode?: string }): GwRefund => ({
+  id: j.refundId ?? null, status: j.state === "COMPLETED" ? "processed" : j.state === "FAILED" ? "failed" : "pending", message: j.errorCode ?? j.state ?? "",
+});
+type PtBody = { resultInfo?: { resultStatus?: string; resultCode?: string; resultMsg?: string }; refundId?: string };
+const ptSigned = (s: Secrets, body: Record<string, string>) => { const raw = JSON.stringify(body); return `{"body":${raw},"head":{"signature":${JSON.stringify(paytmSignature(raw, s.merchantKey))}}}`; };
+
+/** Our refund (by refId) at the gateway, or null when the gateway has none. Network problems throw. */
+export async function gatewayRefundLookup(orgId: string, g: GatewayKey, a: RefundRef): Promise<GwRefund | null> {
+  const k = await load(orgId, g);
+  if (!k) throw new Error("Gateway not configured");
+  const mode = k.stored.mode;
+  if (g === "cashfree") {
+    const r = await call(g, mode, `/pg/orders/${encodeURIComponent(a.pgOrderId)}/refunds/${encodeURIComponent(a.refId)}`, { headers: cfHeaders(k.s) });
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(`Cashfree refund status ${r.status}`);
+    return cfRefund(await r.json());
+  }
+  if (g === "phonepe") {
+    const token = await phonepeToken(orgId, k.s, mode);
+    const r = await call(g, mode, `${ppBase(mode)}/payments/v2/refund/${encodeURIComponent(a.refId)}/status`, { headers: { "content-type": "application/json", authorization: `O-Bearer ${token}` } });
+    if (r.status === 404 || r.status === 400) return null;
+    if (!r.ok) throw new Error(`PhonePe refund status ${r.status}`);
+    return ppRefund(await r.json());
+  }
+  const r = await call(g, mode, "/v2/refund/status", { method: "POST", headers: { "content-type": "application/json" }, body: ptSigned(k.s, { mid: k.s.mid, orderId: a.pgOrderId, refId: a.refId }) });
+  if (!r.ok) throw new Error(`Paytm refund status ${r.status}`);
+  const b = ((await r.json()) as { body?: PtBody }).body;
+  const st = b?.resultInfo?.resultStatus;
+  if (st === "NO_RECORD_FOUND" || b?.resultInfo?.resultCode === "631") return null;
+  return { id: b?.refundId ?? null, status: st === "TXN_SUCCESS" ? "processed" : st === "TXN_FAILURE" ? "failed" : "pending", message: b?.resultInfo?.resultMsg ?? st ?? "" };
+}
+
+/** Ask the gateway to refund the full payment. A definite "no" throws RefundRejected; network problems throw Error. */
+export async function gatewayRefundCreate(orgId: string, g: GatewayKey, a: RefundRef): Promise<GwRefund> {
+  const k = await load(orgId, g);
+  if (!k) throw new RefundRejected("This payment gateway is not connected any more");
+  const mode = k.stored.mode;
+  if (g === "cashfree") {
+    const r = await call(g, mode, `/pg/orders/${encodeURIComponent(a.pgOrderId)}/refunds`, {
+      method: "POST", headers: cfHeaders(k.s), body: JSON.stringify({ refund_amount: Number(rupeeStr(a.amountPaise)), refund_id: a.refId, refund_note: "Order cancelled by seller" }),
+    });
+    if (r.status >= 500) throw new Error(`Cashfree refund ${r.status}`);
+    const j = (await r.json().catch(() => ({}))) as { message?: string; cf_refund_id?: string | number; refund_status?: string; status_description?: string };
+    if (!r.ok) throw new RefundRejected(j.message ?? `Cashfree refused the refund (${r.status})`);
+    return cfRefund(j);
+  }
+  if (g === "phonepe") {
+    const token = await phonepeToken(orgId, k.s, mode);
+    const r = await call(g, mode, `${ppBase(mode)}/payments/v2/refund`, {
+      method: "POST", headers: { "content-type": "application/json", authorization: `O-Bearer ${token}` },
+      body: JSON.stringify({ merchantRefundId: a.refId, originalMerchantOrderId: a.pgOrderId, amount: a.amountPaise }),
+    });
+    if (r.status >= 500) throw new Error(`PhonePe refund ${r.status}`);
+    const j = (await r.json().catch(() => ({}))) as { message?: string; code?: string; refundId?: string; state?: string };
+    if (!r.ok) throw new RefundRejected(j.message ?? j.code ?? `PhonePe refused the refund (${r.status})`);
+    return ppRefund(j);
+  }
+  if (!a.paymentId) throw new RefundRejected("Paytm transaction id is missing");
+  const r = await call(g, mode, "/refund/apply", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: ptSigned(k.s, { mid: k.s.mid, txnType: "REFUND", orderId: a.pgOrderId, txnId: a.paymentId, refId: a.refId, refundAmount: rupeeStr(a.amountPaise) }),
+  });
+  if (r.status >= 500) throw new Error(`Paytm refund ${r.status}`);
+  if (!r.ok) throw new RefundRejected(`Paytm refused the refund (${r.status})`);
+  const b = ((await r.json()) as { body?: PtBody }).body;
+  const st = b?.resultInfo?.resultStatus;
+  if (st === "TXN_FAILURE") throw new RefundRejected(b?.resultInfo?.resultMsg ?? "Paytm refused the refund");
+  return { id: b?.refundId ?? null, status: st === "TXN_SUCCESS" ? "processed" : "pending", message: b?.resultInfo?.resultMsg ?? st ?? "" };
+}

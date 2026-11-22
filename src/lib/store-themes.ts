@@ -158,6 +158,10 @@ export const StoreSettings = z.object({
     shippingFeePaise: z.number().int().min(0).max(100_000).default(0),
     freeShippingAbovePaise: z.number().int().min(0).max(10_000_000).default(0),
     warehouseId: z.string().max(60).nullable().default(null),
+    /** Place orders straight into packing without the merchant's Accept (off = every order waits in Pending Acceptance). */
+    autoAccept: z.boolean().default(false),
+    /** Orders still waiting for Accept after this many hours are shown as overdue. */
+    acceptWithinHours: z.number().int().min(1).max(168).default(24),
   }).default({}),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;

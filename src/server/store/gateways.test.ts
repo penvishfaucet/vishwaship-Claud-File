@@ -49,7 +49,7 @@ beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
   await db.insert(schema.orgs).values({ id: A, name: A, businessName: A });
   await db.insert(schema.warehouses).values({ id: "wh_gw", orgId: A, label: "Main", contactName: "A", mobile: "9999999999", line1: "x", pincode: "110034", city: "Delhi", state: "Delhi" });
-  const settings = readSettings({ checkout: { codEnabled: true, shippingFeePaise: 0, warehouseId: "wh_gw" } });
+  const settings = readSettings({ checkout: { codEnabled: true, shippingFeePaise: 0, warehouseId: "wh_gw", autoAccept: true } });
   await db.insert(schema.stores).values({ id: "st_gw", orgId: A, name: "Gw Store", slug: "gw-store", status: "live", draftTheme: defaultTheme(), publishedTheme: defaultTheme(), settings });
   prod = (await cat.saveProduct(A, cat.ProductInput.parse({ title: "Lamp", priceRupees: 750, stock: 20, weightGrams: 300, status: "active" }))).id;
 });

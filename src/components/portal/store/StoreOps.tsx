@@ -4,35 +4,58 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Msg, api } from "./ui";
 
-/** Store order actions: ship (open the shipping order to book a courier), cancel, mark refunded. */
-export function OrderActions({ id, status, paymentStatus, shippingOrderId, canCancel }: { id: string; status: string; paymentStatus: string; shippingOrderId: string | null; canCancel: boolean }) {
+const REASONS = ["Out of stock", "Address not serviceable", "Duplicate order", "Buyer asked to cancel", "Suspected fake order"];
+
+/** Store order actions: accept / reject (reason), ship (open the shipping order), cancel, retry refund, mark refunded. */
+export function OrderActions({ id, stage, paymentStatus, shippingOrderId, canCancel, prepaid, refundStatus }: {
+  id: string; stage: string; paymentStatus: string; shippingOrderId: string | null; canCancel: boolean; prepaid: boolean; refundStatus: string | null;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok?: string; err?: string } | null>(null);
-  async function act(action: "ship" | "cancel" | "refunded") {
-    let reason = "";
-    if (action === "cancel") {
-      const r = prompt("Reason for cancelling (shown in your records):", "Out of stock");
-      if (r === null) return;
-      reason = r;
-    }
-    if (action === "refunded" && !confirm("Mark as refunded? Do this after you have refunded the buyer in your Razorpay dashboard.")) return;
+  const dlg = useRef<HTMLDialogElement>(null);
+  const [why, setWhy] = useState<{ action: "reject" | "cancel"; reason: string } | null>(null);
+
+  async function act(action: "accept" | "reject" | "ship" | "cancel" | "refund" | "refunded", reason = "") {
+    if (action === "refunded" && !confirm("Mark as refunded? Do this only after you have refunded the buyer from your payment gateway dashboard.")) return;
     setBusy(action); setMsg(null);
-    const r = await api<{ shippingOrderId?: string }>("PATCH", `/api/portal/store/orders/${id}`, { action, reason });
+    const r = await api<{ shippingOrderId?: string; refund?: string | null; message?: string }>("PATCH", `/api/portal/store/orders/${id}`, { action, reason });
     setBusy(null);
     if (!r.ok) { setMsg({ err: r.error }); return; }
     if (action === "ship" && r.data.shippingOrderId) { window.location.href = `/portal/orders/${r.data.shippingOrderId}/`; return; }
-    setMsg({ ok: action === "cancel" ? "Order cancelled and stock returned." : "Marked as refunded." });
+    const refund = r.data.refund === "processed" ? " Refund done." : r.data.refund === "failed" ? " The gateway could not refund: refund the buyer by hand." : r.data.refund ? " Refund started at your payment gateway." : "";
+    setMsg({ ok: action === "accept" ? "Accepted. It is now in To Pack." : action === "reject" ? `Rejected and stock returned.${refund}` : action === "cancel" ? `Cancelled and stock returned.${refund}` : action === "refund" ? `Refund ${r.data.refund ?? "started"}.` : "Marked as refunded." });
     router.refresh();
   }
+  function ask(action: "reject" | "cancel") { setWhy({ action, reason: "" }); dlg.current?.showModal(); }
+
   return (
-    <div>
-      <div className="row wrap" style={{ gap: 8 }}>
-        {status === "placed" && <button className="btn btn-orange" onClick={() => act("ship")} disabled={!!busy}>{busy === "ship" ? "Opening…" : shippingOrderId ? "Book courier / view shipment" : "Ship this order"}</button>}
-        {canCancel && <button className="btn btn-outline" onClick={() => act("cancel")} disabled={!!busy}>Cancel order</button>}
+    <div className="so-head-actions">
+      <div className="row wrap so-detail-actions" style={{ gap: 8 }}>
+        {stage === "pending_acceptance" && <>
+          <button className="btn btn-orange" onClick={() => act("accept")} disabled={!!busy}>{busy === "accept" ? "Accepting…" : "Accept order"}</button>
+          <button className="btn btn-outline" onClick={() => ask("reject")} disabled={!!busy}>Reject</button>
+        </>}
+        {stage === "to_pack" && <button className="btn btn-orange" onClick={() => act("ship")} disabled={!!busy}>{busy === "ship" ? "Opening…" : shippingOrderId ? "Book courier / view shipment" : "Ship this order"}</button>}
+        {stage !== "to_pack" && stage !== "pending_acceptance" && shippingOrderId && <a className="btn btn-outline" href={`/portal/orders/${shippingOrderId}/`}>View shipment</a>}
+        {canCancel && <button className="btn btn-outline" onClick={() => ask("cancel")} disabled={!!busy}>Cancel order</button>}
+        {paymentStatus === "refund_due" && prepaid && refundStatus !== "processed" && <button className="btn btn-outline" onClick={() => act("refund")} disabled={!!busy}>{busy === "refund" ? "Trying…" : "Try refund again"}</button>}
         {paymentStatus === "refund_due" && <button className="btn btn-outline" onClick={() => act("refunded")} disabled={!!busy}>Mark refunded</button>}
       </div>
       <Msg m={msg} />
+      <dialog ref={dlg} className="so-dialog" aria-labelledby="why-h">
+        {why && <form style={{ display: "grid", gap: 10 }} onSubmit={(e) => { e.preventDefault(); if (why.reason.trim().length < 3) return; dlg.current?.close(); void act(why.action, why.reason.trim()); }}>
+          <h3 id="why-h" style={{ margin: 0, fontSize: 16 }}>{why.action === "reject" ? "Reject this order?" : "Cancel this order?"}</h3>
+          <p className="small muted" style={{ margin: 0 }}>Stock goes back to your store.{prepaid ? " The buyer's payment is refunded through your payment gateway." : ""} The buyer is told by email when they gave one.</p>
+          <div className="row wrap" style={{ gap: 6 }}>{REASONS.map((q) => <button type="button" key={q} className={`btn btn-sm ${why.reason === q ? "btn-orange" : "btn-outline"}`} onClick={() => setWhy({ ...why, reason: q })}>{q}</button>)}</div>
+          <div className="field"><label htmlFor="why-r">Reason <span className="req">*</span></label>
+            <textarea id="why-r" className="input" rows={2} maxLength={300} value={why.reason} onChange={(e) => setWhy({ ...why, reason: e.target.value })} required minLength={3} /></div>
+          <div className="row" style={{ gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn btn-outline" onClick={() => dlg.current?.close()}>Keep order</button>
+            <button className="btn btn-orange" disabled={why.reason.trim().length < 3}>{why.action === "reject" ? "Reject" : "Cancel order"}</button>
+          </div>
+        </form>}
+      </dialog>
     </div>
   );
 }

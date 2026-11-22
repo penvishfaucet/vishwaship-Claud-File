@@ -629,5 +629,32 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795327129554,
   "hash": "b1b33947ea0de551b90f9b3e25fdca524ae3cb6df0f68e903844f305a88fd61b"
+ },
+ {
+  "tag": "0031_store_ops",
+  "sql": [
+   "CREATE TABLE \"store_order_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_order_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"kind\" text NOT NULL,\n\t\"message\" text NOT NULL,\n\t\"actor_user_id\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"store_stock_moves\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"product_id\" text NOT NULL,\n\t\"variant_id\" text,\n\t\"kind\" text NOT NULL,\n\t\"available\" integer DEFAULT 0 NOT NULL,\n\t\"reserved\" integer DEFAULT 0 NOT NULL,\n\t\"damaged\" integer DEFAULT 0 NOT NULL,\n\t\"unit_cost_paise\" bigint,\n\t\"store_order_id\" text,\n\t\"reason\" text,\n\t\"actor_user_id\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"stock_state\" text DEFAULT 'reserved' NOT NULL;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"acceptance\" text DEFAULT 'pending' NOT NULL;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"accepted_at\" timestamp with time zone;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"accepted_by\" text;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"reject_reason\" text;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"refund\" jsonb;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"costs\" jsonb;",
+   "\nALTER TABLE \"store_product_variants\" ADD COLUMN \"reserved\" integer DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"store_product_variants\" ADD COLUMN \"damaged\" integer DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"store_product_variants\" ADD COLUMN \"unit_cost_paise\" bigint;",
+   "\nALTER TABLE \"store_products\" ADD COLUMN \"reserved\" integer DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"store_products\" ADD COLUMN \"damaged\" integer DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"store_products\" ADD COLUMN \"unit_cost_paise\" bigint;",
+   "\nCREATE INDEX \"store_order_events_order\" ON \"store_order_events\" USING btree (\"store_order_id\",\"created_at\");",
+   "\nCREATE INDEX \"store_stock_moves_product\" ON \"store_stock_moves\" USING btree (\"product_id\",\"created_at\");",
+   "\nCREATE INDEX \"store_stock_moves_store\" ON \"store_stock_moves\" USING btree (\"store_id\",\"created_at\");",
+   "\n-- orders from before acceptance and reservations: treat as accepted, and never touch the new reserved counts\nUPDATE \"store_orders\" SET \"stock_state\" = 'legacy', \"acceptance\" = CASE WHEN \"status\" = 'pending_payment' THEN 'pending' ELSE 'accepted' END, \"accepted_at\" = CASE WHEN \"status\" = 'pending_payment' THEN NULL ELSE coalesce(\"placed_at\", \"created_at\") END;"
+  ],
+  "bps": true,
+  "folderMillis": 1795341690766,
+  "hash": "4da605467ac8d9720bf166f7faee97e358f37f217c017f382d6eaafb7269bd61"
  }
 ];

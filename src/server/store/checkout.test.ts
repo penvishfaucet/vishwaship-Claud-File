@@ -30,6 +30,9 @@ rz.__setRazorpayFetch(async (url, init) => {
   if (url.endsWith("/v1/orders") && init.method === "POST") return new Response(JSON.stringify({ id: `order_T${++rzOrders}` }), { status: 200 });
   const pay = url.match(/\/v1\/payments\/([^/]+)$/);
   if (pay) { const p = payments.get(decodeURIComponent(pay[1])); return p ? new Response(JSON.stringify(p)) : new Response("{}", { status: 404 }); }
+  // refunds: none exist yet, and this test account refuses new ones (so the merchant refunds by hand)
+  if (/\/v1\/payments\/[^/]+\/refunds/.test(url)) return new Response(JSON.stringify({ items: [] }));
+  if (/\/v1\/payments\/[^/]+\/refund$/.test(url)) return new Response(JSON.stringify({ error: { description: "Refunds are off in this test" } }), { status: 400 });
   const op = url.match(/\/v1\/orders\/([^/]+)\/payments$/);
   if (op) return new Response(JSON.stringify({ items: [...payments.values()].filter((p) => p.order_id === decodeURIComponent(op[1])) }));
   return new Response("{}", { status: 404 });
@@ -43,7 +46,7 @@ beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
   for (const o of [A, B]) await db.insert(schema.orgs).values({ id: o, name: o, businessName: o });
   await db.insert(schema.warehouses).values({ id: "wh_co", orgId: A, label: "Main", contactName: "A", mobile: "9999999999", line1: "x", pincode: "110034", city: "Delhi", state: "Delhi" });
-  const settings = readSettings({ checkout: { codEnabled: true, codFeePaise: 4000, codMinPaise: 0, codMaxPaise: 300000, shippingFeePaise: 5000, freeShippingAbovePaise: 200000, warehouseId: "wh_co" } });
+  const settings = readSettings({ checkout: { codEnabled: true, codFeePaise: 4000, codMinPaise: 0, codMaxPaise: 300000, shippingFeePaise: 5000, freeShippingAbovePaise: 200000, warehouseId: "wh_co", autoAccept: true } });
   await db.insert(schema.stores).values({ id: "st_co", orgId: A, name: "Co Store", slug: "co-store", status: "live", draftTheme: defaultTheme(), publishedTheme: defaultTheme(), settings });
   await db.insert(schema.stores).values({ id: "st_cob", orgId: B, name: "Other", slug: "other-store", status: "live", draftTheme: defaultTheme(), publishedTheme: defaultTheme(), settings: readSettings({}) });
   simpleId = (await cat.saveProduct(A, cat.ProductInput.parse({ title: "Brass Diya", priceRupees: 500, stock: 2, weightGrams: 300, status: "active" }))).id;

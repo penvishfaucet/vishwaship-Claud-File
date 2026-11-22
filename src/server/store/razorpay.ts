@@ -5,6 +5,7 @@ import { orgSetting, saveOrgSetting } from "@/server/couriers";
 import { getDb, schema } from "@/server/db/client";
 import { decryptJson, encryptJson, hmacSha256Hex, maskSecret, safeEqual } from "@/server/security/crypto";
 import { safeFetch } from "@/server/security/safe-fetch";
+import { type GwRefund, RefundRejected } from "./gateways";
 
 /**
  * The MERCHANT's own Razorpay account for store checkout. Completely separate from Vishwaship's Razorpay
@@ -132,4 +133,31 @@ export async function orgByWebhookKey(key: string): Promise<string | null> {
   const [r] = await db.select({ orgId: schema.orgSettings.orgId }).from(schema.orgSettings)
     .where(and(eq(schema.orgSettings.key, KEY), sql`${schema.orgSettings.value}->>'webhookKey' = ${key}`));
   return r?.orgId ?? null;
+}
+
+// ---------------- refunds (full amount back to the buyer, on the merchant's account) ----------------
+type RzRefund = { id: string; status: string; receipt?: string | null };
+const rzRefund = (r: RzRefund): GwRefund => ({ id: r.id, status: r.status === "processed" ? "processed" : r.status === "failed" ? "failed" : "pending", message: r.status });
+
+/** Our refund on this payment (matched by receipt = refId), or null when none exists. */
+export async function razorpayRefundLookup(orgId: string, paymentId: string, refId: string): Promise<GwRefund | null> {
+  const s = await secrets(orgId);
+  if (!s) throw new Error("Razorpay is not connected");
+  const r = await fetcher(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refunds?count=100`, { headers: { authorization: auth(s) }, timeoutMs: 15_000, allowedHosts: HOSTS });
+  if (!r.ok) throw new Error(`Razorpay refunds ${r.status}`);
+  const hit = ((await r.json()) as { items?: RzRefund[] }).items?.find((x) => x.receipt === refId);
+  return hit ? rzRefund(hit) : null;
+}
+
+export async function razorpayRefundCreate(orgId: string, paymentId: string, amountPaise: number, refId: string): Promise<GwRefund> {
+  const s = await secrets(orgId);
+  if (!s) throw new RefundRejected("Razorpay is not connected any more");
+  const r = await fetcher(`https://api.razorpay.com/v1/payments/${encodeURIComponent(paymentId)}/refund`, {
+    method: "POST", headers: { authorization: auth(s), "content-type": "application/json", "X-Refund-Idempotency": refId },
+    body: JSON.stringify({ amount: amountPaise, speed: "normal", receipt: refId, notes: { vishwaship_refund: refId } }), timeoutMs: 20_000, allowedHosts: HOSTS,
+  });
+  if (r.status >= 500) throw new Error(`Razorpay refund ${r.status}`);
+  const j = (await r.json().catch(() => ({}))) as RzRefund & { error?: { description?: string } };
+  if (!r.ok) throw new RefundRejected(j.error?.description ?? `Razorpay refused the refund (${r.status})`);
+  return rzRefund(j);
 }

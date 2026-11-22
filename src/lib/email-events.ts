@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -115,6 +115,20 @@ Please review and confirm.
 Regards,
 Team Vishwaship`,
     defaults: { enabled: true, toClient: false, toRecipient: false } },
+  { key: "store_order_cancelled", label: "Online Store: order cancelled by the seller (to the buyer)", audience: "shipment", button: "Track order",
+    placeholders: ["customer_name", "order_id", "store_name", "reason", "refund_line", "tracking_link"],
+    subject: "Your order {{order_id}} from {{store_name}} was cancelled",
+    body: `Hello {{customer_name}},
+
+Sorry, {{store_name}} could not fulfil your order {{order_id}} and has cancelled it.
+
+Reason: {{reason}}
+
+{{refund_line}}
+
+Regards,
+{{store_name}}`,
+    defaults: { enabled: true, toClient: false, toRecipient: true } },
 ];
 export const eventDef = (k: string) => EMAIL_EVENTS.find((e) => e.key === k);
 export const eventForStatus = (status: string) => EMAIL_EVENTS.find((e) => e.status === status || (e.key === "shipment_rto" && /^rto_/.test(status) && status !== "rto_delivered"));
