@@ -201,7 +201,7 @@ As a result, the freight charge of this LR has been increased from INR 1,500.00 
     expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, d.id)))[0].status).toBe("open");
     await svc.chargeDueDisputes(new Date(Date.now() + 30 * 86400_000));
     expect((await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, d.id)))[0].status).toBe("accepted");
-    expect((d.evidence as Array<{ label: string }>)[0].label).toMatch(/739\.19 → ₹885\.74/);
+    expect((d.evidence as Array<{ label: string }>)[0].label).not.toMatch(/₹/); // the client never sees courier amounts
     const alerts = await db.select().from(schema.inAppAlerts).where(eq(schema.inAppAlerts.orgId, ORG));
     expect(alerts.some((a) => /Receiver pays/.test(a.title))).toBe(true);
   });
@@ -268,5 +268,48 @@ describe("send dispute to the courier, badges, admin alerts", () => {
     expect(mails[0].text).toMatch(/https:\/\/example\.com\/p1\.jpg/);
     const [after] = await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.id, r.disputeId));
     expect((after.evidence as Array<{ by?: string; to?: string[] }>).some((e) => e.by === "vishwaship" && e.to?.length === 3)).toBe(true);
+  });
+});
+
+describe("aggregator export (entered / courier weight charges)", () => {
+  const csv = `order_id,order_date,order_time,updated_date,updated_time,awb_number,courier_tracking_number,courier_service_type_name,order_status,entered_dimensions,"entered_weight (kg)",entered_weight_charges,"courier_weight (kg)",courier_weight_charges,dispute_status,invoice_amount
+61041SM1862746393,"5 Nov 2026","08:36 AM","6 Nov 2026","02:15 PM",22785510906091,22785510906091,"Delhivery Surface 10kg MPS",DELIVERED,"38 x 30 x 10",10,295,12.5,369.34,"No Action Taken",500
+61041SM1264438668,"14 Nov 2026","12:24 AM","17 Nov 2026","11:17 AM",387272005,387272005,"GATI B2B LTL",IN_TRANSIT,,50,783.99,55,849.41,New,5250
+61041AP479387552114,"17 Nov 2026","03:23 PM","18 Nov 2026","04:17 PM",22784714346650,22784714346650,"Delhivery Heavy MPS.",DELIVERED,,40,1144.6,53,1482.08,New,5250
+X1,"17 Nov 2026","03:23 PM","18 Nov 2026","04:17 PM",99999999,99999999,"x",DELIVERED,,40,100,53,150,"Dispute Accepted",1
+`;
+  it("reads AWB, courier weight, extra = courier − entered charge, raised date and settled rows", () => {
+    const { rows, error } = svc.parseWeightReport(csv);
+    expect(error).toBeUndefined();
+    expect(rows[0]).toMatchObject({ ref: "22785510906091", grams: 12_500, extraPaise: 7_434, oldChargePaise: 29_500, newChargePaise: 36_934 });
+    expect(rows[2]).toMatchObject({ ref: "22784714346650", grams: 53_000, extraPaise: 33_748 });
+    expect(rows[2].raisedAt?.toISOString().slice(0, 10)).toBe("2026-11-18");
+    expect(rows[3].skip).toMatch(/Accepted/);
+  });
+
+  it("GST basis is read from the shipment's booked cost; client deadline is before the courier's window closes", async () => {
+    // booked cost ₹970.00 pre-tax ≈ 1144.60 / 1.18 → the export's amounts include GST
+    expect(svc.preTaxExtra({ extraPaise: 33_748, oldChargePaise: 114_460 }, { costPaise: 97_000, carrierChargePaise: null })).toBe(28_600);
+    // booked cost ₹783.99 pre-tax = the export's amount → already pre-tax
+    expect(svc.preTaxExtra({ extraPaise: 6_542, oldChargePaise: 78_399 }, { costPaise: 78_399, carrierChargePaise: null })).toBe(6_542);
+    const now = new Date("2026-11-22T06:00:00Z");
+    const d = svc.clientDeadline(new Date("2026-11-18T06:30:00Z"), now)!;
+    expect(d.toISOString().slice(0, 10)).toBe("2026-11-24"); // courier window 18 + 8 = 26 Nov; client 2 days earlier
+    expect(svc.clientDeadline(new Date("2026-11-06T06:30:00Z"), now)!.getTime()).toBe(now.getTime() + 2 * 86400_000); // courier window over: still 2 days
+    expect(svc.clientDeadline(undefined, now)).toBeUndefined();
+  });
+
+  it("import end-to-end: charge from the courier's amount (GST removed), deadline set, settled rows skipped", async () => {
+    const sm = { lines: [{ code: "freight", costPreTax: 97_000, markupEligible: true }], markup: { bps: 2500 }, gstBps: 1800 };
+    await shipment("sh10", "22784714346650", 40_000, sm);
+    await db.update(schema.shipments).set({ provider: "shipmozo", costPaise: 97_000 }).where(eq(schema.shipments.id, "sh10"));
+    const r = await svc.importWeightReport(csv, { commit: true, actorUserId: STAFF });
+    const row = r.rows.find((x) => x.ref === "22784714346650")!;
+    expect(row).toMatchObject({ status: "ok", courierExtraPaise: 28_600 });
+    expect(row.chargePaise).toBe(42_185); // ₹286.00 × 1.25 × 1.18
+    expect(r.rows.find((x) => x.ref === "99999999")?.message).toMatch(/Accepted/);
+    const [d] = await db.select().from(schema.weightDisputes).where(eq(schema.weightDisputes.shipmentId, "sh10"));
+    expect(d.deadlineAt.getTime()).toBeLessThan(Date.now() + 7 * 86400_000);
+    expect((d.evidence as Array<{ label: string }>)[0].label).toBe("Courier re-weigh: 53 kg");
   });
 });

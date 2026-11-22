@@ -51,7 +51,7 @@ async function evaluate(sh: Shipment, carrierGrams: number, courierExtraPaise: n
  * discrepancy is raised: the client is told in the portal and by email, with a 7-day dispute window. Nothing is
  * debited here — chargeDueDisputes() debits once the window closes undisputed. FoD: the receiver's freight is updated.
  */
-export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGrams: number; courierExtraPaise?: number | null; source: "csv" | "api" | "manual"; evidence?: Array<Record<string, unknown>>; actorUserId?: string | null }): Promise<RaiseOutcome> {
+export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGrams: number; courierExtraPaise?: number | null; source: "csv" | "api" | "manual"; evidence?: Array<Record<string, unknown>>; actorUserId?: string | null; deadlineAt?: Date }): Promise<RaiseOutcome> {
   const db = await getDb();
   const grams = Math.round(a.carrierGrams);
   const [sh] = await db.select().from(schema.shipments).where(eq(schema.shipments.id, a.shipmentId));
@@ -63,7 +63,7 @@ export async function raiseWeightDiscrepancy(a: { shipmentId: string; carrierGra
   const id = newId("wd");
   const fod = sh.freightPayer === "receiver";
   const label = a.source === "csv" ? "Courier weight report" : a.source === "api" ? "Courier re-weigh (tracking)" : "Courier re-weigh";
-  const deadline = new Date(Date.now() + DISPUTE_WINDOW_DAYS * 86400_000);
+  const deadline = a.deadlineAt ?? new Date(Date.now() + DISPUTE_WINDOW_DAYS * 86400_000);
   const recvAfter = sh.receiverFreightPaise + r.receiverExtra;
   await db.insert(schema.weightDisputes).values({
     id, orgId: sh.orgId, shipmentId: sh.id, declaredGrams: sh.chargeableWeightGrams, carrierGrams: grams, revisedChargeableGrams: grams,
@@ -139,7 +139,15 @@ export interface ImportRow {
 }
 
 /** Parse a courier weight report: AWB/LR, charged weight (kg, or grams when the header says g / gm / grams), optional extra amount (₹, pre-tax). */
-type ReportRow = { line: number; ref: string; grams: number | null; extraPaise: number | null; note?: string };
+type ReportRow = {
+  line: number; ref: string; grams: number | null; extraPaise: number | null; note?: string;
+  /** Aggregator export (old and new charge columns): GST basis of the amounts is worked out per shipment. */
+  oldChargePaise?: number; newChargePaise?: number;
+  /** When the courier raised it (its own dispute window runs from here). */
+  raisedAt?: Date;
+  /** Courier already settled it (e.g. dispute accepted): not raised again. */
+  skip?: string;
+};
 const inr = (v: string) => Math.round(Number(v.replace(/,/g, "")) * 100);
 
 /**
@@ -170,7 +178,7 @@ export function parseCourierMails(text: string): ReportRow[] {
       if (!(extra > 0)) extra = null;
     }
     rows.push({ line: rows.length + 1, ref: m[1], grams: Math.round(Number(fin[1]) * 1000), extraPaise: extra,
-      note: `Courier re-weigh: ${init ? `${init[1]} kg → ` : ""}${fin[1]} kg${amt ? ` · courier freight ₹${amt[1]} → ₹${amt[2]} (incl. GST)` : ""}` });
+      note: `Courier re-weigh: ${init ? `${init[1]} kg → ` : ""}${fin[1]} kg` }); // no courier amounts: the client must not see our cost
   });
   return rows;
 }
@@ -186,14 +194,52 @@ export function parseWeightReport(text: string): { rows: ReportRow[]; error?: st
   const ai = findCol(header, AWB_H);
   const wi = findCol(header, WT_H, [ai]);
   const xi = findCol(header, EXTRA_H, [ai, wi]);
+  // Aggregator export (e.g. "entered_weight_charges" and "courier_weight_charges"): extra = new − old charge.
+  const oi = header.findIndex((h) => /^(entered|applied|old|initial|booked)( weight)? (charges?|freight|amount)$/.test(h));
+  const ni = header.findIndex((h) => /^(courier|charged|new|revised|final)( weight)? (charges?|freight|amount)$/.test(h));
+  const di = header.findIndex((h) => /^(updated|discrepancy|raised) date$/.test(h));
+  const si = header.findIndex((h) => /^(dispute )?status$/.test(h) && /dispute/.test(h));
   if (ai < 0 || wi < 0) return { rows: [], error: "Need an AWB / LR column and a charged-weight column (e.g. \"AWB\", \"Charged Weight (kg)\")" };
   const grams = /\b(g|gm|gms|gram|grams)\b/.test(header[wi]) && !/\bkg\b/.test(header[wi]);
   const num = (v: string | undefined) => { const n = Number(String(v ?? "").replace(/[₹,\s]|rs\.?|kgs?|gms?/gi, "")); return Number.isFinite(n) ? n : NaN; };
   const rows = all.slice(1, MAX_IMPORT_ROWS + 1).map((r, i) => {
     const w = num(r[wi]), x = xi >= 0 ? num(r[xi]) : NaN;
-    return { line: i + 2, ref: String(r[ai] ?? "").trim(), grams: w > 0 ? Math.round(grams ? w : w * 1000) : null, extraPaise: x > 0 ? Math.round(x * 100) : null };
+    const row: ReportRow = { line: i + 2, ref: String(r[ai] ?? "").trim(), grams: w > 0 ? Math.round(grams ? w : w * 1000) : null, extraPaise: x > 0 ? Math.round(x * 100) : null };
+    if (oi >= 0 && ni >= 0 && xi < 0) {
+      const o = num(r[oi]), n = num(r[ni]);
+      if (o > 0 && n > o) {
+        row.oldChargePaise = Math.round(o * 100); row.newChargePaise = Math.round(n * 100); row.extraPaise = row.newChargePaise - row.oldChargePaise;
+        row.note = `Courier re-weigh: ${w} kg`;
+      }
+    }
+    if (di >= 0) { const d = new Date(`${r[di]} 12:00 GMT+0530`); if (!Number.isNaN(d.getTime())) row.raisedAt = d; }
+    if (si >= 0 && /accept|revers|refund|closed|resolved/i.test(r[si] ?? "")) row.skip = `Courier status: ${r[si]}`;
+    return row;
   });
   return { rows };
+}
+
+/**
+ * Extra amount before GST. Aggregator exports do not say whether their charges include GST, so it is read from the
+ * shipment: the old charge is compared with the pre-tax cost we booked (≈ cost → pre-tax; ≈ cost × 1.18 → incl. GST).
+ */
+export function preTaxExtra(r: { extraPaise: number | null; oldChargePaise?: number }, s: { costPaise: number; carrierChargePaise: number | null }): number | null {
+  if (r.extraPaise == null || r.oldChargePaise == null) return r.extraPaise;
+  const base = s.carrierChargePaise ?? s.costPaise;
+  const inclusive = base > 0 && Math.abs(r.oldChargePaise - base * 1.18) < Math.abs(r.oldChargePaise - base);
+  return inclusive ? Math.round((r.extraPaise * 100) / 118) : r.extraPaise;
+}
+
+/** Courier (aggregator) dispute window: 8 days from when it raised the discrepancy. */
+export const COURIER_WINDOW_DAYS = 8;
+/**
+ * The client must answer before the courier's own window closes, so we can still dispute it there: courier deadline
+ * minus 2 days, at least 2 days from now (if the courier window is already shut) and never more than 7 days.
+ */
+export function clientDeadline(raisedAt: Date | undefined, now = new Date()): Date | undefined {
+  if (!raisedAt) return undefined;
+  const t = raisedAt.getTime() + (COURIER_WINDOW_DAYS - 2) * 86400_000;
+  return new Date(Math.min(now.getTime() + DISPUTE_WINDOW_DAYS * 86400_000, Math.max(now.getTime() + 2 * 86400_000, t)));
 }
 
 /** Preview (commit = false) or apply (commit = true) a courier weight report. Preview writes nothing. */
@@ -212,17 +258,21 @@ export async function importWeightReport(text: string, opts: { commit: boolean; 
   for (const r of parsed.rows) {
     const base: ImportRow = { line: r.line, ref: r.ref, status: "invalid" };
     if (!r.ref || !r.grams) { out.push({ ...base, message: !r.ref ? "No AWB / LR" : "No charged weight" }); continue; }
+    if (r.skip) { out.push({ ...base, status: "no_extra", message: r.skip }); continue; }
     const m = byRef.get(r.ref);
     if (!m) { out.push({ ...base, status: "not_found", message: "No Vishwaship shipment with this AWB / LR" }); continue; }
     const info = { note: r.note, shipmentId: m.s.id, orgName: m.org, awb: m.s.awb, carrierName: m.s.carrierName, bookedGrams: m.s.chargeableWeightGrams, carrierGrams: r.grams, courierExtraPaise: r.extraPaise };
     if (seen.has(m.s.id)) { out.push({ ...base, ...info, status: "exists", message: "Listed twice in this file" }); continue; }
     seen.add(m.s.id);
+    const extra = preTaxExtra(r, m.s);
+    info.courierExtraPaise = extra;
+    const deadlineAt = clientDeadline(r.raisedAt);
     if (opts.commit) {
-      const res = await raiseWeightDiscrepancy({ shipmentId: m.s.id, carrierGrams: r.grams, courierExtraPaise: r.extraPaise, source: "csv", actorUserId: opts.actorUserId, ...(r.note ? { evidence: [{ kind: "courier", label: r.note }] } : {}) });
+      const res = await raiseWeightDiscrepancy({ shipmentId: m.s.id, carrierGrams: r.grams, courierExtraPaise: extra, source: "csv", actorUserId: opts.actorUserId, ...(deadlineAt ? { deadlineAt } : {}), ...(r.note ? { evidence: [{ kind: "courier", label: r.note }] } : {}) });
       if (res.status === "created") { created++; total += res.chargePaise; out.push({ ...base, ...info, status: "ok", chargePaise: res.chargePaise, receiverExtraPaise: res.receiverExtraPaise || undefined }); }
       else out.push({ ...base, ...info, status: res.status, message: res.message });
     } else {
-      const res = await evaluate(m.s, r.grams, r.extraPaise);
+      const res = await evaluate(m.s, r.grams, extra);
       if (res.status === "ok") { total += res.walletCharge; out.push({ ...base, ...info, status: "ok", chargePaise: res.walletCharge, receiverExtraPaise: res.receiverExtra || undefined }); }
       else out.push({ ...base, ...info, status: res.status, message: res.message });
     }
