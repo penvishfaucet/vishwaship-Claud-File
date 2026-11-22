@@ -100,6 +100,23 @@ export const CARRIER_SPECS: Record<string, CarrierSpec> = {
       track: "Response shape of GET /api/orders/track-by-awb/:awb and the full status list (pickup / out-for-delivery codes).",
     },
   },
+  shiprocket: {
+    adapter: "shiprocket", name: "Shiprocket", route: "aggregator", services: ["B2C"], build: "implemented",
+    hosts: { test: ["apiv2.shiprocket.in"], live: ["apiv2.shiprocket.in"] },
+    defaultBaseUrl: { test: "https://apiv2.shiprocket.in/v1/external", live: "https://apiv2.shiprocket.in/v1/external" },
+    fields: [
+      { key: "email", label: "API user email", secret: true, help: "Shiprocket panel → Settings → API → Configure → Create an API User (use an email different from your login)" },
+      { key: "password", label: "API user password", secret: true },
+    ],
+    sandbox: false,
+    webhooks: "Tracking is polled every 30 minutes (Shiprocket webhooks are set per account in its panel; not wired yet).",
+    docs: "Shiprocket API (apiv2.shiprocket.in/v1/external): auth/login (token 240 h), courier/serviceability, orders/create/adhoc, courier/assign/awb, courier/generate/pickup, courier/generate/label, courier/track/awb, orders/cancel, settings/company/pickup + addpickup.",
+    missing: {
+      general: "No sandbox: every call runs on the live Shiprocket account and bookings spend its wallet. Keep the Shiprocket wallet recharged; a new pickup address may need OTP verification in the Shiprocket panel before its first booking.",
+      quote: "Confirm with one Rate check that 'rate' matches the Shiprocket panel for the same inputs and whether it includes GST (Service settings, default: excluding GST, 18% added).",
+    },
+    serviceNotes: { B2C: "Single-package parcels. B2B cargo (Shiprocket Cargo) is a separate product with its own API — not connected." },
+  },
   ekart: {
     adapter: "ekart", name: "Ekart", route: "direct", services: ["B2C"], build: "documentation_required",
     hosts: { test: [], live: [] }, baseUrlEditable: true,
@@ -175,6 +192,7 @@ export const DEFAULT_PARTNER_CODES: Record<string, string> = {
   "shipmozo:B2C": "VISW001B2C", "shipmozo:B2B": "VISW002B2B",
   "delhivery_b2c:B2C": "DHL0001B2C", "delhivery_b2b:B2B": "DHL0002B2B",
   "shiporax:B2C": "VISIPO00B2C", "shiporax:B2B": "VISIPO00B2B",
+  "shiprocket:B2C": "VISR001B2C",
 };
 
 export function partnerCodeFor(adapter: string, config: Record<string, unknown> | null | undefined): string | null {

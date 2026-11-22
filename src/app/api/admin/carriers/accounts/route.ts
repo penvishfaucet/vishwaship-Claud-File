@@ -12,6 +12,7 @@ import { adapterFor, providerContext, secretsFor } from "@/server/providers/regi
 import { decryptJson, encryptJson, maskSecret } from "@/server/security/crypto";
 import type { QuoteRequest } from "@/server/providers/types";
 import { shipmozoRaw } from "@/server/providers/shipmozo";
+import { shiprocketRaw } from "@/server/providers/shiprocket";
 import { delhiveryB2bRaw } from "@/server/providers/delhivery-b2b";
 import { refreshFromCarrier } from "@/server/tracking/service";
 import { newId } from "@/server/util/ids";
@@ -30,7 +31,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("environment"), id, mode: env }),
   z.object({ op: z.literal("config"), id, brandName: z.string().trim().max(60).default(""), logoCode: z.string().trim().max(60).default(""), baseUrlTest: z.string().trim().max(300).default(""), baseUrlLive: z.string().trim().max(300).default(""),
     typeOfPackage: z.string().trim().max(20).default(""), rovType: z.string().trim().max(30).default(""), gstTreatment: z.enum(["auto", "inclusive", "exclusive"]).default("auto"),
-    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), webhookNote: z.string().trim().max(300).default(""), partnerCode: z.string().trim().max(20).regex(/^[A-Za-z0-9_-]*$/, "Letters, numbers, - and _ only").default("") }),
+    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), noAutoPickup: bool.default(false), webhookNote: z.string().trim().max(300).default(""), partnerCode: z.string().trim().max(20).regex(/^[A-Za-z0-9_-]*$/, "Letters, numbers, - and _ only").default("") }),
   z.object({ op: z.literal("test_auth"), id }),
   z.object({ op: z.literal("test_serviceability"), id, from: pin, to: pin }),
   z.object({ op: z.literal("rate_check"), id, from: pin, to: pin, weightKg: z.coerce.number().positive().max(5000), lengthCm: z.coerce.number().positive().max(500), widthCm: z.coerce.number().positive().max(500), heightCm: z.coerce.number().positive().max(500),
@@ -155,6 +156,11 @@ export async function POST(req: Request) {
         }
         patch.baseUrl = urls;
       }
+      if (acct.adapter === "shiprocket") {
+        patch.gstTreatment = b.gstTreatment === "inclusive" ? "inclusive" : "exclusive";
+        patch.courierIds = b.courierIds.split(/[s,]+/).map((x) => x.trim()).filter((x) => /^[0-9]{1,10}$/.test(x));
+        patch.autoPickup = !b.noAutoPickup;
+      }
       if (acct.adapter === "shiporax") {
         patch.gstTreatment = b.gstTreatment === "auto" ? null : b.gstTreatment;
         patch.courierIds = b.courierIds.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x));
@@ -200,6 +206,7 @@ export async function POST(req: Request) {
       } satisfies QuoteRequest;
       const pctx = await providerContext(acct);
       const raw = acct.adapter === "shipmozo" ? await shipmozoRaw(pctx, req).catch((e) => ({ error: (e as Error).message }))
+        : acct.adapter === "shiprocket" ? await shiprocketRaw(pctx, req).catch((e) => ({ error: (e as Error).message }))
         : acct.adapter === "delhivery_b2b" ? await delhiveryB2bRaw(pctx, req).catch((e) => ({ error: (e as Error).message })) : null;
       const r = await adapter!.quote(pctx, req);
       if (!r.ok) {

@@ -44,7 +44,7 @@ export const PublicRatesInput = z.object({
   .refine((v) => v.paymentType !== "fod" || fodAllowed(chargeableKg(v.packages)), { message: `FOD is ${FOD_RULE_TEXT.toLowerCase()}.`, path: ["paymentType"] });
 export type PublicRatesInput = z.infer<typeof PublicRatesInput>;
 
-/** The services the calculator compares (owner's list). Shiprocket has no adapter in this project yet. */
+/** The services the calculator compares (owner's list). */
 export const EXPECTED_SERVICES = [
   { key: "delhivery_b2c", adapter: "delhivery_b2c", mode: "B2C", name: "Delhivery B2C" },
   { key: "delhivery_b2b", adapter: "delhivery_b2b", mode: "B2B", name: "Delhivery B2B" },

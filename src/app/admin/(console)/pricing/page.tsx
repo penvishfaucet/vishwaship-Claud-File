@@ -14,7 +14,7 @@ import { count, eq, ne } from "drizzle-orm";
 
 /** Provider + service pairs that can carry their own default (Delhivery Direct adapters are already one service each). */
 const SERVICE_KEYS: Array<{ key: string; label: string }> = [
-  ...["shipmozo", "shiporax", "ekart", "tci", "bluedart"].flatMap((a) => CARRIER_SPECS[a].services.map((m) => ({ key: serviceMarkupKey(a, m), label: `${CARRIER_SPECS[a].name} ${m}` }))),
+  ...["shipmozo", "shiporax", "shiprocket", "ekart", "tci", "bluedart"].flatMap((a) => CARRIER_SPECS[a].services.map((m) => ({ key: serviceMarkupKey(a, m), label: `${CARRIER_SPECS[a].name} ${m}` }))),
   { key: "delhivery_b2c", label: "Delhivery Direct B2C" }, { key: "delhivery_b2b", label: "Delhivery Direct B2B" },
 ];
 

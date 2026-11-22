@@ -10,7 +10,7 @@ import { SETUP_LABEL, isVerified, setupState } from "@/server/carriers/verificat
 import { getDb, schema } from "@/server/db/client";
 
 const EP = "/api/admin/carriers/accounts";
-const LOGO: Record<string, string> = { shipmozo: "", delhivery_b2c: "delhivery", delhivery_b2b: "delhivery", ekart: "ekart", tci: "tci-express", bluedart: "blue-dart", shiporax: "" };
+const LOGO: Record<string, string> = { shipmozo: "", delhivery_b2c: "delhivery", delhivery_b2b: "delhivery", ekart: "ekart", tci: "tci-express", bluedart: "blue-dart", shiporax: "", shiprocket: "" };
 
 export default async function CourierIntegrations() {
   const st = await requireStaff("integrations.read");

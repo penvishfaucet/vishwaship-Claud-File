@@ -170,6 +170,11 @@ export default async function CourierAccount({ params }: { params: Promise<{ id:
               { name: "gstTreatment", label: "Shipora X rates (total) are", type: "select" as const, value: String(cfg.gstTreatment ?? "auto"), options: [["auto", "Not set — no rates until chosen"], ["exclusive", "Excluding GST (Vishwaship adds 18%)"], ["inclusive", "Including GST"]] as Array<[string, string]> },
               { name: "courierIds", label: "Offer only these courierIds (blank = all)", value: ((cfg.courierIds as string[] | undefined) ?? []).join(", "), wide: true },
             ] : []),
+            ...(a.adapter === "shiprocket" ? [
+              { name: "gstTreatment", label: "Shiprocket rates are", type: "select" as const, value: String(cfg.gstTreatment ?? "exclusive"), options: [["exclusive", "Excluding GST (Vishwaship adds 18%)"], ["inclusive", "Including GST"]] as Array<[string, string]> },
+              { name: "courierIds", label: "Offer only these courier_company_ids (blank = all)", value: ((cfg.courierIds as string[] | undefined) ?? []).join(", "), wide: true },
+              { name: "noAutoPickup", label: "Don't request pickup automatically after booking", type: "checkbox" as const, value: cfg.autoPickup === false },
+            ] : []),
             ...(a.adapter === "shipmozo" ? [
               { name: "typeOfPackage", label: "type_of_package", value: String(cfg.typeOfPackage ?? (service === "B2B" ? "MPS" : "SPS")) },
               { name: "rovType", label: "rov_type", value: String(cfg.rovType ?? "ROV_OWNER") },

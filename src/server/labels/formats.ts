@@ -24,6 +24,7 @@ export const CARRIER_NATIVE: Record<string, LabelFormat[]> = {
   delhivery_b2b: ["thermal_3x4", "thermal_4x4", "thermal_2x4", "a4"],
   delhivery_b2c: ["thermal_4x6", "a4"],
   shipmozo: ["thermal_4x6"],
+  shiprocket: ["thermal_4x6"],
 };
 
 /** Carrier rules for the drawn Vishwaship label (couriers without a label API). */

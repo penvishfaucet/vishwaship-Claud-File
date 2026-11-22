@@ -8,6 +8,7 @@ import { shipmozoAdapter } from "./shipmozo";
 import { delhiveryB2bAdapter } from "./delhivery-b2b";
 import { delhiveryB2cAdapter } from "./delhivery-b2c";
 import { shiporaAdapter } from "./shiporax";
+import { shiprocketAdapter } from "./shiprocket";
 import type { ProviderContext, ShippingAdapter } from "./types";
 import { CARRIER_SPECS } from "@/server/carriers/specs";
 
@@ -17,6 +18,7 @@ const ADAPTERS: Record<string, ShippingAdapter> = {
   delhivery_b2b: delhiveryB2bAdapter,
   delhivery_b2c: delhiveryB2cAdapter,
   shiporax: shiporaAdapter,
+  shiprocket: shiprocketAdapter,
 };
 
 /** Catalog shown in Admin > Integrations > Add. "adapter_required" providers cannot be enabled yet. */
@@ -25,6 +27,7 @@ export const PROVIDER_CATALOG = [
   { adapter: "delhivery_b2c", category: "shipping", name: "Delhivery Direct B2C", status: "implemented" },
   { adapter: "delhivery_b2b", category: "shipping", name: "Delhivery Direct B2B", status: "implemented" },
   { adapter: "shiporax", category: "shipping", name: "Shipora X", status: "implemented" },
+  { adapter: "shiprocket", category: "shipping", name: "Shiprocket (B2C)", status: "implemented" },
   { adapter: "ekart", category: "shipping", name: "Ekart", status: "adapter_required" },
   { adapter: "tci", category: "shipping", name: "TCI Express", status: "adapter_required" },
   { adapter: "bluedart", category: "shipping", name: "Blue Dart", status: "adapter_required" },
