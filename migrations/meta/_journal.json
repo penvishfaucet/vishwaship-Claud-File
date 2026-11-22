@@ -253,6 +253,13 @@
       "when": 1795352121404,
       "tag": "0035_rto_cod",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1795361431421,
+      "tag": "0036_store_process",
+      "breakpoints": true
     }
   ]
 }

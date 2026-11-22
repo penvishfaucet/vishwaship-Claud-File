@@ -96,7 +96,7 @@ function present(o: typeof schema.storeOrders.$inferSelect, f: Awaited<ReturnTyp
   const cod: CodState = o.paymentMethod !== "cod" ? "not_cod" : ship && f.remitted.has(ship.id) ? "remitted" : ful === "delivered" ? "collected" : "payable";
   const stage = stageOf(o, ship);
   return {
-    stage, acceptance: o.acceptance, acceptedAt: o.acceptedAt, rejectReason: o.rejectReason, refund: o.refund as import("./refunds").RefundState | null, stockState: o.stockState, placedAt: o.placedAt, packedAt: o.packedAt, returnInspectedAt: o.returnInspectedAt,
+    stage, acceptance: o.acceptance, acceptedAt: o.acceptedAt, rejectReason: o.rejectReason, refund: o.refund as import("./refunds").RefundState | null, stockState: o.stockState, placedAt: o.placedAt, packedAt: o.packedAt, labelPrintedAt: o.labelPrintedAt, handedOverAt: o.handedOverAt, returnInspectedAt: o.returnInspectedAt,
     items: (o.lines as Line[]).reduce((n, l) => n + l.qty, 0),
     id: o.id, number: o.number, status: o.status, paymentMethod: o.paymentMethod, paymentStatus: o.paymentStatus, fulfilment: ful, cod,
     buyer: o.buyer as CheckoutInput["buyer"], lines: o.lines as Line[], subtotalPaise: o.subtotalPaise, discountPaise: o.discountPaise, shippingPaise: o.shippingPaise,

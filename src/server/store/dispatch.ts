@@ -191,7 +191,7 @@ export type PackResult = { id: string; number: string; ok: boolean; message: str
  * Confirm packing and make sure each order has a booked courier. Orders already booked just return their shipment
  * (their saved AWB and label are reused); others are booked with Auto-Assign. Every order reports on its own.
  */
-export async function packAndBook(orgId: string, userId: string, ids: string[], opts: { shipWithoutCodConfirmation?: string[] } = {}): Promise<PackResult[]> {
+export async function packAndBook(orgId: string, userId: string, ids: string[], opts: { shipWithoutCodConfirmation?: string[]; markPacked?: boolean } = {}): Promise<PackResult[]> {
   const db = await getDb();
   const out: PackResult[] = [];
   const override = new Set(opts.shipWithoutCodConfirmation ?? []);
@@ -203,8 +203,10 @@ export async function packAndBook(orgId: string, userId: string, ids: string[], 
     if (o.status !== "placed" || o.acceptance !== "accepted") { out.push(res(false, o.status === "cancelled" ? "Order is cancelled" : "Accept the order first")); continue; }
     const sid = await ensureShippingOrder(o.id);
     if (!sid) { out.push(res(false, "Could not prepare the shipment. Check the buyer's address and the store's pickup warehouse")); continue; }
-    const packed = await db.update(schema.storeOrders).set({ packedAt: new Date(), packedBy: userId }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.packedAt))).returning({ id: schema.storeOrders.id });
-    if (packed.length) await logOrderEvent(db, o, "packed", "Marked packed", userId);
+    if (opts.markPacked !== false) {
+      const packed = await db.update(schema.storeOrders).set({ packedAt: new Date(), packedBy: userId }).where(and(eq(schema.storeOrders.id, o.id), isNull(schema.storeOrders.packedAt))).returning({ id: schema.storeOrders.id });
+      if (packed.length) await logOrderEvent(db, o, "packed", "Marked packed", userId);
+    }
     const live = async () => (await db.select().from(schema.shipments).where(eq(schema.shipments.orderId, sid)))
       .find((s) => !["cancelled", "failed"].includes(s.bookingStatus) && s.status !== "cancelled") ?? null;
     let ship = await live();

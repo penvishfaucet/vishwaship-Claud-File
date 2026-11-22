@@ -1274,6 +1274,9 @@ export const storeOrders = pgTable("store_orders", {
   /** Merchant confirmed the parcel is packed (Packing & Dispatch). */
   packedAt: ts("packed_at"),
   packedBy: text("packed_by"),
+  /** Process Orders steps: label printed (Print → Pack) and parcel handed to the courier (Handover). */
+  labelPrintedAt: ts("label_printed_at"),
+  handedOverAt: ts("handed_over_at"),
   /** Goods that came back (RTO or customer return), counted once: [{index, sellable, damaged, missing}] + who / when. */
   returnInspection: jsonb("return_inspection"),
   returnInspectedAt: ts("return_inspected_at"),

@@ -23,7 +23,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
   { id: "store", group: "Online Store", icon: Globe, items: [
     { id: "store.overview", href: "/portal/store/", label: "Store Overview", icon: Store, module: "online_store" },
     { id: "store.orders", href: "/portal/store/orders/", label: "Store Orders", icon: ClipboardList, module: "online_store" },
-    { id: "store.dispatch", href: "/portal/store/dispatch/", label: "Packing & Dispatch", icon: Printer, module: "online_store" },
+    { id: "store.dispatch", href: "/portal/store/dispatch/", label: "Process Orders", icon: Printer, module: "online_store" },
     { id: "store.inventory", href: "/portal/store/inventory/", label: "Inventory", icon: Boxes, module: "online_store" },
     { id: "store.pnl", href: "/portal/store/pnl/", label: "Profit & Loss", icon: FileBarChart, module: "online_store" },
     { id: "store.rto_cod", href: "/portal/store/rto-cod/", label: "RTO & COD", icon: BadgeIndianRupee, module: "online_store" },

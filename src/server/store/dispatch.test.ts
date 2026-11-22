@@ -39,6 +39,7 @@ const co = await import("./checkout");
 const ops = await import("./ops");
 const cat = await import("./catalog");
 const dp = await import("./dispatch");
+const proc = await import("./process");
 
 const A = "org_dp_a", B = "org_dp_b";
 let p1 = "", p2 = "";
@@ -132,5 +133,52 @@ describe("packing & dispatch", () => {
     const pending = await place("e", [{ productId: p1, qty: 1 }]);
     expect(await dp.packAndBook(A, "u", [pending])).toMatchObject([{ ok: false, message: "Accept the order first" }]);
     expect(await dp.packAndBook(B, "u", [pending])).toEqual([]);
+  });
+});
+
+describe("process orders: print → pack → handover", () => {
+  it("each order moves through the steps; delayed, clubbed, duplicates and filters are right", async () => {
+    await db.update(schema.notificationSettings).set({ enabled: false });
+    const a = await place("pr1", [{ productId: p1, qty: 1 }], "160001");
+    const b = await place("pr2", [{ productId: p1, qty: 1 }, { productId: p2, qty: 2 }], "160001"); // same buyer + product → duplicate; 2 lines → clubbed
+    await ops.acceptOrders(A, "u", [a, b]);
+    let q = await proc.processQueue(A, { step: "print" });
+    const row = (id: string) => q.rows.find((r) => r.id === id)!;
+    expect(row(a)).toMatchObject({ step: "print", clubbed: false, duplicateOf: expect.any(String) });
+    expect(row(b)).toMatchObject({ clubbed: true });
+    const clubbed = (await proc.processQueue(A, { step: "print", kind: "clubbed" })).rows.map((r) => r.id);
+    expect(clubbed).toContain(b);
+    expect(clubbed).not.toContain(a);
+    // packing before the label exists is refused
+    expect(await proc.markPacked(A, "u", [a])).toMatchObject({ packed: [], skipped: [expect.any(String)] });
+    // print: book + label → Pack
+    const printed = await dp.packAndBook(A, "u", [a], { markPacked: false });
+    expect(printed[0]).toMatchObject({ ok: true, booked: true });
+    await proc.markLabelsPrinted(A, [a]);
+    q = await proc.processQueue(A, { step: "pack" });
+    expect(q.rows.map((r) => r.id)).toContain(a);
+    expect((await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, a)))[0].packedAt).toBeNull();
+    expect((await proc.markPacked(A, "u", [a])).packed).toHaveLength(1);
+    q = await proc.processQueue(A, { step: "handover" });
+    expect(q.rows.map((r) => r.id)).toContain(a);
+    expect((await proc.markHandedOver(A, "u", [a])).handedOver).toHaveLength(1);
+    expect((await proc.processQueue(A, { step: "handover" })).rows.find((r) => r.id === a)?.handedOverAt).toBeTruthy();
+    // the courier's pickup scan takes it off the list
+    const [so] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, a));
+    await db.update(schema.shipments).set({ status: "picked_up" }).where(eq(schema.shipments.orderId, so.shippingOrderId!));
+    q = await proc.processQueue(A, {});
+    expect(q.rows.some((r) => r.id === a)).toBe(false);
+    expect(q.summary.total).toBe(q.summary.print + q.summary.pack + q.summary.handover);
+    // dispatch time passed → delayed
+    await db.update(schema.storeOrders).set({ placedAt: new Date(Date.now() - 3 * 86_400_000) }).where(eq(schema.storeOrders.id, b));
+    expect((await proc.processQueue(A, { delayed: "1" })).rows.map((r) => r.id)).toContain(b);
+    // booked long ago and never picked up → Expired AWB
+    await dp.packAndBook(A, "u", [b], { markPacked: false });
+    const [sb] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, b));
+    await db.update(schema.shipments).set({ createdAt: new Date(Date.now() - 9 * 86_400_000) }).where(eq(schema.shipments.orderId, sb.shippingOrderId!));
+    const ex = await proc.processQueue(A, { tab: "expired" });
+    expect(ex.rows.map((r) => r.id)).toEqual([b]);
+    expect(ex.rows[0].awbAgeDays).toBeGreaterThanOrEqual(9);
+    expect((await proc.processQueue(B, {})).rows).toEqual([]);
   });
 });
