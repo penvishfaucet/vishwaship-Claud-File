@@ -26,6 +26,8 @@ const KIND: Record<string, { type: PassbookType; title: string }> = {
   recharge_credit: { type: "recharge", title: "Wallet Recharge" },
   reserve_settle: { type: "shipment", title: "Shipment Charge" },
   weight_charge: { type: "shipment", title: "Weight Charge" },
+  rto_charge: { type: "shipment", title: "RTO Charge" },
+  rto_credit: { type: "refund", title: "RTO Charge Reduced" },
   refund_credit: { type: "refund", title: "Refund" },
   weight_reversal: { type: "refund", title: "Weight Charge Reversed" },
   refund_debit: { type: "refund", title: "Refund Reversal" },

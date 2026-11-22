@@ -165,6 +165,9 @@ export async function scheduleSweeps() {
   // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
   try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }
   catch (e) { console.error("[store]", (e as Error).message); }
+  // RTO charges: open a record (with an estimate) for every shipment that turned RTO
+  try { const { sweepRtoCharges } = await import("@/server/rto/charges"); await sweepRtoCharges(); }
+  catch (e) { console.error("[rto charges]", (e as Error).message); }
   // store P&L: monthly copies of recurring expenses (rent, salaries …)
   try { const { sweepRecurringExpenses } = await import("@/server/store/expenses"); await sweepRecurringExpenses(); }
   catch (e) { console.error("[store expenses]", (e as Error).message); }

@@ -1347,6 +1347,47 @@ export const storeExpenses = pgTable("store_expenses", {
   createdAt: created(),
 }, (t) => [index("store_expenses_store_day").on(t.storeId, t.spentOn), uniqueIndex("store_expenses_recurring").on(t.recurringOf, t.recurringMonth)]);
 
+/**
+ * RTO charge of one shipment to the merchant: estimate when it turns RTO (quoted / awaiting), then the final amount
+ * from a carrier invoice, settlement file, integration or an audited staff adjustment (confirmed / adjusted), and
+ * reconciled once the wallet matches. chargedPaise is what has actually moved through the wallet (rto_charge debits
+ * minus rto_credit credits), so a re-confirmation only moves the difference. History keeps every change.
+ */
+export const rtoCharges = pgTable("rto_charges", {
+  id: id(),
+  orgId: text("org_id").notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  state: text("state").notNull().default("awaiting"), // quoted | awaiting | confirmed | adjusted | reconciled
+  estimatePaise: paise("estimate_paise").notNull().default(0),
+  estimateBasis: text("estimate_basis"),
+  /** Merchant-facing final RTO charge incl. GST, and the GST inside it. */
+  finalPaise: paise("final_paise"),
+  gstPaise: paise("gst_paise"),
+  /** Other reverse charges / surcharges inside finalPaise, and credits given back. */
+  otherPaise: paise("other_paise").notNull().default(0),
+  creditsPaise: paise("credits_paise").notNull().default(0),
+  source: text("source"), // carrier_invoice | settlement_file | integration | staff_adjustment
+  reference: text("reference"),
+  chargedPaise: paise("charged_paise").notNull().default(0),
+  history: jsonb("history").notNull().default([]),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [uniqueIndex("rto_charges_shipment").on(t.shipmentId), index("rto_charges_org").on(t.orgId, t.state)]);
+
+/** A merchant's question about the COD money of one shipment (Vishwaship staff resolve it). */
+export const codDisputes = pgTable("cod_disputes", {
+  id: id(),
+  orgId: text("org_id").notNull(),
+  shipmentId: text("shipment_id").notNull(),
+  note: text("note").notNull(),
+  status: text("status").notNull().default("open"), // open | resolved
+  resolution: text("resolution"),
+  createdBy: text("created_by"),
+  resolvedBy: text("resolved_by"),
+  createdAt: created(),
+  resolvedAt: ts("resolved_at"),
+}, (t) => [index("cod_disputes_org").on(t.orgId, t.status), index("cod_disputes_ship").on(t.shipmentId)]);
+
 /** Timeline of a store order (placed, paid, accepted, rejected, refund, dispatched …). */
 export const storeOrderEvents = pgTable("store_order_events", {
   id: id(),

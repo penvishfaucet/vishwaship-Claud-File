@@ -27,7 +27,8 @@ export type LedgerKind =
   | "recharge_credit" | "reserve" | "reserve_settle" | "reserve_release"
   | "adjustment_credit" | "adjustment_debit" | "weight_charge" | "weight_reversal"
   | "credits_purchase" | "refund_credit" | "refund_debit"
-  | "store_plan" | "store_deposit" | "store_deposit_refund";
+  | "store_plan" | "store_deposit" | "store_deposit_refund"
+  | "rto_charge" | "rto_credit";
 
 export interface LedgerEntry {
   id: string;
@@ -82,7 +83,7 @@ async function append(store: LedgerStore, w: WalletState, e: Omit<LedgerEntry, "
   return entry;
 }
 
-export async function credit(store: LedgerStore, a: Common & { amount: Paise; kind: "recharge_credit" | "adjustment_credit" | "weight_reversal" | "refund_credit" | "store_deposit_refund" }) {
+export async function credit(store: LedgerStore, a: Common & { amount: Paise; kind: "recharge_credit" | "adjustment_credit" | "weight_reversal" | "refund_credit" | "store_deposit_refund" | "rto_credit" }) {
   if (a.amount <= 0) throw new Error("Credit must be positive");
   const dup = await store.findByIdempotencyKey(a.idempotencyKey);
   if (dup) return { entry: dup, replayed: true };
@@ -91,7 +92,7 @@ export async function credit(store: LedgerStore, a: Common & { amount: Paise; ki
   return { entry, replayed: false };
 }
 
-export async function debit(store: LedgerStore, a: Common & { amount: Paise; kind: "adjustment_debit" | "weight_charge" | "credits_purchase" | "refund_debit" | "store_plan" | "store_deposit"; allowNegative?: boolean }) {
+export async function debit(store: LedgerStore, a: Common & { amount: Paise; kind: "adjustment_debit" | "weight_charge" | "credits_purchase" | "refund_debit" | "store_plan" | "store_deposit" | "rto_charge"; allowNegative?: boolean }) {
   if (a.amount <= 0) throw new Error("Debit must be positive");
   const dup = await store.findByIdempotencyKey(a.idempotencyKey);
   if (dup) return { entry: dup, replayed: true };

@@ -687,5 +687,19 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795349926178,
   "hash": "a8639c7c458fc5ab1f080fc942e0f4746b4254df09c0151fcd0813c09a7b8038"
+ },
+ {
+  "tag": "0035_rto_cod",
+  "sql": [
+   "CREATE TABLE \"cod_disputes\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"shipment_id\" text NOT NULL,\n\t\"note\" text NOT NULL,\n\t\"status\" text DEFAULT 'open' NOT NULL,\n\t\"resolution\" text,\n\t\"created_by\" text,\n\t\"resolved_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"resolved_at\" timestamp with time zone\n);\n",
+   "\nCREATE TABLE \"rto_charges\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"shipment_id\" text NOT NULL,\n\t\"state\" text DEFAULT 'awaiting' NOT NULL,\n\t\"estimate_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"estimate_basis\" text,\n\t\"final_paise\" bigint,\n\t\"gst_paise\" bigint,\n\t\"other_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"credits_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"source\" text,\n\t\"reference\" text,\n\t\"charged_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"history\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE INDEX \"cod_disputes_org\" ON \"cod_disputes\" USING btree (\"org_id\",\"status\");",
+   "\nCREATE INDEX \"cod_disputes_ship\" ON \"cod_disputes\" USING btree (\"shipment_id\");",
+   "\nCREATE UNIQUE INDEX \"rto_charges_shipment\" ON \"rto_charges\" USING btree (\"shipment_id\");",
+   "\nCREATE INDEX \"rto_charges_org\" ON \"rto_charges\" USING btree (\"org_id\",\"state\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795352121404,
+  "hash": "c4ee73d6f416cc2f1ddfbc320c87b21498405021a5b3dfcf8845745ad0fea1bb"
  }
 ];

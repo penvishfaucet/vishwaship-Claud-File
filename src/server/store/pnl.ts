@@ -63,6 +63,9 @@ async function compute(orgId: string, r: Range) {
   const firstAt = (id: string, test: (s: string) => boolean) => ev.filter((e) => e.id === id && test(e.status)).map((e) => new Date(e.at)).sort((a, b) => +a - +b)[0] ?? null;
   const disputes = shipIds.length ? await db.select({ id: schema.weightDisputes.shipmentId, amt: schema.weightDisputes.chargePaise, status: schema.weightDisputes.status }).from(schema.weightDisputes)
     .where(and(eq(schema.weightDisputes.orgId, orgId), inArray(schema.weightDisputes.shipmentId, shipIds))) : [];
+  // RTO charges settled in the wallet after booking (debits are negative, reductions positive)
+  const rtoL = shipIds.length ? await db.select({ id: schema.ledgerEntries.refId, amt: schema.ledgerEntries.amountPaise }).from(schema.ledgerEntries)
+    .where(and(eq(schema.ledgerEntries.refType, "shipment"), inArray(schema.ledgerEntries.refId, shipIds), inArray(schema.ledgerEntries.kind, ["rto_charge", "rto_credit"]))) : [];
   const orderIds = rows.map((x) => x.o.id);
   const tagged = orderIds.length ? await db.select().from(schema.storeExpenses).where(and(inArray(schema.storeExpenses.storeOrderId, orderIds), isNull(schema.storeExpenses.deletedAt))) : [];
   // current unit costs, only as an estimate for orders shipped before costs were captured
@@ -114,7 +117,8 @@ async function compute(orgId: string, r: Range) {
     if (outcome !== "delivered" && !insp) flags.push("return not counted yet");
     // shipping paid to Vishwaship (booking charge + weight charges), GST credit when registered
     const weight = disputes.filter((d) => d.id === s.id && ["charged", "accepted"].includes(d.status)).reduce((t, d) => t + (d.amt ?? 0), 0);
-    const shipPaidGross = s.sellPaise + weight;
+    const rtoCharge = -rtoL.filter((l) => l.id === s.id).reduce((t, l) => t + l.amt, 0);
+    const shipPaidGross = s.sellPaise + weight + rtoCharge;
     const shippingPaid = st.gstRegistered ? exGst(shipPaidGross, shipGstBps) : shipPaidGross;
     let inputGst = st.gstRegistered ? shipPaidGross - shippingPaid : 0;
     const paymentFees = o.paymentMethod !== "cod" && st.gatewayFeeBps ? Math.round((o.totalPaise * st.gatewayFeeBps) / 10_000) : 0;

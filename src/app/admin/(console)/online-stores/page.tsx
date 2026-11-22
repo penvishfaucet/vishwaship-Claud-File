@@ -6,8 +6,9 @@ import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { AdsTab, BillingSettings, DepositsTab } from "./tabs";
 import { PackageImport } from "./PackageImport";
+import { RtoTab } from "./rto-tab";
 
-type SP = Promise<{ tab?: string; status?: string; q?: string; step?: string; plan?: string; manager?: string; ok?: string; err?: string }>;
+type SP = Promise<{ tab?: string; state?: string; awb?: string; status?: string; q?: string; step?: string; plan?: string; manager?: string; ok?: string; err?: string }>;
 const STATUS_CHIP: Record<string, string> = { live: "c-active", draft: "c-draft", paused: "c-draft", suspended: "c-failed" };
 const when = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -15,7 +16,7 @@ export default async function AdminOnlineStores({ searchParams }: { searchParams
   const sp = await searchParams;
   const staff = await requireStaff("customers.read");
   const db = await getDb();
-  const tab = ["help", "ads", "deposits", "settings", "import"].includes(sp.tab ?? "") ? sp.tab! : "stores";
+  const tab = ["help", "ads", "deposits", "settings", "import", "rto"].includes(sp.tab ?? "") ? sp.tab! : "stores";
   const [[{ newHelp }], [{ refunds }], [{ pendingAds }]] = await Promise.all([
     db.select({ newHelp: sql<number>`count(*)::int` }).from(schema.storeHelpRequests).where(eq(schema.storeHelpRequests.status, "new")),
     db.select({ refunds: sql<number>`count(*)::int` }).from(schema.storeDeposits).where(eq(schema.storeDeposits.status, "refund_requested")),
@@ -28,6 +29,7 @@ export default async function AdminOnlineStores({ searchParams }: { searchParams
       <a className={tab === "ads" ? "on" : ""} href="/admin/online-stores/?tab=ads">Managed Ads{pendingAds > 0 && <span className="n" title="Approved by the merchant, waiting to be set up">{pendingAds}</span>}</a>
       <a className={tab === "deposits" ? "on" : ""} href="/admin/online-stores/?tab=deposits">Deposits{refunds > 0 && <span className="n" title="Refund requests">{refunds}</span>}</a>
       <a className={tab === "settings" ? "on" : ""} href="/admin/online-stores/?tab=settings">Plans & settings</a>
+      <a className={tab === "rto" ? "on" : ""} href="/admin/online-stores/?tab=rto">RTO &amp; COD</a>
       <a className={tab === "import" ? "on" : ""} href="/admin/online-stores/?tab=import">Import package</a>
       <a className={tab === "help" ? "on" : ""} href="/admin/online-stores/?tab=help">Help requests{newHelp > 0 && <span className="n">{newHelp}</span>}</a>
     </nav>
@@ -35,6 +37,7 @@ export default async function AdminOnlineStores({ searchParams }: { searchParams
   const notes = <>{sp.ok && <p className="note small mb12">{sp.ok}</p>}{sp.err && <p className="err-box small mb12" role="alert">{sp.err}</p>}</>;
   const head = (sub: string) => <div className="page-h"><div><h1>Online Stores</h1><p className="small muted" style={{ margin: "4px 0 0" }}>{sub}</p></div></div>;
 
+  if (tab === "rto") return <>{head("RTO charges of every customer (estimate → confirmed from the carrier invoice / settlement file → reconciled in the wallet) and customers' COD questions. Every change is audited.")}{tabs}{notes}<RtoTab state={sp.state} awb={sp.awb} canWrite={can(staff.role, "finance.adjust")} showCost={can(staff.role, "finance.read")} /></>;
   if (tab === "import") return <>{head("Load a prepared store (products, photos, categories and design) into a customer's account.")}{tabs}{notes}{can(staff.role, "modules.manage") ? <PackageImport /> : <p className="small muted">Only the owner can import store packages.</p>}</>;
   if (tab === "settings") return <>{head("Store plans, free trial, Managed Meta Ads deposit and terms, and which themes merchants can pick. Every change is in the audit log.")}{tabs}{notes}<BillingSettings canWrite={can(staff.role, "pricing.write")} /></>;
   if (tab === "deposits") return <>{head("Managed Meta Ads security deposits held from merchant wallets, and refund requests.")}{tabs}{notes}<DepositsTab status={sp.status} canDecide={can(staff.role, "finance.adjust")} /></>;
