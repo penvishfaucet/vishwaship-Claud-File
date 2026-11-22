@@ -1,5 +1,5 @@
 /* Vishwaship Growth Package (online store + ads + shipping). Navy / orange / white; dark text on light, white on navy only. */
-.gp,.gp-pop,.gp-run{--gn:#051C46;--gn2:#0b2a5e;--go:#C94A0A;--go2:#FE6519;--gink:#051C46;--gmut:#3d4b66;--gln:#dbe3ee;--gbg:#f5f7fb;--gok:#15803d;font-family:Roboto,system-ui,sans-serif;color:var(--gink)}
+.gp,.gp-pop,.gp-run{--gn:#051C46;--gn2:#0b2a5e;--go:#C94A0A;--go2:#FE6519;--gink:#051C46;--gmut:#3d4b66;--gln:#dbe3ee;--gbg:#f5f7fb;--gok:#15803d;font-family:inherit;color:var(--gink)}
 .gp *{box-sizing:border-box}
 .gp-wrap{max-width:1160px;margin:0 auto;padding:0 16px}
 .gp-sec{padding:72px 0}
@@ -105,7 +105,7 @@ html body .gp-btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
 .gp-faq p{margin:10px 0 0;color:var(--gmut);line-height:1.55;font-size:14.5px}
 
 /* running bar (site top / portal) */
-.gp-run{overflow:hidden;white-space:nowrap;background:var(--gn,#051C46);color:#fff;font-family:Roboto,system-ui,sans-serif}
+.gp-run{overflow:hidden;white-space:nowrap;background:var(--gn,#051C46);color:#fff;font-family:inherit}
 .gp-run a{color:#fff;text-decoration:none;display:block}
 .gp-run .track{display:inline-flex;gap:0;animation:gp-marq 38s linear infinite;padding:8px 0}
 .gp-run:hover .track{animation-play-state:paused}
@@ -124,7 +124,7 @@ html body .gp-btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
 .gp-mini svg{display:block;margin:0 auto 8px;color:#FFB48A}
 
 /* slide-in promo (home, once per session) */
-.gp-pop{position:fixed;left:16px;bottom:86px;z-index:60;width:min(340px,calc(100vw - 32px));background:#fff;color:var(--gink,#051C46);border-radius:18px;box-shadow:0 24px 50px rgba(5,28,70,.3);border:1px solid #dbe3ee;overflow:hidden;animation:gp-in .5s ease-out both;font-family:Roboto,system-ui,sans-serif}
+.gp-pop{position:fixed;left:16px;bottom:86px;z-index:60;width:min(340px,calc(100vw - 32px));background:#fff;color:var(--gink,#051C46);border-radius:18px;box-shadow:0 24px 50px rgba(5,28,70,.3);border:1px solid #dbe3ee;overflow:hidden;animation:gp-in .5s ease-out both;font-family:inherit}
 .gp-pop .hd{background:linear-gradient(135deg,#051C46,#123a80);color:#fff;padding:14px 16px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .gp-pop .hd button{background:transparent;border:0;color:#fff;cursor:pointer;padding:4px;display:grid;place-items:center}
 .gp-pop ul{list-style:none;margin:0;padding:12px 16px;display:grid;gap:8px;font-size:14px;color:#051C46}
