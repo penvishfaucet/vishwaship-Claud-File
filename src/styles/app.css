@@ -567,3 +567,64 @@ html:not(.dark) .shell .side a.item.on svg{color:#fff!important}
 .wd-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .wd-actions .btn{min-height:40px;flex:1 1 auto}
 }
+
+/* ---------- profile avatar (photo / emoji / initials) ---------- */
+.uav{display:inline-grid;place-items:center;border-radius:50%;overflow:hidden;flex-shrink:0;background:#051C46;color:#fff;font-weight:700;line-height:1;user-select:none}
+.uav img{width:100%;height:100%;object-fit:cover;display:block}
+.uav-emoji{background:#fff1e8;color:inherit;font-weight:400}
+html.dark .uav-emoji{background:#22365e}
+.avatar.avatar-btn{background:none;padding:0;width:auto;height:auto;border:2px solid transparent;border-radius:50%}
+.avatar.avatar-btn:focus-visible{border-color:#C94A0A;outline:none}
+.uav-edit{position:relative;border:0;background:none;padding:0;cursor:pointer;border-radius:50%;flex-shrink:0}
+.uav-edit:focus-visible{outline:3px solid #C94A0A;outline-offset:2px}
+.uav-pen{position:absolute;right:-2px;bottom:-2px;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#C94A0A;color:#fff;border:2px solid var(--card,#fff)}
+.uav-dialog{border:0;border-radius:18px;padding:16px;width:min(460px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow:auto;background:var(--card,#fff);color:var(--text,#102a5c);box-shadow:0 20px 60px rgba(0,0,0,.3);display:grid;gap:12px}
+.uav-dialog:not([open]){display:none}
+.uav-dialog::backdrop{background:rgba(5,28,70,.5)}
+.uav-dh{display:flex;align-items:center;justify-content:space-between}
+.uav-dh h2{font-size:17px;margin:0}
+.uav-now{display:flex;align-items:center;gap:10px}
+.uav-photo{display:grid;gap:10px;justify-items:center}
+.uav-crop{position:relative;width:260px;height:260px;border-radius:50%;overflow:hidden;touch-action:none;cursor:grab;box-shadow:0 0 0 3px #C94A0A}
+.uav-crop:focus-visible{outline:3px solid #051C46;outline-offset:3px}
+.uav-crop canvas{display:block;width:260px;height:260px}
+.uav-zoom{display:flex;align-items:center;gap:10px;width:100%;max-width:260px}
+.uav-zoom input{flex:1;accent-color:#C94A0A;min-height:32px}
+.uav-pick{display:grid;justify-items:center;gap:6px;width:100%;padding:28px 12px;border:2px dashed var(--line,#e3e8f2);border-radius:14px;background:var(--gray-soft,#eef2f9);color:var(--text,#102a5c);cursor:pointer}
+.uav-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;max-height:220px;overflow:auto}
+.uav-grid button{font-size:24px;min-height:44px;border-radius:10px;border:1.5px solid transparent;background:var(--gray-soft,#eef2f9);cursor:pointer}
+.uav-grid button.on{border-color:#C94A0A;background:#fff1e8}
+.uav-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.uav-actions .btn{min-height:44px}
+@media (max-width:600px){
+  .uav-dialog{margin:auto 0 0;width:100vw;max-width:100vw;border-radius:18px 18px 0 0;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+  .uav-actions .btn-orange{flex:1}
+}
+
+/* ---------- More (mobile) ---------- */
+.more-v2{display:grid;gap:12px}
+.mv-profile{display:flex;gap:14px;align-items:center;padding:16px}
+.mv-who{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.mv-who b{font-size:16px;color:var(--text,#102a5c)}
+.mv-sum{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mv-card{display:flex;flex-direction:column;gap:4px;padding:12px 14px;min-height:72px;text-decoration:none;color:inherit}
+.mv-card b{font-size:17px}
+.mv-card .tiny{display:inline-flex;gap:4px;align-items:center}
+.mv-appear{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.more-v2 .more-grp{font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.more-v2 .more-row{min-height:52px;color:var(--text,#102a5c)}
+.more-v2 .more-row .mr-l{flex:1;min-width:0;overflow-wrap:anywhere}
+.more-v2 .more-row.sub{padding-left:46px;min-height:46px;font-size:13px;background:var(--gray-soft,#f6f8fc)}
+.more-v2 .more-row.on{color:#C94A0A;box-shadow:inset 3px 0 0 #C94A0A}
+.more-v2 .more-row svg.rot{transform:rotate(180deg)}
+.more-v2 .more-row:focus-visible{outline:2px solid #C94A0A;outline-offset:-2px}
+.mv-out .more-row{background:var(--card,#fff);border:1px solid var(--line,#e3e8f2);border-radius:16px;color:#b42318}
+.more-v2{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media (max-width:360px){.mv-sum{grid-template-columns:1fr}}
+
+/* ---------- desktop account menu ---------- */
+.acct-dd{min-width:300px;right:0}
+.acct-h{display:flex;gap:12px;align-items:center;padding:10px 12px}
+.acct-sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 12px 8px}
+.acct-sum a{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;background:var(--gray-soft,#eef2f9);text-decoration:none;color:inherit}
+.acct-theme{display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-top:1px solid var(--line-2,#edf1f8)}

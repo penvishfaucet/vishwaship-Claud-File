@@ -15,6 +15,7 @@ import { sha256 } from "@/server/security/crypto";
 import { weightCounts } from "@/server/weight/courier-dispute";
 import { pendingAcceptanceCount } from "@/server/store/ops";
 import { lowStockCount } from "@/server/store/inventory";
+import { readAvatar } from "@/server/portal/avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const support = { label: await t("portal.support.phone_label"), phone: await t("portal.support.phone"), hours: await t("portal.support.hours") };
   return (
     <PortalShell
-      user={{ name: ctx.session.name, orgName: ctx.org.businessName, kycStatus: ctx.org.kycStatus, email: ctx.session.email }}
+      user={{ name: ctx.session.name, orgName: ctx.org.businessName, kycStatus: ctx.org.kycStatus, email: ctx.session.email, avatar: await readAvatar(ctx.session.userId), profileStep: ob.step }}
       walletPaise={ctx.walletAvailable}
       credits={ctx.credits}
       tickets={tickets}

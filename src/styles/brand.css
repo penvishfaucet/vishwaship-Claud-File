@@ -1,6 +1,6 @@
 /* ==========================================================================
    Vishwaship brand theme v5 (owner spec 2026-11-19, second revision).
-   Deep Navy #051C46 · Brand Orange #FE6519 (highlights) · Button Orange #E5540C (white text, 3.7:1) · White surfaces · Link Blue #0057B8
+   Deep Navy #051C46 · Brand Orange #FE6519 (highlights) · Button Orange #C94A0A (white text, 4.7:1; hover #A83F08) · White surfaces · Link Blue #0057B8
    Loaded last; selectors start with `html` so they win over older theme blocks and page CSS.
    ========================================================================== */
 html:root,html .shell,html .vs{
@@ -42,7 +42,7 @@ html:not(.dark) body .shell .side :is(a.item,button.item,summary,.grp-h,.qs-btn,
 html:not(.dark) body .shell .side :is(a.item,button.item,.grp-h,.qs-btn,.side-pin) svg{color:#fff!important;opacity:.9}
 html:not(.dark) body .shell .side .grp{color:#fff}
 html:not(.dark) body .shell .side :is(a.item,button.item):hover{background:rgba(255,255,255,.1)!important}
-html:not(.dark) body .shell .side a.item.on,html:not(.dark) body .shell .side a.item.on:hover{background:#E5540C!important;color:#fff!important;font-weight:600;box-shadow:none}
+html:not(.dark) body .shell .side a.item.on,html:not(.dark) body .shell .side a.item.on:hover{background:#C94A0A!important;color:#fff!important;font-weight:600;box-shadow:none}
 html:not(.dark) body .shell .side a.item.on svg{color:#fff!important;opacity:1}
 html:not(.dark) body .shell .side .grp.has-on>.grp-h{box-shadow:inset 3px 0 0 #FE6519}
 html:not(.dark) body .shell .side kbd{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25)}
@@ -54,7 +54,7 @@ html .shell .side a.item:focus-visible,html .shell .side .grp-h:focus-visible{ou
   html body .shell .bnav{background:#051C46;border-top:0;box-shadow:0 -6px 20px rgba(5,28,70,.25)}
   html body .shell .bnav a{color:#fff!important}
   html body .shell .bnav a svg{color:#fff}
-  html body .shell .bnav a.on .bi{background:#E5540C;color:#fff}
+  html body .shell .bnav a.on .bi{background:#C94A0A;color:#fff}
   html body .shell .bnav a.on{font-weight:600}
 }
 /* top header stays white with navy text */
@@ -84,11 +84,11 @@ html .vs .auth .l .awbcard .small{color:#051C46!important}
 html :is(.btn-navy,.shell .btn-navy,.wv .w-btn.sec,.tk-raise,.hw-rech,.tk-search .go,.seg-tabs a.on,.btn-sm.btn-orange,.ov-btn.sm.orange){background:#051C46!important;border-color:#051C46!important;color:#fff!important}
 html :is(.btn-navy,.shell .btn-navy,.tk-raise,.hw-rech,.tk-search .go):hover{background:#0b2a5e!important;color:#fff!important}
 /* key actions: brand orange + large bold white label */
-html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy){background:#E5540C;border-color:#E5540C;color:#fff!important;font-weight:700;font-size:16px;letter-spacing:.01em}
-html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy):hover{background:#c94a0a;color:#fff!important}
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy){background:#C94A0A;border-color:#C94A0A;color:#fff!important;font-weight:700;font-size:16px;letter-spacing:.01em}
+html :is(.btn-orange:not(.btn-sm),.shell .ov-btn.orange:not(.sm),.vs-btn,.wv .w-btn.pri,.oc-btn:not(.ghost),.rt-save,.shell .ov-split .ov-btn.navy):hover{background:#a83f08;color:#fff!important}
 html .wv .w-btn.pri{font-size:17px;padding-inline:26px;box-shadow:0 10px 24px rgba(229,84,12,.3)}
 /* orange surfaces / indicators: white text and icons */
-html :is(.qa-fab,.mo-fab,.dm-ic.wallet,.sc-send,.chat-input button,ol.stepper li.cur .n,.step.on .n,.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#E5540C;border-color:#E5540C;color:#fff!important}
+html :is(.qa-fab,.mo-fab,.dm-ic.wallet,.sc-send,.chat-input button,ol.stepper li.cur .n,.step.on .n,.oc-seg .on,.tk-tabs a.on,.oc-tabs a.on i,.shell .ov-stabs a.on .ov-n,.hdr-ico i,.mo-icon i){background:#C94A0A;border-color:#C94A0A;color:#fff!important}
 html :is(.oc-seg .on,.tk-tabs a.on){font-weight:700}
 html .tk-tabs a.on{font-size:15.5px}
 /* outline / secondary on white */
@@ -112,7 +112,7 @@ html .chat-msg.me .tk-att-doc{color:#fff}
 
 /* ---------- offers banner ---------- */
 html body .shell .vo-compact{background:#fff!important;border-color:#dbe3ee!important}
-html body .shell .vo-compact .ic{background:#E5540C!important;color:#fff!important}
+html body .shell .vo-compact .ic{background:#C94A0A!important;color:#fff!important}
 
 /* ---------- forms + tables ---------- */
 html .shell :is(.input,.select,.textarea,.ov-field,.rt-input,.tk-search,.tk-box){border-color:#c9d5e6;background:#fff;color:#051C46}
@@ -170,7 +170,7 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .pw-eye:hover { background: #EDF5FF; color: #051C46; }
 
 /* Create Order — always first in the sidebar */
-.side a.item.side-cta{background:#E5540C;color:#fff!important;border-radius:10px;margin:4px 8px 8px;font-weight:700}
+.side a.item.side-cta{background:#C94A0A;color:#fff!important;border-radius:10px;margin:4px 8px 8px;font-weight:700}
 .side a.item.side-cta svg{color:#fff!important}
 .side a.item.side-cta:hover,.side a.item.side-cta.on{background:#c94606}
 
@@ -236,3 +236,13 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .rate-lines { display: grid; gap: 2px; margin-top: 4px; font-size: 12px; }
 .rate-lines > span { display: flex; justify-content: space-between; gap: 10px; }
 @media (min-width: 900px) { .rate-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Dark mode: navy surfaces, light text, visible borders, same orange accent */
+html.dark .shell{--bg:#061430;--card:#0c1d3d;--line:#253a64;--line-2:#1b2f55;--gray-soft:#132849;--text:#e8edf7;--muted:#a9b6cf;--orange-soft:#3a2416}
+html.dark .shell .more-row,html.dark .shell .more-grp{color:var(--text)}
+html.dark .shell :is(.input,select.input,textarea.input){background:#0a1834;border-color:var(--line);color:var(--text)}
+html.dark .shell .dropdown{background:var(--card);border-color:var(--line);color:var(--text)}
+html.dark .shell :is(a.link,.link){color:#7fb0ff}
+.shell .m-brand .logo-dark{display:none}
+html.dark .shell .m-brand .logo-dark{display:inline}
+html.dark .shell .m-brand .logo-light{display:none}

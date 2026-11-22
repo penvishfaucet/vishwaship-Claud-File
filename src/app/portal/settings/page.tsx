@@ -1,3 +1,4 @@
+import { ChangePassword } from "@/components/portal/ChangePassword";
 import { ThemePicker } from "@/components/portal/ThemePicker";
 import { customerLogoutAll } from "@/server/auth/actions";
 
@@ -8,6 +9,10 @@ export default function SettingsPage() {
       <section className="card mb12" style={{ padding: 16 }}>
         <h2 className="b small" style={{ marginTop: 0 }}>Appearance</h2>
         <ThemePicker />
+      </section>
+      <section className="card mb12" style={{ padding: 16, scrollMarginTop: 80 }} id="password">
+        <h2 className="b small" style={{ marginTop: 0 }}>Change password</h2>
+        <ChangePassword />
       </section>
       <section className="card" style={{ padding: 16 }}>
         <h2 className="b small" style={{ marginTop: 0 }}>Security</h2>

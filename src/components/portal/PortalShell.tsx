@@ -12,9 +12,11 @@ import { QuickSearch } from "./QuickSearch";
 import { type QuickAction, quickActions } from "./quick-actions";
 import { BrandLogo, SidebarBrand } from "@/components/BrandLogo";
 import { rememberBrowser } from "@/components/site/nav";
+import { type AvatarData, AvatarEditor, UserAvatar } from "./ProfileAvatar";
+import { ThemePicker } from "./ThemePicker";
 
 interface Props {
-  user: { name: string; orgName: string; kycStatus: string; email?: string | null };
+  user: { name: string; orgName: string; kycStatus: string; email?: string | null; avatar: AvatarData; profileStep: string };
   walletPaise: number;
   credits: number;
   unreadAlerts: Array<{ id: string; title: string; href: string | null; createdAt: string }>;
@@ -62,6 +64,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
   const [pinned, setPinned] = useState(false);
   const [qs, setQs] = useState(false);
   const [menu, setMenu] = useState<Menu>(null);
+  const [editAvatar, setEditAvatar] = useState(false);
   const close = () => setMenu(null);
   const ref = useClickAway(menu !== null, close);
   const matches = (href: string) => (href === "/portal/" ? path === "/portal" || path === "/portal/" : path.startsWith(href.replace(/\/$/, "")));
@@ -90,7 +93,6 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
   const searchMenu = useMemo(() => nav.flatMap((e) => (isNavGroup(e)
     ? e.items.map((i) => ({ href: i.href, label: i.label, parent: e.group, locked: (i as Locked).locked }))
     : [{ href: e.href, label: e.label, locked: (e as Locked).locked }])), [nav]);
-  const initials = user.name.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
   const cls = (href: string, locked?: boolean) => `${active(href) ? "item on" : "item"}${locked ? " locked" : ""}`;
 
   // header search (AWB default, Order ID, LR)
@@ -157,7 +159,7 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
       <QuickSearch open={qs} onClose={() => setQs(false)} menu={searchMenu} />
       <div className="main">
         <header className="top top2" ref={ref}>
-          <Link href="/portal/" className="m-brand" aria-label="vishwaship.com home"><BrandLogo height={46} /></Link>
+          <Link href="/portal/" className="m-brand" aria-label="vishwaship.com home"><BrandLogo height={46} className="logo-light" /><BrandLogo height={46} onDark className="logo-dark" /></Link>
           <button className="icon-btn hide-xs" aria-label={drawer ? "Close menu" : "Open menu"} aria-expanded={drawer || pinned} onClick={onHamburger}><Menu size={20} /></button>
           <div className="hsearch" role="search">
             <label className="sr-only" htmlFor="hs-type">Search by</label>
@@ -203,16 +205,26 @@ export function PortalShell({ user, walletPaise, credits, unreadAlerts, tickets,
             )}
           </div>
           <div style={{ position: "relative" }} className="hide-xs">
-            <button className="avatar" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu === "profile"} onClick={() => setMenu(menu === "profile" ? null : "profile")}>{initials}</button>
+            <button className="avatar avatar-btn" aria-label="Account menu" aria-haspopup="menu" aria-expanded={menu === "profile"} onClick={() => setMenu(menu === "profile" ? null : "profile")}><UserAvatar name={user.name} avatar={user.avatar} size={36} /></button>
             {menu === "profile" && (
-              <div className="dropdown" role="menu">
-                <div style={{ padding: "8px 12px" }}><div className="b small">{user.name}</div><div className="tiny muted">{user.orgName}</div>{user.email && <div className="tiny muted">{user.email}</div>}</div>
-                <Link role="menuitem" href="/portal/profile/">Profile &amp; business</Link>
-                <Link role="menuitem" href="/portal/kyc/"><ShieldCheck size={14} style={{ verticalAlign: -2 }} /> KYC {user.kycStatus !== "approved" && <span className="chip c-pending" style={{ marginLeft: 6 }}>{user.kycStatus.replace("_", " ")}</span>}</Link>
-                <Link role="menuitem" href="/portal/settings/">Account settings</Link>
-                <form action={logout}><button className="dd" role="menuitem">Sign out</button></form>
+              <div className="dropdown acct-dd" role="menu">
+                <div className="acct-h">
+                  <UserAvatar name={user.name} avatar={user.avatar} size={48} />
+                  <div style={{ minWidth: 0 }}><div className="b small" style={{ overflowWrap: "anywhere" }}>{user.name}</div><div className="tiny muted">Account owner · {user.orgName}</div>{user.email && <div className="tiny muted" style={{ overflowWrap: "anywhere" }}>{user.email}</div>}</div>
+                </div>
+                <div className="acct-sum">
+                  <Link href="/portal/billing/passbook/"><span className="tiny muted">Wallet balance</span><b>{formatINR(walletPaise)}</b></Link>
+                  <Link href={user.profileStep === "profile" ? "/portal/onboarding/" : "/portal/kyc/"}><span className="tiny muted">Profile status</span><b className={user.profileStep === "active" ? "green" : user.profileStep === "resubmit" ? "red" : "orange"}>{({ active: "Verified", review: "KYC under review", kyc: "KYC pending", resubmit: "Changes needed", profile: "Complete profile" } as Record<string, string>)[user.profileStep] ?? user.kycStatus}</b></Link>
+                </div>
+                <Link role="menuitem" href="/portal/profile/">My Profile</Link>
+                <button type="button" className="dd" role="menuitem" onClick={() => { setMenu(null); setEditAvatar(true); }}>Edit Avatar</button>
+                <Link role="menuitem" href="/portal/kyc/"><ShieldCheck size={14} style={{ verticalAlign: -2 }} /> Documents &amp; KYC</Link>
+                <Link role="menuitem" href="/portal/settings/#password">Change Password</Link>
+                <div className="acct-theme"><span className="tiny muted">Appearance</span><ThemePicker /></div>
+                <form action={logout}><button className="dd" role="menuitem">Sign Out</button></form>
               </div>
             )}
+            {editAvatar && <AvatarEditor name={user.name} avatar={user.avatar} onClose={() => setEditAvatar(false)} />}
           </div>
         </header>
         <div className="content has-bnav" id="main">{children}</div>
