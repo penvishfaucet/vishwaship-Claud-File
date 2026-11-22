@@ -401,8 +401,17 @@ export const weightDisputes = pgTable("weight_disputes", {
   deadlineAt: ts("deadline_at").notNull(),
   status: text("status").notNull().default("open"), // open | disputed | accepted | waived | charged
   resolution: text("resolution"),
+  /** csv (courier report import) | api (courier tracking reply) | manual | seed */
+  source: text("source").notNull().default("manual"),
+  /** Chargeable weight the client was billed for at booking. */
+  bookedChargeableGrams: integer("booked_chargeable_grams"),
+  /** Extra pre-tax amount the courier billed Vishwaship, when the courier report states it. */
+  courierExtraPaise: paise("courier_extra_paise"),
+  /** Calculation breakdown (before / after cost, client price, GST, markup) shown to the client and Admin. */
+  calc: jsonb("calc"),
+  chargedAt: ts("charged_at"),
   createdAt: created(),
-});
+}, (t) => [index("weight_disputes_shipment").on(t.shipmentId), index("weight_disputes_status_deadline").on(t.status, t.deadlineAt)]);
 
 // ---------- wallet ----------
 export const wallets = pgTable("wallets", {

@@ -605,5 +605,20 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795261814691,
   "hash": "8c9102aa3cb88478738431fad0203b5ef28360b9e3858202806231b4d8b9ea01"
+ },
+ {
+  "tag": "0029_weight_discrepancy",
+  "sql": [
+   "ALTER TABLE \"weight_disputes\" ADD COLUMN \"source\" text DEFAULT 'manual' NOT NULL;",
+   "\nALTER TABLE \"weight_disputes\" ADD COLUMN \"booked_chargeable_grams\" integer;",
+   "\nALTER TABLE \"weight_disputes\" ADD COLUMN \"courier_extra_paise\" bigint;",
+   "\nALTER TABLE \"weight_disputes\" ADD COLUMN \"calc\" jsonb;",
+   "\nALTER TABLE \"weight_disputes\" ADD COLUMN \"charged_at\" timestamp with time zone;",
+   "\nCREATE INDEX \"weight_disputes_shipment\" ON \"weight_disputes\" USING btree (\"shipment_id\");",
+   "\nCREATE INDEX \"weight_disputes_status_deadline\" ON \"weight_disputes\" USING btree (\"status\",\"deadline_at\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795320093287,
+  "hash": "32984c426d19f98a2322b03b9d7d6e97d05609e7c75c67518aa7c44b6ff0c175"
  }
 ];

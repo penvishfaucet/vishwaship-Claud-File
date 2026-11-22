@@ -107,6 +107,8 @@ export interface TrackResult {
   status: NormalizedStatus;
   etaDate?: string;
   events: TrackingEvent[];
+  /** Courier charged / billed weight (grams), when the tracking reply states it explicitly. */
+  chargedWeightGrams?: number;
 }
 
 export type LabelFormat = "a4" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100";

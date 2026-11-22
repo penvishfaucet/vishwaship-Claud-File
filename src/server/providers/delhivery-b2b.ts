@@ -335,7 +335,8 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
     if (!r.ok) return r;
     const t = parseB2bTrack(r.value.json, awb);
     if (!t) return { ok: false, error: { category: "not_found", message: "No tracking status yet", retryable: true } };
-    return { ok: true, value: { awb, carrierName: "Delhivery", status: t.status, events: t.events, etaDate: t.etaDate } };
+    const cw = b2bChargedWeight(r.value.json);
+    return { ok: true, value: { awb, carrierName: "Delhivery", status: t.status, events: t.events, etaDate: t.etaDate, ...(cw ? { chargedWeightGrams: cw } : {}) } };
   },
 
   async cancel(ctx, ref) {
@@ -351,6 +352,24 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
 };
 
 export { amountToPaise };
+
+/**
+ * Courier charged / billed weight in a Delhivery B2B reply, only from an explicitly named field (never the booked
+ * "weight"). Values below 1000 are kilograms, otherwise grams (same reading as the freight estimate). null = not stated.
+ */
+export function b2bChargedWeight(j: unknown, depth = 0): number | null {
+  if (!j || typeof j !== "object" || depth > 6) return null;
+  for (const [k, v] of Object.entries(j as Record<string, unknown>)) {
+    if (/^(charged_wt|charged_weight|chargeable_weight|chargeable_wt|billed_weight|billed_wt|charged_weight_kg|charged_weight_g)$/i.test(k)) {
+      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v.replace(/[^0-9.]/g, "")) : NaN;
+      if (Number.isFinite(n) && n > 0) return /_kg$/i.test(k) ? Math.round(n * 1000) : /_g$/i.test(k) ? Math.round(n) : n < 1000 ? Math.round(n * 1000) : Math.round(n);
+    }
+  }
+  for (const v of Object.values(j as Record<string, unknown>)) {
+    if (v && typeof v === "object") { const n = b2bChargedWeight(v, depth + 1); if (n) return n; }
+  }
+  return null;
+}
 
 /** ODA (out of delivery area) flag from the pincode-serviceability response: true / false / null (not stated). */
 export function odaFlag(j: unknown): boolean | null { return yesNo(j, /(^|_)(oda|is_oda|oda_flag|odc|remote)(_|$)/i); }

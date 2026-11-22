@@ -131,6 +131,10 @@ export async function refreshFromCarrier(shipmentId: string) {
   if (!r.ok) return syncFailed(shipmentId, r.error.message);
   const res = await ingestEvents(shipmentId, r.value.events, "poll", r.value.etaDate);
   await markSynced(shipmentId);
+  if (r.value.chargedWeightGrams && r.value.chargedWeightGrams !== sh.carrierWeightGrams) {
+    try { const { raiseWeightDiscrepancy } = await import("@/server/weight/service"); await raiseWeightDiscrepancy({ shipmentId, carrierGrams: r.value.chargedWeightGrams, source: "api" }); }
+    catch (e) { console.error("[weight]", shipmentId, (e as Error).message); }
+  }
   if (r.value.events.length) await noteCapability(acct.id, "track", true, { evidence: `AWB ${sh.awb}` });
   return { ok: true as const, ...res };
 }
