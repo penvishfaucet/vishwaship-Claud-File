@@ -1,7 +1,8 @@
 import { ANDROID_RELEASE as R } from "@/lib/android-release";
 import { SITE } from "@/lib/site";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata = { title: "Download the Vishwaship Android app — Vishwaship" };
+export const metadata = pageMeta("/download-app/", "Download the Vishwaship Android App", "Book, track and manage your shipments on the go with the Vishwaship Android app — same account as the website.");
 
 /** Direct APK download (until the app is on Google Play). Same account as the website. */
 export default function DownloadAppPage() {

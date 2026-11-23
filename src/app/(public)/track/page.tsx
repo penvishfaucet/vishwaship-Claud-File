@@ -6,9 +6,10 @@ import { carrierLogo } from "@/lib/site";
 import { rateLimit } from "@/server/security/rate-limit";
 import { type PublicTrack, publicTrack } from "@/server/tracking/public";
 import { getSiteContent } from "@/server/site/content";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Track Shipment — Vishwaship", description: "Track your Vishwaship shipment by AWB or LR number." };
+export const metadata = pageMeta("/track/", "Track Shipment — Vishwaship", "Track your Vishwaship shipment by AWB or LR number: live status, delivery updates and proof of delivery.");
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" });

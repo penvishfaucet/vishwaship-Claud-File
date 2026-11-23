@@ -3,10 +3,11 @@ import { SignupForm } from "@/components/auth/Forms";
 import { firebaseGoogleFrom, googleAvailable } from "@/server/auth/google";
 import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
 import { activeFranchiseByCode, referralFromCookie } from "@/server/franchise/referral";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Sign up — Vishwaship" };
+export const metadata = pageMeta("/signup/", "Create Your Free Account — Vishwaship", "Sign up free with Vishwaship to compare courier rates, book parcels and cargo and track every shipment across India.");
 
 export default async function SignupPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;

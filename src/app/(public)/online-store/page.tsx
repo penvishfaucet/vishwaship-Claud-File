@@ -7,12 +7,9 @@ import { THEMES } from "@/lib/store-themes";
 import { StoreHelpForm } from "@/components/site/StoreHelpForm";
 import { siteAuth } from "@/server/site/auth";
 import "@/styles/growth.css";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata = {
-  title: "Growth Package: Online Store, Ads & Shipping — Vishwaship",
-  description: "We build your online store, run your Meta & Google ads, make your Instagram & Facebook creatives and ship every order from ₹28. ₹0 monthly fee — 1.5% only on delivered orders. Refundable ₹2,499 + GST deposit.",
-  alternates: { canonical: "/online-store/" },
-};
+export const metadata = pageMeta("/online-store/", "Growth Package: Online Store, Ads & Shipping — Vishwaship", "We build your online store, run your Meta & Google ads, make your Instagram & Facebook creatives and ship every order from ₹28. ₹0 monthly fee — 1.5% only on delivered orders. Refundable ₹2,499 + GST deposit.");
 
 const FEATURES = [
   { icon: Store, t: "Your online store", d: "Built for you — your brand, products, cart, COD and online payments." },

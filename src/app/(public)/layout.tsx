@@ -10,6 +10,7 @@ import { DEFAULTS, accountHref } from "@/lib/site-content";
 import { customerLogout, staffLogout } from "@/server/auth/actions";
 import { type SiteAuth, siteAuth } from "@/server/site/auth";
 import { getSiteContent } from "@/server/site/content";
+import { structuredData } from "@/lib/seo";
 
 // Header/footer links come from Admin → Website Content and the account menu from the session, so public pages render per request.
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export default async function PublicLayout({ children }: { children: React.React
   const acct = auth.customer ? "/portal/" : auth.staff ? "/admin/" : accountHref(links.customerLogin, "/login/");
   return (
     <div className="vs wv v4 v5">
+      {/* Organization + WebSite structured data for Google (logo, contact, address, tracking search box). */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData()).replace(/</g, "\\u003c") }} />
       <a className="sr-only" href="#main">Skip to content</a>
       <GrowthRunBar />
       <div className="v4-top">

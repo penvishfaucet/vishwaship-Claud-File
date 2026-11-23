@@ -4,12 +4,10 @@ import { OfferStrip } from "@/components/site/OfferStrip";
 import { accountHref, visiblePartners } from "@/lib/site-content";
 import { siteAuth } from "@/server/site/auth";
 import { getSiteContent } from "@/server/site/content";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "Shipping Rate Calculator — Vishwaship",
-  description: "Compare B2C parcel and B2B cargo courier rates pincode to pincode, by weight and box size.",
-};
+export const metadata = pageMeta("/shipping-rate-calculator/", "Shipping Rate Calculator — Compare Courier Rates | Vishwaship", "Compare B2C parcel and B2B cargo courier rates pincode to pincode, by weight and box size, and book the best courier in one click.");
 
 export default async function RateCalcPage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const sp = await searchParams;

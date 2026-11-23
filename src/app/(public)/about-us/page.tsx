@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, Headset, MapPin, Package, Scale, Truck } from "lucide-react";
 import { getSiteContent } from "@/server/site/content";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "About Us — Vishwaship",
-  description: "Vishwaship brings shipping-rate comparison, booking, pickup coordination, tracking and support into one platform.",
-};
+export const metadata = pageMeta("/about-us/", "About Us — Vishwaship", "Vishwaship brings shipping-rate comparison, booking, pickup coordination, tracking and support into one platform, run from our Haridwar head office.");
 
 export default async function AboutPage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const sp = await searchParams;

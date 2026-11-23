@@ -4,8 +4,9 @@ import { LoginForm } from "@/components/auth/Forms";
 import { readSession } from "@/server/auth/session";
 import { firebaseGoogleFrom, googleAvailable } from "@/server/auth/google";
 import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata = { title: "Login — Vishwaship" };
+export const metadata = pageMeta("/login/", "Login — Vishwaship", "Log in to your Vishwaship account to book shipments, schedule pickups and track orders.");
 export const dynamic = "force-dynamic";
 
 const safe = (n?: string) => (n && n.startsWith("/") && !n.startsWith("//") ? n : "/portal/");

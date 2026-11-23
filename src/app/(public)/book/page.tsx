@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { Package, Truck } from "lucide-react";
 import { ArrowRight } from "@/components/icons";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata = { title: "Book a Shipment — Vishwaship.com" };
+export const metadata = pageMeta("/book/", "Book a Shipment Online — Vishwaship", "Book a parcel or cargo shipment anywhere in India: enter pickup and delivery pincodes, pick a courier and get your AWB and label instantly.");
 
 export default function BookPage() {
   return (

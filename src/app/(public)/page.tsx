@@ -9,12 +9,10 @@ import { GrowthHomeTeaser } from "@/components/site/Growth";
 import { GrowthPopup } from "@/components/site/GrowthPopup";
 import { accountHref, completeMobile, safeHref, visiblePartners } from "@/lib/site-content";
 import { b2bThresholdGrams, getSiteContent } from "@/server/site/content";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "Vishwaship — Big & Small, We Ship It All",
-  description: "Compare courier rates, book parcels and cargo, schedule pickups and track shipments across India with Vishwaship.",
-};
+export const metadata = pageMeta("/", "Vishwaship — Big & Small, We Ship It All | Courier & Cargo Across India", "Compare courier rates, book parcels and cargo, schedule doorstep pickups and track shipments across India with Vishwaship — many courier partners, one account.");
 
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const sp = await searchParams;

@@ -3,12 +3,10 @@ import { Clock, ExternalLink, Mail, MapPin, Phone, Ticket } from "lucide-react";
 import { TeamGrid } from "@/components/site/TeamCards";
 import { mapEmbedUrl, mapOpenUrl } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
+import { pageMeta } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata = {
-  title: "Customer Care — Vishwaship",
-  description: "Contact the Vishwaship support manager for your region, or reach our Haridwar head office.",
-};
+export const metadata = pageMeta("/customer-care/", "Customer Care — Vishwaship", "Contact the Vishwaship support manager for your region, or reach our Haridwar head office by phone, WhatsApp or email.");
 
 export default async function CustomerCare({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
   const sp = await searchParams;
