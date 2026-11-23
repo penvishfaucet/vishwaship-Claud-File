@@ -85,8 +85,8 @@ export async function requireCustomer(): Promise<SessionUser & { orgId: string }
 }
 
 function mfaOk(s: SessionUser) {
-  // Demo staff skip MFA only when explicitly allowed for local development.
-  if (process.env.ALLOW_DEMO_STAFF_WITHOUT_MFA === "1" && s.email?.endsWith("@demo.vishwaship.test")) return true;
+  // Demo staff skip MFA only when explicitly allowed for local development — never in production, even if the flag is set.
+  if (process.env.NODE_ENV !== "production" && process.env.ALLOW_DEMO_STAFF_WITHOUT_MFA === "1" && s.email?.endsWith("@demo.vishwaship.test")) return true;
   return !MFA_REQUIRED.includes(s.role!) || s.mfaPassed;
 }
 

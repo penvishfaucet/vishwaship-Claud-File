@@ -13,6 +13,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     "content-type": a.mime,
     "cache-control": "public, max-age=31536000, immutable",
     "x-content-type-options": "nosniff",
+    // opened directly (e.g. an SVG), the file can never run scripts on this site
+    "content-security-policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox",
     "accept-ranges": "bytes",
   };
   // Videos need byte ranges for seeking/iOS playback.

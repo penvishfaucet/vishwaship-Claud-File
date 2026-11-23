@@ -5,6 +5,10 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // HTTPS only for a year (no includeSubDomains/preload, so other subdomains are never forced)
+  { key: "Strict-Transport-Security", value: "max-age=31536000" },
+  // restrictions that cannot break scripts, styles or payment pop-ups; framing matches X-Frame-Options
+  { key: "Content-Security-Policy", value: "base-uri 'self'; object-src 'none'; frame-ancestors 'none'" },
 ];
 
 const config: NextConfig = {
@@ -12,6 +16,7 @@ const config: NextConfig = {
   typescript: { tsconfigPath: "tsconfig.build.json" },
   // local only: lets a second dev server run side by side (e.g. NEXT_DIST_DIR=.data/next-alt)
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  poweredByHeader: false, // do not advertise the framework
   trailingSlash: true, // keeps existing public paths (/book/, /login/, /track/ …)
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
   // Admin uploads the UPI QR through a server action (QR images are capped at 2 MB in code)
@@ -20,7 +25,7 @@ const config: NextConfig = {
     return [
       { source: "/:path((?!s/).*)", headers: securityHeaders },
       // storefronts: the portal theme editor previews them in a same-origin iframe
-      { source: "/s/:path*", headers: securityHeaders.map((h) => (h.key === "X-Frame-Options" ? { key: h.key, value: "SAMEORIGIN" } : h)) },
+      { source: "/s/:path*", headers: securityHeaders.map((h) => (h.key === "X-Frame-Options" ? { key: h.key, value: "SAMEORIGIN" } : h.key === "Content-Security-Policy" ? { key: h.key, value: "base-uri 'self'; object-src 'none'; frame-ancestors 'self'" } : h)) },
     ];
   },
   /**
