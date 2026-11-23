@@ -78,12 +78,13 @@ describe("API Keys & Services", () => {
     expect(await svc.saveService("firebase_phone", { apiKey: key, authDomain: "vishwaship-app.firebaseapp.com", projectId: "vishwaship-app" }, "usr_a")).toMatchObject({ ok: true });
     reply = () => ({ status: 400, body: { error: { message: "API key not valid" } } });
     expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/rejected/) });
-    reply = () => ({ status: 200, body: { projectId: "someone-else", authorizedDomains: ["localhost"] } });
-    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/someone-else/) });
-    reply = () => ({ status: 200, body: { projectId: "vishwaship-app", authorizedDomains: ["vishwaship-app.firebaseapp.com"] } });
+    // Google answers with the project NUMBER; the key belongs to another project when its default domain differs
+    reply = () => ({ status: 200, body: { projectId: "111111111111", authorizedDomains: ["localhost", "someone-else.firebaseapp.com"] } });
+    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/different Firebase project/) });
+    reply = () => ({ status: 200, body: { projectId: "981211259035", authorizedDomains: ["vishwaship-app.firebaseapp.com", "www.vishwaship.in"] } });
     expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/Authorized domains/) });
     expect(await svc.setServiceOn("firebase_phone", true, "usr_a")).toMatchObject({ ok: false });
-    reply = () => ({ status: 200, body: { projectId: "vishwaship-app", authorizedDomains: ["localhost", "vishwaship-app.firebaseapp.com"] } });
+    reply = () => ({ status: 200, body: { projectId: "981211259035", authorizedDomains: ["localhost", "vishwaship-app.firebaseapp.com"] } });
     expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: true });
     expect(calls.at(-1)!.init.allowedHosts).toEqual(["www.googleapis.com"]);
     await svc.setServiceOn("firebase_phone", true, "usr_a");

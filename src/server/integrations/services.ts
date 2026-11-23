@@ -280,10 +280,14 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
       const x = await call(`https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=${encodeURIComponent(v.apiKey)}`);
       const j = (await x.json().catch(() => ({}))) as { projectId?: string; authorizedDomains?: string[]; error?: { message?: string } };
       const host = new URL(appUrl()).hostname;
+      const domains = j.authorizedDomains ?? [];
+      // Google answers with the project NUMBER (e.g. 981211259035), not the ID; every project's own
+      // <id>.firebaseapp.com domain is always authorized, so that proves the key belongs to this Project ID.
+      const sameProject = j.projectId === v.projectId || domains.includes(`${v.projectId}.firebaseapp.com`);
       res = !x.ok ? { ok: false, message: x.status === 400 || x.status === 403 ? "Firebase rejected the Web API key — copy it again from Project settings" : `Firebase HTTP ${x.status}${j.error?.message ? `: ${j.error.message}` : ""}` }
-        : j.projectId && j.projectId !== v.projectId ? { ok: false, message: `This key belongs to project “${j.projectId}”, not “${v.projectId}”` }
-        : !(j.authorizedDomains ?? []).includes(host) ? { ok: false, message: `Add ${host} in Firebase → Authentication → Settings → Authorized domains, then test again` }
-        : { ok: true, message: `Connected to Firebase project ${j.projectId ?? v.projectId}; ${host} is an authorized domain. Make sure Phone sign-in is enabled.` };
+        : !sameProject ? { ok: false, message: `This Web API key belongs to a different Firebase project than “${v.projectId}” — copy apiKey and projectId from the same firebaseConfig` }
+        : !domains.includes(host) ? { ok: false, message: `Add ${host} in Firebase → Authentication → Settings → Authorized domains, then test again` }
+        : { ok: true, message: `Connected to Firebase project ${v.projectId}; ${host} is an authorized domain. Make sure Phone sign-in is enabled.` };
     } else if (adapter === "wati") {
       const base = v.apiEndpoint.replace(/\/+$/, "");
       const x = await call(`${base}/api/v1/getMessageTemplates?pageSize=1`, { headers: { authorization: `Bearer ${v.accessToken}` } });
