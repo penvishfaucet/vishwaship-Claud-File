@@ -72,6 +72,24 @@ describe("API Keys & Services", () => {
     expect(view.info.map((i) => i.value)).toContain("http://localhost:3000/api/auth/google/callback");
   });
 
+  it("Firebase mobile OTP: key format, project match and the site as an authorized domain are all checked before ON", async () => {
+    expect(await svc.saveService("firebase_phone", { apiKey: "not-a-key", authDomain: "vs.firebaseapp.com", projectId: "vishwaship-app" }, "usr_a")).toMatchObject({ ok: false });
+    const key = "AIzaSyD-abcdefghijklmnopqrstuvwxyz0123";
+    expect(await svc.saveService("firebase_phone", { apiKey: key, authDomain: "vishwaship-app.firebaseapp.com", projectId: "vishwaship-app" }, "usr_a")).toMatchObject({ ok: true });
+    reply = () => ({ status: 400, body: { error: { message: "API key not valid" } } });
+    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/rejected/) });
+    reply = () => ({ status: 200, body: { projectId: "someone-else", authorizedDomains: ["localhost"] } });
+    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/someone-else/) });
+    reply = () => ({ status: 200, body: { projectId: "vishwaship-app", authorizedDomains: ["vishwaship-app.firebaseapp.com"] } });
+    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: false, message: expect.stringMatching(/Authorized domains/) });
+    expect(await svc.setServiceOn("firebase_phone", true, "usr_a")).toMatchObject({ ok: false });
+    reply = () => ({ status: 200, body: { projectId: "vishwaship-app", authorizedDomains: ["localhost", "vishwaship-app.firebaseapp.com"] } });
+    expect(await svc.testService("firebase_phone", "usr_a")).toMatchObject({ ok: true });
+    expect(calls.at(-1)!.init.allowedHosts).toEqual(["www.googleapis.com"]);
+    await svc.setServiceOn("firebase_phone", true, "usr_a");
+    expect(await svc.activeService("firebase_phone")).toMatchObject({ apiKey: key, projectId: "vishwaship-app" });
+  });
+
   it("WhatsApp: WATI endpoint must be a wati.io host; only one WhatsApp provider is ON at a time", async () => {
     expect(await svc.saveService("wati", { apiEndpoint: "https://evil.example.com/1", accessToken: "t", webhookToken: "x".repeat(20) }, "usr_a")).toMatchObject({ ok: false });
     expect(await svc.saveService("wati", { apiEndpoint: "https://live-mt-server.wati.io/12345", accessToken: "Bearer tok-123", webhookToken: "w".repeat(24) }, "usr_a")).toMatchObject({ ok: true });

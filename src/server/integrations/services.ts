@@ -16,7 +16,7 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "wati" | "meta_whatsapp" | "aisensy" | "bolna";
+  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna";
   group: "Email" | "Sign-in" | "WhatsApp" | "AI calling";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
@@ -65,6 +65,26 @@ export const SERVICES: ServiceDef[] = [
       "Create → copy the Client ID and Client secret → paste below → Save → Test connection → Turn ON.",
     ],
     links: [{ label: "Google Cloud console", url: "https://console.cloud.google.com/apis/credentials" }],
+  },
+  {
+    adapter: "firebase_phone", group: "Sign-in", name: "Firebase mobile OTP login",
+    purpose: "Shows “Login with Mobile OTP” on the login and signup pages. Firebase sends the SMS code; Vishwaship checks it on the server.",
+    fields: [
+      { key: "apiKey", label: "Web API key", secret: false, required: true, placeholder: "AIza…", help: "Firebase → Project settings → General → Your apps → Web app → firebaseConfig.apiKey (this key is public by design)" },
+      { key: "authDomain", label: "Auth domain", secret: false, required: true, placeholder: "your-project.firebaseapp.com" },
+      { key: "projectId", label: "Project ID", secret: false, required: true, placeholder: "your-project" },
+      { key: "appId", label: "App ID (optional)", secret: false, required: false, placeholder: "1:1234567890:web:abc123" },
+    ],
+    guide: [
+      "Open console.firebase.google.com → Add project (or open the existing Vishwaship project used for app notifications).",
+      "Phone sign-in sends real SMS, which Google bills: upgrade the project to the Blaze (pay as you go) plan and set a budget alert in Google Cloud billing.",
+      "Build → Authentication → Get started → Sign-in method → Phone → Enable → Save.",
+      "Authentication → Settings → Authorized domains → Add domain: the domain shown below (and www. too if the site uses it).",
+      "Authentication → Settings → SMS region policy → Allow → India only (blocks SMS fraud to other countries).",
+      "Project settings (gear) → General → Your apps → Add app → Web (</>) → name it Vishwaship Web → Register. Copy apiKey, authDomain, projectId and appId from firebaseConfig.",
+      "Paste them below → Save → Test connection → Turn ON. “Login with Mobile OTP” then appears on the login page.",
+    ],
+    links: [{ label: "Firebase console", url: "https://console.firebase.google.com/" }],
   },
   {
     adapter: "wati", group: "WhatsApp", name: "WATI (WhatsApp)", exclusive: true,
@@ -147,6 +167,7 @@ export const serviceDef = (adapter: string) => SERVICES.find((s) => s.adapter ==
 export function serviceInfo(adapter: string): Array<{ label: string; value: string }> {
   const u = appUrl();
   if (adapter === "google_oauth") return [{ label: "Authorized JavaScript origin", value: u }, { label: "Authorized redirect URI", value: `${u}/api/auth/google/callback` }];
+  if (adapter === "firebase_phone") return [{ label: "Authorized domain to add in Firebase", value: new URL(u).hostname }];
   if (adapter === "wati") return [{ label: "Webhook URL", value: `${u}/api/webhooks/wati?token=<your webhook token>` }];
   if (adapter === "aisensy") return [{ label: "Webhook URL", value: `${u}/api/webhooks/aisensy?token=<your webhook token>` }];
   if (adapter === "bolna") return [{ label: "Webhook URL", value: `${u}/api/webhooks/bolna?token=<your webhook token>` }];
@@ -154,7 +175,7 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -183,6 +204,7 @@ export async function activeService(adapter: ServiceDef["adapter"]): Promise<Rec
 function hostsFor(adapter: string, v: Record<string, string>): string[] {
   if (adapter === "resend") return ["api.resend.com"];
   if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
+  if (adapter === "firebase_phone") return ["www.googleapis.com"];
   if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
   if (adapter === "aisensy") return ["backend.aisensy.com"];
   if (adapter === "bolna") return ["api.bolna.ai"];
@@ -207,6 +229,9 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (missing.length) return { ok: false, message: `Fill in: ${missing.join(", ")}` };
   if (adapter === "resend" && !/^re_[\w-]{8,}$/.test(v.apiKey)) return { ok: false, message: "A Resend API key starts with re_" };
   if (adapter === "google_oauth" && !/\.apps\.googleusercontent\.com$/.test(v.clientId)) return { ok: false, message: "The Client ID ends with .apps.googleusercontent.com" };
+  if (adapter === "firebase_phone" && !/^AIza[\w-]{30,}$/.test(v.apiKey)) return { ok: false, message: "The Web API key starts with AIza (Firebase → Project settings → Your apps)" };
+  if (adapter === "firebase_phone" && !/^[a-z0-9-]{4,40}$/.test(v.projectId)) return { ok: false, message: "The Project ID is lowercase letters, numbers and dashes (e.g. vishwaship-app)" };
+  if (adapter === "firebase_phone" && !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(v.authDomain.toLowerCase())) return { ok: false, message: "The Auth domain looks like your-project.firebaseapp.com" };
   if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
   if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
   if (adapter === "aisensy" && v.apiKey.length < 20) return { ok: false, message: "Copy the full AiSensy API key (Manage → API Key)" };
@@ -250,6 +275,15 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
         : j.error === "invalid_client" ? { ok: false, message: "Google rejected the Client ID / secret — copy them again from the OAuth client" }
         : j.error === "redirect_uri_mismatch" ? { ok: false, message: "Add the Authorized redirect URI shown above to the OAuth client" }
         : { ok: false, message: `Google answered: ${j.error ?? x.status} ${j.error_description ?? ""}`.trim() };
+    } else if (adapter === "firebase_phone") {
+      // reads the project settings with the web key: proves the key + project and that this site may sign in
+      const x = await call(`https://www.googleapis.com/identitytoolkit/v3/relyingparty/getProjectConfig?key=${encodeURIComponent(v.apiKey)}`);
+      const j = (await x.json().catch(() => ({}))) as { projectId?: string; authorizedDomains?: string[]; error?: { message?: string } };
+      const host = new URL(appUrl()).hostname;
+      res = !x.ok ? { ok: false, message: x.status === 400 || x.status === 403 ? "Firebase rejected the Web API key — copy it again from Project settings" : `Firebase HTTP ${x.status}${j.error?.message ? `: ${j.error.message}` : ""}` }
+        : j.projectId && j.projectId !== v.projectId ? { ok: false, message: `This key belongs to project “${j.projectId}”, not “${v.projectId}”` }
+        : !(j.authorizedDomains ?? []).includes(host) ? { ok: false, message: `Add ${host} in Firebase → Authentication → Settings → Authorized domains, then test again` }
+        : { ok: true, message: `Connected to Firebase project ${j.projectId ?? v.projectId}; ${host} is an authorized domain. Make sure Phone sign-in is enabled.` };
     } else if (adapter === "wati") {
       const base = v.apiEndpoint.replace(/\/+$/, "");
       const x = await call(`${base}/api/v1/getMessageTemplates?pageSize=1`, { headers: { authorization: `Bearer ${v.accessToken}` } });

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { type FormEvent, startTransition, useActionState, useEffect, useState } from "react";
 import { Eye, EyeOff, Info } from "lucide-react";
+import { PhoneOtpLogin, type PhoneOtpConfig } from "./PhoneOtpLogin";
 import { type FormState, customerLogin, customerResetPassword, customerSignup, staffLogin } from "@/server/auth/actions";
 
 /** Keep the return path (e.g. a booking started in the Rate Calculator) when switching between Login and Sign up. */
@@ -94,7 +95,7 @@ const GOOGLE_MSG: Record<string, string> = {
   inactive: "This account is not active. Contact support.",
 };
 
-export function LoginForm({ next, googleEnabled, err, msg, linkEmail }: { next?: string; googleEnabled: boolean; err?: string; msg?: string; linkEmail?: string }) {
+export function LoginForm({ next, googleEnabled, err, msg, linkEmail, phone }: { next?: string; googleEnabled: boolean; err?: string; msg?: string; linkEmail?: string; phone?: PhoneOtpConfig | null }) {
   const [state, action, pending] = useActionState(customerLogin, undefined);
   return (
     <>
@@ -104,6 +105,7 @@ export function LoginForm({ next, googleEnabled, err, msg, linkEmail }: { next?:
       {linkEmail && <p className="note small mb12" role="status"><b>Link your Google account:</b> an account with {linkEmail} already exists. Log in with its password once to connect Google — your shipments, wallet and profile stay on this account.</p>}
       {err && GOOGLE_MSG[err] && <p className="err small" role="alert">{msg || GOOGLE_MSG[err]}</p>}
       {!linkEmail && <GoogleButton enabled={googleEnabled} next={next} label="Continue with Google" />}
+      {!linkEmail && <PhoneOtpLogin config={phone ?? null} next={next} />}
       <form className="col" style={{ gap: 14 }} action={action}>
         <input type="hidden" name="next" value={next ?? ""} />
         <div className="field"><label htmlFor="identifier">Email or mobile</label><input id="identifier" name="identifier" className="input" required autoFocus autoComplete="username" defaultValue={linkEmail ?? ""} /></div>
@@ -117,7 +119,7 @@ export function LoginForm({ next, googleEnabled, err, msg, linkEmail }: { next?:
 }
 
 /** Sign up: email → Send OTP → code + name + password. The account is created only after the code is verified. */
-export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabled: boolean }) {
+export function SignupForm({ next, googleEnabled, phone }: { next?: string; googleEnabled: boolean; phone?: PhoneOtpConfig | null }) {
   const [state, action, pending] = useActionState(customerSignup, undefined);
   const { email, setEmail, sentTo, cool, busy, note, send, change, valid } = useEmailOtp("signup");
   return (
@@ -126,6 +128,7 @@ export function SignupForm({ next, googleEnabled }: { next?: string; googleEnabl
       <h1 style={{ fontSize: 24 }}>Create your account</h1>
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Verify your email to get started</p>
       <GoogleButton enabled={googleEnabled} next={next} label="Continue with Google" />
+      <PhoneOtpLogin config={phone ?? null} next={next} />
       <form className="col" style={{ gap: 14 }} onSubmit={keepValues(action)}>
         <input type="hidden" name="next" value={next ?? ""} />
         <div className="field">
