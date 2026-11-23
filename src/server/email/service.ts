@@ -84,7 +84,7 @@ export function renderEmail(event: EmailEventKey, tpl: { subject: string; body: 
 <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;border:1px solid #dbe3ee">
 <tr><td bgcolor="#051C46" style="padding:18px 26px;background:#051C46;border-radius:16px 16px 0 0"><img src="${appUrl()}/brand/vishwaship-logo-on-dark.png" alt="vishwaship.com" height="52" style="height:52px;width:auto;display:block;color:#ffffff;font-size:20px;font-weight:700"></td></tr>
 <tr><td style="padding:24px 26px 24px;font-size:15px;line-height:1.55">${htmlBody}${button}</td></tr>
-<tr><td style="padding:14px 26px;border-top:1px solid #e9eef5;font-size:12px;color:#4a5a78">Vishwaship · <a href="${appUrl()}" style="color:#0057B8">vishwaship.in</a></td></tr>
+<tr><td style="padding:14px 26px;border-top:1px solid #e9eef5;font-size:12px;color:#4a5a78">Vishwaship · <a href="${appUrl()}" style="color:#0057B8">${appUrl().replace(/^https?:\/\//, "")}</a></td></tr>
 </table></td></tr></table></body></html>`;
   return { subject, html, text };
 }

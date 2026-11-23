@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { REF_COOKIE, REF_DAYS, activeFranchiseByCode, siteBase } from "@/server/franchise/referral";
+import { mainDomainUrl } from "@/server/public-origin";
 
 export const dynamic = "force-dynamic";
 
 /** Franchise referral link: remember the code for 30 days, then open Sign up. Unknown or inactive codes just open Sign up. */
-export async function GET(_req: Request, { params }: { params: Promise<{ code: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ code: string }> }) {
+  // Old links on another of our domains (vishwaship.in): hop to the main domain first, so the cookie lands where Sign up is.
+  const main = mainDomainUrl(req);
+  if (main) return NextResponse.redirect(main, 302);
   const { code } = await params;
   const f = await activeFranchiseByCode(decodeURIComponent(code));
   // Public site address (APP_URL), never the request URL: behind the host's proxy that is the internal 0.0.0.0:3000.
