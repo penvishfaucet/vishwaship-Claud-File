@@ -1,6 +1,6 @@
 # Vishwaship Instagram content plan
 
-Daily: 2–3 carousels (1080×1350). Rotate the three pillars so every day covers at least two.
+Daily: 2–3 carousels (1080×1080, 1:1, JPG). Rotate the three pillars so every day covers at least two.
 
 - **S = Shipping**: courier rates, COD, RTO/NDR, cargo, tracking
 - **G = Growth Package (D2C)**: own website + domain, Meta Pixel / GA4 / Google Ads conversion, ads and creatives, account manager
