@@ -4,7 +4,8 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { audit } from "@/server/audit";
 import { createCustomerAccount } from "@/server/auth/accounts";
-import { PhoneTokenError, firebasePhoneConfig, verifyFirebasePhoneToken } from "@/server/auth/firebase-phone";
+import { PhoneTokenError, firebasePhoneConfig, verifyFirebaseGoogleToken, verifyFirebasePhoneToken } from "@/server/auth/firebase-phone";
+import { firebaseGoogleConfig, rememberPendingLink } from "@/server/auth/google";
 import { createSession } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { referralFromCookie } from "@/server/franchise/referral";
@@ -17,9 +18,13 @@ import { clientIp, rateLimit } from "@/server/security/rate-limit";
  *  verify: Firebase ID token → an existing customer with that mobile is signed in; a new number gets a 15-minute signed
  *          ticket (httpOnly cookie) to finish sign-up.
  *  signup: name + email + terms with that ticket → new account, mobile verified, signed in.
+ * Continue with Google (through Firebase, used when the site's direct Google sign-in has no keys):
+ *  google: Firebase ID token → same rules as /api/auth/google/callback: known Google id → signed in; email of an
+ *          existing account → that customer logs in with their password once to link Google; new email → new account.
  */
 const Body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("verify"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
+  z.object({ op: z.literal("google"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
   z.object({
     op: z.literal("signup"),
     name: z.string().trim().min(2, "Enter your full name").max(80),
@@ -43,10 +48,11 @@ const cookieOpts = { httpOnly: true, secure: process.env.NODE_ENV === "productio
 export async function POST(req: Request) {
   const ip = clientIp(req), ua = req.headers.get("user-agent") ?? "";
   if (!(await rateLimit(`phone-login:${ip}`, 20, 600)).ok) return apiError(429, "rate_limited", "Too many attempts. Please wait a few minutes and try again.");
-  const cfg = await firebasePhoneConfig();
-  if (!cfg) return apiError(503, "provider_error", "Login with mobile OTP is switched off right now. Use email instead.");
   const p = await parseJson(req, Body); if (!p.ok) return p.res;
   const b = p.data;
+  if (b.op === "google") return googleLogin(b.idToken, b.next, { ip, ua });
+  const cfg = await firebasePhoneConfig();
+  if (!cfg) return apiError(503, "provider_error", "Login with mobile OTP is switched off right now. Use email instead.");
   const db = await getDb();
   const jar = await cookies();
 
@@ -83,6 +89,38 @@ export async function POST(req: Request) {
   if (!userId) return apiError(409, "conflict", "An account with this email or mobile already exists. Please log in.");
   jar.delete({ name: TICKET, path: cookieOpts.path });
   await createSession(userId, "customer", { ip, ua });
+  return NextResponse.json({ ok: true, redirect: "/portal/" });
+}
+
+async function googleLogin(idToken: string, next: string, meta: { ip: string; ua: string }) {
+  const cfg = await firebaseGoogleConfig();
+  if (!cfg) return apiError(503, "provider_error", "Continue with Google is switched off right now. Use email instead.");
+  let id: { sub: string; email: string; name: string };
+  try { id = await verifyFirebaseGoogleToken(idToken, cfg.projectId); }
+  catch (e) {
+    if (e instanceof PhoneTokenError) return apiError(401, "unauthorized", "Google sign-in could not be confirmed. Please try again.");
+    console.error("[google-login]", (e as Error).message);
+    return apiError(502, "provider_error", "Could not reach Google to confirm the sign-in. Please try again.");
+  }
+  if (!(await rateLimit(`google-login:s:${id.sub}`, 10, 900)).ok) return apiError(429, "rate_limited", "Too many attempts for this Google account. Please wait a few minutes.");
+  const db = await getDb();
+  const [bySub] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.googleSub, id.sub)));
+  if (bySub) {
+    if (!bySub.active) return apiError(403, "forbidden", "This account is not active. Contact support.");
+    await createSession(bySub.id, "customer", meta);
+    await audit({ actorUserId: bySub.id, actorKind: "customer", orgId: bySub.orgId, action: "auth.login", details: { via: "google" } });
+    return NextResponse.json({ ok: true, redirect: safeNext(next) });
+  }
+  const [byEmail] = await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.email, id.email)));
+  if (byEmail) {
+    // never sign in on email alone: the owner of the account confirms the link with their password once
+    await rememberPendingLink({ sub: id.sub, email: id.email, name: id.name });
+    const q = new URLSearchParams({ link: "google", email: id.email, ...(next ? { next } : {}) });
+    return NextResponse.json({ ok: true, link: true, redirect: `/login/?${q}` });
+  }
+  const userId = await createCustomerAccount({ name: id.name, email: id.email, googleSub: id.sub, via: "google", referralCode: await referralFromCookie() });
+  if (!userId) return apiError(409, "conflict", "An account with this email already exists. Please log in with your email and password.");
+  await createSession(userId, "customer", meta);
   return NextResponse.json({ ok: true, redirect: "/portal/" });
 }
 

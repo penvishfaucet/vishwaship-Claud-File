@@ -3,6 +3,7 @@ import Link from "next/link";
 import { type FormEvent, startTransition, useActionState, useEffect, useState } from "react";
 import { Eye, EyeOff, Info } from "lucide-react";
 import { PhoneOtpLogin, type PhoneOtpConfig } from "./PhoneOtpLogin";
+import { firebaseGoogleSignIn, googleCancelled, googleError, preloadFirebaseGoogle } from "@/lib/firebase-phone-client";
 import { type FormState, customerLogin, customerResetPassword, customerSignup, staffLogin } from "@/server/auth/actions";
 
 /** Keep the return path (e.g. a booking started in the Rate Calculator) when switching between Login and Sign up. */
@@ -74,14 +75,46 @@ function useEmailOtp(purpose: "signup" | "reset") {
   return { email, setEmail, sentTo, cool, busy, note, send, change, valid };
 }
 
-function GoogleButton({ enabled, next, label }: { enabled: boolean; next?: string; label: string }) {
-  if (!enabled) return null;
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
+);
+
+/**
+ * Continue with Google. The site's own Google sign-in when it is set up; otherwise Google through Firebase (popup)
+ * when Admin has the Firebase card ON (`firebase` is then its web config, chosen on the server).
+ */
+function GoogleButton({ enabled, firebase, next, label }: { enabled: boolean; firebase?: PhoneOtpConfig | null; next?: string; label: string }) {
+  if (enabled) return (
+    <>
+      <a className="btn-google" href={`/api/auth/google/start${next ? `?next=${encodeURIComponent(next)}` : ""}`}><GoogleIcon />{label}</a>
+      <div className="or-line"><span>or</span></div>
+    </>
+  );
+  return firebase ? <FirebaseGoogleButton config={firebase} next={next} label={label} /> : null;
+}
+
+function FirebaseGoogleButton({ config, next, label }: { config: PhoneOtpConfig; next?: string; label: string }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { void preloadFirebaseGoogle(config).catch(() => {}); }, [config]);
+  async function go() {
+    if (busy) return;
+    setBusy(true); setNote(null);
+    let idToken: string;
+    try { idToken = await firebaseGoogleSignIn(config); }
+    catch (e) { setNote({ ok: googleCancelled(e), text: googleError(e) }); setBusy(false); return; }
+    try {
+      const r = await fetch("/api/auth/firebase-phone/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "google", idToken, next: next ?? "" }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.redirect) { window.location.assign(j.redirect); return; }
+      setNote({ ok: false, text: j?.error?.message ?? "Google sign-in could not be completed. Please try again." });
+    } catch { setNote({ ok: false, text: "No internet connection. Check your network and try again." }); }
+    setBusy(false);
+  }
   return (
     <>
-      <a className="btn-google" href={`/api/auth/google/start${next ? `?next=${encodeURIComponent(next)}` : ""}`}>
-        <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>
-        {label}
-      </a>
+      <button type="button" className="btn-google" onClick={go} disabled={busy} aria-busy={busy}><GoogleIcon />{busy ? "Connecting to Google…" : label}</button>
+      {note && <p className={`small ${note.ok ? "muted" : "err"}`} role={note.ok ? "status" : "alert"} style={{ margin: "6px 0 0" }}>{note.text}</p>}
       <div className="or-line"><span>or</span></div>
     </>
   );
@@ -95,7 +128,7 @@ const GOOGLE_MSG: Record<string, string> = {
   inactive: "This account is not active. Contact support.",
 };
 
-export function LoginForm({ next, googleEnabled, err, msg, linkEmail, phone }: { next?: string; googleEnabled: boolean; err?: string; msg?: string; linkEmail?: string; phone?: PhoneOtpConfig | null }) {
+export function LoginForm({ next, googleEnabled, googleFirebase, err, msg, linkEmail, phone }: { next?: string; googleEnabled: boolean; googleFirebase?: PhoneOtpConfig | null; err?: string; msg?: string; linkEmail?: string; phone?: PhoneOtpConfig | null }) {
   const [state, action, pending] = useActionState(customerLogin, undefined);
   return (
     <>
@@ -104,7 +137,7 @@ export function LoginForm({ next, googleEnabled, err, msg, linkEmail, phone }: {
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Login with your email or mobile number</p>
       {linkEmail && <p className="note small mb12" role="status"><b>Link your Google account:</b> an account with {linkEmail} already exists. Log in with its password once to connect Google — your shipments, wallet and profile stay on this account.</p>}
       {err && GOOGLE_MSG[err] && <p className="err small" role="alert">{msg || GOOGLE_MSG[err]}</p>}
-      {!linkEmail && <GoogleButton enabled={googleEnabled} next={next} label="Continue with Google" />}
+      {!linkEmail && <GoogleButton enabled={googleEnabled} firebase={googleFirebase} next={next} label="Continue with Google" />}
       {!linkEmail && <PhoneOtpLogin config={phone ?? null} next={next} />}
       <form className="col" style={{ gap: 14 }} action={action}>
         <input type="hidden" name="next" value={next ?? ""} />
@@ -119,7 +152,7 @@ export function LoginForm({ next, googleEnabled, err, msg, linkEmail, phone }: {
 }
 
 /** Sign up: email → Send OTP → code + name + password. The account is created only after the code is verified. */
-export function SignupForm({ next, googleEnabled, phone }: { next?: string; googleEnabled: boolean; phone?: PhoneOtpConfig | null }) {
+export function SignupForm({ next, googleEnabled, googleFirebase, phone }: { next?: string; googleEnabled: boolean; googleFirebase?: PhoneOtpConfig | null; phone?: PhoneOtpConfig | null }) {
   const [state, action, pending] = useActionState(customerSignup, undefined);
   const { email, setEmail, sentTo, cool, busy, note, send, change, valid } = useEmailOtp("signup");
   return (
@@ -127,7 +160,7 @@ export function SignupForm({ next, googleEnabled, phone }: { next?: string; goog
       <Seg active="signup" next={next} />
       <h1 style={{ fontSize: 24 }}>Create your account</h1>
       <p className="muted small" style={{ margin: "4px 0 18px" }}>Verify your email to get started</p>
-      <GoogleButton enabled={googleEnabled} next={next} label="Continue with Google" />
+      <GoogleButton enabled={googleEnabled} firebase={googleFirebase} next={next} label="Continue with Google" />
       <PhoneOtpLogin config={phone ?? null} next={next} />
       <form className="col" style={{ gap: 14 }} onSubmit={keepValues(action)}>
         <input type="hidden" name="next" value={next ?? ""} />

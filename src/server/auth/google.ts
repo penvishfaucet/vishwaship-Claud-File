@@ -8,6 +8,7 @@ import { safeFetch } from "@/server/security/safe-fetch";
 import { audit } from "@/server/audit";
 import { getAuthSettings } from "@/server/email/service";
 import { activeService } from "@/server/integrations/services";
+import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
 
 /** Client ID + secret: Admin → API Keys & Services (when ON), else GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET on the server. */
 async function googleKeys(): Promise<{ id: string; secret: string } | null> {
@@ -40,6 +41,18 @@ export async function googleAvailable() {
   const on = (await getAuthSettings()).googleEnabled;
   const keys = await googleKeys();
   return { enabled: on && !!keys, configured: !!keys, switchedOn: on };
+}
+
+/**
+ * "Continue with Google" through Firebase: used only when the direct Google sign-in above has no keys, the Admin
+ * switch "Show Continue with Google" is ON, and the Firebase mobile-OTP card is ON. Returns the Firebase web config.
+ */
+export function firebaseGoogleFrom<T>(g: { enabled: boolean; switchedOn: boolean }, firebase: T | null): T | null {
+  return !g.enabled && g.switchedOn ? firebase : null;
+}
+export async function firebaseGoogleConfig() {
+  const [g, fb] = await Promise.all([googleAvailable(), firebasePhoneConfig()]);
+  return firebaseGoogleFrom(g, fb);
 }
 
 /** URL to send the browser to Google; remembers state, nonce and the PKCE verifier in a short signed cookie. */

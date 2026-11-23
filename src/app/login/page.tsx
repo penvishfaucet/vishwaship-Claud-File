@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { LoginForm } from "@/components/auth/Forms";
 import { readSession } from "@/server/auth/session";
-import { googleAvailable } from "@/server/auth/google";
+import { firebaseGoogleFrom, googleAvailable } from "@/server/auth/google";
 import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
 
 export const metadata = { title: "Login — Vishwaship" };
@@ -17,5 +17,5 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   // Already signed in: continue straight to where the visitor was going (e.g. a booking from the Rate Calculator).
   if (await readSession("customer").catch(() => null)) redirect(safe(sp.next));
   const [g, phone] = await Promise.all([googleAvailable(), firebasePhoneConfig()]);
-  return <AuthShell><LoginForm next={sp.next} googleEnabled={g.enabled} phone={phone} err={sp.err} msg={sp.msg?.slice(0, 160)} linkEmail={sp.link === "google" ? sp.email?.slice(0, 160) : undefined} /></AuthShell>;
+  return <AuthShell><LoginForm next={sp.next} googleEnabled={g.enabled} googleFirebase={firebaseGoogleFrom(g, phone)} phone={phone} err={sp.err} msg={sp.msg?.slice(0, 160)} linkEmail={sp.link === "google" ? sp.email?.slice(0, 160) : undefined} /></AuthShell>;
 }

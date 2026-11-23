@@ -40,6 +40,51 @@ export async function confirmPhoneOtp(cfg: PhoneOtpConfig, c: Confirmation, code
   return token;
 }
 
+/**
+ * Continue with Google through Firebase (used when the site's direct Google sign-in is not set up). Opens Google's
+ * account chooser in a popup and returns the Firebase ID token for our server, then drops Firebase's own sign-in.
+ * Call `preloadFirebaseGoogle` when the button appears so the click opens the popup at once (browsers block popups
+ * opened long after the click).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FbGoogle = { auth: any; a: any };
+let googlePromise: Promise<FbGoogle> | null = null;
+export function preloadFirebaseGoogle(cfg: PhoneOtpConfig): Promise<FbGoogle> {
+  googlePromise ??= (async () => {
+    const [{ initializeApp, getApps }, a] = await Promise.all([load(`${SDK}/firebase-app.js`), load(`${SDK}/firebase-auth.js`)]);
+    const app = getApps().find((x: { name: string }) => x.name === "vs-google") ?? initializeApp(cfg, "vs-google");
+    const auth = a.getAuth(app);
+    auth.languageCode = "en";
+    return { auth, a };
+  })().catch((e) => { googlePromise = null; throw e; });
+  return googlePromise;
+}
+export async function firebaseGoogleSignIn(cfg: PhoneOtpConfig): Promise<string> {
+  const { auth, a } = await preloadFirebaseGoogle(cfg);
+  const provider = new a.GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: "select_account" });
+  const cred = await a.signInWithPopup(auth, provider);
+  const token: string = await cred.user.getIdToken();
+  void a.signOut(auth).catch(() => {});
+  return token;
+}
+const GOOGLE_MSG: Record<string, string> = {
+  "auth/popup-blocked": "Your browser blocked the Google window. Allow pop-ups for this site and try again.",
+  "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+  "auth/cancelled-popup-request": "Google sign-in was cancelled.",
+  "auth/user-cancelled": "Google sign-in was cancelled.",
+  "auth/unauthorized-domain": "Continue with Google is not set up for this website yet. Use email instead.",
+  "auth/operation-not-allowed": "Continue with Google is not switched on yet. Use email instead.",
+  "auth/operation-not-supported-in-this-environment": "This browser cannot open the Google window. Use email or mobile OTP instead.",
+  "auth/web-storage-unsupported": "This browser blocks the storage Google sign-in needs. Use email or mobile OTP instead.",
+  "auth/user-disabled": "This Google account is disabled. Use email instead.",
+  "auth/too-many-requests": "Too many attempts from this device. Please try again later.",
+  "auth/network-request-failed": "No internet connection. Check your network and try again.",
+};
+/** True when the customer simply closed the Google window (show a gentle note, not an error). */
+export const googleCancelled = (e: unknown) => ["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/user-cancelled"].includes((e as { code?: string })?.code ?? "");
+export const googleError = (e: unknown) => GOOGLE_MSG[(e as { code?: string })?.code ?? ""] ?? "Google sign-in could not be completed. Please try again.";
+
 const MSG: Record<string, string> = {
   "auth/invalid-phone-number": "Enter a valid 10-digit mobile number.",
   "auth/too-many-requests": "Too many OTP requests from this device. Please try again later.",

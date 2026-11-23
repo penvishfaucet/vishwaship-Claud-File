@@ -160,6 +160,8 @@ html .shell .side .brand .brand-logo{max-width:100%;height:auto!important;width:
 .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;border:1px solid #c9d5e6;border-radius:12px;background:#fff;color:#051C46!important;font-weight:600;font-size:15px;text-decoration:none}
 .btn-google:hover{border-color:#051C46;background:#f4f7fb}
 .btn-google:focus-visible{outline:3px solid #0057B8;outline-offset:2px}
+button.btn-google{width:100%;cursor:pointer;font-family:inherit}
+button.btn-google:disabled{opacity:.7;cursor:wait}
 .or-line{display:flex;align-items:center;gap:10px;margin:16px 0;color:#4a5a78;font-size:13px}
 .or-line::before,.or-line::after{content:"";flex:1;height:1px;background:#dbe3ee}
 .otp-in{letter-spacing:.4em;font-size:20px;text-align:center}

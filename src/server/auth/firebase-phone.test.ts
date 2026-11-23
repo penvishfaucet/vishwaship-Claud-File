@@ -14,7 +14,7 @@ vi.mock("@/server/security/safe-fetch", () => ({
     return new Response(JSON.stringify({ keys: [jwk] }), { status: 200, headers: { "cache-control": "public, max-age=3600" } });
   },
 }));
-const { verifyFirebasePhoneToken, PhoneTokenError, _resetKeyCache } = await import("./firebase-phone");
+const { verifyFirebasePhoneToken, verifyFirebaseGoogleToken, PhoneTokenError, _resetKeyCache } = await import("./firebase-phone");
 
 const P = "vishwaship-app";
 const now = Date.UTC(2026, 10, 23, 10, 0, 0);
@@ -52,5 +52,34 @@ describe("Firebase phone token check", () => {
     // a tampered payload with the original signature
     const [h, , s] = token().split(".");
     await bad(`${h}.${enc({ aud: P, iss: `https://securetoken.google.com/${P}`, sub: "x", iat: sec, auth_time: sec, exp: sec + 60, phone_number: "+919999999999", firebase: { sign_in_provider: "phone" } })}.${s}`);
+  });
+});
+
+describe("Firebase Google token check", () => {
+  beforeEach(() => { _resetKeyCache(); fetched = 0; });
+  const G = { phone_number: undefined, email: "Asha@Example.test", email_verified: true, name: "Asha Rao", firebase: { sign_in_provider: "google.com", identities: { "google.com": ["109876543210987654321"], email: ["asha@example.test"] } } };
+  const badG = (t: string) => expect(verifyFirebaseGoogleToken(t, P, now)).rejects.toBeInstanceOf(PhoneTokenError);
+
+  it("accepts a fresh Google sign-in and returns Google's own id with the lower-cased verified email", async () => {
+    expect(await verifyFirebaseGoogleToken(token(G), P, now)).toEqual({ sub: "109876543210987654321", email: "asha@example.test", name: "Asha Rao", uid: "fb_uid_1" });
+    // no usable name → the part of the email before @
+    expect((await verifyFirebaseGoogleToken(token({ ...G, name: undefined }), P, now)).name).toBe("asha");
+  });
+
+  it("refuses forged, foreign, stale, unverified-email and non-Google tokens", async () => {
+    await badG(token(G, { key: other.privateKey }));
+    await badG(token(G, { alg: "HS256" }));
+    await badG(token({ ...G, aud: "another-project" }));
+    await badG(token({ ...G, iss: "https://securetoken.google.com/another-project" }));
+    await badG(token({ ...G, exp: sec - 1 }));
+    await badG(token({ ...G, auth_time: sec - 601, iat: sec - 601 }));
+    await badG(token({ ...G, email_verified: false }));
+    await badG(token({ ...G, email_verified: "true" }));                     // must be a real boolean true
+    await badG(token({ ...G, email: undefined }));
+    await badG(token({ ...G, firebase: { ...G.firebase, sign_in_provider: "password" } }));
+    await badG(token({ ...G, firebase: { sign_in_provider: "google.com", identities: {} } })); // no Google id
+    await badG(token({ ...G, firebase: { sign_in_provider: "google.com", identities: { "google.com": [{ x: 1 }] } } }));
+    await badG(token());                                                        // a phone token is not a Google sign-in
+    await bad(token(G));                                                        // and a Google token cannot log in by phone
   });
 });
