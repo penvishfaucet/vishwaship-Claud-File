@@ -49,3 +49,4 @@ html.dark .st-dot{background:var(--card)}
 .st-mode.otp{background:#e0f2fe;color:#075985}
 .st-mode.pod{background:#dcfce7;color:#166534}
 .st-pod-h{flex-wrap:wrap}
+.st-dialog .st-ship{padding:0}

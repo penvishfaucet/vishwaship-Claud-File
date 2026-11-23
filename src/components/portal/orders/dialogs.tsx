@@ -6,6 +6,8 @@ import { statusLabel } from "@/lib/status";
 import { COD_DISPLAY, codDisplay } from "@/lib/order-view";
 import type { OrderRow } from "@/server/orders/view";
 import { CodStatusText, CopyBtn, Dialog, ago, inr, istFull } from "./ui";
+import { OneShipment, type PodCardData } from "@/components/tracking/ShipmentTracking";
+import type { Milestone, ScanLine } from "@/lib/tracking-timeline";
 
 type Timeline = {
   orderNumber: string; carrier: string; service: string; awb: string | null; lr: string | null; status: string; etaDate: string | null; deliveredAt: string | null;
@@ -15,6 +17,7 @@ type Timeline = {
   delivery?: { name: string | null; phone: string | null } | null;
   events: Array<{ status: string; raw: string | null; location: string | null; at: string; remark: string | null; source: string }>;
   amendments: Array<{ at: string; previous: string; next: string }>;
+  milestones?: Milestone[]; scans?: ScanLine[]; pod?: Omit<PodCardData, "href"> | null;
 };
 
 /** Track: provider events, timestamps, locations, current status, ETA and sync health with Retry. */
@@ -82,8 +85,13 @@ export function TrackDialog({ shipmentId, onClose, onChanged, admin }: { shipmen
             </section>
           )}
           <section aria-label="Tracking history">
-            <h3 className="small b" style={{ marginBottom: 10 }}>Tracking history</h3>
-            {d.events.length === 0 ? <p className="small muted">No courier scans yet.</p> : (
+            <h3 className="small b" style={{ marginBottom: 10 }}>Shipment tracking</h3>
+            {d.milestones && d.scans ? (
+              <div className="st-dialog">
+                <OneShipment labelled={false} s={{ id: shipmentId, awb: d.awb, carrierName: d.carrier, statusLabel: statusLabel(d.status), milestones: d.milestones, scans: d.scans,
+                  pod: d.pod ? { ...d.pod, href: `${api}/shipments/${shipmentId}/pod` } : null }} />
+              </div>
+            ) : d.events.length === 0 ? <p className="small muted">No courier scans yet.</p> : (
               <ol className="ov-tl">
                 {d.events.map((e, i) => (
                   <li key={i} className={i === 0 ? "now" : undefined}>

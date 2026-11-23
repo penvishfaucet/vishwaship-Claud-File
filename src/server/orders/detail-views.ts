@@ -3,6 +3,8 @@ import { type SQL, and, asc, desc, eq, inArray } from "drizzle-orm";
 import { hideProviders } from "@/server/customer-safe";
 import { getDb, schema } from "@/server/db/client";
 import { timeline } from "@/server/tracking/service";
+import { buildMilestones, buildScans } from "@/lib/tracking-timeline";
+import { podView } from "@/server/tracking/pod";
 
 /**
  * Data behind the Orders "Track" and "WhatsApp COD" dialogs, shared by the Customer Portal (orgId = the session's
@@ -28,6 +30,9 @@ export async function shipmentTimeline(shipmentId: string, orgId: string | null,
     destination: { city: c.city, state: c.state, pincode: c.pincode },
     events: events.slice().reverse().map((e) => ({ status: e.status, raw: e.rawStatus, location: e.location, at: e.occurredAt, remark: e.remark, source: e.source })),
     amendments: amendments.map((a) => ({ at: a.occurredAt, previous: addr(a.previous), next: addr(a.next) })),
+    milestones: buildMilestones(events, sh.status, sh.createdAt),
+    scans: buildScans(events, opts.customerSafe ? (s: string) => hideProviders(s) : undefined),
+    pod: await podView(shipmentId, orgId),
   };
 }
 

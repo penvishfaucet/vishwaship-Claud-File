@@ -10,6 +10,10 @@ import { getDb, schema } from "@/server/db/client";
 import { requireFeature } from "@/server/features";
 import { portalContext } from "@/server/portal/context";
 import { ensurePublicRef, timeline } from "@/server/tracking/service";
+import { OneShipment } from "@/components/tracking/ShipmentTracking";
+import { buildMilestones, buildScans } from "@/lib/tracking-timeline";
+import { hideProviders } from "@/server/customer-safe";
+import { podView } from "@/server/tracking/pod";
 
 const fmt = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -55,20 +59,15 @@ export default async function PortalTrack({ searchParams }: { searchParams: Prom
               </div>
             </div>
             <dl className="kv-list mt12">
-              <dt>Carrier status (original)</dt><dd className="mono small">{latest?.rawStatus ?? "—"}{latest?.location ? ` · ${latest.location}` : ""}</dd>
+              <dt>Carrier status (original)</dt><dd className="mono small">{latest?.rawStatus ? hideProviders(latest.rawStatus) : "—"}{latest?.location ? ` · ${latest.location}` : ""}</dd>
               <dt>Last update</dt><dd>{s.lastEventAt ? fmt(s.lastEventAt) : "—"}</dd>
               <dt>Buyer tracking link</dt><dd className="small" style={{ wordBreak: "break-all" }}><a className="link" href={shareUrl} target="_blank" rel="noopener">{shareUrl}</a></dd>
             </dl>
             <RefreshTracking shipmentId={s.id} />
-            <ol className="trk-tl">
-              {[...events].reverse().map((e, i) => (
-                <li key={e.id} className={i === 0 ? "cur" : ""}>
-                  <span className="b small">{statusLabel(e.status)}{e.location ? <span className="muted"> · {e.location}</span> : null}<span className="tiny muted mono" style={{ display: "block" }}>{e.rawStatus}</span></span>
-                  <span className="tiny muted">{fmt(e.occurredAt)}</span>
-                </li>
-              ))}
-              {events.length === 0 && <li><span className="small muted">No scans yet.</span></li>}
-            </ol>
+            <div className="st-dialog mt12">
+              <OneShipment labelled={false} s={{ id: s.id, awb: s.awb, carrierName: s.carrierName, statusLabel: statusLabel(s.status), milestones: buildMilestones(events, s.status, s.createdAt), scans: buildScans(events, (x) => hideProviders(x)),
+                pod: await (async () => { const v = await podView(s.id, ctx.org.id); return v ? { ...v, href: `/api/portal/shipments/${s.id}/pod` } : null; })() }} />
+            </div>
           </section>
         );
       }))}
