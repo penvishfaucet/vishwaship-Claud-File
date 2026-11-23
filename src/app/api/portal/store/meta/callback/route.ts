@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
+import { publicOrigin } from "@/server/public-origin";
 import { storeAudit, storeGuard } from "@/server/store/api";
 import { checkState, completeMetaConnect } from "@/server/store/meta-connect";
 
 /** Meta redirects here after "Connect with Facebook". The state must be ours and for this same account. */
 export async function GET(req: Request) {
-  const back = new URL("/portal/store/marketing/", req.url);
+  const back = new URL("/portal/store/marketing/", publicOrigin(req));
   const g = await storeGuard();
-  if (g.err) return NextResponse.redirect(new URL("/login/?next=/portal/store/marketing/", req.url));
+  if (g.err) return NextResponse.redirect(new URL("/login/?next=/portal/store/marketing/", publicOrigin(req)));
   const sp = new URL(req.url).searchParams;
   const code = sp.get("code"), state = sp.get("state") ?? "";
   if (!code || !checkState(state, g.s.orgId)) {

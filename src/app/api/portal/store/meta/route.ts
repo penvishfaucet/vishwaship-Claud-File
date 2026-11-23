@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicOrigin } from "@/server/public-origin";
 import { z } from "zod";
 import { apiError, parseJson } from "@/server/http";
 import { rateLimit } from "@/server/security/rate-limit";
@@ -10,7 +11,7 @@ import { markStep } from "@/server/store/service";
 export async function GET(req: Request) {
   const g = await storeGuard(); if (g.err) return g.err;
   const url = metaAuthUrl(g.s.orgId);
-  const back = new URL("/portal/store/marketing/", req.url);
+  const back = new URL("/portal/store/marketing/", publicOrigin(req));
   if (!url) { back.searchParams.set("err", "Facebook connection is not switched on yet. Vishwaship needs to finish its Meta app setup."); return NextResponse.redirect(back); }
   return NextResponse.redirect(url);
 }

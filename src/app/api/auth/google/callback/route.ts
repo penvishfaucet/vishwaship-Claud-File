@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicOrigin } from "@/server/public-origin";
 import { and, eq } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { createCustomerAccount } from "@/server/auth/accounts";
@@ -14,7 +15,7 @@ import { getDb, schema } from "@/server/db/client";
  */
 export async function GET(req: Request) {
   const u = new URL(req.url);
-  const to = (p: string) => NextResponse.redirect(new URL(p, u.origin));
+  const to = (p: string) => NextResponse.redirect(new URL(p, publicOrigin(req)));
   if (!(await googleAvailable()).enabled) return to("/login/?err=google_off");
   if (u.searchParams.get("error")) return to("/login/?err=google_cancelled");
   const code = u.searchParams.get("code"), state = u.searchParams.get("state");

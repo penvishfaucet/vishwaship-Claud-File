@@ -2,52 +2,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Smartphone } from "lucide-react";
+import { type Confirmation, type PhoneOtpConfig, confirmPhoneOtp, fbError, firebasePhone } from "@/lib/firebase-phone-client";
 
-export type PhoneOtpConfig = { apiKey: string; authDomain: string; projectId: string; appId?: string };
-
-/* Firebase's own browser SDK, loaded from Google only when the customer chooses mobile OTP (nothing is bundled). */
-const SDK = "https://www.gstatic.com/firebasejs/13.2.0";
-type Confirmation = { confirm: (code: string) => Promise<{ user: { getIdToken: () => Promise<string> } }> };
-type Fb = {
-  auth: unknown; signOut: () => Promise<void>;
-  send: (phone: string) => Promise<Confirmation>;
-};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const load = (u: string): Promise<any> => new Function("u", "return import(u)")(u);
-let fbPromise: Promise<Fb> | null = null;
-function firebase(cfg: PhoneOtpConfig, boxId: string): Promise<Fb> {
-  fbPromise ??= (async () => {
-    const [{ initializeApp, getApps }, a] = await Promise.all([load(`${SDK}/firebase-app.js`), load(`${SDK}/firebase-auth.js`)]);
-    const app = getApps().find((x: { name: string }) => x.name === "vs-phone") ?? initializeApp(cfg, "vs-phone");
-    const auth = a.getAuth(app);
-    auth.languageCode = "en";
-    let verifier: { clear: () => void } | null = null;
-    return {
-      auth,
-      signOut: () => a.signOut(auth),
-      send: async (phone: string) => {
-        verifier?.clear();
-        verifier = new a.RecaptchaVerifier(auth, boxId, { size: "invisible" });
-        return a.signInWithPhoneNumber(auth, phone, verifier);
-      },
-    };
-  })().catch((e) => { fbPromise = null; throw e; });
-  return fbPromise;
-}
-
-const MSG: Record<string, string> = {
-  "auth/invalid-phone-number": "Enter a valid 10-digit mobile number.",
-  "auth/too-many-requests": "Too many OTP requests from this device. Please try again later.",
-  "auth/quota-exceeded": "OTP limit reached for today. Please use email login.",
-  "auth/invalid-verification-code": "Wrong OTP. Check the code and try again.",
-  "auth/code-expired": "This OTP has expired. Request a new one.",
-  "auth/captcha-check-failed": "Security check failed. Reload the page and try again.",
-  "auth/unauthorized-domain": "Mobile OTP is not set up for this website yet. Please use email login.",
-  "auth/operation-not-allowed": "Mobile OTP is not switched on yet. Please use email login.",
-  "auth/billing-not-enabled": "Mobile OTP is not switched on yet. Please use email login.",
-  "auth/network-request-failed": "No internet connection. Check your network and try again.",
-};
-const fbError = (e: unknown) => MSG[(e as { code?: string })?.code ?? ""] ?? "Could not send or check the OTP. Please try again.";
+export type { PhoneOtpConfig } from "@/lib/firebase-phone-client";
 
 /** "Login with Mobile OTP" — on the login and signup pages, shown only when Admin has switched Firebase ON. */
 export function PhoneOtpLogin({ config, next }: { config: PhoneOtpConfig | null; next?: string }) {
@@ -69,8 +26,8 @@ export function PhoneOtpLogin({ config, next }: { config: PhoneOtpConfig | null;
     if (!valid || busy) return;
     setBusy(true); setErr("");
     try {
-      const fb = await firebase(config!, "vs-recaptcha");
-      conf.current = await fb.send(`+91${mobile}`);
+      const fb = await firebasePhone(config!);
+      conf.current = await fb.send(`+91${mobile}`, "vs-recaptcha");
       setStep("code"); setCode(""); setCool(30);
     } catch (e) { setErr(fbError(e)); }
     setBusy(false);
@@ -88,9 +45,8 @@ export function PhoneOtpLogin({ config, next }: { config: PhoneOtpConfig | null;
     setBusy(true); setErr("");
     try {
       let token: string;
-      try { token = await (await conf.current.confirm(code)).user.getIdToken(); } catch (e) { setErr(fbError(e)); setBusy(false); return; }
+      try { token = await confirmPhoneOtp(config!, conf.current, code); } catch (e) { setErr(fbError(e)); setBusy(false); return; }
       const j = await post({ op: "verify", idToken: token });
-      void firebase(config!, "vs-recaptcha").then((fb) => fb.signOut()).catch(() => {}); // our own session is the login; drop Firebase's
       if (j.redirect) { window.location.assign(j.redirect); return; }
       if (j.signup) { setShown(j.mobile ?? `+91 ${mobile}`); setStep("signup"); }
     } catch (e) { setErr((e as Error).message); }

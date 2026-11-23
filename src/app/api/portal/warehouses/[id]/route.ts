@@ -7,7 +7,7 @@ import { getDb, schema } from "@/server/db/client";
 import { hasFeature } from "@/server/features";
 import { apiError, parseJson } from "@/server/http";
 import { enqueue } from "@/server/jobs/runner";
-import { WarehouseInput, getOwnWarehouse, pickupOtpRequired, setDefaultWarehouse } from "@/server/warehouses";
+import { PICKUP_OTP_MSG, WarehouseInput, checkPickupMobileToken, getOwnWarehouse, pickupOtpRequired, setDefaultWarehouse } from "@/server/warehouses";
 
 /** Edit. Changing the pickup mobile resets OTP verification. Past orders keep their own address snapshot. */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -16,19 +16,23 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!(await hasFeature(s.orgId, "warehouses"))) return apiError(403, "forbidden", "Warehouses are not enabled for your account");
   const w = await getOwnWarehouse(s.orgId, (await params).id);
   if (!w) return apiError(404, "not_found", "Warehouse not found");
-  const p = await parseJson(req, WarehouseInput);
+  const p = await parseJson(req, WarehouseInput.extend({ mobileToken: z.string().max(4096).optional() }));
   if (!p.ok) return p.res;
-  const mobileChanged = p.data.mobile !== w.mobile;
+  const { mobileToken, ...data } = p.data;
+  const mobileChanged = data.mobile !== w.mobile;
+  // a new pickup mobile is OTP-verified before it is saved (Vishwaship staff acting for a customer may skip it)
+  const otp = mobileChanged ? await checkPickupMobileToken(mobileToken, data.mobile) : "off";
+  if (otp !== "off" && otp !== "ok" && !(s.impersonatorId && otp === "missing")) return apiError(422, "validation_error", PICKUP_OTP_MSG[otp]);
   const db = await getDb();
   await db.update(schema.warehouses).set({
-    ...p.data, email: p.data.email || null, line2: p.data.line2 || null, updatedAt: new Date(),
-    ...(mobileChanged ? { mobileVerifiedAt: null } : {}),
+    ...data, email: data.email || null, line2: data.line2 || null, updatedAt: new Date(),
+    ...(mobileChanged ? { mobileVerifiedAt: otp === "ok" ? new Date() : null } : {}),
   }).where(eq(schema.warehouses.id, w.id));
   // Courier-side registrations must be re-synced after an address change.
   await db.update(schema.warehouseProviderSync).set({ status: "pending", updatedAt: new Date() }).where(eq(schema.warehouseProviderSync.warehouseId, w.id));
   await audit({ actorUserId: s.userId, actorKind: s.impersonatorId ? "staff" : "customer", orgId: s.orgId, action: "warehouse.update", targetType: "warehouse", targetId: w.id, details: { mobileChanged } });
   await enqueue("warehouse.sync", { warehouseId: w.id }, { dedupeKey: `warehouse.sync:${w.id}:${Date.now()}` }); // re-register the edited address
-  return NextResponse.json({ ok: true, mobileChanged, otpRequired: await pickupOtpRequired() });
+  return NextResponse.json({ ok: true, mobileChanged, verified: otp === "ok", otpRequired: await pickupOtpRequired() });
 }
 
 const Action = z.object({ action: z.enum(["set_default", "deactivate", "activate"]) });

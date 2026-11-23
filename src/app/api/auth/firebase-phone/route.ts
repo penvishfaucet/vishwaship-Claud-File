@@ -85,3 +85,8 @@ export async function POST(req: Request) {
   await createSession(userId, "customer", { ip, ua });
   return NextResponse.json({ ok: true, redirect: "/portal/" });
 }
+
+/** Public web config (these values are public by design) so OTP screens know whether mobile OTP is ON. */
+export async function GET() {
+  return NextResponse.json({ config: await firebasePhoneConfig() }, { headers: { "cache-control": "no-store" } });
+}

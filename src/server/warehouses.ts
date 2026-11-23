@@ -66,3 +66,28 @@ export async function setPickupOtpRequired(on: boolean) {
   await db.insert(schema.pricingSettings).values({ key: "pickup_otp_required", value: on })
     .onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value: on, updatedAt: new Date() } });
 }
+
+/**
+ * Pickup mobile OTP with Firebase (when Admin has switched mobile OTP ON): the token must be a fresh Firebase phone
+ * sign-in for exactly this mobile. off = Firebase is not set up, so the older flow applies.
+ */
+export async function checkPickupMobileToken(token: string | undefined, mobile: string): Promise<"off" | "ok" | "missing" | "invalid" | "mismatch" | "unreachable"> {
+  const { firebasePhoneConfig, verifyFirebasePhoneToken, PhoneTokenError } = await import("@/server/auth/firebase-phone");
+  const cfg = await firebasePhoneConfig();
+  if (!cfg) return "off";
+  if (!token) return "missing";
+  try {
+    const r = await verifyFirebasePhoneToken(token, cfg.projectId);
+    return r.mobile === mobile ? "ok" : "mismatch";
+  } catch (e) {
+    if (e instanceof PhoneTokenError) return "invalid";
+    console.error("[warehouse otp]", (e as Error).message);
+    return "unreachable";
+  }
+}
+export const PICKUP_OTP_MSG: Record<"missing" | "invalid" | "mismatch" | "unreachable", string> = {
+  missing: "Verify the pickup mobile with OTP before saving.",
+  invalid: "The OTP check could not be confirmed. Please request a new OTP.",
+  mismatch: "The OTP was verified for a different mobile number. Verify the pickup mobile shown in the form.",
+  unreachable: "Could not reach Google to confirm the OTP. Please try again.",
+};
