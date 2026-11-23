@@ -188,6 +188,9 @@ export async function scheduleSweeps() {
     }
   } catch (e) { console.error("[store marketing]", (e as Error).message); }
   await scheduleTrackingPolls();
+  // Online Store: "your order is on its way" once the courier picks the parcel up
+  try { const { sweepDispatchNotices } = await import("@/server/store/notify"); await sweepDispatchNotices(); }
+  catch (e) { console.error("[store notify]", (e as Error).message); }
   // Proof of Delivery: open rows for newly delivered shipments and queue retries that are due
   try { const { sweepPods } = await import("@/server/tracking/pod"); await sweepPods(); }
   catch (e) { console.error("[pod]", (e as Error).message); }
@@ -264,6 +267,15 @@ registerHandler("email.shipment", async (p): Promise<JobResult> => {
 registerHandler("ndr.ai_call", async (p): Promise<JobResult> => {
   const { placeNdrCall } = await import("@/server/ndr/ai-call");
   return placeNdrCall(String(p.caseId));
+});
+
+/** store.notify — one buyer update (accepted / cancelled / dispatched); email and WhatsApp dedupe themselves. */
+registerHandler("store.notify", async (p, attempt): Promise<JobResult> => {
+  try {
+    const { notifyBuyer } = await import("@/server/store/notify");
+    await notifyBuyer(String(p.storeOrderId), p.kind as "accepted" | "cancelled" | "dispatched");
+    return { done: true };
+  } catch (e) { return { retryInSec: Math.min(3600, 60 * 2 ** attempt), error: (e as Error).message }; }
 });
 
 /** pod.fetch — one Proof-of-Delivery attempt; the shipment_pods row keeps its own back-off, so the job always ends. */

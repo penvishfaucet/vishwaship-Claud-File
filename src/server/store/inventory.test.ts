@@ -95,7 +95,7 @@ describe("CSV", () => {
     expect(r).toEqual({ changed: 2, skipped: 3 });
     expect(await prod(tap)).toMatchObject({ stock: 25, unitCostPaise: 21_050, lowStockAt: 8 });
     expect(await variant(rodL)).toMatchObject({ stock: 5, unitCostPaise: 9_900 });
-    expect((await inv.exportInventoryCsv(A)).split("\r\n")[1]).toBe("TAP-1,Brass Tap,,25,0,0,25,8,210.50");
+    expect((await inv.exportInventoryCsv(A)).split("\r\n")[1]).toBe("TAP-1,Brass Tap,,25,0,0,25,8,210.50,0.00,0.00,0.00,0.00");
     await expect(inv.planInventoryImport(A, "name,qty\nx,1")).rejects.toThrow(/sku/);
   });
 });

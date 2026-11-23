@@ -12,6 +12,8 @@ export type ProcessItem = {
 };
 type Result = { id: string; number: string; ok: boolean; message: string; awb: string | null; carrier: string | null; booked: boolean; codHold?: boolean };
 type FileLink = { label: string; url: string; at: number };
+type CourierOpt = { key: string; carrierName: string; serviceName: string; orders: number; totalPaise: number; cheapestFor: number };
+type Options = { considered: number; cheapestTotal: number; options: CourierOpt[]; skipped: string[] };
 
 const rs = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: p % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const FORMATS = [{ key: "a4_4up", label: "A4 · 4 per page" }, { key: "thermal_4x6", label: "Thermal 4 × 6" }];
@@ -27,6 +29,9 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
   const [results, setResults] = useState<Result[] | null>(null);
   const [note, setNote] = useState<{ ok?: string; err?: string } | null>(null);
   const [files, setFiles] = useState<FileLink[]>([]);
+  /** courier for booking: "cheapest" (auto, lowest rate), "rules" (my Auto-Assign rules) or one courier "code|service" */
+  const [courier, setCourier] = useState("cheapest");
+  const [opts, setOpts] = useState<Options | null>(null);
   const actionable = tab === "pending";
 
   useEffect(() => {
@@ -34,6 +39,8 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
       const here = new Set(rows.map((r) => r.id));
       setSel(new Set((JSON.parse(sessionStorage.getItem(selKey) ?? "[]") as string[]).filter((id) => here.has(id))));
       setFormat(localStorage.getItem("vs-label-format") ?? "a4_4up");
+      const c = localStorage.getItem("vs-store-courier-mode");
+      if (c === "rules" || c === "cheapest") setCourier(c);
       setFiles((JSON.parse(sessionStorage.getItem(FILES_KEY) ?? "[]") as FileLink[]).filter((f) => Date.now() - f.at < 12 * 3600_000));
     } catch { /* storage blocked */ }
   }, [rows, selKey]);
@@ -46,6 +53,17 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
     try { sessionStorage.setItem(FILES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
     return next;
   });
+  const pickMode = (c: string) => { setCourier(c); if (c === "rules" || c === "cheapest") { setOpts(null); try { localStorage.setItem("vs-store-courier-mode", c); } catch { /* ignore */ } } };
+  async function loadOptions(list: string[]) {
+    if (!list.length) return;
+    setBusy("options"); setNote(null);
+    const r = await api<Options>("POST", "/api/portal/store/dispatch", { action: "options", ids: list.slice(0, 50) });
+    setBusy(null);
+    if (!r.ok) { setNote({ err: r.error }); return; }
+    setOpts(r.data);
+    if (!r.data.options.length) setNote({ err: "No courier serves these orders right now." });
+    else setCourier(r.data.options[0].key);
+  }
   const pickFormat = (f: string) => { setFormat(f); try { localStorage.setItem("vs-label-format", f); } catch { /* ignore */ } };
 
   async function labelsFor(shipmentIds: string[]) {
@@ -61,7 +79,7 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
   async function print(list: string[], skipCod: string[] = []) {
     if (!list.length) return;
     setBusy("print"); setNote(null); setResults(null);
-    const r = await api<{ results: Result[]; shipmentIds: string[] }>("POST", "/api/portal/store/dispatch", { action: "print", ids: list, shipWithoutCodConfirmation: skipCod });
+    const r = await api<{ results: Result[]; shipmentIds: string[] }>("POST", "/api/portal/store/dispatch", { action: "print", ids: list, shipWithoutCodConfirmation: skipCod, courier });
     if (!r.ok) { setBusy(null); setNote({ err: r.error }); return; }
     setResults(r.data.results);
     await labelsFor(r.data.shipmentIds);
@@ -125,7 +143,13 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
         <div className="card mb12 dp-tools">
           <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
             {step === "print" && <><span className="small muted">Label size</span>
-              <div className="seg" role="radiogroup" aria-label="Label size">{FORMATS.map((f) => <button key={f.key} type="button" role="radio" aria-checked={format === f.key} className={format === f.key ? "on" : ""} onClick={() => pickFormat(f.key)}>{f.label}</button>)}</div></>}
+              <div className="seg" role="radiogroup" aria-label="Label size">{FORMATS.map((f) => <button key={f.key} type="button" role="radio" aria-checked={format === f.key} className={format === f.key ? "on" : ""} onClick={() => pickFormat(f.key)}>{f.label}</button>)}</div>
+              <span className="small muted">Courier</span>
+              <div className="seg" role="radiogroup" aria-label="Courier">
+                <button type="button" role="radio" aria-checked={courier === "cheapest"} className={courier === "cheapest" ? "on" : ""} onClick={() => pickMode("cheapest")}>Auto · cheapest</button>
+                <button type="button" role="radio" aria-checked={courier === "rules"} className={courier === "rules" ? "on" : ""} onClick={() => pickMode("rules")}>My auto-assign rules</button>
+                <button type="button" role="radio" aria-checked={courier !== "rules" && courier !== "cheapest"} className={courier !== "rules" && courier !== "cheapest" ? "on" : ""} disabled={!rows.length || !!busy} onClick={() => loadOptions(list)}>{busy === "options" ? "Checking rates…" : "Choose courier"}</button>
+              </div></>}
             <div className="row wrap" style={{ gap: 8, marginLeft: "auto" }}>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => doc("slips", list)} disabled={!rows.length}><FileDown size={14} aria-hidden /> Packing slip{ids.length ? ` (${ids.length})` : "s (all)"}</button>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => doc("picklist", list)} disabled={!rows.length}>Pick list</button>
@@ -137,6 +161,20 @@ export function ProcessBoard({ rows, tab, step, warehouseId, today }: { rows: Pr
               </>}
             </div>
           </div>
+          {step === "print" && opts && opts.options.length > 0 && courier !== "rules" && courier !== "cheapest" && (
+            <div className="dp-couriers mt8" role="radiogroup" aria-label="Choose the courier for these orders">
+              <p className="tiny muted" style={{ margin: "0 0 6px" }}>Rates for {opts.considered} order{opts.considered === 1 ? "" : "s"}{ids.length ? " (selected)" : " (all on this list)"}. Auto · cheapest would cost {rs(opts.cheapestTotal)} in total.{opts.skipped.length ? ` Not included: ${opts.skipped.join("; ")}.` : ""}</p>
+              {opts.options.map((o) => (
+                <label key={o.key} className={`dp-courier${courier === o.key ? " on" : ""}`}>
+                  <input type="radio" name="dp-courier" checked={courier === o.key} onChange={() => setCourier(o.key)} />
+                  <span className="dp-c-name"><b>{o.carrierName}</b><span className="tiny muted">{o.serviceName}</span></span>
+                  <span className="dp-c-cov tiny">{o.orders === opts.considered ? "All orders" : `${o.orders} of ${opts.considered} orders`}{o.cheapestFor ? ` · cheapest for ${o.cheapestFor}` : ""}</span>
+                  <b className="dp-c-amt">{rs(o.totalPaise)}</b>
+                </label>
+              ))}
+              <p className="tiny muted" style={{ margin: "6px 0 0" }}>Orders this courier does not serve are not booked; they stay here with a message so you can pick another courier for them.</p>
+            </div>
+          )}
         </div>
       )}
 

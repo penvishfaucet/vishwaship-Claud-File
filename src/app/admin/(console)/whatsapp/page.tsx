@@ -11,6 +11,14 @@ import { WA_EVENT_LABEL, codSettings, whatsappAccount, whatsappMode } from "@/se
 const CANCEL: Record<string, string> = { requested: "Cancellation requested", cancelled: "Cancelled", failed: "Cancellation Failed", action_required: "Action Required" };
 const fmt = (d: Date | null) => d?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "short" }) ?? "—";
 
+const WA_DEFAULT_BODY: Record<string, string> = {
+  cod_confirmation: "Hi {{buyer_name}}, please confirm your COD order {{order_id}} from {{merchant_name}} for {{cod_amount}}. [Confirm Order] [Cancel Order]",
+  out_for_delivery: "Hi {{buyer_name}}, your order {{order_id}} from {{merchant_name}} is out for delivery with {{carrier}} (AWB {{awb}}). Track: {{tracking_link}}",
+  store_order_accepted: "Hi {{buyer_name}}, thank you! {{store_name}} has confirmed your order {{order_id}} ({{order_total}}). We will dispatch it by {{dispatch_by}}; expected delivery {{expected_delivery}}. {{payment_line}}",
+  store_order_cancelled: "Hi {{buyer_name}}, sorry — {{store_name}} could not fulfil your order {{order_id}} and has cancelled it. Reason: {{reason}}. {{refund_line}}",
+  store_order_dispatched: "Hi {{buyer_name}}, your order {{order_id}} from {{store_name}} is on its way with {{courier_name}} (AWB {{awb_number}}). Expected delivery {{expected_delivery}}. Track: {{tracking_link}}",
+};
+
 export default async function WhatsappOps({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; status?: string }> }) {
   const sp = await searchParams;
   const s = await requireStaff("notifications.read");
@@ -70,16 +78,16 @@ export default async function WhatsappOps({ searchParams }: { searchParams: Prom
       <section className="card p0 mt16">
         <h2 className="b small card-h" style={{ margin: 0 }}>Template mapping (approved templates)</h2>
         <div className="col" style={{ gap: 12, padding: 16 }}>
-          {(["out_for_delivery", "cod_confirmation"] as const).map((ev) => {
+          {(["out_for_delivery", "cod_confirmation", "store_order_accepted", "store_order_cancelled", "store_order_dispatched"] as const).map((ev) => {
             const t = templates.find((x) => x.event === ev);
             return (
               <form key={ev} action={saveTemplateMapping} className="row wrap" style={{ gap: 8, alignItems: "end" }}>
                 <input type="hidden" name="event" value={ev} />
                 <b className="small" style={{ minWidth: 150 }}>{WA_EVENT_LABEL[ev]}</b>
-                <div className="field"><label htmlFor={`tn-${ev}`}>Template name (WATI) / API campaign name (AiSensy) / template name (Meta)</label><input id={`tn-${ev}`} name="templateName" className="input mono" defaultValue={t?.providerTemplateName ?? ""} placeholder={ev === "cod_confirmation" ? "cod_confirm_v1" : "out_for_delivery_v1"} disabled={!write} /></div>
+                <div className="field"><label htmlFor={`tn-${ev}`}>Template name (WATI) / API campaign name (AiSensy) / template name (Meta)</label><input id={`tn-${ev}`} name="templateName" className="input mono" defaultValue={t?.providerTemplateName ?? ""} placeholder={ev === "cod_confirmation" ? "cod_confirm_v1" : ev === "out_for_delivery" ? "out_for_delivery_v1" : `${ev}_v1`} disabled={!write} /></div>
                 <div className="field"><label htmlFor={`ap-${ev}`}>Approval</label><select id={`ap-${ev}`} name="approval" className="select" defaultValue={t?.approvalState ?? "draft"} disabled={!write}><option value="draft">Draft</option><option value="submitted">Submitted to Meta</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></div>
                 <div className="field"><label htmlFor={`lg-${ev}`}>Language</label><select id={`lg-${ev}`} name="language" className="select" defaultValue={t?.language ?? "en"} disabled={!write}><option value="en">English</option><option value="hi">Hindi</option></select></div>
-                <div className="field" style={{ flex: 1, minWidth: 240 }}><label htmlFor={`bd-${ev}`}>Body (reference copy)</label><input id={`bd-${ev}`} name="body" className="input" defaultValue={t?.body ?? (ev === "cod_confirmation" ? "Hi {{buyer_name}}, please confirm your COD order {{order_id}} from {{merchant_name}} for {{cod_amount}}. [Confirm Order] [Cancel Order]" : "Hi {{buyer_name}}, your order {{order_id}} from {{merchant_name}} is out for delivery with {{carrier}} (AWB {{awb}}). Track: {{tracking_link}}")} disabled={!write} /></div>
+                <div className="field" style={{ flex: 1, minWidth: 240 }}><label htmlFor={`bd-${ev}`}>Body (reference copy)</label><input id={`bd-${ev}`} name="body" className="input" defaultValue={t?.body ?? WA_DEFAULT_BODY[ev]} disabled={!write} /></div>
                 {write && <button className="btn btn-sm btn-navy">Save</button>}
               </form>
             );

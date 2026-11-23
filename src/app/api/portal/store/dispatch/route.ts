@@ -3,7 +3,7 @@ import { z } from "zod";
 import { parseJson } from "@/server/http";
 import { rateLimit } from "@/server/security/rate-limit";
 import { fail, storeAudit, storeGuard } from "@/server/store/api";
-import { packAndBook, shipmentsFor } from "@/server/store/dispatch";
+import { courierOptions, packAndBook, shipmentsFor } from "@/server/store/dispatch";
 import { markHandedOver, markLabelsPrinted, markPacked } from "@/server/store/process";
 
 const Id = z.string().regex(/^[A-Za-z0-9_-]{4,64}$/);
@@ -18,18 +18,24 @@ const Id = z.string().regex(/^[A-Za-z0-9_-]{4,64}$/);
  */
 export async function POST(req: Request) {
   const g = await storeGuard(); if (g.err) return g.err;
-  const p = await parseJson(req, z.object({ action: z.enum(["print", "pack", "labels", "mark_packed", "handover"]), ids: z.array(Id).min(1).max(100),
+  const p = await parseJson(req, z.object({ action: z.enum(["print", "pack", "labels", "mark_packed", "handover", "options"]), ids: z.array(Id).min(1).max(100),
+    /** "rules" (Auto-Assign rules), "cheapest", or one courier service "carrierCode|serviceName" from "options". */
+    courier: z.string().max(120).regex(/^(rules|cheapest|[a-z0-9-]{2,40}\|.{1,80})$/).default("rules"),
     /** COD orders the merchant chose to ship without the buyer's WhatsApp confirmation. */
     shipWithoutCodConfirmation: z.array(Id).max(100).default([]) })); if (!p.ok) return p.res;
   const { action, ids } = p.data;
+  if (action === "options") {
+    if (!(await rateLimit(`store-courier-options:${g.s.orgId}`, 30, 300)).ok) return fail("Too many rate checks at once. Please wait a minute.", 429);
+    return NextResponse.json({ ok: true, ...(await courierOptions(g.s.orgId, ids.slice(0, 50))) });
+  }
   if (action === "labels") return NextResponse.json({ ok: true, shipmentIds: await shipmentsFor(g.s.orgId, ids) });
   if (action === "mark_packed") { const r = await markPacked(g.s.orgId, g.s.userId, ids); await storeAudit(g.s, "orders.packed", undefined, r); return NextResponse.json({ ok: true, ...r }); }
   if (action === "handover") { const r = await markHandedOver(g.s.orgId, g.s.userId, ids); await storeAudit(g.s, "orders.handed_over", undefined, r); return NextResponse.json({ ok: true, ...r }); }
   if (!(await rateLimit(`store-pack:${g.s.orgId}`, 20, 300)).ok) return fail("Too many bookings at once. Please wait a few minutes.", 429);
-  const results = await packAndBook(g.s.orgId, g.s.userId, ids, { shipWithoutCodConfirmation: p.data.shipWithoutCodConfirmation, markPacked: action === "pack" });
+  const results = await packAndBook(g.s.orgId, g.s.userId, ids, { shipWithoutCodConfirmation: p.data.shipWithoutCodConfirmation, markPacked: action === "pack", courier: p.data.courier });
   const done = results.filter((r) => r.ok && r.shipmentId);
   await markLabelsPrinted(g.s.orgId, done.map((r) => r.id));
-  await storeAudit(g.s, action === "print" ? "orders.print_labels" : "orders.pack_and_book", undefined, { booked: results.filter((r) => r.booked).map((r) => r.number), failed: results.filter((r) => !r.ok).map((r) => r.number),
+  await storeAudit(g.s, action === "print" ? "orders.print_labels" : "orders.pack_and_book", undefined, { courier: p.data.courier, booked: results.filter((r) => r.booked).map((r) => r.number), failed: results.filter((r) => !r.ok).map((r) => r.number),
     shippedWithoutCodConfirmation: results.filter((r) => r.ok && p.data.shipWithoutCodConfirmation.includes(r.id)).map((r) => r.number) });
   return NextResponse.json({ ok: true, results, shipmentIds: done.map((r) => r.shipmentId) });
 }

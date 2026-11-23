@@ -1,4 +1,5 @@
 import "server-only";
+import { extrasTotal } from "@/lib/store-costs";
 import { and, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { newId } from "@/server/util/ids";
@@ -68,7 +69,7 @@ export async function deductOrderStock(storeOrderId: string) {
     if (!o) return false;
     const lines = o.lines as Line[];
     const P = schema.storeProducts, V = schema.storeProductVariants;
-    const prods = await tx.select({ id: P.id, cost: P.unitCostPaise }).from(P).where(inArray(P.id, lines.map((l) => l.productId)));
+    const prods = await tx.select({ id: P.id, cost: P.unitCostPaise, extras: P.costExtras }).from(P).where(inArray(P.id, lines.map((l) => l.productId)));
     const vids = lines.map((l) => l.variantId).filter((v): v is string => !!v);
     const vars = vids.length ? await tx.select({ id: V.id, cost: V.unitCostPaise }).from(V).where(inArray(V.id, vids)) : [];
     const costs = [];
@@ -77,7 +78,7 @@ export async function deductOrderStock(storeOrderId: string) {
       if (l.variantId) await tx.update(V).set({ reserved: sql`greatest(${V.reserved} - ${l.qty}, 0)` }).where(eq(V.id, l.variantId));
       await tx.update(P).set({ reserved: sql`greatest(${P.reserved} - ${l.qty}, 0)` }).where(eq(P.id, l.productId));
       await move(tx, o, l, "order_dispatched", { reserved: -l.qty }, { unitCostPaise: cost });
-      costs.push({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitCostPaise: cost });
+      costs.push({ productId: l.productId, variantId: l.variantId, qty: l.qty, unitCostPaise: cost, extrasPaise: extrasTotal(prods.find((p) => p.id === l.productId)?.extras) });
     }
     await tx.update(schema.storeOrders).set({ costs }).where(eq(schema.storeOrders.id, o.id));
     await logOrderEvent(tx, o, "dispatched", "Goods left the warehouse: stock deducted");

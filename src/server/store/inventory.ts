@@ -1,4 +1,5 @@
 import "server-only";
+import { type CostExtras, EXTRA_FIELDS, readExtras } from "@/lib/store-costs";
 import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
@@ -229,16 +230,22 @@ export async function inspectReturn(orgId: string, actorUserId: string, storeOrd
 
 // ---------------------------------------------------------------- CSV
 const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\n\r]/.test(s) || /^[=+\-@]/.test(s) ? `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"` : s; };
-export const INV_HEADERS = ["sku", "product", "option", "available", "reserved", "damaged", "on_hand", "reorder_level", "unit_cost"] as const;
+export const INV_HEADERS = ["sku", "product", "option", "available", "reserved", "damaged", "on_hand", "reorder_level", "unit_cost", "packaging_cost", "labour_cost", "other_cost", "overhead_cost"] as const;
 
 export async function exportInventoryCsv(orgId: string) {
   const { rows } = await inventoryList(orgId);
+  const db = await getDb();
+  const ex = rows.length ? await db.select({ id: schema.storeProducts.id, x: schema.storeProducts.costExtras }).from(schema.storeProducts).where(inArray(schema.storeProducts.id, [...new Set(rows.map((r) => r.productId))])) : [];
   const out = [INV_HEADERS.join(",")];
-  for (const r of rows) out.push([r.sku ?? "", r.title, r.variantTitle ?? "", r.available, r.reserved, r.damaged, r.onHand, r.reorderAt, r.unitCostPaise === null ? "" : (r.unitCostPaise / 100).toFixed(2)].map(csvCell).join(","));
+  for (const r of rows) {
+    const x = readExtras(ex.find((e) => e.id === r.productId)?.x);
+    out.push([r.sku ?? "", r.title, r.variantTitle ?? "", r.available, r.reserved, r.damaged, r.onHand, r.reorderAt, r.unitCostPaise === null ? "" : (r.unitCostPaise / 100).toFixed(2),
+      ...EXTRA_FIELDS.map((f) => (x[f.key] / 100).toFixed(2))].map(csvCell).join(","));
+  }
   return out.join("\r\n");
 }
 
-type Plan = { row: number; sku: string; key: string | null; title: string; set: { available?: number; unitCostPaise?: number; reorderAt?: number }; errors: string[] };
+type Plan = { row: number; sku: string; key: string | null; title: string; set: { available?: number; unitCostPaise?: number; reorderAt?: number; extras?: Partial<CostExtras> }; errors: string[] };
 
 /**
  * Inventory CSV: match rows by SKU, then (optionally) set the available count, unit cost and reorder level. The
@@ -269,10 +276,25 @@ export async function planInventoryImport(orgId: string, text: string) {
     set.reorderAt = int("reorder_level", "reorder_level", 100_000);
     const c = col(r, "unit_cost").replace(/[₹,\s]/g, "");
     if (c) { if (!/^\d+(\.\d{1,2})?$/.test(c)) errors.push("unit_cost must be a price like 125.50"); else set.unitCostPaise = Math.round(Number(c) * 100); }
-    if (set.available === undefined && set.reorderAt === undefined && set.unitCostPaise === undefined && !errors.length) errors.push("Nothing to change (fill available, unit_cost or reorder_level)");
+    for (const f of EXTRA_FIELDS) {
+      const v = col(r, f.csv).replace(/[₹,\s]/g, "");
+      if (!v) continue;
+      if (!/^\d+(\.\d{1,2})?$/.test(v) || Number(v) > 100_000) errors.push(`${f.csv} must be a price like 12.50`);
+      else set.extras = { ...(set.extras ?? {}), [f.key]: Math.round(Number(v) * 100) };
+    }
+    if (set.available === undefined && set.reorderAt === undefined && set.unitCostPaise === undefined && !set.extras && !errors.length) errors.push("Nothing to change (fill available, unit_cost, reorder_level or a per-piece cost)");
     return { row: i + 2, sku, key: hits.length === 1 ? hits[0].key : null, title: hits[0] ? `${hits[0].title}${hits[0].variantTitle ? ` (${hits[0].variantTitle})` : ""}` : "", set, errors };
   });
   return { rows: plans, valid: plans.filter((p) => !p.errors.length).length, invalid: plans.filter((p) => p.errors.length).length };
+}
+
+/** Per-piece costs for one or many products (fields left out keep their value). Other orgs' products are ignored. */
+export async function setCostExtras(orgId: string, productIds: string[], patch: Partial<CostExtras>) {
+  const db = await getDb();
+  const rows = await db.select({ id: schema.storeProducts.id, x: schema.storeProducts.costExtras }).from(schema.storeProducts)
+    .where(and(eq(schema.storeProducts.orgId, orgId), inArray(schema.storeProducts.id, [...new Set(productIds)].slice(0, 5000))));
+  for (const r of rows) await db.update(schema.storeProducts).set({ costExtras: { ...readExtras(r.x), ...patch }, updatedAt: new Date() }).where(eq(schema.storeProducts.id, r.id));
+  return rows.length;
 }
 
 export async function runInventoryImport(orgId: string, actorUserId: string, text: string) {
@@ -284,6 +306,7 @@ export async function runInventoryImport(orgId: string, actorUserId: string, tex
     const variantId = v || null;
     if (p.set.available !== undefined) await adjustStock(orgId, actorUserId, { productId, variantId, kind: "count", qty: p.set.available, unitCostPaise: null, reason: "CSV import" });
     if (p.set.unitCostPaise !== undefined || p.set.reorderAt !== undefined) await updateItem(orgId, { productId, variantId, unitCostPaise: p.set.unitCostPaise, reorderAt: p.set.reorderAt });
+    if (p.set.extras) await setCostExtras(orgId, [productId], p.set.extras);
     changed++;
   }
   return { changed, skipped: plan.invalid };

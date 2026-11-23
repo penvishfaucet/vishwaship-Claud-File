@@ -163,7 +163,7 @@ export const StoreSettings = z.object({
     /** Orders still waiting for Accept after this many hours are shown as overdue. */
     acceptWithinHours: z.number().int().min(1).max(168).default(24),
     /** Accepted orders not picked up by the courier within this many hours of the order are "Delayed". */
-    dispatchWithinHours: z.number().int().min(12).max(240).default(48),
+    dispatchWithinHours: z.number().int().min(12).max(240).default(24),
   }).default({}),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;

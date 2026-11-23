@@ -135,10 +135,11 @@ export async function setOwn(orgId: string, userId: string, kind: OwnKind, on: b
 }
 
 /** The client's own WhatsApp for an event, when switched on and a template is set for it. */
-export async function ownWhatsapp(orgId: string, event: "cod_confirmation" | "out_for_delivery") {
+export async function ownWhatsapp(orgId: string, event: string) {
   const c = ((await orgSetting<Stored>(orgId, KEY)) ?? {}).whatsapp;
   if (!c?.on) return null;
-  const templateName = event === "cod_confirmation" ? c.values.codTemplate : c.values.ofdTemplate;
+  // store updates use Vishwaship's approved templates (no own-account template fields for them yet)
+  const templateName = event === "cod_confirmation" ? c.values.codTemplate : event === "out_for_delivery" ? c.values.ofdTemplate : undefined;
   if (!templateName) return null;
   return { adapter: c.adapter as "wati" | "aisensy", ctx: ctxFor(orgId, c), templateName };
 }

@@ -25,6 +25,9 @@ export type ModuleKey = (typeof MODULES)[number]["key"];
 export const NOTIFICATION_EVENTS = [
   { key: "whatsapp:out_for_delivery", label: "WhatsApp — Out for Delivery", module: "whatsapp_notifications" },
   { key: "whatsapp:cod_confirmation", label: "WhatsApp — COD Confirmation (Confirm / Cancel)", module: "whatsapp_notifications" },
+  { key: "whatsapp:store_order_accepted", label: "WhatsApp — Online Store: order confirmed", module: "whatsapp_notifications" },
+  { key: "whatsapp:store_order_cancelled", label: "WhatsApp — Online Store: order cancelled", module: "whatsapp_notifications" },
+  { key: "whatsapp:store_order_dispatched", label: "WhatsApp — Online Store: order dispatched", module: "whatsapp_notifications" },
 ] as const;
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number]["key"];

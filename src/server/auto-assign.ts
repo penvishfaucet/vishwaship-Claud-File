@@ -62,7 +62,8 @@ export function choose(offers: QuoteOffer[], rules: Rule[], prefs: string[], f: 
   return { offer: o, ruleId: null, reason: `${skipped.length ? `No rule courier serviceable (${skipped.join(", ")}); ` : "No rule matched; "}cheapest serviceable courier → ${o.carrierName}` };
 }
 
-export async function autoAssign(orgId: string, orderId: string) {
+/** Live courier offers for one shipping order (each carries a quoteId that can be booked). */
+export async function offersForOrder(orgId: string, orderId: string) {
   const db = await getDb();
   const [o] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, orderId), eq(schema.orders.orgId, orgId)));
   if (!o) return { ok: false as const, message: "Order not found" };
@@ -75,10 +76,35 @@ export async function autoAssign(orgId: string, orderId: string) {
     codAmount: o.codAmountPaise, declaredValue: o.declaredValuePaise, direction: o.direction as "forward" | "reverse",
     packages: pk.map((p) => ({ count: p.count, lengthMm: p.lengthMm, breadthMm: p.breadthMm, heightMm: p.heightMm, actualWeightGrams: p.actualWeightGrams })),
   }, orgId);
+  const grams = pk.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
+  return { ok: true as const, offers, facts: { mode: o.mode, payment: o.paymentType, warehouseId: o.warehouseId, pincode: c.pincode, grams } };
+}
+
+/** Courier choice when booking: "rules" (your Auto-Assign rules), "cheapest", or one courier service "carrierCode|serviceName". */
+export type CourierChoice = string;
+export const courierKey = (o: { carrierCode: string; serviceName: string }) => `${o.carrierCode}|${o.serviceName}`;
+
+export async function pickCourier(orgId: string, orderId: string, choice: CourierChoice = "rules") {
+  const r = await offersForOrder(orgId, orderId);
+  if (!r.ok) return r;
+  if (!r.offers.length) return { ok: false as const, message: "No courier is serviceable for this order" };
+  if (choice === "cheapest") {
+    const o = [...r.offers].sort((a, b) => a.total - b.total)[0];
+    return { ok: true as const, offer: o, ruleId: null, reason: `Cheapest serviceable courier → ${o.carrierName}` };
+  }
+  if (choice !== "rules") {
+    const o = r.offers.filter((x) => courierKey(x) === choice).sort((a, b) => a.total - b.total)[0];
+    if (!o) return { ok: false as const, message: "The courier you chose does not serve this order (PIN code, weight or payment type). Pick another courier for it" };
+    return { ok: true as const, offer: o, ruleId: null, reason: `Chosen by you → ${o.carrierName}` };
+  }
+  const db = await getDb();
   const rules = await db.select().from(schema.assignRules).where(eq(schema.assignRules.orgId, orgId)).orderBy(asc(schema.assignRules.priority));
   const prefs = await courierPrefs(orgId);
-  const grams = pk.reduce((t, p) => t + p.actualWeightGrams * p.count, 0);
-  const pick = choose(offers, rules, prefs.priority, { mode: o.mode, payment: o.paymentType, warehouseId: o.warehouseId, pincode: c.pincode, grams });
+  const pick = choose(r.offers, rules, prefs.priority, r.facts);
   if (!pick) return { ok: false as const, message: "No courier is serviceable for this order" };
   return { ok: true as const, ...pick };
+}
+
+export async function autoAssign(orgId: string, orderId: string) {
+  return pickCourier(orgId, orderId, "rules");
 }

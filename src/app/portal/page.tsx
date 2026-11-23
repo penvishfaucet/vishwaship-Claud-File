@@ -127,7 +127,7 @@ async function Analytics({ orgId, hasStore, walletId, counts, href, r, rq }: { o
       </section>
 
       {/* desktop: store dispatch work below the analytics icons, above Wallet Transactions (owner request) */}
-      {hasStore && <div className="dash-desk"><ProcessSummaryCard orgId={orgId} /></div>}
+      {hasStore && <div className="dash-desk dash-store">{/* desktop too: new store orders to accept (red count, Accept / Accept all), then the dispatch work (owner 2026-11-23) */}<StoreAcceptCard initial={await pendingAcceptance(orgId).catch(() => ({ count: 0, totalPaise: 0, rows: [] }))} /><ProcessSummaryCard orgId={orgId} /></div>}
       <div className="dash-panels mb16 dash-desk">
         <section className="card p0" aria-labelledby="wt-h">
           <div className="row between card-h"><h2 id="wt-h" className="b" style={{ fontSize: 16, margin: 0 }}>Wallet Transactions</h2><Link className="btn btn-sm btn-soft" href={`/portal/billing/passbook/?${rq}`}>View All</Link></div>

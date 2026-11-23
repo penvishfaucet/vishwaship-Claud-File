@@ -39,6 +39,8 @@ async function acceptOne(orgId: string, id: string, actorUserId: string | null):
     return r(false, "Could not prepare the shipment. Check the buyer's address and the store's pickup warehouse");
   }
   await logOrderEvent(db, o, "accepted", actorUserId ? "Accepted; moved to To Pack" : "Accepted automatically (auto-accept is on)", actorUserId);
+  // buyer: "order confirmed, dispatch by …" (email + WhatsApp)
+  await (await import("./notify")).queueStoreNotice(id, "accepted").catch((e) => console.error("[store] accept notice", (e as Error).message));
   return r(true, "Accepted");
 }
 
@@ -77,25 +79,10 @@ export async function rejectOrders(orgId: string, actorUserId: string, ids: stri
   return out;
 }
 
-/** Tell the buyer (by email when they gave one) that the seller cancelled the order, and about the refund. */
+/** Tell the buyer (email + WhatsApp) that the seller cancelled the order, and about the refund. */
 export async function notifyBuyerCancelled(storeOrderId: string) {
-  const db = await getDb();
-  const [o] = await db.select().from(schema.storeOrders).where(eq(schema.storeOrders.id, storeOrderId));
-  if (!o || o.status !== "cancelled") return;
-  const b = o.buyer as { name: string; email?: string };
-  if (!b.email) return;
-  const [store] = await db.select({ name: schema.stores.name, slug: schema.stores.slug }).from(schema.stores).where(eq(schema.stores.id, o.storeId));
-  const { sendEmail } = await import("@/server/email/service");
-  const base = (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/$/, "");
-  const r = await sendEmail({
-    event: "store_order_cancelled", to: b.email, toKind: "recipient", orgId: o.orgId, dedupeKey: `store_cancel:${o.id}`,
-    vars: {
-      customer_name: b.name, order_id: o.number, store_name: store?.name ?? "the store", reason: o.rejectReason ?? o.note ?? "Not available",
-      refund_line: o.paymentMethod === "cod" ? "You have not been charged." : `Your payment of ₹${(o.totalPaise / 100).toFixed(2)} is being refunded to your original payment method. Banks usually take 5–7 working days.`,
-      tracking_link: `${base}/s/${store?.slug ?? ""}/track/`,
-    },
-  });
-  await logOrderEvent(db, o, "buyer_notified", r.status === "sent" ? `Buyer emailed at ${b.email}` : `Buyer email not sent (${r.error ?? r.status})`);
+  const { notifyBuyer } = await import("./notify");
+  await notifyBuyer(storeOrderId, "cancelled");
 }
 
 export async function orderTimeline(orgId: string, storeOrderId: string) {

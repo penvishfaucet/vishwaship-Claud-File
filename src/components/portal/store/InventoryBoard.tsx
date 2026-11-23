@@ -17,6 +17,38 @@ const toPaise = (s: string) => (s.trim() === "" ? null : Math.round(Number(s) * 
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
 
 /** Inventory on a phone: one card per item, a sheet for receive / count / damaged / cost, stock history, returns to count, CSV. */
+const EXTRA_INPUTS = [["packagingPaise", "Packaging"], ["labourPaise", "Labour"], ["otherPaise", "Other"], ["overheadPaise", "Overheads"]] as const;
+
+/** Same per-piece costs for every product at once (e.g. ₹12 packaging on everything). Blank = keep each product's value. */
+function BulkExtras({ onDone }: { onDone: (msg: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [v, setV] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (!open) return <button type="button" className="btn btn-soft btn-sm" style={{ justifySelf: "start" }} onClick={() => setOpen(true)}>Set packaging / per-piece costs for all products</button>;
+  async function save() {
+    const extras = Object.fromEntries(Object.entries(v).filter(([, x]) => x.trim() !== "").map(([k, x]) => [k, Math.round(Number(x) * 100)]));
+    if (!Object.keys(extras).length) { setErr("Fill at least one amount"); return; }
+    if (!window.confirm("Apply these per-piece costs to every product in the store?")) return;
+    setBusy(true); setErr(null);
+    const r = await api<{ products: number }>("POST", "/api/portal/store/inventory", { action: "extras_all", extras });
+    setBusy(false);
+    if (!r.ok) { setErr(r.error); return; }
+    setOpen(false); setV({}); onDone(`Per-piece costs updated on ${r.data.products} product(s).`);
+  }
+  return (
+    <div className="row wrap" style={{ gap: 8, alignItems: "end" }}>
+      {EXTRA_INPUTS.map(([k, label]) => (
+        <div className="field" key={k} style={{ width: 120 }}><label htmlFor={`bx-${k}`}>{label} (₹)</label>
+          <input id={`bx-${k}`} className="input" inputMode="decimal" value={v[k] ?? ""} placeholder="keep" onChange={(e) => setV({ ...v, [k]: e.target.value.replace(/[^0-9.]/g, "") })} /></div>
+      ))}
+      <button type="button" className="btn btn-orange btn-sm" disabled={busy} onClick={save}>{busy ? "Saving…" : "Apply to all products"}</button>
+      <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(false)}>Cancel</button>
+      {err && <span className="small red" role="alert">{err}</span>}
+    </div>
+  );
+}
+
 export function InventoryBoard({ rows, returns }: { rows: InvItem[]; returns: ReturnItem[] }) {
   const router = useRouter();
   const dlg = useRef<HTMLDialogElement>(null);
@@ -180,8 +212,9 @@ function CsvTools() {
         <a className="btn btn-outline btn-sm" href="/api/portal/store/inventory/csv" download><Download size={14} aria-hidden /> Export CSV</a>
         <button type="button" className="btn btn-outline btn-sm" onClick={() => file.current?.click()}><Upload size={14} aria-hidden /> Import CSV</button>
         <input ref={file} type="file" accept=".csv,text/csv" hidden onChange={(e) => void pick(e.target.files?.[0])} />
-        <span className="tiny muted" style={{ alignSelf: "center" }}>Columns: sku, available, unit_cost, reorder_level (blank = no change)</span>
+        <span className="tiny muted" style={{ alignSelf: "center" }}>Columns: sku, available, unit_cost, reorder_level, packaging_cost, labour_cost, other_cost, overhead_cost (blank = no change)</span>
       </div>
+      <BulkExtras onDone={(t) => { setMsg({ ok: t }); router.refresh(); }} />
       {plan && (
         <div className="small">
           <b>{plan.valid} row(s) ready</b>{plan.invalid ? <span className="red">, {plan.invalid} with problems (skipped)</span> : null}

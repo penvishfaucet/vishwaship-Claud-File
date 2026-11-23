@@ -43,6 +43,12 @@ export const ProductInput = z.object({
   heightCm: z.number().min(0).max(500).default(0),
   options: z.array(z.string().trim().min(1, "Name every option").max(30)).max(3).default([]),
   variants: z.array(VariantInput).max(100).default([]),
+  /** Cost per piece (owner 2026-11-23). productRupees = purchase cost (no variants only; null = leave as it is). */
+  costs: z.object({
+    productRupees: z.number().min(0).max(10_00_000).nullable().default(null),
+    packagingRupees: z.number().min(0).max(1_00_000).default(0), labourRupees: z.number().min(0).max(1_00_000).default(0),
+    otherRupees: z.number().min(0).max(1_00_000).default(0), overheadRupees: z.number().min(0).max(1_00_000).default(0),
+  }).optional(),
 }).superRefine((v, ctx) => {
   if (v.options.length && !v.variants.length) ctx.addIssue({ code: "custom", path: ["variants"], message: "Add at least one variant" });
   if (!v.options.length && v.variants.length) ctx.addIssue({ code: "custom", path: ["options"], message: "Name the option (e.g. Size) for your variants" });
@@ -121,6 +127,10 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     seo: { title: input.seoTitle, description: input.seoDescription }, sku: input.sku || null, hsn: input.hsn || null, taxBps: Math.round(input.taxPercent * 100),
     lowStockAt: input.lowStockAt, lengthMm: Math.round(input.lengthCm * 10), breadthMm: Math.round(input.breadthCm * 10), heightMm: Math.round(input.heightCm * 10),
     options: input.options, updatedAt: new Date(),
+    ...(input.costs ? {
+      costExtras: { packagingPaise: toPaise(input.costs.packagingRupees), labourPaise: toPaise(input.costs.labourRupees), otherPaise: toPaise(input.costs.otherRupees), overheadPaise: toPaise(input.costs.overheadRupees) },
+      ...(input.costs.productRupees !== null && !hasVariants ? { unitCostPaise: toPaise(input.costs.productRupees) } : {}),
+    } : {}),
   };
   const pid = id ?? newId("sp");
   await db.transaction(async (tx) => {

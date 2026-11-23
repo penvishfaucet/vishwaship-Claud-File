@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled" | "store_plan_reminder";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled" | "store_order_accepted" | "store_order_dispatched" | "store_plan_reminder";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -136,6 +136,37 @@ Sorry, {{store_name}} could not fulfil your order {{order_id}} and has cancelled
 Reason: {{reason}}
 
 {{refund_line}}
+
+Regards,
+{{store_name}}`,
+    defaults: { enabled: true, toClient: false, toRecipient: true } },
+  { key: "store_order_accepted", label: "Online Store: order confirmed by the seller (to the buyer)", audience: "shipment", button: "Track order",
+    placeholders: ["customer_name", "order_id", "store_name", "order_total", "dispatch_by", "expected_delivery", "payment_line", "tracking_link"],
+    subject: "Your order {{order_id}} from {{store_name}} is confirmed",
+    body: `Hello {{customer_name}},
+
+Thank you for shopping with {{store_name}}. Your order {{order_id}} ({{order_total}}) is confirmed and is being packed.
+
+We will dispatch it by {{dispatch_by}}. Expected delivery: {{expected_delivery}}.
+
+{{payment_line}}
+
+We will send you the courier's tracking number as soon as it leaves our warehouse.
+
+Regards,
+{{store_name}}`,
+    defaults: { enabled: true, toClient: false, toRecipient: true } },
+  { key: "store_order_dispatched", label: "Online Store: order dispatched (to the buyer)", audience: "shipment", button: "Track order",
+    placeholders: ["customer_name", "order_id", "store_name", "courier_name", "awb_number", "expected_delivery", "tracking_link"],
+    subject: "Your order {{order_id}} from {{store_name}} is on its way",
+    body: `Hello {{customer_name}},
+
+Good news! Your order {{order_id}} has been handed to {{courier_name}}.
+
+AWB / tracking number: {{awb_number}}
+Expected delivery: {{expected_delivery}}
+
+Track it any time with the button below.
 
 Regards,
 {{store_name}}`,

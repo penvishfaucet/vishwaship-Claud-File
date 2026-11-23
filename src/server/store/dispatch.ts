@@ -2,7 +2,7 @@ import "server-only";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { PDFDocument, type PDFFont, type PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { getDb, schema } from "@/server/db/client";
-import { autoAssign } from "@/server/auto-assign";
+import { type CourierChoice, courierKey, offersForOrder, pickCourier } from "@/server/auto-assign";
 import { bookOrder } from "@/server/booking/service";
 import { hideProviders } from "@/server/customer-safe";
 import { ensureShippingOrder, type Line } from "./checkout";
@@ -191,7 +191,7 @@ export type PackResult = { id: string; number: string; ok: boolean; message: str
  * Confirm packing and make sure each order has a booked courier. Orders already booked just return their shipment
  * (their saved AWB and label are reused); others are booked with Auto-Assign. Every order reports on its own.
  */
-export async function packAndBook(orgId: string, userId: string, ids: string[], opts: { shipWithoutCodConfirmation?: string[]; markPacked?: boolean } = {}): Promise<PackResult[]> {
+export async function packAndBook(orgId: string, userId: string, ids: string[], opts: { shipWithoutCodConfirmation?: string[]; markPacked?: boolean; courier?: CourierChoice } = {}): Promise<PackResult[]> {
   const db = await getDb();
   const out: PackResult[] = [];
   const override = new Set(opts.shipWithoutCodConfirmation ?? []);
@@ -226,7 +226,7 @@ export async function packAndBook(orgId: string, userId: string, ids: string[], 
       await db.update(schema.orders).set({ status: "ready" }).where(and(eq(schema.orders.id, sid), eq(schema.orders.status, "cod_hold")));
       await logOrderEvent(db, o, "cod_hold_released", codConfirmOn ? "Shipped without the buyer's COD confirmation (seller's decision)" : "COD confirmation is switched off: hold released", userId);
     }
-    const pick = await autoAssign(orgId, sid);
+    const pick = await pickCourier(orgId, sid, opts.courier ?? "rules");
     if (!pick.ok) { out.push(res(false, pick.message)); continue; }
     const b = await bookOrder({ orgId, orderId: sid, quoteId: pick.offer.quoteId, actorUserId: userId });
     if (!b.ok) { out.push(res(false, b.message)); continue; }
@@ -235,6 +235,38 @@ export async function packAndBook(orgId: string, userId: string, ids: string[], 
     out.push(res(true, b.awb ? "Booked" : "Booked; waiting for the courier's AWB", { shipmentId: b.shipmentId, awb: b.awb, carrier: ship?.carrierName ?? pick.offer.carrierName, booked: true }));
   }
   return out;
+}
+
+export type CourierOption = { key: string; carrierName: string; serviceName: string; orders: number; totalPaise: number; cheapestFor: number };
+
+/**
+ * Couriers that can take the selected (accepted, not yet booked) orders, with the total charge for the orders each one
+ * serves, cheapest first. "cheapestFor" = for how many orders it is the cheapest. Quotes only: nothing is booked.
+ */
+export async function courierOptions(orgId: string, ids: string[]) {
+  const map = new Map<string, CourierOption>();
+  let considered = 0, cheapestTotal = 0;
+  const skipped: string[] = [];
+  for (const o of await ordersFor(orgId, ids)) {
+    if (o.status !== "placed" || o.acceptance !== "accepted") { skipped.push(`${o.number}: not accepted`); continue; }
+    const sid = await ensureShippingOrder(o.id);
+    if (!sid) { skipped.push(`${o.number}: address / warehouse missing`); continue; }
+    const r = await offersForOrder(orgId, sid);
+    if (!r.ok || !r.offers.length) { skipped.push(`${o.number}: ${r.ok ? "no courier serves this PIN" : r.message}`); continue; }
+    considered++;
+    // one line per courier service: its cheapest offer for this order
+    const best = new Map<string, (typeof r.offers)[number]>();
+    for (const x of r.offers) { const k = courierKey(x); if (!best.has(k) || best.get(k)!.total > x.total) best.set(k, x); }
+    const min = Math.min(...[...best.values()].map((x) => x.total));
+    cheapestTotal += min;
+    for (const [k, x] of best) {
+      const cur = map.get(k) ?? { key: k, carrierName: hideProviders(x.carrierName), serviceName: hideProviders(x.serviceName), orders: 0, totalPaise: 0, cheapestFor: 0 };
+      cur.orders++; cur.totalPaise += x.total; if (x.total === min) cur.cheapestFor++;
+      map.set(k, cur);
+    }
+  }
+  const options = [...map.values()].sort((a, b) => b.orders - a.orders || a.totalPaise - b.totalPaise);
+  return { considered, cheapestTotal, options, skipped };
 }
 
 /** Shipments of these store orders that can have labels (booked, not cancelled), in the given order. */

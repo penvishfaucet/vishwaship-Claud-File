@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!D.test(from) || !D.test(to) || from > to) return apiError(422, "validation_error", "Choose a valid date range");
   const p = await storePnl(g.s.orgId, { from, to });
   const s = p.summary, rs = (x: number) => Math.round(x) / 100;
-  const summary: unknown[][] = [[], ["Summary", `${from} to ${to}`], ["Net sales (ex-GST)", rs(s.netSales)], ["Shipping collected", rs(s.shippingCollected)], ["Product cost", rs(s.productCost)],
+  const summary: unknown[][] = [[], ["Summary", `${from} to ${to}`], ["Net sales (ex-GST)", rs(s.netSales)], ["Shipping collected", rs(s.shippingCollected)], ["Product cost", rs(s.productCost)], ["Packaging & per-piece costs", rs(s.packagingCost)],
     ["Shipping paid", rs(s.shippingPaid)], ["Payment fees", rs(s.paymentFees)], ["Order expenses", rs(s.orderExpenses)], ["Order contribution", rs(s.contribution)],
     ...p.overhead.map((o) => [o.label, rs(o.amount)]), ["Store-level expenses", rs(s.overhead)], ["Net profit", rs(s.net)], ["Margin %", s.marginPct ?? ""],
     ["Output GST", rs(p.gst.output)], ["Input GST (claimable)", rs(p.gst.inputRecoverable)], ["GST not claimable", rs(p.gst.nonRecoverable)],

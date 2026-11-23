@@ -1,4 +1,5 @@
 import "server-only";
+import { extrasTotal } from "@/lib/store-costs";
 import { and, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import { orgSetting, saveOrgSetting } from "@/server/couriers";
 import { getDb, schema } from "@/server/db/client";
@@ -41,7 +42,7 @@ const exGst = (gross: number, bps: number) => Math.round((gross * 10_000) / (10_
 
 export type OrderPnl = {
   id: string; number: string; date: string; outcome: "delivered" | "rto" | "lost"; method: string;
-  netSales: number; shippingCollected: number; productCost: number; shippingPaid: number; paymentFees: number; orderExpenses: number; contribution: number;
+  netSales: number; shippingCollected: number; productCost: number; packagingCost: number; shippingPaid: number; paymentFees: number; orderExpenses: number; contribution: number;
   outputGst: number; inputGst: number; flags: string[];
 };
 type Range = { from: string; to: string };
@@ -70,7 +71,7 @@ async function compute(orgId: string, r: Range) {
   const tagged = orderIds.length ? await db.select().from(schema.storeExpenses).where(and(inArray(schema.storeExpenses.storeOrderId, orderIds), isNull(schema.storeExpenses.deletedAt))) : [];
   // current unit costs, only as an estimate for orders shipped before costs were captured
   const pids = [...new Set(rows.flatMap((x) => (x.o.lines as Line[]).map((l) => l.productId)))];
-  const curP = pids.length ? await db.select({ id: schema.storeProducts.id, c: schema.storeProducts.unitCostPaise }).from(schema.storeProducts).where(inArray(schema.storeProducts.id, pids)) : [];
+  const curP = pids.length ? await db.select({ id: schema.storeProducts.id, c: schema.storeProducts.unitCostPaise, x: schema.storeProducts.costExtras }).from(schema.storeProducts).where(inArray(schema.storeProducts.id, pids)) : [];
   const curV = pids.length ? await db.select({ id: schema.storeProductVariants.id, c: schema.storeProductVariants.unitCostPaise }).from(schema.storeProductVariants).where(inArray(schema.storeProductVariants.productId, pids)) : [];
   const expNet = (e: { amountPaise: number; gstPaise: number; gstRecoverable: boolean }) => (st.gstRegistered && e.gstRecoverable ? e.amountPaise - e.gstPaise : e.amountPaise);
 
@@ -101,8 +102,8 @@ async function compute(orgId: string, r: Range) {
       shippingCollected = shipGross - shipGst; outputGst += shipGst;
     }
     // product cost: captured when the goods left; RTO keeps only what did not come back sellable
-    const costs = (o.costs as Array<{ productId: string; variantId: string | null; qty: number; unitCostPaise: number | null }> | null) ?? null;
-    let productCost = 0;
+    const costs = (o.costs as Array<{ productId: string; variantId: string | null; qty: number; unitCostPaise: number | null; extrasPaise?: number }> | null) ?? null;
+    let productCost = 0, packagingCost = 0;
     const insp = (o.returnInspection as { lines: Array<{ sellable: number }> } | null)?.lines ?? null;
     lines.forEach((l, i) => {
       let unit = costs?.find((c) => c.productId === l.productId && c.variantId === l.variantId)?.unitCostPaise ?? null;
@@ -110,6 +111,9 @@ async function compute(orgId: string, r: Range) {
         unit = (l.variantId ? curV.find((v) => v.id === l.variantId)?.c : null) ?? curP.find((p) => p.id === l.productId)?.c ?? null;
         if (unit !== null && !flags.includes("cost estimated")) flags.push("cost estimated");
       }
+      // packaging / labour / other / overhead per piece: used up even when the parcel comes back
+      const snap = costs?.find((c) => c.productId === l.productId && c.variantId === l.variantId);
+      packagingCost += (snap?.extrasPaise ?? extrasTotal(curP.find((p) => p.id === l.productId)?.x)) * l.qty;
       if (unit === null) { if (!flags.includes("cost missing")) flags.push("cost missing"); return; }
       const back = outcome === "delivered" ? 0 : insp?.[i]?.sellable ?? 0;
       productCost += unit * (l.qty - back);
@@ -130,10 +134,10 @@ async function compute(orgId: string, r: Range) {
     if (st.gstRegistered) inputGst += feeGst;
     inputGst += mine.filter((e) => st.gstRegistered && e.gstRecoverable).reduce((t, e) => t + e.gstPaise, 0);
     const R = Math.round;
-    const row = { netSales: R(netSales), shippingCollected: R(shippingCollected), productCost: R(productCost), shippingPaid, paymentFees, orderExpenses };
+    const row = { netSales: R(netSales), shippingCollected: R(shippingCollected), productCost: R(productCost), packagingCost: R(packagingCost), shippingPaid, paymentFees, orderExpenses };
     orders.push({
       id: o.id, number: o.number, date: istDate(at), outcome, method: o.paymentMethod, ...row, outputGst: R(outputGst), inputGst, flags,
-      contribution: row.netSales + row.shippingCollected - row.productCost - row.shippingPaid - row.paymentFees - row.orderExpenses,
+      contribution: row.netSales + row.shippingCollected - row.productCost - row.packagingCost - row.shippingPaid - row.paymentFees - row.orderExpenses,
     });
   }
   orders.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : a.number < b.number ? 1 : -1));
@@ -166,7 +170,7 @@ async function compute(orgId: string, r: Range) {
     settings: st,
     summary: {
       delivered: orders.filter((x) => x.outcome === "delivered").length, rto: orders.filter((x) => x.outcome !== "delivered").length,
-      netSales: sum("netSales"), shippingCollected: sum("shippingCollected"), revenue, productCost: sum("productCost"), shippingPaid: sum("shippingPaid"),
+      netSales: sum("netSales"), shippingCollected: sum("shippingCollected"), revenue, productCost: sum("productCost"), packagingCost: sum("packagingCost"), shippingPaid: sum("shippingPaid"),
       paymentFees: sum("paymentFees"), orderExpenses: sum("orderExpenses"), contribution, overhead: overheadTotal, net,
       marginPct: revenue > 0 ? Math.round((net / revenue) * 1000) / 10 : null,
       rtoLoss: orders.filter((x) => x.outcome !== "delivered").reduce((t, x) => t + x.contribution, 0),
@@ -189,6 +193,6 @@ export async function storePnl(orgId: string, r: Range) {
   return { ...cur, range: r, previous: { range: { from: pFrom, to: pTo }, summary: prev.summary } };
 }
 
-export const ORDER_COLS = ["Date", "Order", "Outcome", "Payment", "Net sales (ex-GST)", "Shipping collected", "Product cost", "Shipping paid", "Payment fees", "Order expenses", "Contribution", "Output GST", "Input GST", "Notes"];
+export const ORDER_COLS = ["Date", "Order", "Outcome", "Payment", "Net sales (ex-GST)", "Shipping collected", "Product cost", "Packaging & per-piece costs", "Shipping paid", "Payment fees", "Order expenses", "Contribution", "Output GST", "Input GST", "Notes"];
 export const orderRow = (x: OrderPnl) => [x.date, x.number, x.outcome === "delivered" ? "Delivered" : x.outcome === "lost" ? "Lost" : "RTO", x.method === "cod" ? "COD" : "Prepaid",
-  ...[x.netSales, x.shippingCollected, x.productCost, x.shippingPaid, x.paymentFees, x.orderExpenses, x.contribution, x.outputGst, x.inputGst].map((p) => Math.round(p) / 100), x.flags.join("; ")];
+  ...[x.netSales, x.shippingCollected, x.productCost, x.packagingCost, x.shippingPaid, x.paymentFees, x.orderExpenses, x.contribution, x.outputGst, x.inputGst].map((p) => Math.round(p) / 100), x.flags.join("; ")];

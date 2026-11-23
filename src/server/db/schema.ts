@@ -1298,6 +1298,8 @@ export const storeProducts = pgTable("store_products", {
   damaged: integer("damaged").notNull().default(0),
   /** Purchase cost per unit (for profit). Null = not entered yet. */
   unitCostPaise: paise("unit_cost_paise"),
+  /** Per-piece costs on top of the purchase cost: { packagingPaise, labourPaise, otherPaise, overheadPaise } (owner 2026-11-23). */
+  costExtras: jsonb("cost_extras"),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);

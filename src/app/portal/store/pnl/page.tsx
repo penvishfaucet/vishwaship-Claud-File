@@ -37,7 +37,7 @@ export default async function StorePnl({ searchParams }: { searchParams: SP }) {
   const delta = (a: number, b: number) => (b === 0 ? null : Math.round(((a - b) / Math.abs(b)) * 100));
   const lines: Array<{ label: string; v: number; sign: "+" | "−" | "="; strong?: boolean }> = [
     { label: "Net sales (delivered, ex-GST)", v: s.netSales, sign: "+" }, { label: "Shipping & COD fee collected", v: s.shippingCollected, sign: "+" },
-    { label: "Product cost", v: s.productCost, sign: "−" }, { label: "Shipping paid (incl. RTO)", v: s.shippingPaid, sign: "−" },
+    { label: "Product cost", v: s.productCost, sign: "−" }, { label: "Packaging, labour & per-piece overheads", v: s.packagingCost, sign: "−" }, { label: "Shipping paid (incl. RTO)", v: s.shippingPaid, sign: "−" },
     { label: "Payment fees (estimated)", v: s.paymentFees, sign: "−" }, { label: "Order expenses (packaging …)", v: s.orderExpenses, sign: "−" },
     { label: "Order contribution", v: s.contribution, sign: "=", strong: true },
   ];
@@ -116,12 +116,12 @@ export default async function StorePnl({ searchParams }: { searchParams: SP }) {
         <>
           <div className="card p0 only-desktop" style={{ overflowX: "auto" }}>
             <table className="os-dns">
-              <thead><tr><th>Date</th><th>Order</th><th>Outcome</th><th style={{ textAlign: "right" }}>Sales</th><th style={{ textAlign: "right" }}>Shipping in</th><th style={{ textAlign: "right" }}>Product</th><th style={{ textAlign: "right" }}>Shipping paid</th><th style={{ textAlign: "right" }}>Fees + exp.</th><th style={{ textAlign: "right" }}>Profit</th><th>Notes</th></tr></thead>
+              <thead><tr><th>Date</th><th>Order</th><th>Outcome</th><th style={{ textAlign: "right" }}>Sales</th><th style={{ textAlign: "right" }}>Shipping in</th><th style={{ textAlign: "right" }}>Product</th><th style={{ textAlign: "right" }}>Packaging etc.</th><th style={{ textAlign: "right" }}>Shipping paid</th><th style={{ textAlign: "right" }}>Fees + exp.</th><th style={{ textAlign: "right" }}>Profit</th><th>Notes</th></tr></thead>
               <tbody>{p.orders.map((o) => (
                 <tr key={o.id}>
                   <td className="small">{o.date}</td><td><a className="orange" href={`/portal/store/orders/${o.id}/`}>{o.number}</a></td>
                   <td className="small">{o.outcome === "delivered" ? "Delivered" : o.outcome === "lost" ? "Lost" : "RTO"} · {o.method === "cod" ? "COD" : "Prepaid"}</td>
-                  <td style={{ textAlign: "right" }}>{rs(o.netSales)}</td><td style={{ textAlign: "right" }}>{rs(o.shippingCollected)}</td><td style={{ textAlign: "right" }}>{rs(o.productCost)}</td>
+                  <td style={{ textAlign: "right" }}>{rs(o.netSales)}</td><td style={{ textAlign: "right" }}>{rs(o.shippingCollected)}</td><td style={{ textAlign: "right" }}>{rs(o.productCost)}</td><td style={{ textAlign: "right" }}>{rs(o.packagingCost)}</td>
                   <td style={{ textAlign: "right" }}>{rs(o.shippingPaid)}</td><td style={{ textAlign: "right" }}>{rs(o.paymentFees + o.orderExpenses)}</td>
                   <td style={{ textAlign: "right", fontWeight: 700, color: o.contribution < 0 ? "#b42318" : undefined }}>{rs(o.contribution)}</td>
                   <td className="tiny muted">{o.flags.join("; ")}</td>
@@ -136,7 +136,7 @@ export default async function StorePnl({ searchParams }: { searchParams: SP }) {
                   <summary className="pl-ord"><span><b>{o.number}</b><span className="tiny muted"> · {o.date} · {o.outcome === "delivered" ? "Delivered" : o.outcome === "lost" ? "Lost" : "RTO"}</span></span>
                     <b style={{ color: o.contribution < 0 ? "#b42318" : undefined }}>{rs(o.contribution)}</b></summary>
                   <dl className="kv-list" style={{ marginTop: 8 }}>
-                    <dt>Net sales</dt><dd>{rs(o.netSales)}</dd><dt>Shipping collected</dt><dd>{rs(o.shippingCollected)}</dd><dt>Product cost</dt><dd>− {rs(o.productCost)}</dd>
+                    <dt>Net sales</dt><dd>{rs(o.netSales)}</dd><dt>Shipping collected</dt><dd>{rs(o.shippingCollected)}</dd><dt>Product cost</dt><dd>− {rs(o.productCost)}</dd><dt>Packaging &amp; per-piece</dt><dd>− {rs(o.packagingCost)}</dd>
                     <dt>Shipping paid</dt><dd>− {rs(o.shippingPaid)}</dd><dt>Payment fees</dt><dd>− {rs(o.paymentFees)}</dd><dt>Order expenses</dt><dd>− {rs(o.orderExpenses)}</dd>
                   </dl>
                   {o.flags.length > 0 && <p className="tiny red" style={{ margin: "6px 0 0" }}>{o.flags.join("; ")}</p>}

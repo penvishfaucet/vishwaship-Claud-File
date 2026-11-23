@@ -17,8 +17,13 @@ import { ORG_SETTING_SCHEMAS } from "@/lib/org-settings";
 import { roughDelivery } from "@/lib/cod-template";
 import { orgSetting } from "@/server/couriers";
 
-export type WaEvent = "out_for_delivery" | "cod_confirmation";
-export const WA_EVENT_LABEL: Record<WaEvent, string> = { out_for_delivery: "Out for Delivery", cod_confirmation: "COD Confirmation" };
+export type WaEvent = "out_for_delivery" | "cod_confirmation" | "store_order_accepted" | "store_order_cancelled" | "store_order_dispatched";
+export const WA_EVENT_LABEL: Record<WaEvent, string> = {
+  out_for_delivery: "Out for Delivery", cod_confirmation: "COD Confirmation",
+  store_order_accepted: "Online Store: order confirmed", store_order_cancelled: "Online Store: order cancelled", store_order_dispatched: "Online Store: order dispatched",
+};
+/** Online Store buyer updates: on unless the merchant switched the event off (no toggle row = on). */
+export const STORE_WA_EVENTS: WaEvent[] = ["store_order_accepted", "store_order_cancelled", "store_order_dispatched"];
 
 export interface CodSettings { reminderMinutes: number; expiryMinutes: number; noReply: "release" | "hold_for_review" | "cancel"; credits: number }
 export const COD_DEFAULTS: CodSettings = { reminderMinutes: 120, expiryMinutes: 1440, noReply: "release", credits: 1 };
@@ -94,15 +99,23 @@ export type SendOutcome = { status: "sent" | "skipped" | "failed" | "duplicate";
  * plan/event access → customer toggle → recipient → provider → approved template → credits.
  * `dedupeKey` makes retries and duplicate triggers safe (one row, at most one charge, at most one send).
  */
-export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: string; shipmentId?: string | null; dedupeKey: string }): Promise<SendOutcome> {
+export async function sendEvent(a: {
+  event: WaEvent; orgId: string; orderId: string | null; shipmentId?: string | null; dedupeKey: string;
+  /** Online Store orders: the buyer (an order may be cancelled before any shipping order exists). */
+  recipient?: { name: string; mobile: string; orderNumber: string };
+  /** Extra template values (store updates). */
+  params?: Record<string, string>;
+}): Promise<SendOutcome> {
   const db = await getDb();
-  const [order] = await db.select().from(schema.orders).where(and(eq(schema.orders.id, a.orderId), eq(schema.orders.orgId, a.orgId)));
-  if (!order) return { status: "skipped", reason: "Order not found" };
-  const consignee = order.consignee as { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
+  const [order] = a.orderId ? await db.select().from(schema.orders).where(and(eq(schema.orders.id, a.orderId), eq(schema.orders.orgId, a.orgId))) : [];
+  if (!order && !a.recipient) return { status: "skipped", reason: "Order not found" };
+  const consignee = (a.recipient ? { name: a.recipient.name, mobile: a.recipient.mobile } : order!.consignee) as { name?: string; mobile?: string; line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
+  const orderNumber = a.recipient?.orderNumber ?? order!.orderNumber;
+  const storeEvent = STORE_WA_EVENTS.includes(a.event);
   const digits = String(consignee.mobile ?? "").replace(/\D/g, "").slice(-10);
   const toE164 = /^[6-9]\d{9}$/.test(digits) ? `+91${digits}` : "";
 
-  await db.insert(schema.whatsappMessages).values({ id: newId("wam"), orgId: a.orgId, orderId: a.orderId, shipmentId: a.shipmentId ?? null, event: a.event, recipientMasked: toE164 ? maskPhone(toE164) : "—", dedupeKey: a.dedupeKey, status: "queued" }).onConflictDoNothing();
+  await db.insert(schema.whatsappMessages).values({ id: newId("wam"), orgId: a.orgId, orderId: a.orderId ?? null, shipmentId: a.shipmentId ?? null, event: a.event, recipientMasked: toE164 ? maskPhone(toE164) : "—", dedupeKey: a.dedupeKey, status: "queued" }).onConflictDoNothing();
   const [msg] = await db.select().from(schema.whatsappMessages).where(eq(schema.whatsappMessages.dedupeKey, a.dedupeKey));
   if (msg.status !== "queued") return { status: "duplicate", messageId: msg.id };
 
@@ -113,12 +126,13 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
 
   if (!(await eventIncluded(a.orgId, `whatsapp:${a.event}`))) return finish("skipped", { error: "Not included in the customer's plan" });
   const [toggle] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, a.orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, a.event)));
-  if (!toggle?.enabled) return finish("skipped", { error: "Turned off by the customer" });
-  if (a.event === "out_for_delivery") {
+  if (storeEvent ? toggle && !toggle.enabled : !toggle?.enabled) return finish("skipped", { error: "Turned off by the customer" });
+  if (a.event === "out_for_delivery" || storeEvent) {
     const [master] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, a.orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "*")));
     if (master && !master.enabled) return finish("skipped", { error: "WhatsApp notifications switched off by the customer" });
   }
   if (!toE164) return finish("failed", { error: "Buyer mobile number is missing or invalid" });
+  if (storeEvent && !a.recipient) return finish("skipped", { error: "Store update without a buyer" });
 
   // the client's own WhatsApp account (no Vishwaship credits), when switched on with a template for this event
   const own = await (await import("@/server/own-providers")).ownWhatsapp(a.orgId, a.event);
@@ -138,11 +152,12 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
   const [ship] = a.shipmentId ? await db.select().from(schema.shipments).where(eq(schema.shipments.id, a.shipmentId)) : [];
   const params: Record<string, string> = {
     buyer_name: String(consignee.name ?? "Customer").split(" ")[0],
-    order_id: order.orderNumber,
+    order_id: orderNumber,
     merchant_name: org?.businessName ?? "your seller",
-    cod_amount: `₹${(order.codAmountPaise / 100).toLocaleString("en-IN")}`,
+    cod_amount: `₹${((order?.codAmountPaise ?? 0) / 100).toLocaleString("en-IN")}`,
+    ...(a.params ?? {}),
   };
-  if (a.event === "cod_confirmation") {
+  if (a.event === "cod_confirmation" && order) {
     const snap = (order.pickupSnapshot ?? null) as { state?: string; mobile?: string } | null;
     const [wh] = order.warehouseId ? await db.select({ state: schema.warehouses.state, mobile: schema.warehouses.mobile }).from(schema.warehouses).where(eq(schema.warehouses.id, order.warehouseId)) : [];
     const [sh] = await db.select({ eta: schema.shipments.etaDate }).from(schema.shipments).where(eq(schema.shipments.orderId, order.id)).orderBy(desc(schema.shipments.createdAt)).limit(1);
@@ -154,7 +169,7 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
     params.store_note = msgCfg.note || (msgCfg.language === "hi" ? "हम आपके ऑर्डर का ध्यान रखेंगे।" : "We will keep you updated on your order.");
     params.support_phone = msgCfg.supportPhone || snap?.mobile || wh?.mobile || "reply to this message";
   }
-  if (ship) {
+  if (ship && !storeEvent) {
     params.carrier = ship.carrierName;
     params.awb = ship.awb ?? "";
     params.tracking_link = `${appUrl()}/t/${await ensurePublicRef(ship.id)}`;
@@ -169,7 +184,7 @@ export async function sendEvent(a: { event: WaEvent; orgId: string; orderId: str
     ? await metaSendTemplate(ctx, { toE164, templateName, language: tpl?.language ?? "en", body: tpl?.body ?? "", params })
     : adapter === "aisensy"
       ? await aisensySendTemplate(ctx, { toE164, campaignName: templateName, event: a.event, body: own ? "" : tpl?.body ?? "", params })
-      : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${order.orderNumber}`.slice(0, 60), params });
+      : await watiSendTemplate(ctx, { toE164, templateName, broadcastName: `${a.event}_${orderNumber}`.slice(0, 60), params });
   if (r.ok) {
     if (acct) await db.update(schema.providerAccounts).set({ lastSuccessAt: new Date() }).where(eq(schema.providerAccounts.id, acct.id));
     return finish("sent", { templateName, providerMessageId: r.providerMessageId ?? null, creditsCharged: cost });

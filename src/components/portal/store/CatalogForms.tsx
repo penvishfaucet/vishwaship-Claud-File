@@ -10,7 +10,10 @@ export type ProductFormValue = {
   stock: string; weight: string; status: "draft" | "active" | "archived"; featured: boolean; seoTitle: string; seoDescription: string;
   sku: string; hsn: string; taxPercent: string; lowStockAt: string; lengthCm: string; breadthCm: string; heightCm: string;
   options: string[]; variants: VariantRow[];
+  /** cost per piece in rupees (text inputs); product = purchase cost */
+  costs?: { product: string; packaging: string; labour: string; other: string; overhead: string };
 };
+const NO_COSTS = { product: "", packaging: "", labour: "", other: "", overhead: "" };
 export type VariantRow = { id: string | null; values: string[]; sku: string; price: string; compare: string; stock: string; weight: string };
 
 const GST = ["0", "0.25", "3", "5", "12", "18", "28"];
@@ -29,6 +32,10 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
   const set = <K extends keyof ProductFormValue>(k: K, v: ProductFormValue[K]) => setF({ ...f, [k]: v });
   const num = (v: string) => (v.trim() === "" ? NaN : Number(v));
   const hasVariants = f.options.length > 0;
+  const cs = f.costs ?? NO_COSTS;
+  const setCost = (k: keyof typeof NO_COSTS, v: string) => setF({ ...f, costs: { ...cs, [k]: v.replace(/[^0-9.]/g, "") } });
+  const costTotal = (hasVariants ? 0 : Number(cs.product) || 0) + (Number(cs.packaging) || 0) + (Number(cs.labour) || 0) + (Number(cs.other) || 0) + (Number(cs.overhead) || 0);
+  const priceNow = hasVariants ? Math.min(...f.variants.map((v) => Number(v.price) || Infinity)) : Number(f.price) || 0;
 
   function buildVariants(options: string[], valueText: string[]) {
     const lists = options.map((_, i) => [...new Set((valueText[i] ?? "").split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 20));
@@ -54,6 +61,7 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
       sku: f.sku, hsn: f.hsn, taxPercent: Number(f.taxPercent) || 0, lowStockAt: Math.floor(num(f.lowStockAt) || 0),
       lengthCm: num(f.lengthCm) || 0, breadthCm: num(f.breadthCm) || 0, heightCm: num(f.heightCm) || 0,
       options: f.options, variants: hasVariants ? variants : [],
+      costs: { productRupees: !hasVariants && cs.product.trim() ? Number(cs.product) || 0 : null, packagingRupees: Number(cs.packaging) || 0, labourRupees: Number(cs.labour) || 0, otherRupees: Number(cs.other) || 0, overheadRupees: Number(cs.overhead) || 0 },
     };
     if (hasVariants && variants.some((v) => !(v.priceRupees > 0))) { setBusy(false); setMsg({ err: "Enter a price for every variant" }); return; }
     if (!(body.priceRupees > 0) || !Number.isFinite(body.priceRupees)) { setBusy(false); setMsg({ err: "Enter a price more than 0" }); return; }
@@ -100,6 +108,20 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
             <div className="field"><label htmlFor="pw">Packed weight (grams) <span className="req">*</span></label><input id="pw" className="input" inputMode="numeric" value={f.weight} onChange={(e) => set("weight", e.target.value.replace(/\D/g, ""))} required /></div>
             <div className="field"><label htmlFor="plow">Low-stock alert at</label><input id="plow" className="input" inputMode="numeric" value={f.lowStockAt} onChange={(e) => set("lowStockAt", e.target.value.replace(/\D/g, ""))} /></div>
           </div>
+        </div>
+        <div className="card mb12" style={{ padding: 20 }}>
+          <h3 style={{ marginBottom: 4 }}>Cost per piece</h3>
+          <p className="small muted" style={{ marginTop: 0 }}>Used for each order&apos;s profit &amp; loss. Packaging and the other costs are added to every piece sold. Update many products at once from Inventory → Export / Import CSV.</p>
+          <div className="grid2">
+            {!hasVariants && <div className="field"><label htmlFor="cp">Product / purchase cost (₹)</label><input id="cp" className="input" inputMode="decimal" value={cs.product} onChange={(e) => setCost("product", e.target.value)} placeholder="What one piece costs you" /></div>}
+            <div className="field"><label htmlFor="cpk">Packaging (₹)</label><input id="cpk" className="input" inputMode="decimal" value={cs.packaging} onChange={(e) => setCost("packaging", e.target.value)} placeholder="Box, tape, bubble wrap" /></div>
+            <div className="field"><label htmlFor="clb">Labour / handling (₹)</label><input id="clb" className="input" inputMode="decimal" value={cs.labour} onChange={(e) => setCost("labour", e.target.value)} placeholder="Packing, quality check" /></div>
+            <div className="field"><label htmlFor="cot">Other variable cost (₹)</label><input id="cot" className="input" inputMode="decimal" value={cs.other} onChange={(e) => setCost("other", e.target.value)} placeholder="Freebie, printing" /></div>
+            <div className="field"><label htmlFor="cov">Overheads per piece (₹)</label><input id="cov" className="input" inputMode="decimal" value={cs.overhead} onChange={(e) => setCost("overhead", e.target.value)} placeholder="Share of rent, salaries" /></div>
+          </div>
+          {hasVariants && <p className="tiny muted" style={{ margin: "4px 0 0" }}>With variants, each variant&apos;s purchase cost is set in Inventory; the costs above are added to every variant.</p>}
+          <p className="small" style={{ margin: "8px 0 0" }}><b>Total cost per piece: ₹{costTotal.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</b>
+            {priceNow > 0 && Number.isFinite(priceNow) && costTotal > 0 && <span className={priceNow - costTotal < 0 ? "red" : "muted"}> · margin before shipping &amp; GST ₹{(priceNow - costTotal).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>}</p>
         </div>
         <div className="card mb12" style={{ padding: 20 }}>
           <h3 style={{ marginBottom: 4 }}>Variants</h3>

@@ -50,7 +50,7 @@ export async function hasFeature(orgId: string, module: ModuleKey) {
 /** Event is allowed only if the module is on AND the active plan includes the event. */
 export async function eventIncluded(orgId: string, event: NotificationEventKey) {
   const f = await resolveFeatures(orgId);
-  if (event === "whatsapp:cod_confirmation") {
+  if (event === "whatsapp:cod_confirmation" || event.startsWith("whatsapp:store_order_")) {
     const m = f.modules.whatsapp_notifications;
     return !(m.source === "customer" && !m.enabled);
   }

@@ -288,6 +288,13 @@
       "when": 1795442250875,
       "tag": "0040_shipment_pods",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795448040728,
+      "tag": "0041_store_cost_extras",
+      "breakpoints": true
     }
   ]
 }

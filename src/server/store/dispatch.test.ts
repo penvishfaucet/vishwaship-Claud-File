@@ -17,13 +17,26 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/server/db/client", () => ({ getDb: async () => db, schema }));
 vi.mock("@/server/auth/session", () => ({ readSession: async () => null }));
 vi.mock("@/server/email/service", () => ({ sendEmail: async () => ({ status: "sent" }) }));
-vi.mock("@/server/auto-assign", () => ({
-  autoAssign: async (_org: string, orderId: string) => {
-    const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
-    return failPins.has((o.consignee as { pincode: string }).pincode) ? { ok: false, message: "No courier is serviceable for this order" }
-      : { ok: true, offer: { quoteId: "q1", carrierName: "Delhivery", carrierCode: "delhivery", total: 60 }, reason: "cheapest", ruleId: null };
-  },
-}));
+// two couriers: Delhivery Surface ₹60 everywhere, Xpressbees Air ₹50 only outside PIN 171xxx
+const choices: string[] = [];
+const offersFor = async (orderId: string) => {
+  const [o] = await db.select().from(schema.orders).where(eq(schema.orders.id, orderId));
+  const pin = (o.consignee as { pincode: string }).pincode;
+  if (failPins.has(pin)) return [];
+  return [{ quoteId: "q1", carrierName: "Delhivery", carrierCode: "delhivery", serviceName: "Surface", total: 60 },
+    ...(pin.startsWith("171") ? [] : [{ quoteId: "q2", carrierName: "Xpressbees", carrierCode: "xpressbees", serviceName: "Air", total: 50 }])];
+};
+vi.mock("@/server/auto-assign", () => {
+  const courierKey = (o: { carrierCode: string; serviceName: string }) => `${o.carrierCode}|${o.serviceName}`;
+  const pickCourier = async (_org: string, orderId: string, choice = "rules") => {
+    choices.push(choice);
+    const offers = await offersFor(orderId);
+    if (!offers.length) return { ok: false, message: "No courier is serviceable for this order" };
+    const o = choice === "rules" ? offers[0] : choice === "cheapest" ? [...offers].sort((a, b) => a.total - b.total)[0] : offers.find((x) => courierKey(x) === choice);
+    return o ? { ok: true, offer: o, reason: choice, ruleId: null } : { ok: false, message: "The courier you chose does not serve this order" };
+  };
+  return { courierKey, pickCourier, autoAssign: (org: string, id: string) => pickCourier(org, id), offersForOrder: async (_org: string, id: string) => ({ ok: true, offers: await offersFor(id) }) };
+});
 vi.mock("@/server/booking/service", () => ({
   bookOrder: async (a: { orgId: string; orderId: string }) => {
     booked.push(a.orderId);
@@ -180,5 +193,33 @@ describe("process orders: print → pack → handover", () => {
     expect(ex.rows.map((r) => r.id)).toEqual([b]);
     expect(ex.rows[0].awbAgeDays).toBeGreaterThanOrEqual(9);
     expect((await proc.processQueue(B, {})).rows).toEqual([]);
+  });
+});
+
+describe("choosing the courier", () => {
+  it("rates per courier for the selected orders, cheapest first per order; booking uses the courier you chose", async () => {
+    const a = await place("ca", [{ productId: p1, qty: 1 }], "560001");
+    const b = await place("cb", [{ productId: p1, qty: 1 }], "171001");
+    await ops.acceptOrders(A, "u", [a, b]);
+    const r = await dp.courierOptions(A, [a, b]);
+    expect(r.considered).toBe(2);
+    expect(r.cheapestTotal).toBe(50 + 60);
+    expect(r.options).toEqual([
+      { key: "delhivery|Surface", carrierName: "Delhivery", serviceName: "Surface", orders: 2, totalPaise: 120, cheapestFor: 1 },
+      { key: "xpressbees|Air", carrierName: "Xpressbees", serviceName: "Air", orders: 1, totalPaise: 50, cheapestFor: 1 },
+    ]);
+    expect((await dp.courierOptions(B, [a])).considered).toBe(0); // another account's orders
+    // chosen courier: books only where it serves, the other order waits with a message
+    const before = booked.length;
+    const res = await dp.packAndBook(A, "u", [a, b], { courier: "xpressbees|Air", markPacked: false });
+    expect(res.find((x) => x.id === a)).toMatchObject({ ok: true, booked: true });
+    expect(res.find((x) => x.id === b)).toMatchObject({ ok: false, message: "The courier you chose does not serve this order" });
+    expect(booked.length).toBe(before + 1);
+    expect(choices.slice(-2)).toEqual(["xpressbees|Air", "xpressbees|Air"]);
+    // then "Auto · cheapest" for the one left
+    const res2 = await dp.packAndBook(A, "u", [b], { courier: "cheapest", markPacked: false });
+    expect(res2[0]).toMatchObject({ ok: true, booked: true });
+    // clean up for the next tests (cancel both)
+    for (const id of [a, b]) await db.update(schema.storeOrders).set({ status: "cancelled" }).where(eq(schema.storeOrders.id, id));
   });
 });
