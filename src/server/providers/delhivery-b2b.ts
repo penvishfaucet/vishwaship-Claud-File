@@ -1,11 +1,11 @@
 import "server-only";
 import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/engine";
 import {
-  type BookResult, type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type WarehouseInput, unsupported,
+  type BookResult, type LabelFormat, type NormalizedStatus, type PodResult, type ProviderContext, type Result, type ShippingAdapter, type WarehouseInput, unsupported,
 } from "./types";
 import { labelStrings } from "@/server/labels/strings";
 import { collectsCod } from "@/lib/payment";
-import { pickupAgent, amountToPaise, b2bCharges, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
+import { pickupAgent, amountToPaise, b2bCharges, documentLinks, documentMeta, documentReply, firstString, jsonOrNull, providerError, rupees } from "./delhivery-common";
 
 /**
  * Delhivery Direct B2B (LTL). Endpoints from the Delhivery developer portal (docs/DELHIVERY-API-NOTES.md).
@@ -144,7 +144,7 @@ const LABEL_SIZE: Partial<Record<LabelFormat, string>> = { a4: "a4", thermal_4x4
 export const delhiveryB2bAdapter: ShippingAdapter = {
   key: "delhivery_b2b",
   displayName: "Delhivery Direct B2B",
-  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "reconciliation"],
+  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "reconciliation", "pod"],
   paymentModes: ["prepaid", "cod", "fod"],
   pickupScope: "warehouse",
 
@@ -318,6 +318,34 @@ export const delhiveryB2bAdapter: ShippingAdapter = {
       return { ok: false, error: { category: "not_found", message: `Delhivery has not generated labels for this LR yet (reply: ${keys || "empty"})`, retryable: true } };
     }
     return { ok: true, value: { images, formatsAvailable } };
+  },
+
+  /**
+   * POD (developer portal "Document Download", 2026-11): GET /document/download?lrn=&doc_type=LM_POD&version=latest
+   * (Bearer UMS token). Returns a link to the last-mile POD; the reply body is not documented, so links are collected.
+   */
+  async pod(ctx, ref) {
+    const lrn = ref.lrNumber || ref.awb;
+    const t = await login(ctx);
+    if (!t.ok) return t;
+    const out: PodResult = { ready: false, files: [] };
+    // LM_POD = the last-mile POD Delhivery uploads after delivery; ALTERNATE_LM_POD when the first copy was re-uploaded
+    for (const docType of ["LM_POD", "ALTERNATE_LM_POD"]) {
+      let r: Response;
+      try {
+        r = await ctx.fetch(`${base(ctx)}/document/download?lrn=${encodeURIComponent(lrn)}&doc_type=${docType}&version=latest`, { timeoutMs: 25_000, headers: { authorization: `Bearer ${t.value}`, "x-request-id": `pod:${lrn}:${docType}` } });
+      } catch (e) { return { ok: false, error: { category: "timeout", message: `Delhivery B2B timed out: ${(e as Error).message}`, retryable: true } }; }
+      if (r.status === 401) { tokens.delete(ctx.accountId); return { ok: false, error: { category: "auth", message: "Delhivery B2B session expired — will retry", retryable: true } }; }
+      if (r.status === 429 || r.status >= 500) return { ok: false, error: { category: r.status === 429 ? "rate_limited" : "upstream", message: `Delhivery document download HTTP ${r.status}`, retryable: true } };
+      if (!r.ok) continue; // not uploaded yet
+      const d = await documentReply(r);
+      if (d.binary?.length) out.files.push({ kind: "pod", data: d.binary });
+      else { const link = documentLinks(d.json)[0]; if (link) out.files.push({ kind: "pod", url: link }); Object.assign(out, documentMeta(d.json)); }
+      if (out.files.length) break;
+    }
+    out.ready = out.files.length > 0;
+    if (out.ready && !out.deliveryMode) out.deliveryMode = "pod";
+    return { ok: true, value: out };
   },
 
   async schedulePickup(ctx, ref, date) {

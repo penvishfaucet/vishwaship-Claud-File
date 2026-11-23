@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { OneShipment } from "@/components/tracking/ShipmentTracking";
 import Link from "next/link";
 import { CheckCircle2, Clock, MapPin, PackageSearch, Search, Truck } from "lucide-react";
 import { carrierLogo } from "@/lib/site";
@@ -73,13 +74,7 @@ export default async function TrackPage({ searchParams }: { searchParams: Promis
             </dl>
             {r.stale && <p className="note">No new scan from the courier for a few days. Updates may be delayed — check again later or contact the seller.</p>}
             <h2>Tracking history</h2>
-            {r.events.length === 0 ? <p className="muted">No courier scans yet.</p> : (
-              <ol className="w-tl">
-                {[...r.events].reverse().map((e, i) => (
-                  <li key={i} className={i === 0 ? "cur" : undefined}><b>{e.status}</b><span>{fmt(e.at)}{e.location ? ` · ${e.location}` : ""}</span></li>
-                ))}
-              </ol>
-            )}
+            <div className="st-public"><OneShipment s={{ id: r.awb, awb: r.awb, carrierName: r.carrierName, statusLabel: r.statusLabel, milestones: r.milestones, scans: r.scans }} labelled={false} /></div>
           </article>
         )}
         {!q && c.features.tracking && <p className="w-trk-hint"><PackageSearch size={18} aria-hidden="true" />Sellers: log in to the dashboard to track every shipment with full details.</p>}

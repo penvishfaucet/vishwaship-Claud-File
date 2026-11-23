@@ -142,6 +142,7 @@ export function OrdersView(p: Props) {
   const allSel = allIds.length > 0 && allIds.every((id) => selected.has(id));
   const selRows = p.rows.filter((r) => selected.has(r.id));
   const selLabelIds = selRows.flatMap((r) => (r.shipment?.awb ? [r.shipment.id] : []));
+  const selPodIds = selRows.flatMap((r) => (r.shipment?.status === "delivered" ? [r.shipment.id] : []));
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const pages = Math.max(1, Math.ceil(p.total / f.pageSize));
   const colCount = 4 + ["orderDate", "product", "package", "shipping", "pickup"].filter((c) => show(c as OptionalColumn)).length + 1 + (p.admin ? 1 : 0);
@@ -245,6 +246,7 @@ export function OrdersView(p: Props) {
             <b>{selected.size} selected</b>
             <LabelMenu label={`Download labels (${selLabelIds.length})`} formats={LABEL_CHOICES.flatMap((g) => g.items.map((i) => ({ key: i.key, name: g.group === "Thermal printer" ? `Thermal ${i.name}` : i.name, ok: true })))} disabled={!selLabelIds.length || busy === "labels"}
               onPick={(fmt) => downloadLabels(selLabelIds, fmt)} dark onOpen={(o) => { menuOpen.current = o; }} />
+            {!admin && selPodIds.length > 0 && <a className="ov-btn ghost sm" href={`/api/portal/pods/?ids=${selPodIds.join(",")}`} download><Download size={14} aria-hidden /> Download POD ({selPodIds.length})</a>}
             {admin ? null : f.tab === "archive"
               ? <button type="button" className="ov-btn ghost sm" onClick={() => archive([...selected], false)}><ArchiveRestore size={14} aria-hidden /> Restore</button>
               : <button type="button" className="ov-btn ghost sm" onClick={() => archive([...selected], true)}><Archive size={14} aria-hidden /> Archive</button>}

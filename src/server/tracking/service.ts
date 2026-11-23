@@ -82,6 +82,11 @@ export async function ingestEvents(shipmentId: string, events: TrackingEvent[], 
   }
   if (Object.keys(patch).length) await db.update(schema.shipments).set(patch).where(eq(schema.shipments.id, shipmentId));
   if (status !== sh.status) await onStatusChange(sh.orgId, sh.orderId, shipmentId, status as NormalizedStatus);
+  // "POD uploaded" (Delhivery B2B / B2C) after delivery: ask for the POD now instead of waiting for the next retry
+  else if (status === "delivered" && inserted > 0) {
+    const podScan = valid.find((e) => /\bpod\b|proof of delivery/i.test(`${e.rawStatus ?? ""} ${e.remark ?? ""}`));
+    if (podScan) await enqueue("pod.fetch", { shipmentId }, { dedupeKey: `pod:${shipmentId}:scan:${new Date(podScan.occurredAt).toISOString()}` }).catch(() => null);
+  }
   return { inserted, status };
 }
 
@@ -108,6 +113,8 @@ async function onStatusChange(orgId: string, orderId: string, shipmentId: string
   if (status === "ndr") await (await import("@/server/ndr/service")).openNdrCase(shipmentId).catch((e) => console.error("[ndr]", (e as Error).message));
   // Email updates (Admin → Settings → Email rules): one job per shipment + status; the email log dedupes per address.
   await enqueue("email.shipment", { shipmentId, status }, { dedupeKey: `email:${shipmentId}:${status}` });
+  // Proof of Delivery: copy it from the courier (retried later when the courier has not published it yet)
+  if (status === "delivered") await (await import("@/server/tracking/pod")).queuePodFetch(shipmentId).catch((e) => console.error("[pod]", (e as Error).message));
   if (status === "out_for_delivery") {
     // dedupe per shipment+day so a re-attempt next day can notify again, but retries never double-send
     const day = new Date().toISOString().slice(0, 10);

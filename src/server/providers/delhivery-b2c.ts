@@ -1,7 +1,7 @@
 import "server-only";
 import type { ProviderQuote } from "@/server/pricing/engine";
-import { type LabelFormat, type NormalizedStatus, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
-import { b2cCharges, firstString, jsonOrNull, pickupAgent, providerError, rupees } from "./delhivery-common";
+import { type LabelFormat, type NormalizedStatus, type PodResult, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
+import { b2cCharges, documentLinks, documentMeta, documentReply, firstString, jsonOrNull, pickupAgent, providerError, rupees } from "./delhivery-common";
 
 /**
  * Delhivery Direct B2C (Express). Endpoints from the Delhivery developer portal (docs/DELHIVERY-API-NOTES.md).
@@ -43,7 +43,7 @@ export function mapB2cStatus(type: string, status: string, instructions = ""): N
 export const delhiveryB2cAdapter: ShippingAdapter = {
   key: "delhivery_b2c",
   displayName: "Delhivery Direct B2C",
-  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel"],
+  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "pod"],
   paymentModes: ["prepaid", "cod"],
   pickupScope: "warehouse",
 
@@ -171,6 +171,32 @@ export const delhiveryB2cAdapter: ShippingAdapter = {
     const status = mapB2cStatus(st.StatusType ?? "", st.Status ?? "", st.Instructions ?? "");
     const eta = (sh.ExpectedDeliveryDate ?? sh.PromisedDeliveryDate) as string | undefined;
     return { ok: true, value: { awb, carrierName: "Delhivery", status, events, etaDate: eta ? new Date(eta).toISOString() : undefined } };
+  },
+
+  /**
+   * Document download (developer portal "Download Document", 2026-11): GET /api/rest/fetch/pkg/document/?doc_type=&waybill=
+   * doc_type EPOD (electronic POD) and SIGNATURE_URL (receiver's signature). Only documents not yet archived by Delhivery.
+   */
+  async pod(ctx, ref) {
+    if (!ctx.secrets.apiToken) return { ok: false, error: { category: "auth", message: "Delhivery B2C API token not configured", retryable: false } };
+    const out: PodResult = { ready: false, files: [] };
+    for (const [docType, kind] of [["EPOD", "pod"], ["SIGNATURE_URL", "signature"]] as const) {
+      let r: Response;
+      try {
+        r = await ctx.fetch(`${base(ctx)}/api/rest/fetch/pkg/document/?doc_type=${docType}&waybill=${encodeURIComponent(ref.awb)}`, { timeoutMs: 20_000, headers: { authorization: `Token ${ctx.secrets.apiToken}`, accept: "application/json, application/pdf, image/*" } });
+      } catch (e) { return { ok: false, error: { category: "timeout", message: `Delhivery B2C timed out: ${(e as Error).message}`, retryable: true } }; }
+      if (r.status === 401 || r.status === 403) return { ok: false, error: { category: "auth", message: "Delhivery rejected the API token", retryable: false } };
+      if (r.status === 429 || r.status >= 500) return { ok: false, error: { category: r.status === 429 ? "rate_limited" : "upstream", message: `Delhivery document download HTTP ${r.status}`, retryable: true } };
+      if (!r.ok) continue; // not published yet / not found for this doc type
+      const d = await documentReply(r);
+      if (d.binary?.length) { out.files.push({ kind, data: d.binary }); continue; }
+      const link = documentLinks(d.json)[0];
+      if (link) out.files.push({ kind, url: link });
+      Object.assign(out, documentMeta(d.json));
+    }
+    out.ready = out.files.length > 0;
+    if (out.ready && !out.deliveryMode) out.deliveryMode = "pod";
+    return { ok: true, value: out };
   },
 
   async cancel(ctx, ref) {

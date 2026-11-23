@@ -3,6 +3,7 @@ import "@/styles/vs-site.css";
 import "@/styles/app.css";
 import "@/styles/support.css";
 import "@/styles/brand.css";
+import "@/styles/tracking.css";
 import "@/styles/mobile.css";
 import { TableScroll } from "@/components/TableScroll";
 

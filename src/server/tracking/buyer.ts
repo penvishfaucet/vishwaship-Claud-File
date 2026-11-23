@@ -2,6 +2,8 @@ import "server-only";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { timeline } from "./service";
+import { buildMilestones, buildScans } from "@/lib/tracking-timeline";
+import { publicClean } from "./public";
 import { toBuyerEvents, type BuyerShipment } from "@/components/public/BuyerTracking";
 
 /** Look up a shipment by its unguessable public reference and return buyer-safe fields only. */
@@ -17,6 +19,7 @@ export async function buyerShipmentByRef(ref: string): Promise<{ orgId: string; 
     shipment: {
       orderNumber: row.o.orderNumber, awb: row.s.awb, carrierCode: row.s.carrierCode, carrierName: row.s.carrierName,
       status: row.s.status, etaDate: row.s.etaDate?.toISOString() ?? null, events: toBuyerEvents(ev),
+      milestones: buildMilestones(ev, row.s.status, row.s.createdAt), scans: buildScans(ev, publicClean),
     },
   };
 }

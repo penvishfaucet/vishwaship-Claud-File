@@ -1,4 +1,5 @@
 import type { ComponentCode, ProviderQuoteComponent } from "@/server/pricing/engine";
+import { deliveryModeFromText } from "@/lib/tracking-timeline";
 
 /**
  * Helpers shared by the Delhivery adapters. Delhivery's developer portal documents requests but not
@@ -123,4 +124,42 @@ export function pickupAgent(j: unknown): { agentName?: string; agentPhone?: stri
   const phone = firstString(j, ["pickup_executive_phone", "executive_phone", "executive_mobile", "fe_phone", "fe_mobile", "rider_phone", "agent_phone", "data.pickup_executive_phone", "data.executive_phone", "data.executive_mobile", "data.fe_phone", "data.rider_phone", "data.agent_phone"]);
   const digits = phone?.replace(/\D/g, "").slice(-10);
   return { ...(name ? { agentName: name.slice(0, 80) } : {}), ...(digits && digits.length === 10 ? { agentPhone: digits } : {}) };
+}
+
+/**
+ * POD / document replies. Delhivery documents the document-download calls but not their response bodies, so a reply is
+ * read as: a file (PDF / image bytes) when the content type says so, else JSON from which every https link is collected.
+ */
+export async function documentReply(r: Response): Promise<{ binary?: Uint8Array; json?: unknown }> {
+  const type = (r.headers.get("content-type") ?? "").toLowerCase();
+  if (/application\/pdf|image\/|octet-stream/.test(type)) return { binary: new Uint8Array(await r.arrayBuffer()) };
+  return { json: await jsonOrNull(r) };
+}
+
+/** Every distinct https link in a JSON reply (depth-limited). Links under POD / signature-like keys come first. */
+export function documentLinks(j: unknown): string[] {
+  const hits: Array<{ url: string; score: number }> = [];
+  const walk = (v: unknown, key: string, depth: number) => {
+    if (depth > 6 || v == null) return;
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (/^https:\/\/[^\s"'<>]+$/i.test(s)) hits.push({ url: s, score: /pod|sign|epod|proof|document|doc|url|link|file/i.test(key) ? 0 : 1 });
+      return;
+    }
+    if (Array.isArray(v)) { v.forEach((x) => walk(x, key, depth + 1)); return; }
+    if (typeof v === "object") for (const [k, x] of Object.entries(v as Record<string, unknown>)) walk(x, k, depth + 1);
+  };
+  walk(j, "", 0);
+  return [...new Set(hits.sort((a, b) => a.score - b.score).map((h) => h.url))];
+}
+
+/** Receiver name / delivery time when a POD reply carries them (field names vary). */
+export function documentMeta(j: unknown): { receiverName?: string; receiverRelation?: string; deliveredAt?: string; deliveryMode?: "otp" | "pod" } {
+  const name = firstString(j, ["receiver_name", "receiverName", "received_by", "receivedBy", "delivered_to", "consignee_name", "data.receiver_name", "data.received_by", "data.0.receiver_name", "data.0.received_by", "results.0.receiver_name"]);
+  const rel = firstString(j, ["receiver_relation", "relation", "data.receiver_relation", "data.0.receiver_relation"]);
+  const at = firstString(j, ["delivered_at", "delivery_date", "delivered_date", "pod_date", "data.delivered_at", "data.0.delivered_at", "data.0.delivery_date"]);
+  const ms = at ? new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(at) ? at : `${at.replace(" ", "T")}+05:30`).getTime() : NaN;
+  const how = firstString(j, ["delivery_type", "delivery_mode", "pod_type", "verification_type", "data.delivery_type", "data.pod_type", "data.0.delivery_type", "data.0.pod_type"]);
+  const mode = how ? deliveryModeFromText(how) : null;
+  return { ...(mode ? { deliveryMode: mode } : {}), ...(name ? { receiverName: name.slice(0, 80) } : {}), ...(rel ? { receiverRelation: rel.slice(0, 40) } : {}), ...(Number.isFinite(ms) ? { deliveredAt: new Date(ms).toISOString() } : {}) };
 }

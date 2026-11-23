@@ -2,10 +2,13 @@ import { BrandLogo } from "@/components/BrandLogo";
 import type { TrackingPageSettings } from "@/lib/tracking-page";
 import { carrierLogo } from "@/lib/site";
 import { statusLabel } from "@/lib/status";
+import type { Milestone, ScanLine } from "@/lib/tracking-timeline";
+import { OneShipment } from "@/components/tracking/ShipmentTracking";
 
 export type BuyerShipment = {
   orderNumber: string; awb: string | null; carrierCode: string; carrierName: string; status: string;
   etaDate: string | null; events: Array<{ status: string; location: string | null; at: string }>;
+  milestones?: Milestone[]; scans?: ScanLine[];
 };
 
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -46,6 +49,11 @@ export function BuyerTracking({ brand, shipment, footer, preview, children }: { 
                 {shipment.etaDate && <div style={{ fontSize: 13, color: "#6b7183" }}>Expected by {new Date(shipment.etaDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", weekday: "short", day: "numeric", month: "short" })}</div>}
               </div>
             </div>
+            {shipment.milestones && shipment.scans ? (
+              <div className="st-buyer" style={{ marginTop: 14, borderTop: "1px solid #efede8" }}>
+                <OneShipment s={{ id: shipment.awb ?? shipment.orderNumber, awb: shipment.awb, carrierName: shipment.carrierName, statusLabel: statusLabel(shipment.status), milestones: shipment.milestones, scans: shipment.scans }} labelled={false} />
+              </div>
+            ) : (<>
             <div aria-hidden style={{ display: "flex", gap: 4, margin: "18px 0 6px" }}>
               {STEPS.map((s, i) => <div key={s} style={{ flex: 1, height: 6, borderRadius: 4, background: i <= stepIdx ? accent : "#e7e5df" }} />)}
             </div>
@@ -57,6 +65,7 @@ export function BuyerTracking({ brand, shipment, footer, preview, children }: { 
                 </li>
               ))}
             </ol>
+            </>)}
           </section>
         )}
         {brand && (brand.supportEmail || brand.supportPhone) && (

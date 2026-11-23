@@ -362,6 +362,31 @@ export const shipmentEvents = pgTable("shipment_events", {
   createdAt: created(),
 }, (t) => [uniqueIndex("shipment_events_dedupe").on(t.dedupeKey)]);
 
+/**
+ * Proof of Delivery copied from the courier into private storage (one row per delivered shipment).
+ * state: pending (courier has not published it yet; retried with back-off) | available | unsupported (courier API has
+ * no POD) | failed (gave up after the retry window). Customers only ever get our own copy, never the courier's URL.
+ */
+export const shipmentPods = pgTable("shipment_pods", {
+  shipmentId: text("shipment_id").primaryKey().references(() => shipments.id),
+  orgId: text("org_id").notNull(),
+  state: text("state").notNull().default("pending"),
+  fileKey: text("file_key"),
+  fileMime: text("file_mime"),
+  signatureKey: text("signature_key"),
+  signatureMime: text("signature_mime"),
+  receiverName: text("receiver_name"),
+  receiverRelation: text("receiver_relation"),
+  deliveryMode: text("delivery_mode"), // otp | pod — how the courier proved the delivery
+  deliveredAt: ts("delivered_at"),
+  attempts: integer("attempts").notNull().default(0),
+  nextAttemptAt: ts("next_attempt_at"),
+  lastError: text("last_error"),
+  fetchedAt: ts("fetched_at"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [index("shipment_pods_org").on(t.orgId), index("shipment_pods_due").on(t.state, t.nextAttemptAt)]);
+
 /** Destination changes confirmed by the carrier (never inferred from scan locations). */
 export const destinationAmendments = pgTable("destination_amendments", {
   id: id(),

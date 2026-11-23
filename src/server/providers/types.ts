@@ -111,6 +111,17 @@ export interface TrackResult {
   chargedWeightGrams?: number;
 }
 
+/** Proof of Delivery from the courier. `ready: false` = the courier has not published it yet (try again later). */
+export interface PodResult {
+  ready: boolean;
+  files: Array<{ kind: "pod" | "signature"; url?: string; data?: Uint8Array; headers?: Record<string, string> }>;
+  receiverName?: string;
+  receiverRelation?: string;
+  deliveredAt?: string;
+  /** "otp" = the courier says the delivery was confirmed by the buyer OTP; "pod" = a POD document / photo / signature was taken. */
+  deliveryMode?: "otp" | "pod";
+}
+
 export type LabelFormat = "a4" | "thermal_4x6" | "thermal_3x4" | "thermal_4x4" | "thermal_2x4" | "thermal_38x100";
 
 export interface ProviderContext {
@@ -141,6 +152,8 @@ export interface ShippingAdapter {
   /** Payment modes this adapter can book (before Admin / account switches are applied). */
   paymentModes?: PaymentMode[];
   track(ctx: ProviderContext, awb: string): Promise<Result<TrackResult>>;
+  /** Proof of Delivery, only where the provider documents an API for it (capability "pod"). */
+  pod?(ctx: ProviderContext, ref: { awb: string; providerOrderRef: string; lrNumber?: string | null }): Promise<Result<PodResult>>;
   cancel(ctx: ProviderContext, ref: { providerOrderRef: string; awb: string | null }): Promise<Result<{ acknowledged: boolean }>>;
   /** Parse a verified tracking webhook body. Absent = provider has no documented push; we poll instead. */
   parseTrackingWebhook?(body: unknown): Result<PushedUpdate[]>;

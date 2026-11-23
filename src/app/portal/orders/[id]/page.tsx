@@ -20,6 +20,8 @@ import { carrierLogo } from "@/lib/site";
 import { StatusChip, statusLabel } from "@/lib/status";
 import { portalContext } from "@/server/portal/context";
 import { getOrderDetail } from "@/server/portal/queries";
+import { ShipmentTracking } from "@/components/tracking/ShipmentTracking";
+import { trackingForOrder } from "@/server/tracking/view";
 
 const fmt = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -29,7 +31,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
   const tagList = await (await getDbTags()).select({ id: schemaTags.orderTags.id, name: schemaTags.orderTags.name, color: schemaTags.orderTags.color }).from(schemaTags.orderTags).where(eqTags(schemaTags.orderTags.orgId, ctx.org.id)).orderBy(ascTags(schemaTags.orderTags.name));
   const d = await getOrderDetail(ctx.org.id, id); // tenant-scoped: other orgs' ids 404
   if (!d) notFound();
-  const { order, pkgs, shipment, events, warehouse, quote } = d;
+  const { order, pkgs, shipment, warehouse, quote } = d;
   const c = order.consignee as { name: string; mobile: string; line1: string; line2?: string; city: string; state: string; pincode: string };
   const products = order.products as Array<{ name: string; qty: number; unitPrice: number; hsn?: string }>;
   const priced = quote?.priced as { lines?: Array<{ label: string; sellPreTax: number }>; gst?: number; total?: number } | undefined;
@@ -149,24 +151,10 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
         </aside>
       </div>
 
-      <section className="card mt16" style={{ padding: 16 }}>
-        <h2 className="b small" style={{ marginTop: 0 }}>Tracking</h2>
-        {shipment?.lastLocation && <p className="small" style={{ marginTop: 0 }}>Last scanned at <b>{shipment.lastLocation}</b>{shipment.lastEventAt ? ` · ${fmt(shipment.lastEventAt)}` : ""}</p>}
-        {events.length === 0 ? <p className="small muted">No scans yet.</p> : (
-          <div className="tbl-wrap"><table className="tbl trk-table">
-            <thead><tr><th>Date &amp; time</th><th>Status</th><th>Location</th><th>Courier update</th></tr></thead>
-            <tbody>{events.map((e, i) => (
-              <tr key={e.id} className={i === 0 ? "cur" : ""}>
-                <td className="small" style={{ whiteSpace: "nowrap" }}>{fmt(e.occurredAt)}</td>
-                <td className="small">{statusLabel(e.status)}</td>
-                <td className="small">{e.location ?? "—"}</td>
-                <td className="tiny muted">{e.rawStatus ?? ""}{e.remark && e.remark !== e.rawStatus ? ` · ${e.remark}` : ""}</td>
-              </tr>
-            ))}</tbody>
-          </table></div>
-        )}
+      <div className="mt16">
+        <ShipmentTracking shipments={await trackingForOrder(order.id, ctx.org.id, { customerSafe: true, podBase: "portal" })} />
         <p className="tiny muted mt8">Scans update automatically from the courier (every 30 minutes, or instantly when the courier pushes them).</p>
-      </section>
+      </div>
     </>
   );
 }

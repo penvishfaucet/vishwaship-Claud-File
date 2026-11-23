@@ -773,5 +773,17 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795429142958,
   "hash": "3724bcef36a8c02484cb0f8b1345e20b932d8f5d9abd00fcc045b6dd3929a543"
+ },
+ {
+  "tag": "0040_shipment_pods",
+  "sql": [
+   "CREATE TABLE \"shipment_pods\" (\n\t\"shipment_id\" text PRIMARY KEY NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"state\" text DEFAULT 'pending' NOT NULL,\n\t\"file_key\" text,\n\t\"file_mime\" text,\n\t\"signature_key\" text,\n\t\"signature_mime\" text,\n\t\"receiver_name\" text,\n\t\"receiver_relation\" text,\n\t\"delivery_mode\" text,\n\t\"delivered_at\" timestamp with time zone,\n\t\"attempts\" integer DEFAULT 0 NOT NULL,\n\t\"next_attempt_at\" timestamp with time zone,\n\t\"last_error\" text,\n\t\"fetched_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"shipment_pods\" ADD CONSTRAINT \"shipment_pods_shipment_id_shipments_id_fk\" FOREIGN KEY (\"shipment_id\") REFERENCES \"public\".\"shipments\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"shipment_pods_org\" ON \"shipment_pods\" USING btree (\"org_id\");",
+   "\nCREATE INDEX \"shipment_pods_due\" ON \"shipment_pods\" USING btree (\"state\",\"next_attempt_at\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795442250875,
+  "hash": "b5a78a29bcf1d2ad0b9f74d2bbc33dc331dfdf26a92d38cd229eb8211202601b"
  }
 ];

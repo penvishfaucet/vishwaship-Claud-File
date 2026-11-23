@@ -1,7 +1,8 @@
 import type { ProviderQuote, ProviderQuoteComponent } from "@/server/pricing/engine";
 import { amountToPaise, firstString, jsonOrNull } from "./delhivery-common";
+import { deliveryModeFromText } from "@/lib/tracking-timeline";
 import { carrierFromName, mapShipmozoStatus } from "./shipmozo";
-import { type BookResult, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
+import { type BookResult, type PodResult, type ProviderContext, type Result, type ShippingAdapter, type TrackingEvent, unsupported } from "./types";
 
 /**
  * Shiprocket (aggregator, B2C). Public API "Shiprocket API (apiv2)":
@@ -157,6 +158,23 @@ export function parseTrack(j: Record<string, unknown>, awb: string) {
   return { awb: firstString(track0, ["awb_code"]) ?? awb, carrierName: firstString(track0, ["courier_name"]) ?? "Courier", status, events, etaDate: eta && !Number.isNaN(new Date(eta).getTime()) ? new Date(eta).toISOString() : undefined, current };
 }
 
+/**
+ * POD from the tracking reply (apidocs.shiprocket.in "Get Tracking through AWB"): tracking_data.shipment_track[0] has
+ * pod ("Available" / "Not Available"), pod_status (the image link when available — e.g. an S3 .png — otherwise text such as
+ * "OTP Based Delivery"), delivered_to and delivered_date. Shiprocket has no separate POD endpoint.
+ */
+export function parsePod(j: Record<string, unknown>): PodResult {
+  const td = (j.tracking_data ?? j) as Record<string, unknown>;
+  const t0 = (Array.isArray(td.shipment_track) ? td.shipment_track[0] : null) as Record<string, unknown> | null;
+  const link = [firstString(t0, ["pod_status"]), firstString(t0, ["pod"])].find((v) => !!v && /^https:\/\/\S+$/i.test(v.trim()));
+  const who = firstString(t0, ["delivered_to"]) ?? undefined;
+  const at = firstString(t0, ["delivered_date"]);
+  const ms = at ? new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(at) ? at : `${at.replace(" ", "T")}+05:30`).getTime() : NaN;
+  const said = deliveryModeFromText(firstString(t0, ["pod_status"]), firstString(t0, ["pod"]));
+  const mode = said === "otp" ? "otp" : link ? "pod" : said;
+  return { ready: !!link, files: link ? [{ kind: "pod", url: link.trim() }] : [], ...(mode ? { deliveryMode: mode } : {}), ...(who ? { receiverName: who.slice(0, 80) } : {}), ...(Number.isFinite(ms) ? { deliveredAt: new Date(ms).toISOString() } : {}) };
+}
+
 /** The AWB of a Shiprocket order (orders/show), if one is assigned. */
 function bookingFromOrder(o: Record<string, unknown>): BookResult | null {
   const d = (o.data ?? o) as Record<string, unknown>;
@@ -174,7 +192,7 @@ function bookingFromOrder(o: Record<string, unknown>): BookResult | null {
 export const shiprocketAdapter: ShippingAdapter = {
   key: "shiprocket",
   displayName: "Shiprocket",
-  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel"],
+  implemented: ["authenticate", "health", "warehouse_sync", "serviceability", "quote", "book", "booking_lookup", "label", "pickup", "track", "cancel", "pod"],
   paymentModes: ["prepaid", "cod"],
   pickupScope: "shipment",
 
@@ -330,6 +348,12 @@ export const shiprocketAdapter: ShippingAdapter = {
     const t = parseTrack(r.value, awb);
     if (!t.current && !t.events.length) return fail("not_found", "No tracking data yet", true);
     return { ok: true, value: { awb: t.awb, carrierName: t.carrierName, status: t.status, events: t.events, etaDate: t.etaDate } };
+  },
+
+  async pod(ctx, ref) {
+    const r = await call(ctx, `/courier/track/awb/${encodeURIComponent(ref.awb)}`);
+    if (!r.ok) return r;
+    return { ok: true, value: parsePod(r.value) };
   },
 
   async cancel(ctx, ref) {

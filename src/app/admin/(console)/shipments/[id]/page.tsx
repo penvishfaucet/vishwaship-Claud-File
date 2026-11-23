@@ -8,6 +8,9 @@ import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { LabelDownload } from "@/components/labels/LabelDownload";
 import { labelFormatsFor } from "@/server/labels/formats";
+import { PodCard } from "@/components/tracking/ShipmentTracking";
+import { PodRetry } from "@/components/tracking/PodRetry";
+import { podView } from "@/server/tracking/pod";
 
 export default async function AdminShipment({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,6 +32,8 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
   const showCost = can(s.role, "shipments.cost.read");
   const [cu] = await db.select({ email: schema.users.email }).from(schema.users).where(and(eq(schema.users.orgId, org.id), eq(schema.users.kind, "customer"))).orderBy(asc(schema.users.createdAt)).limit(1);
   const clientEmail = cu?.email ?? null;
+  const pod = await podView(id, null);
+  const [podRow] = await db.select().from(schema.shipmentPods).where(eq(schema.shipmentPods.shipmentId, id));
   return (
     <>
       <div className="page-h">
@@ -87,6 +92,15 @@ export default async function AdminShipment({ params }: { params: Promise<{ id: 
               <tr><td className="b small">Customer total</td><td /><td /><td className="b">{formatINR(priced?.total ?? q.totalPaise)}</td></tr>
             </tbody></table></div>
           {priced?.providerComponents && <p className="tiny muted" style={{ marginTop: 8 }}>Raw courier components: {priced.providerComponents.map((c) => `${c.label} ${formatINR(c.amount)}`).join(" · ")}</p>}
+        </section>
+      )}
+      {pod && pod.state !== "not_delivered" && (
+        <section className="card mt16" style={{ padding: 16 }} aria-label="Proof of Delivery">
+          <PodCard pod={{ ...pod, href: `/api/admin/shipments/${id}/pod` }} awb={x.awb} />
+          <div className="row wrap mt8" style={{ gap: 10, alignItems: "center" }}>
+            {can(s.role, "shipments.write") && pod.state !== "unsupported" && <PodRetry shipmentId={id} />}
+            {podRow && <span className="tiny muted">Tries {podRow.attempts}{podRow.nextAttemptAt ? ` · next ${podRow.nextAttemptAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}` : ""}{podRow.lastError ? ` · last: ${podRow.lastError}` : ""}</span>}
+          </div>
         </section>
       )}
       <section className="card mt16" id="tracking" style={{ padding: 16, scrollMarginTop: 80 }}>

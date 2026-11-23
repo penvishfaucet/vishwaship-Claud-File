@@ -1,6 +1,8 @@
 import "server-only";
 import { asc, desc, eq, or } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
+import { type Milestone, type ScanLine, buildMilestones, buildScans, maskPhones } from "@/lib/tracking-timeline";
+import { hideProviders } from "@/server/customer-safe";
 
 export const STATUS_LABEL: Record<string, string> = {
   booked: "Booked", pickup_pending: "Pickup pending", picked_up: "Picked up", in_transit: "In transit",
@@ -18,6 +20,7 @@ export type PublicTrack =
     status: string; statusLabel: string; etaDate: string | null; deliveredAt: string | null;
     lastLocation: string | null; lastAt: string | null; stale: boolean; isDemo: boolean;
     events: Array<{ status: string; location: string | null; at: string }>;
+    milestones: Milestone[]; scans: ScanLine[];
   };
 
 /**
@@ -34,7 +37,7 @@ export async function publicTrack(raw: string): Promise<PublicTrack> {
   const s = rows[0];
   if (!s || s.bookingStatus === "failed") return { kind: "not_found" };
   if (!s.awb) return { kind: "awb_pending", carrierName: s.carrierName, serviceName: s.serviceName };
-  const events = await db.select({ status: schema.shipmentEvents.status, location: schema.shipmentEvents.location, occurredAt: schema.shipmentEvents.occurredAt })
+  const events = await db.select({ status: schema.shipmentEvents.status, location: schema.shipmentEvents.location, occurredAt: schema.shipmentEvents.occurredAt, rawStatus: schema.shipmentEvents.rawStatus, remark: schema.shipmentEvents.remark })
     .from(schema.shipmentEvents).where(eq(schema.shipmentEvents.shipmentId, s.id)).orderBy(asc(schema.shipmentEvents.occurredAt));
   const last = events[events.length - 1];
   const lastWithPlace = [...events].reverse().find((e) => e.location);
@@ -47,5 +50,9 @@ export async function publicTrack(raw: string): Promise<PublicTrack> {
     status: s.status, statusLabel: STATUS_LABEL[s.status] ?? s.status, etaDate: s.etaDate?.toISOString() ?? null, deliveredAt: delivered?.occurredAt.toISOString() ?? null,
     lastLocation: lastWithPlace?.location ?? null, lastAt: last?.occurredAt.toISOString() ?? null, stale, isDemo: s.provider === "demo",
     events: events.map((e) => ({ status: STATUS_LABEL[e.status] ?? e.status, location: e.location ?? null, at: e.occurredAt.toISOString() })),
+    milestones: buildMilestones(events, s.status, s.createdAt), scans: buildScans(events, publicClean),
   };
 }
+
+/** Scan text shown to anyone with the AWB: no internal partner names, no phone numbers. */
+export const publicClean = (t: string) => maskPhones(hideProviders(t));

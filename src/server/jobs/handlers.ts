@@ -188,6 +188,9 @@ export async function scheduleSweeps() {
     }
   } catch (e) { console.error("[store marketing]", (e as Error).message); }
   await scheduleTrackingPolls();
+  // Proof of Delivery: open rows for newly delivered shipments and queue retries that are due
+  try { const { sweepPods } = await import("@/server/tracking/pod"); await sweepPods(); }
+  catch (e) { console.error("[pod]", (e as Error).message); }
   // franchise commission on newly delivered shipments of franchise customers (idempotent)
   try { const { accrueCommissions } = await import("@/server/franchise/commission"); await accrueCommissions(); }
   catch (e) { console.error("[franchise]", (e as Error).message); }
@@ -261,6 +264,13 @@ registerHandler("email.shipment", async (p): Promise<JobResult> => {
 registerHandler("ndr.ai_call", async (p): Promise<JobResult> => {
   const { placeNdrCall } = await import("@/server/ndr/ai-call");
   return placeNdrCall(String(p.caseId));
+});
+
+/** pod.fetch — one Proof-of-Delivery attempt; the shipment_pods row keeps its own back-off, so the job always ends. */
+registerHandler("pod.fetch", async (p): Promise<JobResult> => {
+  const { fetchPod } = await import("@/server/tracking/pod");
+  await fetchPod(String(p.shipmentId));
+  return { done: true };
 });
 
 registerHandler("tracking.poll", async (p): Promise<JobResult> => {
