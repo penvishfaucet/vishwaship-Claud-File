@@ -7,7 +7,7 @@ import "@/styles/mobile.css";
 import { TableScroll } from "@/components/TableScroll";
 
 /*
- * Roboto (same face as the live site) is loaded with a plain Google Fonts stylesheet link instead of
+ * Archivo (the site font, owner reference 2026-11-23) is loaded with a plain Google Fonts stylesheet link instead of
  * next/font/google, so builds never need to download fonts (that step failed under Turbopack and can
  * fail on hosting build servers). --font-roboto is set in app.css.
  */
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto:wght@300;400;500;700;900&display=swap" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&display=swap" />
       </head>
       <body>{children}<TableScroll /></body>
     </html>

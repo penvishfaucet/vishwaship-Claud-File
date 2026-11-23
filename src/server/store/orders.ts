@@ -172,3 +172,19 @@ export async function storeOrderForOrg(orgId: string, id: string) {
   if (!o) return null;
   return present(o, await shipFacts(o.shippingOrderId ? [o.shippingOrderId] : []));
 }
+
+/** Dashboard "Store orders to accept": how many paid / COD orders wait for the merchant, and the oldest few. */
+export async function pendingAcceptance(orgId: string, take = 5) {
+  const db = await getDb();
+  const where = and(eq(schema.storeOrders.orgId, orgId), eq(schema.storeOrders.status, "placed"), eq(schema.storeOrders.acceptance, "pending"));
+  const [c] = await db.select({ n: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(${schema.storeOrders.totalPaise}),0)::bigint` }).from(schema.storeOrders).where(where);
+  const rows = await db.select().from(schema.storeOrders).where(where).orderBy(asc(schema.storeOrders.createdAt)).limit(take);
+  return {
+    count: Number(c?.n ?? 0), totalPaise: Number(c?.total ?? 0),
+    rows: rows.map((o) => {
+      const b = o.buyer as CheckoutInput["buyer"];
+      return { id: o.id, number: o.number, name: b?.name ?? "", city: b?.city ?? "", totalPaise: o.totalPaise, cod: o.paymentMethod === "cod", items: (o.lines as Line[]).reduce((n, l) => n + l.qty, 0), placedAt: (o.placedAt ?? o.createdAt).toISOString() };
+    }),
+  };
+}
+export type PendingAcceptance = Awaited<ReturnType<typeof pendingAcceptance>>;

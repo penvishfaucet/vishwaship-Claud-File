@@ -77,3 +77,33 @@ html .sx-on:focus-visible { outline: 3px solid #C94A0A; outline-offset: 2px; }
 @media (max-width: 380px) {
   html .shell .page-h :is(.btn, button) { flex: 1 1 auto; justify-content: center; }
 }
+
+/* phone dashboard: "Your Store Orders" waiting to be accepted (StoreAcceptCard) */
+html .sa-card { padding: 14px; border: 1px solid #dbe3ee; }
+html .sa-card.has { border-color: #f3b38f; background: linear-gradient(180deg, #fff6f0, #fff 60%); }
+html .sa-top { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #051C46; }
+html .sa-ico { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: #eef3fb; color: #051C46; flex-shrink: 0; }
+html .sa-card.has .sa-ico { background: #C2410C; color: #fff; animation: sa-ring 2.4s ease-in-out infinite; }
+html .sa-t { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+html .sa-t b { font-size: 16px; }
+html .sa-t span { font-size: 13px; color: #3c4a63; }
+html .sa-n { position: relative; font-size: 30px; font-weight: 800; line-height: 1; color: #051C46; font-variant-numeric: tabular-nums; min-width: 40px; text-align: right; }
+html .sa-card.has .sa-n { color: #C2410C; }
+html .sa-new { position: absolute; right: 0; top: -14px; font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: #15803d; border-radius: 999px; padding: 2px 7px; white-space: nowrap; animation: sa-pop .5s ease-out; }
+html .sa-sum { display: flex; align-items: center; gap: 6px; margin: 10px 0 6px; color: #3c4a63; }
+html .sa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+html .sa-list li { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #e3e7ef; border-radius: 12px; background: #fff; }
+html .sa-o { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; text-decoration: none; color: #051C46; }
+html .sa-o b { font-size: 14px; }
+html .sa-meta { font-size: 12.5px; color: #3c4a63; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html .sa-pay { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 6px; background: #e7f6ec; color: #166534; }
+html .sa-pay.cod { background: #051C46; color: #fff; }
+html .sa-acc { flex-shrink: 0; min-height: 40px; padding: 0 14px; display: inline-flex; align-items: center; gap: 4px; }
+html .sa-msg { margin: 8px 0 0; }
+html .sa-msg.ok { color: #166534; }
+html .sa-msg.bad { color: #b91c1c; }
+html .sa-foot { display: flex; gap: 8px; margin-top: 10px; }
+html .sa-foot > * { flex: 1; justify-content: center; min-height: 40px; display: inline-flex; align-items: center; gap: 4px; }
+@keyframes sa-ring { 0%, 86%, 100% { transform: rotate(0); } 89% { transform: rotate(-10deg); } 93% { transform: rotate(10deg); } 97% { transform: rotate(-6deg); } }
+@keyframes sa-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html .sa-card.has .sa-ico, html .sa-new { animation: none; } }

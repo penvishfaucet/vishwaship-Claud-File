@@ -82,7 +82,8 @@ ol.stepper li+li::before{content:"";width:28px;height:1px;background:var(--line)
 .only-mobile{display:none}
 @media (max-width:900px){.only-desktop{display:none}.only-mobile{display:block}}
 
-:root{--font-roboto:"Roboto"}
+:root{--font-roboto:"Archivo"}
+html body{font-family:Archivo,system-ui,-apple-system,"Segoe UI",sans-serif}
 
 /* customer sidebar: groups, locked items, quick search, support, collapse */
 .side nav{padding:0 10px}

@@ -1,6 +1,8 @@
 import { ProcessSummaryCard } from "@/components/portal/store/ProcessSummaryCard";
 import { hasFeature } from "@/server/features";
 import { storeForOrg } from "@/server/store/service";
+import { pendingAcceptance } from "@/server/store/orders";
+import { StoreAcceptCard } from "@/components/portal/store/StoreAcceptCard";
 import { CopyBtn } from "@/components/portal/orders/ui";
 import { AwbLink, OrderIdLink, portalOrderHref, portalTrackHref } from "@/components/IdLinks";
 import Link from "next/link";
@@ -82,7 +84,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <Link href="/portal/billing/notification-credits/" className="dm-card"><IcoCoin size={56} /><b>{ctx.credits.toLocaleString("en-IN")}</b><span>Notification Credits</span></Link>
         </div>
       </div>
-      {hasStore && <div className="dash-m"><ProcessSummaryCard orgId={ctx.org.id} /></div>}
+      {hasStore && <div className="dash-m">{/* phone: store orders waiting to be accepted, live count (owner 2026-11-23) */}<StoreAcceptCard initial={await pendingAcceptance(ctx.org.id).catch(() => ({ count: 0, totalPaise: 0, rows: [] }))} /><ProcessSummaryCard orgId={ctx.org.id} /></div>}
       {/* desktop only — on phones Analytics follows the balance cards directly (owner request 2026-11-19) */}
       <div className="dash-desk">
         {announcement && <p className="note small mb12">{announcement}</p>}
