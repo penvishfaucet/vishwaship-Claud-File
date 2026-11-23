@@ -1,4 +1,6 @@
 import { ShieldAlert } from "lucide-react";
+import { after } from "next/server";
+import { kickJobsIfIdle } from "@/server/jobs/kick";
 import { PortalShell } from "@/components/portal/PortalShell";
 import { exitCustomerView } from "@/server/admin/impersonate";
 import { customerLogout } from "@/server/auth/actions";
@@ -22,6 +24,8 @@ import { GrowthRunBar } from "@/components/site/Growth";
 export const dynamic = "force-dynamic";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+  // keep tracking / emails moving even if the host paused the background loop (runs after the page is sent)
+  after(() => kickJobsIfIdle());
   const ctx = await portalContext();
   const viewingAsAdmin = !!ctx.session.impersonatorId;
   const f = await resolveFeatures(ctx.org.id);

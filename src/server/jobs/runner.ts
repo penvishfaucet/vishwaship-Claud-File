@@ -24,23 +24,36 @@ export async function enqueue(queue: string, payload: Record<string, unknown>, o
 async function claim() {
   const db = await getDb();
   const r = await db.execute(sql`
-    update ${schema.jobs} set status = 'running', attempts = attempts + 1
+    update ${schema.jobs} set status = 'running', attempts = attempts + 1, run_at = now()
     where id = (select id from ${schema.jobs} where status = 'queued' and run_at <= now() order by run_at limit 1 for update skip locked)
     returning id, queue, payload, attempts`);
   return (r as unknown as { rows: Array<{ id: string; queue: string; payload: Record<string, unknown>; attempts: number }> }).rows[0] ?? null;
 }
 
-/** Process up to `max` due jobs. Returns how many ran. */
-export async function runDueJobs(max = 20) {
-  const db = await getDb();
+/** A job that has not finished after this long is treated as failed and retried (a hung network call never blocks the queue). */
+export const JOB_TIMEOUT_MS = 120_000;
+const withTimeout = <T,>(p: Promise<T>, ms: number) => new Promise<T>((resolve, reject) => {
+  const t = setTimeout(() => reject(new Error(`Timed out after ${Math.round(ms / 1000)} s`)), ms);
+  p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+});
+
+/** Process up to `max` due jobs, `concurrency` at a time (one at a time on local PGlite, a single connection). Returns how many ran. */
+export async function runDueJobs(max = 20, concurrency = process.env.DATABASE_URL ? 5 : 1) {
   let n = 0;
-  for (; n < max; n++) {
+  const lane = async () => { while (n < max) { n++; if (!(await runOne())) { n--; return; } } };
+  await Promise.all(Array.from({ length: Math.max(1, concurrency) }, lane));
+  return n;
+}
+
+async function runOne(): Promise<boolean> {
+  const db = await getDb();
+  {
     const job = await claim();
-    if (!job) break;
+    if (!job) return false;
     const h = handlers.get(job.queue);
     let res: JobResult;
     try {
-      res = h ? await h(job.payload, job.attempts) : { dead: `No handler for ${job.queue}` };
+      res = h ? await withTimeout(h(job.payload, job.attempts), JOB_TIMEOUT_MS) : { dead: `No handler for ${job.queue}` };
     } catch (e) {
       res = { retryInSec: Math.min(3600, 30 * 2 ** job.attempts), error: (e as Error).message };
     }
@@ -52,7 +65,18 @@ export async function runDueJobs(max = 20) {
       await db.update(schema.jobs).set({ status: "queued", runAt: new Date(Date.now() + res.retryInSec * 1000), lastError: res.error ?? null }).where(and(eq(schema.jobs.id, job.id)));
     }
   }
-  return n;
+  return true;
+}
+
+/**
+ * Jobs left "running" by a server restart or a hung call would never run again: put them back in the queue
+ * (attempts already counted) after 10 minutes.
+ */
+export async function requeueStuckJobs() {
+  const db = await getDb();
+  const r = await db.execute(sql`update ${schema.jobs} set status = 'queued', run_at = now(), last_error = 'Requeued: was running for over 10 minutes'
+    where status = 'running' and run_at < now() - interval '10 minutes' returning id`);
+  return ((r as unknown as { rows?: unknown[] }).rows ?? []).length;
 }
 
 /** Admin "replay" of a dead job: requeue it now with attempts reset. */

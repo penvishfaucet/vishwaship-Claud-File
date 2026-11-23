@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, isNotNull, lte, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, lte, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { hasFeature } from "@/server/features";
@@ -155,13 +155,20 @@ registerHandler("store.push_tracking", async (p, attempt): Promise<JobResult> =>
 
 /** Periodic sweeps: re-arm the webhook retry job, schedule store syncs, expire stale COD confirmations. */
 export async function scheduleSweeps() {
+  // tracking first: shipment statuses must keep moving even when another sweep below fails (bug 2026-11-23: statuses
+  // only changed after a manual Refresh)
+  try { await scheduleTrackingPolls(); } catch (e) { console.error("[tracking polls]", (e as Error).message); }
+  // jobs left running by a restart / redeploy go back in the queue
+  try { const { requeueStuckJobs } = await import("./runner"); await requeueStuckJobs(); } catch (e) { console.error("[jobs requeue]", (e as Error).message); }
   const minute = Math.floor(Date.now() / 60_000);
-  await enqueue("webhook.retry", {}, { dedupeKey: `webhook.retry:${minute}` });
+  try { await enqueue("webhook.retry", {}, { dedupeKey: `webhook.retry:${minute}` }); } catch (e) { console.error("[webhook.retry]", (e as Error).message); }
   const db = await getDb();
   const slot = Math.floor(minute / 15);
-  const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
-  for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
-  await sweepNoResponse();
+  try {
+    const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
+    for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
+  } catch (e) { console.error("[store.sync]", (e as Error).message); }
+  try { await sweepNoResponse(); } catch (e) { console.error("[cod no-response]", (e as Error).message); }
   // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
   try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }
   catch (e) { console.error("[store]", (e as Error).message); }
@@ -187,7 +194,6 @@ export async function scheduleSweeps() {
       for (const orgId of await orgsWithMetaAds()) await enqueue("store.meta.sync", { orgId }, { dedupeKey: `store.meta.sync:${orgId}:${ist.toISOString().slice(0, 10)}` });
     }
   } catch (e) { console.error("[store marketing]", (e as Error).message); }
-  await scheduleTrackingPolls();
   // Online Store: "your order is on its way" once the courier picks the parcel up
   try { const { sweepDispatchNotices } = await import("@/server/store/notify"); await sweepDispatchNotices(); }
   catch (e) { console.error("[store notify]", (e as Error).message); }
@@ -292,16 +298,27 @@ registerHandler("tracking.poll", async (p): Promise<JobResult> => {
 });
 
 let lastPollSlot = -1;
-export async function scheduleTrackingPolls() {
-  const slot = Math.floor(Date.now() / (30 * 60_000));
-  if (slot === lastPollSlot) return; // once per 30-minute slot per process (jobs are also deduped per slot)
+/** Active shipments are asked for new scans every POLL_MIN minutes; the least recently checked go first. */
+export const POLL_MIN = 15;
+export const ACTIVE_STATUSES = ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "ndr", "rto_initiated", "rto_in_transit"];
+export async function scheduleTrackingPolls(now = new Date()) {
+  const slot = Math.floor(now.getTime() / (POLL_MIN * 60_000));
+  if (slot === lastPollSlot) return; // once per slot per process (jobs are also deduped per slot)
   lastPollSlot = slot;
   const db = await getDb();
-  const live = await db.select({ id: schema.shipments.id }).from(schema.shipments)
-    .where(and(eq(schema.shipments.bookingStatus, "confirmed"), ne(schema.shipments.provider, "demo"), isNotNull(schema.shipments.awb),
-      inArray(schema.shipments.status, ["booked", "pickup_pending", "picked_up", "in_transit", "at_delivery_center", "out_for_delivery", "ndr", "rto_initiated", "rto_in_transit"])))
-    .limit(500);
+  const S = schema.shipments;
+  // skip ones checked in the last 10 minutes (webhook, manual Refresh); bookings older than 45 days that never moved past
+  // "booked" are asked only every 6 hours so they cannot crowd out live parcels
+  const fresh = new Date(now.getTime() - 10 * 60_000), sixH = new Date(now.getTime() - 6 * 3600_000), old = new Date(now.getTime() - 45 * 86400_000);
+  const live = await db.select({ id: S.id }).from(S)
+    .where(and(eq(S.bookingStatus, "confirmed"), ne(S.provider, "demo"), isNotNull(S.awb), inArray(S.status, ACTIVE_STATUSES),
+      or(isNull(S.lastSyncAt), lt(S.lastSyncAt, fresh)),
+      or(gte(S.createdAt, old), notInArray(S.status, ["booked", "pickup_pending"]), isNull(S.lastSyncAt), lt(S.lastSyncAt, sixH))))
+    .orderBy(sql`${S.lastSyncAt} asc nulls first`)
+    .limit(600);
   for (const s of live) await enqueue("tracking.poll", { shipmentId: s.id }, { dedupeKey: `track:${s.id}:${slot}` });
+  const { jobsHeartbeat } = await import("./heartbeat");
+  jobsHeartbeat.trackingSlotAt = now; jobsHeartbeat.trackingQueued = live.length;
   // Bookings the carrier accepted but has not numbered yet (LR/AWB pending), and timed-out attempts: keep asking the
   // carrier every slot for up to 14 days, even after the first reconcile job ran out of attempts. lookupBooking only
   // reads — it never creates a second booking.
