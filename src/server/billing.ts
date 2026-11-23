@@ -132,11 +132,7 @@ export async function issueAutoNote(a: { orgId: string; kind: "credit_note" | "d
   const db = await getDb();
   const [dup] = await db.select({ id: schema.billingDocuments.id }).from(schema.billingDocuments).where(and(eq(schema.billingDocuments.orgId, a.orgId), eq(schema.billingDocuments.kind, a.kind), eq(schema.billingDocuments.refType, a.refType), eq(schema.billingDocuments.refId, a.refId)));
   if (dup) return dup.id;
-  const { getSetting } = await import("@/server/quotes/service");
-  const gstBps = (await getSetting<number>("gst_bps", 1800)).value;
-  const taxable = Math.round((a.totalPaise * 10_000) / (10_000 + gstBps));
-  const { newId } = await import("@/server/util/ids");
-  const id = newId("doc");
-  await db.insert(schema.billingDocuments).values({ id, orgId: a.orgId, kind: a.kind, number: await nextDocNumber(a.kind), docDate: new Date(), taxablePaise: taxable, gstPaise: a.totalPaise - taxable, totalPaise: a.totalPaise, reason: a.reason, refType: a.refType, refId: a.refId, lines: [{ description: a.reason, ref: a.refId, taxablePaise: taxable, gstPaise: a.totalPaise - taxable }], createdBy: a.actor ?? null });
-  return id;
+  // GST snapshot, AWB and original-invoice link (gst/notes.ts)
+  const { postNote } = await import("@/server/gst/notes");
+  return (await postNote({ orgId: a.orgId, kind: a.kind, totalPaise: a.totalPaise, reason: a.reason, refType: a.refType, refId: a.refId, actor: a.actor ?? null })).id;
 }

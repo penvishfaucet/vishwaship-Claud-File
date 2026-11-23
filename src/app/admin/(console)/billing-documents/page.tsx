@@ -27,7 +27,7 @@ export default async function AdminBillingDocuments() {
         <section className="card" style={{ padding: 16 }}>
           <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Generate invoice</h2>
           <AdminOpForm op="invoice_generate" submit="Generate" disabled={!write} fields={[{ name: "orgId", label: "Customer", type: "select", options: orgOpts }, { name: "from", label: "From", type: "date", value: first }, { name: "to", label: "To", type: "date", value: last }]} />
-          <p className="tiny muted mt8">Includes every confirmed shipment booked in the period, at the price charged (GST back-calculated). Periods cannot overlap.</p>
+          <p className="tiny muted mt8">One line per charge of every confirmed shipment booked in the period (freight, fuel, COD fee …), RTO charges and non-shipment services (notification credits, Online Store plan / fees) charged in the period. Anything already on an invoice is skipped, and periods cannot overlap. CGST/SGST/IGST is fixed at issue from the company and customer GSTINs.</p>
           <h2 className="b mt16" style={{ fontSize: 15 }}>Issue credit / debit note</h2>
           <AdminOpForm op="note_issue" submit="Issue note" disabled={!write} fields={[
             { name: "orgId", label: "Customer", type: "select", options: orgOpts }, { name: "kind", label: "Type", type: "select", options: [["credit_note", "Credit note"], ["debit_note", "Debit note"]] },

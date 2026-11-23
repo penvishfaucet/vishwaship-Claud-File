@@ -38,7 +38,7 @@ const SECTIONS = (supportPhone: string): Section[] => [
     { kind: "group", key: "store-setup", label: "Store setup & marketing", icon: Store, ids: ["store.products", "store.theme", "store.pages", "store.domains", "store.payments", "store.plan", "store.sales", "store.coupons", "store.reviews", "store.marketing", "store.managed_ads", "store.analytics"] },
   ] },
   { key: "money", title: "Billing, Tools & Reports", rows: [
-    { kind: "group", key: "billing", label: "Billing", icon: Receipt, ids: ["billing.passbook", "billing.recharges", "billing.cod", "billing.charges", "billing.invoices", "billing.credit_notes", "billing.debit_notes", "billing.ledgers", "billing.credits"] },
+    { kind: "group", key: "billing", label: "Billing", icon: Receipt, ids: ["billing.passbook", "billing.recharges", "billing.cod", "billing.charges", "billing.gst", "billing.invoices", "billing.credit_notes", "billing.debit_notes", "billing.ledgers", "billing.credits"] },
     { kind: "group", key: "tools", label: "Tools", icon: Wrench, ids: ["tools.rates", "tools.price_list", "tools.couriers", "tools.activity", "tools.downloads"] },
     { kind: "group", key: "reports", label: "Reports", icon: FileBarChart, ids: ["reports.shipments", "reports.orders", "reports.ndr", "reports.custom", "store.pnl"] },
   ] },

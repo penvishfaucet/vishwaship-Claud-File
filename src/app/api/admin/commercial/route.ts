@@ -125,24 +125,26 @@ export async function POST(req: Request) {
       if (from > to) return apiError(422, "validation_error", "From must be before To");
       const overlap = await db.select({ id: schema.billingDocuments.id }).from(schema.billingDocuments).where(and(eq(schema.billingDocuments.orgId, b.orgId), eq(schema.billingDocuments.kind, "invoice"), lte(schema.billingDocuments.periodFrom, to), gte(schema.billingDocuments.periodTo, from)));
       if (overlap.length) return apiError(409, "conflict", "An invoice already covers part of this period");
-      const ships = await db.select().from(schema.shipments).where(and(eq(schema.shipments.orgId, b.orgId), gte(schema.shipments.createdAt, from), lte(schema.shipments.createdAt, to), inArray(schema.shipments.bookingStatus, ["confirmed"])));
-      if (!ships.length) return apiError(409, "conflict", "No billable shipments in this period");
       const gstBps = (await getSetting<number>("gst_bps", 1800)).value;
-      const lines = ships.map((x) => { const taxable = Math.round((x.sellPaise * 10_000) / (10_000 + gstBps)); return { description: `Shipping — ${x.carrierName} ${x.serviceName}`, ref: x.awb ?? x.id, taxablePaise: taxable, gstPaise: x.sellPaise - taxable }; });
-      const taxable = lines.reduce((t, l) => t + l.taxablePaise, 0), gst = lines.reduce((t, l) => t + l.gstPaise, 0);
+      // per-AWB charge lines (freight, fuel, COD fee …), RTO charges and non-shipment services; nothing already invoiced
+      const { collectInvoiceLines } = await import("@/server/gst/invoicing");
+      const { snapshotFor } = await import("@/server/gst/posting");
+      const { lines: raw, shipments: shipCount } = await collectInvoiceLines(b.orgId, from, to, gstBps);
+      if (!raw.length) return apiError(409, "conflict", "Nothing billable in this period (or it is already on an invoice)");
+      const taxable = raw.reduce((t, l) => t + l.taxablePaise, 0), gst = raw.reduce((t, l) => t + l.gstPaise, 0);
+      const docDate = new Date();
+      const snap = await snapshotFor(b.orgId, raw, docDate);
       const number = await nextDocNumber("invoice");
-      await db.insert(schema.billingDocuments).values({ id: newId("doc"), orgId: b.orgId, kind: "invoice", number, docDate: new Date(), periodFrom: from, periodTo: to, taxablePaise: taxable, gstPaise: gst, totalPaise: taxable + gst, lines, createdBy: s.userId });
+      await db.insert(schema.billingDocuments).values({ id: newId("doc"), orgId: b.orgId, kind: "invoice", number, docDate, periodFrom: from, periodTo: to, taxablePaise: taxable, gstPaise: gst, totalPaise: taxable + gst, lines: snap.lines, createdBy: s.userId, ...snap.fields });
       await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: b.orgId, kind: "billing", title: `Invoice ${number} issued`, href: "/portal/billing/invoices/" });
-      return done(`Invoice ${number} issued for ${ships.length} shipments`, { number, taxable, gst }, b.orgId);
+      return done(`Invoice ${number} issued: ${shipCount} shipments, ${raw.length} lines`, { number, taxable, gst }, b.orgId);
     }
     case "note_issue": {
       if (!(await orgOk(b.orgId))) return apiError(404, "not_found", "Customer not found");
       const total = Math.round(b.amount * 100);
-      const gstBps = (await getSetting<number>("gst_bps", 1800)).value;
-      const taxable = Math.round((total * 10_000) / (10_000 + gstBps));
-      const number = await nextDocNumber(b.kind);
-      const id = newId("doc");
-      await db.insert(schema.billingDocuments).values({ id, orgId: b.orgId, kind: b.kind, number, docDate: new Date(), taxablePaise: taxable, gstPaise: total - taxable, totalPaise: total, reason: b.reason, refType: b.refType, refId: b.refId || null, lines: [{ description: b.reason, ref: b.refId, taxablePaise: taxable, gstPaise: total - taxable }], createdBy: s.userId });
+      // GST snapshot, AWB and original-invoice link are set in one place (gst/notes.ts)
+      const { postNote } = await import("@/server/gst/notes");
+      const { id, number } = await postNote({ orgId: b.orgId, kind: b.kind, totalPaise: total, reason: b.reason, refType: b.refType, refId: b.refId || null, actor: s.userId });
       if (b.postToWallet) {
         const [w] = await db.select().from(schema.wallets).where(eq(schema.wallets.orgId, b.orgId));
         if (w) await withLedger((st) => b.kind === "credit_note"

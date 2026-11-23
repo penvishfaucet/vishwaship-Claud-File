@@ -107,3 +107,17 @@ html .sa-foot > * { flex: 1; justify-content: center; min-height: 40px; display:
 @keyframes sa-ring { 0%, 86%, 100% { transform: rotate(0); } 89% { transform: rotate(-10deg); } 93% { transform: rotate(10deg); } 97% { transform: rotate(-6deg); } }
 @keyframes sa-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { html .sa-card.has .sa-ico, html .sa-new { animation: none; } }
+
+/* GST Invoices & Reports (portal) and Finance & GST (admin) */
+html .gst-filter { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+html .gst-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+html .gst-presets .chip { text-decoration: none; padding: 6px 12px; min-height: 34px; display: inline-flex; align-items: center; border: 1px solid #dbe3ee; background: #fff; color: #051C46; border-radius: 999px; font-size: 13px; font-weight: 600; }
+html .gst-presets .chip.on { background: #051C46; border-color: #051C46; color: #fff; }
+html .gst-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+html .gst-card { padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+html .gst-card b { font-size: 20px; color: #051C46; overflow-wrap: anywhere; }
+html .gst-card .tiny { color: #3c4a63; }
+html .gst-card.hl { border-color: #f3b38f; background: linear-gradient(180deg, #fff6f0, #fff 70%); }
+html .gst-card.hl b { color: #C2410C; }
+@media (max-width: 900px) { html .gst-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { html .gst-cards { grid-template-columns: minmax(0, 1fr); } html .gst-card b { font-size: 18px; } }

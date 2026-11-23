@@ -946,10 +946,99 @@ export const billingDocuments = pgTable("billing_documents", {
   reason: text("reason"),
   refType: text("ref_type"), // shipment | invoice | dispute
   refId: text("ref_id"),
-  lines: jsonb("lines").notNull().default([]), // [{description, ref, taxablePaise, gstPaise}]
+  lines: jsonb("lines").notNull().default([]), // [{description, ref, taxablePaise, gstPaise, key?, chargeType?, awb?, shipmentId?, rateBps?, cgstPaise?, sgstPaise?, utgstPaise?, igstPaise?}]
   createdBy: text("created_by"),
+  /**
+   * GST snapshot taken when the document was posted (null taxSnapshotAt = issued before 2026-11-23: the split is
+   * derived at read time and shown as such). Never changed afterwards, even when the customer edits their GSTIN.
+   */
+  supplierGstin: text("supplier_gstin"),
+  supplierState: text("supplier_state"), // 2-digit GST state code
+  recipientName: text("recipient_name"),
+  recipientGstin: text("recipient_gstin"),
+  placeOfSupply: text("place_of_supply"), // 2-digit GST state code
+  sac: text("sac"),
+  rateBps: integer("rate_bps"),
+  cgstPaise: paise("cgst_paise"),
+  sgstPaise: paise("sgst_paise"),
+  utgstPaise: paise("utgst_paise"),
+  igstPaise: paise("igst_paise"),
+  /** Credit / debit note: the invoice it adjusts, when known. */
+  originalDocId: text("original_doc_id"),
+  /** GST return period the document belongs to (YYYY-MM, IST). */
+  taxPeriod: text("tax_period"),
+  taxSnapshotAt: ts("tax_snapshot_at"),
   createdAt: created(),
 }, (t) => [index("billing_docs_org").on(t.orgId, t.kind, t.docDate)]);
+
+// ---------- Courier purchases (input GST): bills Vishwaship receives from Delhivery and other couriers ----------
+export const courierBills = pgTable("courier_bills", {
+  id: id(),
+  kind: text("kind").notNull(), // invoice | credit_note | debit_note
+  supplierName: text("supplier_name").notNull(),
+  supplierGstin: text("supplier_gstin"),
+  /** The Vishwaship GSTIN the courier billed. */
+  billedGstin: text("billed_gstin"),
+  number: text("number").notNull(),
+  docDate: ts("doc_date").notNull(),
+  /** Credit / debit note from a courier: the bill it adjusts. */
+  originalBillId: text("original_bill_id"),
+  placeOfSupply: text("place_of_supply"),
+  taxablePaise: paise("taxable_paise").notNull(),
+  cgstPaise: paise("cgst_paise").notNull().default(0),
+  sgstPaise: paise("sgst_paise").notNull().default(0),
+  utgstPaise: paise("utgst_paise").notNull().default(0),
+  igstPaise: paise("igst_paise").notNull().default(0),
+  totalPaise: paise("total_paise").notNull(),
+  taxPeriod: text("tax_period").notNull(),
+  /** Private file key of the original PDF (storage.ts). */
+  fileKey: text("file_key"),
+  /** For the CA: pending_review | eligible | ineligible | blocked. Never "verified" without GST portal data. */
+  itcStatus: text("itc_status").notNull().default("pending_review"),
+  /** not_checked until GSTR-2B data is imported for the period. */
+  gstr2bStatus: text("gstr2b_status").notNull().default("not_checked"),
+  source: text("source").notNull().default("manual"), // manual | import
+  importBatch: text("import_batch"),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("courier_bills_doc").on(t.supplierName, t.kind, t.number), index("courier_bills_period").on(t.taxPeriod)]);
+
+/** AWB annexure of a courier bill. shipmentId null = not matched to a Vishwaship shipment (Unmatched queue). */
+export const courierBillLines = pgTable("courier_bill_lines", {
+  id: id(),
+  billId: text("bill_id").notNull().references(() => courierBills.id),
+  awb: text("awb"),
+  shipmentId: text("shipment_id"),
+  orgId: text("org_id"),
+  chargeType: text("charge_type").notNull().default("forward"), // forward | rto | reverse | weight | cod | fuel | other
+  taxablePaise: paise("taxable_paise").notNull(),
+  gstPaise: paise("gst_paise").notNull().default(0),
+  totalPaise: paise("total_paise").notNull(),
+  matchStatus: text("match_status").notNull().default("unmatched"), // matched | unmatched | resolved
+  note: text("note"),
+}, (t) => [index("courier_bill_lines_bill").on(t.billId), index("courier_bill_lines_ship").on(t.shipmentId), index("courier_bill_lines_awb").on(t.awb)]);
+
+/** Money Vishwaship actually paid a courier (bank transfer, wallet adjustment …). */
+export const courierPayments = pgTable("courier_payments", {
+  id: id(),
+  supplierName: text("supplier_name").notNull(),
+  amountPaise: paise("amount_paise").notNull(),
+  paidAt: ts("paid_at").notNull(),
+  reference: text("reference").notNull(),
+  method: text("method"),
+  notes: text("notes"),
+  createdBy: text("created_by"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("courier_payments_ref").on(t.supplierName, t.reference)]);
+
+/** Which bills a payment settled (only what the settlement record supports). */
+export const courierPaymentAllocations = pgTable("courier_payment_allocations", {
+  id: id(),
+  paymentId: text("payment_id").notNull().references(() => courierPayments.id),
+  billId: text("bill_id").notNull().references(() => courierBills.id),
+  amountPaise: paise("amount_paise").notNull(),
+}, (t) => [uniqueIndex("courier_payment_alloc").on(t.paymentId, t.billId)]);
 
 // ---------- Early COD (faster remittance) — separate from WhatsApp COD Confirmation ----------
 export const earlyCodSubscriptions = pgTable("early_cod_subscriptions", {

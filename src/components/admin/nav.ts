@@ -1,4 +1,4 @@
-import {
+import { Landmark,
   Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Handshake, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Store, Tags, Ticket, Truck, Users, Wallet, TrendingUp,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
@@ -29,6 +29,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/recharges/", label: "Wallet Recharges", icon: Banknote, perm: "finance.read" },
     { href: "/admin/cod-remittance/", label: "COD & Early COD", icon: BadgeIndianRupee, perm: "finance.read" },
     { href: "/admin/billing-documents/", label: "Invoices & Notes", icon: FileSpreadsheet, perm: "finance.read" },
+    { href: "/admin/finance-gst/", label: "Finance & GST", icon: Landmark, perm: "finance.read" },
     { href: "/admin/couriers/", label: "Couriers & Rate Cards", icon: TruckIcon, perm: "pricing.read" },
     { href: "/admin/reports/", label: "Reports", icon: FileDown, perm: "reports.export" },
   ] },

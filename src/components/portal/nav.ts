@@ -45,6 +45,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
     { id: "billing.cod", href: "/portal/billing/cod-remittance/", label: "COD Remittance", icon: BadgeIndianRupee },
     { id: "billing.charges", href: "/portal/billing/shipping-charges/", label: "Shipping Charges", icon: Receipt },
     { id: "billing.recharges", href: "/portal/billing/recharges/", label: "All Recharges", icon: Wallet },
+    { id: "billing.gst", href: "/portal/billing/gst/", label: "GST Invoices & Reports", icon: FileSpreadsheet },
     { id: "billing.invoices", href: "/portal/billing/invoices/", label: "Invoices", icon: FileText },
     { id: "billing.credit_notes", href: "/portal/billing/credit-notes/", label: "Credit Notes", icon: FilePlus },
     { id: "billing.debit_notes", href: "/portal/billing/debit-notes/", label: "Debit Notes", icon: FileMinus },

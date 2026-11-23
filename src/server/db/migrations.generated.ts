@@ -737,5 +737,41 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795375120940,
   "hash": "8eb6abc017f46e74d77bb41b79c887570b5bf1b326888f2bb3f1ceb1ac97e165"
+ },
+ {
+  "tag": "0039_gst_billing",
+  "sql": [
+   "CREATE TABLE \"courier_bill_lines\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"bill_id\" text NOT NULL,\n\t\"awb\" text,\n\t\"shipment_id\" text,\n\t\"org_id\" text,\n\t\"charge_type\" text DEFAULT 'forward' NOT NULL,\n\t\"taxable_paise\" bigint NOT NULL,\n\t\"gst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"total_paise\" bigint NOT NULL,\n\t\"match_status\" text DEFAULT 'unmatched' NOT NULL,\n\t\"note\" text\n);\n",
+   "\nCREATE TABLE \"courier_bills\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"kind\" text NOT NULL,\n\t\"supplier_name\" text NOT NULL,\n\t\"supplier_gstin\" text,\n\t\"billed_gstin\" text,\n\t\"number\" text NOT NULL,\n\t\"doc_date\" timestamp with time zone NOT NULL,\n\t\"original_bill_id\" text,\n\t\"place_of_supply\" text,\n\t\"taxable_paise\" bigint NOT NULL,\n\t\"cgst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"sgst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"utgst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"igst_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"total_paise\" bigint NOT NULL,\n\t\"tax_period\" text NOT NULL,\n\t\"file_key\" text,\n\t\"itc_status\" text DEFAULT 'pending_review' NOT NULL,\n\t\"gstr2b_status\" text DEFAULT 'not_checked' NOT NULL,\n\t\"source\" text DEFAULT 'manual' NOT NULL,\n\t\"import_batch\" text,\n\t\"notes\" text,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"courier_payment_allocations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"payment_id\" text NOT NULL,\n\t\"bill_id\" text NOT NULL,\n\t\"amount_paise\" bigint NOT NULL\n);\n",
+   "\nCREATE TABLE \"courier_payments\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"supplier_name\" text NOT NULL,\n\t\"amount_paise\" bigint NOT NULL,\n\t\"paid_at\" timestamp with time zone NOT NULL,\n\t\"reference\" text NOT NULL,\n\t\"method\" text,\n\t\"notes\" text,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"supplier_gstin\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"supplier_state\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"recipient_name\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"recipient_gstin\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"place_of_supply\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"sac\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"rate_bps\" integer;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"cgst_paise\" bigint;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"sgst_paise\" bigint;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"utgst_paise\" bigint;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"igst_paise\" bigint;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"original_doc_id\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"tax_period\" text;",
+   "\nALTER TABLE \"billing_documents\" ADD COLUMN \"tax_snapshot_at\" timestamp with time zone;",
+   "\nALTER TABLE \"courier_bill_lines\" ADD CONSTRAINT \"courier_bill_lines_bill_id_courier_bills_id_fk\" FOREIGN KEY (\"bill_id\") REFERENCES \"public\".\"courier_bills\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"courier_payment_allocations\" ADD CONSTRAINT \"courier_payment_allocations_payment_id_courier_payments_id_fk\" FOREIGN KEY (\"payment_id\") REFERENCES \"public\".\"courier_payments\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"courier_payment_allocations\" ADD CONSTRAINT \"courier_payment_allocations_bill_id_courier_bills_id_fk\" FOREIGN KEY (\"bill_id\") REFERENCES \"public\".\"courier_bills\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"courier_bill_lines_bill\" ON \"courier_bill_lines\" USING btree (\"bill_id\");",
+   "\nCREATE INDEX \"courier_bill_lines_ship\" ON \"courier_bill_lines\" USING btree (\"shipment_id\");",
+   "\nCREATE INDEX \"courier_bill_lines_awb\" ON \"courier_bill_lines\" USING btree (\"awb\");",
+   "\nCREATE UNIQUE INDEX \"courier_bills_doc\" ON \"courier_bills\" USING btree (\"supplier_name\",\"kind\",\"number\");",
+   "\nCREATE INDEX \"courier_bills_period\" ON \"courier_bills\" USING btree (\"tax_period\");",
+   "\nCREATE UNIQUE INDEX \"courier_payment_alloc\" ON \"courier_payment_allocations\" USING btree (\"payment_id\",\"bill_id\");",
+   "\nCREATE UNIQUE INDEX \"courier_payments_ref\" ON \"courier_payments\" USING btree (\"supplier_name\",\"reference\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795429142958,
+  "hash": "3724bcef36a8c02484cb0f8b1345e20b932d8f5d9abd00fcc045b6dd3929a543"
  }
 ];
