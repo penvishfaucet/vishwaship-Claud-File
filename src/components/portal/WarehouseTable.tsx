@@ -38,20 +38,20 @@ export function WarehouseTable({ rows }: { rows: Row[] }) {
               {rows.map((w, i) => (
                 <tr key={w.id}>
                   <td>{i + 1}</td>
-                  <td className="b">{w.code}</td>
+                  <td className="b nw">{w.code}</td>
                   <td><span className="b link-navy">{w.label}</span>{w.isDefault && <div><span className="chip c-active" style={{ marginTop: 4 }}>Default</span></div>}</td>
                   <td className="small"><b>{w.contactName}</b><br />{w.email ?? ""}{w.email ? <br /> : null}{w.mobile}</td>
                   <td>{w.pincode}</td>
-                  <td className="small" style={{ maxWidth: 280 }}>{w.line1}{w.line2 ? `, ${w.line2}` : ""}, {w.city}, {w.state}, {w.pincode}</td>
+                  <td className="small wh-addr" style={{ maxWidth: 280 }}>{w.line1}{w.line2 ? `, ${w.line2}` : ""}, {w.city}, {w.state}, {w.pincode}</td>
                   <td className="small">{w.createdBy ?? "—"}</td>
                   <td className="small">{new Date(w.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
-                  <td>
+                  <td className="wh-status">
                     <span className={`chip ${w.active ? "c-active" : "c-cancelled"}`}>{w.active ? "Active" : "Inactive"}</span>
                     <div className="mt8"><span className={`chip ${w.verified ? "c-verified" : "c-pending"}`}>{w.verified ? "Mobile verified" : "Mobile not verified"}</span></div>
                     {w.courierSync.length > 0 && <div className="tiny muted mt8">{w.courierSync.join(" · ")}</div>}
                   </td>
                   <td>
-                    <div className="col" style={{ gap: 4 }}>
+                    <div className="col wh-acts" style={{ gap: 4 }}>
                       <button className="icon-btn" aria-label={`Edit ${w.label}`} title="Edit" onClick={() => setEdit(w)}><Pencil size={15} /></button>
                       {!w.verified && w.active && <button className="btn btn-sm btn-orange" onClick={() => setVerify(verify === w.id ? null : w.id)}>Verify mobile</button>}
                       {w.active && !w.isDefault && <button className="btn btn-sm btn-outline" disabled={busy === w.id} onClick={() => act(w.id, "set_default")}>Set default</button>}

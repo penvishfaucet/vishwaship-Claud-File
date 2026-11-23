@@ -62,7 +62,7 @@ export default async function ShipmentGstInvoice({ params }: { params: Promise<{
         <section className="mt16 small">
           <b>Billed to</b><br />{ctx.org.businessName}{ctx.org.gstin ? <><br />GSTIN: {ctx.org.gstin}</> : null}
         </section>
-        <table className="tbl mt16">
+        <div className="sx mt16"><table className="tbl">
           <thead><tr><th>Description</th><th>SAC</th><th style={{ textAlign: "right" }}>Taxable value</th><th style={{ textAlign: "right" }}>GST</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
           <tbody>
             <tr>
@@ -73,7 +73,7 @@ export default async function ShipmentGstInvoice({ params }: { params: Promise<{
               <td style={{ textAlign: "right" }} className="small">{formatINR(total)}</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
         <p className="tiny muted mt16">This statement is not a tax invoice. GST {(gstBps / 100).toFixed(0)}% shown as charged on the shipment; the tax invoice shows IGST / CGST + SGST per place of supply.</p>
       </article>
     </div>

@@ -3,6 +3,8 @@ import "@/styles/vs-site.css";
 import "@/styles/app.css";
 import "@/styles/support.css";
 import "@/styles/brand.css";
+import "@/styles/mobile.css";
+import { TableScroll } from "@/components/TableScroll";
 
 /*
  * Roboto (same face as the live site) is loaded with a plain Google Fonts stylesheet link instead of
@@ -26,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto:wght@300;400;500;700;900&display=swap" />
       </head>
-      <body>{children}</body>
+      <body>{children}<TableScroll /></body>
     </html>
   );
 }

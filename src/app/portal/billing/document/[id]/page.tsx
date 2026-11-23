@@ -38,7 +38,7 @@ export default async function BillingDocument({ params }: { params: Promise<{ id
           <b>Billed to</b><br />{ctx.org.businessName}{ctx.org.gstin ? <><br />GSTIN: {ctx.org.gstin}</> : null}
           {doc.reason && <p style={{ margin: "8px 0 0" }}><b>Reason:</b> {doc.reason}{doc.refType ? ` (${doc.refType} ${doc.refId ?? ""})` : ""}</p>}
         </section>
-        <table className="tbl mt16">
+        <div className="sx mt16"><table className="tbl">
           <thead><tr><th>#</th><th>Description</th><th>SAC</th><th style={{ textAlign: "right" }}>Taxable value</th><th style={{ textAlign: "right" }}>GST</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
           <tbody>
             {(lines.length ? lines : [{ description: doc.reason ?? title, taxablePaise: doc.taxablePaise, gstPaise: doc.gstPaise }]).map((l, i) => (
@@ -48,7 +48,7 @@ export default async function BillingDocument({ params }: { params: Promise<{ id
           <tfoot>
             <tr><td colSpan={3} className="b">Total</td><td style={{ textAlign: "right" }} className="b">{formatINR(doc.taxablePaise)}</td><td style={{ textAlign: "right" }} className="b">{formatINR(doc.gstPaise)}</td><td style={{ textAlign: "right" }} className="b">{formatINR(doc.totalPaise)}</td></tr>
           </tfoot>
-        </table>
+        </table></div>
         <p className="tiny muted mt16">GST shown as IGST/CGST+SGST per place of supply on the filed return. This is a computer-generated document and does not need a signature.</p>
       </article>
     </div>

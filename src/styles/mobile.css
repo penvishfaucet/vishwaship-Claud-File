@@ -1,0 +1,79 @@
+/*
+ * Mobile: wide data scrolls inside its own box, never the page (owner 2026-11-23).
+ * `.card.p0` sets overflow:hidden for its rounded corners, which used to beat `.tbl-wrap`'s horizontal scroll and cut the
+ * right-hand columns off. Every table box below scrolls sideways with native touch; headers and rows move together.
+ * TableScroll (components/TableScroll.tsx) adds the edge fades, the "swipe" hint and keyboard focus.
+ */
+html .tbl-wrap,
+html .card.p0:has(> table),
+html .card.p0:has(> form > table),
+html .ov-tablewrap,
+html .table-wrap,
+html .sx {
+  overflow-x: auto !important;
+  position: relative; /* absolutely placed bits inside (sr-only labels) stay in the box instead of widening the page */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  min-width: 0;
+}
+/* a flex / grid child that holds a table may shrink to the screen instead of pushing the page wider */
+html :is(.split, .split-1-2, .split-2-1, .split-3, .grid2, .grid3, .grid4) > * { min-width: 0; }
+html .content, html .main { min-width: 0; }
+
+/* the hint: soft fade on the side that has more columns, and a one-line "swipe" note until the first swipe */
+html .sx-on.sx-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); mask-image: linear-gradient(to right, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); }
+html .sx-on.sx-l { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); mask-image: linear-gradient(to left, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); }
+html .sx-on.sx-l.sx-r { -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, .18), #000 34px, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); mask-image: linear-gradient(to right, rgba(0, 0, 0, .18), #000 34px, #000 calc(100% - 34px), rgba(0, 0, 0, .18)); }
+html .sx-on::before {
+  content: "Swipe sideways for more columns  ↔";
+  position: sticky; left: 0; display: block; width: 100%; box-sizing: border-box;
+  padding: 6px 12px; font-size: 12px; font-weight: 600; text-align: left;
+  color: #051C46; background: #eef3fb; border-bottom: 1px solid #dbe3ee;
+}
+html .sx-on:focus-visible { outline: 3px solid #C94A0A; outline-offset: 2px; }
+
+@media (max-width: 760px) {
+  /* give columns room instead of squeezing every word onto its own line */
+  html :is(.tbl-wrap, .table-wrap, .card.p0, .sx) > table:has(> thead > tr > th:nth-child(4)) { min-width: 600px; }
+  html :is(.tbl-wrap, .table-wrap, .card.p0, .sx) > table:has(> thead > tr > th:nth-child(6)) { min-width: 760px; }
+  html :is(.tbl-wrap, .table-wrap, .card.p0, .sx) > table:has(> thead > tr > th:nth-child(8)) { min-width: 860px; }
+  html :is(.tbl-wrap, .table-wrap, .card.p0, .sx) > table:has(> thead > tr > th:nth-child(10)) { min-width: 940px; }
+  html :is(.tbl-wrap, .table-wrap, .card.p0, .sx) > table:has(> thead > tr > th:nth-child(13)) { min-width: 1180px; }
+  /* IDs, phones, AWBs and money stay on one line; text cells wrap normally */
+  html table.tbl :is(.mono, .num, .id-link, .awb) { white-space: nowrap; }
+  html table.tbl td { overflow-wrap: break-word; }
+  html table.tbl .nw { white-space: nowrap; }
+  html table.tbl td :is(a, button) { min-height: 32px; }
+
+  /* store products list / product form: the side panel goes below instead of off the screen */
+  html .os-plist, html .os-pform { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* pickup addresses: actions and status chips side by side instead of one tall stack per row */
+  html .tbl .wh-acts { flex-direction: row !important; flex-wrap: wrap; align-items: center; min-width: 190px; max-width: 250px; }
+  html .tbl .wh-acts > * { white-space: nowrap; }
+  html .tbl .wh-status { white-space: normal; min-width: 170px; }
+  html .tbl .wh-status .chip { white-space: nowrap; }
+  html .tbl .wh-addr { min-width: 210px; }
+  html .tbl td:has(> .chip):not(.wh-status) { white-space: nowrap; }
+  html .tbl .wh-status .mt8 { display: inline-block; margin: 0 0 0 4px !important; }
+
+  /* toolbars: search, dates and buttons wrap instead of pushing off-screen */
+  html .shell :is(.row, .toolbar, .filters, .page-h) { flex-wrap: wrap; }
+  html .shell .page-h > * { min-width: 0; max-width: 100%; }
+  html .shell .content label.search { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; max-width: none !important; min-width: 0; }
+  html .shell .content label.search input { flex: 1 1 auto; min-width: 0; width: 100%; min-height: 42px; }
+  html .shell :is(input, select, textarea) { max-width: 100%; }
+
+  /* dialogs fit the screen; their body scrolls and the action row stays reachable */
+  html .modal, html dialog { max-width: calc(100vw - 16px); }
+  html .modal { max-height: calc(100dvh - 16px); overflow-y: auto; overscroll-behavior: contain; }
+  html dialog[open] { max-height: calc(100dvh - 16px); overflow-y: auto; }
+}
+@media (max-width: 430px) {
+  /* a search box and its page button stack: the search on top, the button full width below */
+  html .shell .content .row:has(> label.search) > :is(.btn, button, a.btn) { flex: 1 1 100%; justify-content: center; }
+}
+@media (max-width: 380px) {
+  html .shell .page-h :is(.btn, button) { flex: 1 1 auto; justify-content: center; }
+}
