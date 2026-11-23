@@ -11,7 +11,9 @@ html:root,html .shell,html .vs{
   --link:#0057B8;
 }
 html .wv{--n:#051C46;--n2:#0b2a5e;--n3:#163a78;--o:#FE6519;--o2:#e5540c;--os:#fff3ec;--ink:#051C46;--mut:#4a5a78;--ln:#dbe3ee;--bg:#FFFFFF}
-html .shell,html .wv,html .vs{font-family:var(--font-roboto,Roboto),Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+html .shell,html .wv,html .vs{font-family:Manrope,var(--font-roboto,Roboto),Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+/* dashboard (portal + admin) in Manrope like the website (owner 2026-11-23); form fields follow the page font */
+html .shell :where(button,input,select,textarea){font-family:inherit}
 html:not(.dark) .shell,html:not(.dark) .shell .main,html:not(.dark) .shell .content{background:#FFFFFF;color:#051C46}
 html .shell :is(.card,.oc,.tk-card,.rt-card,.dcard,.dm-card,.dsearch,.tk-empty){background:#fff;border-color:#dbe3ee;box-shadow:0 1px 2px rgba(5,28,70,.05),0 6px 18px rgba(5,28,70,.05)}
 html .shell :is(h1,h2,h3){color:#051C46;letter-spacing:-.01em}
