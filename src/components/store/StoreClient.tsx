@@ -96,6 +96,12 @@ export function ProductGallery({ images, title }: { images: string[]; title: str
     el.addEventListener("scroll", on, { passive: true });
     return () => el.removeEventListener("scroll", on);
   }, [images.length]);
+  // the chosen size / colour has its own photo: show it
+  useEffect(() => {
+    const on = (e: Event) => { const src = (e as CustomEvent<string>).detail; const k = images.indexOf(src); if (k >= 0) go(k); };
+    window.addEventListener("sf-variant-image", on);
+    return () => window.removeEventListener("sf-variant-image", on);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!zoom) return;
     const key = (e: KeyboardEvent) => {
@@ -164,12 +170,14 @@ export function AddToCart({ store, base, product }: { store: string; base: strin
     io.observe(el); return () => io.disconnect();
   }, []);
   const variant = hasVariants ? product.variants.find((v) => v.values.join("|") === sel.join("|")) ?? null : null;
+  const vImage = variant?.image ?? null;
+  useEffect(() => { if (vImage) window.dispatchEvent(new CustomEvent("sf-variant-image", { detail: vImage })); }, [vImage]);
   if (!product.inStock) return <p className="sf-oos" style={{ fontSize: 15, margin: "20px 0" }}>Currently out of stock</p>;
   const price = variant?.pricePaise ?? product.pricePaise;
   const canBuy = !hasVariants || !!variant?.inStock;
   function add(go: boolean) {
     if (!canBuy) { setToast(variant ? "This option is out of stock" : `Choose ${product.options.join(" / ").toLowerCase()} first`); setTimeout(() => setToast(""), 2200); return; }
-    const line = { productId: product.id, variantId: variant?.id ?? null, variantTitle: variant?.title ?? null, slug: product.slug, title: product.title, image: product.image, pricePaise: price };
+    const line = { productId: product.id, variantId: variant?.id ?? null, variantTitle: variant?.title ?? null, slug: product.slug, title: product.title, image: variant?.image ?? product.image, pricePaise: price };
     // Buy now: only this item goes to checkout; whatever is already in the cart stays there
     if (go) { setBuyNow(store, line, qty); window.location.href = `${base}/checkout/?buy=1`; return; }
     addToCart(store, line, qty);

@@ -1302,6 +1302,10 @@ export const storeProducts = pgTable("store_products", {
   costExtras: jsonb("cost_extras"),
   /** "Frequently bought together": up to 6 other product ids of this store chosen by the merchant (compatible add-ons). */
   addonIds: jsonb("addon_ids").notNull().default([]),
+  /** Filterable attributes shown as shop filters and in Specifications: [{name, value}] e.g. Finish = Chrome (max 12). */
+  attributes: jsonb("attributes").notNull().default([]),
+  /** Product page details: {highlights, specs: [{label, value}], usage, inBox, care, warranty}. */
+  details: jsonb("details").notNull().default({}),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);
@@ -1325,6 +1329,8 @@ export const storeProductVariants = pgTable("store_product_variants", {
   damaged: integer("damaged").notNull().default(0),
   /** Null = use the product's unit cost. */
   unitCostPaise: paise("unit_cost_paise"),
+  /** One of the product's photos (store_media id) shown when this variant is chosen. Null = product photos. */
+  image: text("image"),
   createdAt: created(),
 }, (t) => [index("store_variants_product").on(t.productId)]);
 

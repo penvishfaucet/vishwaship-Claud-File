@@ -14,10 +14,15 @@ export type ProductFormValue = {
   costs?: { product: string; packaging: string; labour: string; other: string; overhead: string };
   /** "Frequently bought together" add-on product ids */
   addonIds?: string[];
+  /** Filterable attributes (Finish, Material, Size…) and product page details */
+  attributes?: Array<{ name: string; value: string }>;
+  details?: { highlights: string; specs: Array<{ label: string; value: string }>; usage: string; inBox: string; care: string; warranty: string };
 };
+const NO_DETAILS = { highlights: "", specs: [] as Array<{ label: string; value: string }>, usage: "", inBox: "", care: "", warranty: "" };
+const ATTR_SUGGEST = ["Brand", "Finish", "Material", "Size", "Colour", "Shape", "Surface type", "Pack size", "Fragrance", "Fabric", "Fit", "Capacity", "Power", "Warranty"];
 export type CatalogItem = { id: string; title: string; sku: string | null; status: string };
 const NO_COSTS = { product: "", packaging: "", labour: "", other: "", overhead: "" };
-export type VariantRow = { id: string | null; values: string[]; sku: string; price: string; compare: string; stock: string; weight: string };
+export type VariantRow = { id: string | null; values: string[]; sku: string; price: string; compare: string; stock: string; weight: string; image?: string | null };
 
 const GST = ["0", "0.25", "3", "5", "12", "18", "28"];
 
@@ -54,7 +59,7 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg(null);
-    const variants = f.variants.map((v) => ({ id: v.id, values: v.values, sku: v.sku, priceRupees: num(v.price), compareRupees: v.compare.trim() ? num(v.compare) : null, stock: Math.floor(num(v.stock) || 0), weightGrams: v.weight.trim() ? Math.floor(num(v.weight)) : null }));
+    const variants = f.variants.map((v) => ({ id: v.id, values: v.values, sku: v.sku, priceRupees: num(v.price), compareRupees: v.compare.trim() ? num(v.compare) : null, stock: Math.floor(num(v.stock) || 0), weightGrams: v.weight.trim() ? Math.floor(num(v.weight)) : null, image: v.image && f.images.includes(v.image) ? v.image : null }));
     const body = {
       title: f.title, slug: f.slug, description: f.description,
       priceRupees: hasVariants ? Math.min(...variants.map((v) => v.priceRupees).filter((x) => x > 0), Infinity) : num(f.price),
@@ -65,6 +70,8 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
       lengthCm: num(f.lengthCm) || 0, breadthCm: num(f.breadthCm) || 0, heightCm: num(f.heightCm) || 0,
       options: f.options, variants: hasVariants ? variants : [],
       addonIds: f.addonIds ?? [],
+      attributes: (f.attributes ?? []).map((a) => ({ name: a.name.trim(), value: a.value.trim() })).filter((a) => a.name && a.value),
+      details: { ...(f.details ?? NO_DETAILS), specs: (f.details?.specs ?? []).map((x) => ({ label: x.label.trim(), value: x.value.trim() })).filter((x) => x.label && x.value) },
       costs: { productRupees: !hasVariants && cs.product.trim() ? Number(cs.product) || 0 : null, packagingRupees: Number(cs.packaging) || 0, labourRupees: Number(cs.labour) || 0, otherRupees: Number(cs.other) || 0, overheadRupees: Number(cs.overhead) || 0 },
     };
     if (hasVariants && variants.some((v) => !(v.priceRupees > 0))) { setBusy(false); setMsg({ err: "Enter a price for every variant" }); return; }
@@ -90,6 +97,7 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
           <div className="field"><label htmlFor="pt">Product name <span className="req">*</span></label><input id="pt" className="input" maxLength={140} value={f.title} onChange={(e) => set("title", e.target.value)} required /></div>
           <div className="field" style={{ marginTop: 12 }}><label htmlFor="pd">Description</label><textarea id="pd" className="input" rows={6} maxLength={5000} value={f.description} onChange={(e) => set("description", e.target.value)} /></div>
         </div>
+        <DetailsCard value={f} onChange={(patch) => setF((cur) => ({ ...cur, ...patch }))} />
         <div className="card mb12" style={{ padding: 20 }}>
           <h3 style={{ marginBottom: 8 }}>Photos</h3>
           <div className="os-thumbs">
@@ -144,7 +152,7 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
           {hasVariants && f.variants.length > 0 && (
             <div style={{ overflowX: "auto", marginTop: 12 }}>
               <table className="os-dns">
-                <thead><tr><th>Variant</th><th>Price ₹</th><th>MRP ₹</th><th>Stock</th><th>SKU</th><th>Weight g</th></tr></thead>
+                <thead><tr><th>Variant</th><th>Price ₹</th><th>MRP ₹</th><th>Stock</th><th>SKU</th><th>Weight g</th>{f.images.length > 1 && <th>Photo</th>}</tr></thead>
                 <tbody>{f.variants.map((v, i) => (
                   <tr key={v.values.join("|")}>
                     <td><b>{v.values.join(" / ")}</b></td>
@@ -153,6 +161,8 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
                     <td><input className="input" style={{ width: 70 }} inputMode="numeric" aria-label={`Stock for ${v.values.join(" / ")}`} value={v.stock} onChange={(e) => setVar(i, "stock", e.target.value.replace(/\D/g, ""))} /></td>
                     <td><input className="input" style={{ width: 110 }} aria-label={`SKU for ${v.values.join(" / ")}`} value={v.sku} maxLength={60} onChange={(e) => setVar(i, "sku", e.target.value)} /></td>
                     <td><input className="input" style={{ width: 80 }} inputMode="numeric" aria-label={`Weight for ${v.values.join(" / ")}`} placeholder={f.weight} value={v.weight} onChange={(e) => setVar(i, "weight", e.target.value.replace(/\D/g, ""))} /></td>
+                    {f.images.length > 1 && <td><select className="input select" style={{ width: 110 }} aria-label={`Photo for ${v.values.join(" / ")}`} value={v.image ?? ""} onChange={(e) => setF({ ...f, variants: f.variants.map((x, j) => (j === i ? { ...x, image: e.target.value || null } : x)) })}>
+                      <option value="">Main photo</option>{f.images.map((m, k) => <option key={m} value={m}>Photo {k + 1}</option>)}</select></td>}
                   </tr>
                 ))}</tbody>
               </table>
@@ -194,6 +204,47 @@ export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }
       </div>
       <style>{`@media (max-width:900px){.os-pform{grid-template-columns:1fr!important}}`}</style>
     </form>
+  );
+}
+
+/** Filters (attributes) + product page sections. Empty fields are not shown to buyers. */
+function DetailsCard({ value, onChange }: { value: ProductFormValue; onChange: (p: Partial<ProductFormValue>) => void }) {
+  const attrs = value.attributes ?? [];
+  const d = value.details ?? NO_DETAILS;
+  const setD = (p: Partial<typeof d>) => onChange({ details: { ...d, ...p } });
+  const area = (k: "highlights" | "usage" | "inBox" | "care" | "warranty", label: string, hint: string, rows = 3) => (
+    <div className="field" style={{ marginTop: 10 }}><label htmlFor={`pdx-${k}`}>{label}</label>
+      <textarea id={`pdx-${k}`} className="input" rows={rows} maxLength={k === "usage" ? 3000 : k === "care" ? 2000 : 1000} value={d[k]} onChange={(e) => setD({ [k]: e.target.value })} placeholder={hint} /></div>
+  );
+  return (
+    <div className="card mb12" style={{ padding: 20 }}>
+      <h3 style={{ marginBottom: 4 }}>Details &amp; filters</h3>
+      <p className="small muted" style={{ margin: "0 0 10px" }}>Attributes become shop filters for this category (e.g. Finish, Material, Size for taps; Surface, Pack size for cleaners) and show under Specifications.</p>
+      <datalist id="attr-names">{ATTR_SUGGEST.map((x) => <option key={x} value={x} />)}</datalist>
+      {attrs.map((a, i) => (
+        <div key={i} className="row" style={{ gap: 6, marginBottom: 6 }}>
+          <input className="input" list="attr-names" placeholder="Name (e.g. Finish)" aria-label={`Attribute ${i + 1} name`} maxLength={30} value={a.name} onChange={(e) => onChange({ attributes: attrs.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+          <input className="input" placeholder="Value (e.g. Chrome)" aria-label={`Attribute ${i + 1} value`} maxLength={60} value={a.value} onChange={(e) => onChange({ attributes: attrs.map((x, j) => (j === i ? { ...x, value: e.target.value } : x)) })} />
+          <button type="button" className="icon-btn" aria-label={`Remove attribute ${i + 1}`} onClick={() => onChange({ attributes: attrs.filter((_, j) => j !== i) })}><Trash2 size={16} /></button>
+        </div>
+      ))}
+      {attrs.length < 12 && <button type="button" className="btn btn-outline btn-sm" onClick={() => onChange({ attributes: [...attrs, { name: "", value: "" }] })}>+ Add attribute</button>}
+      {area("highlights", "Key benefits (one per line)", "Rust-proof brass body\nCeramic disc cartridge — drip free", 3)}
+      <div className="field" style={{ marginTop: 10 }}><label>Specifications</label>
+        {d.specs.map((x, i) => (
+          <div key={i} className="row" style={{ gap: 6, marginBottom: 6 }}>
+            <input className="input" placeholder="e.g. Body" aria-label={`Specification ${i + 1} label`} maxLength={40} value={x.label} onChange={(e) => setD({ specs: d.specs.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)) })} />
+            <input className="input" placeholder="e.g. Brass, 1.2 kg" aria-label={`Specification ${i + 1} value`} maxLength={200} value={x.value} onChange={(e) => setD({ specs: d.specs.map((y, j) => (j === i ? { ...y, value: e.target.value } : y)) })} />
+            <button type="button" className="icon-btn" aria-label={`Remove specification ${i + 1}`} onClick={() => setD({ specs: d.specs.filter((_, j) => j !== i) })}><Trash2 size={16} /></button>
+          </div>
+        ))}
+        {d.specs.length < 20 && <button type="button" className="btn btn-outline btn-sm" onClick={() => setD({ specs: [...d.specs, { label: "", value: "" }] })}>+ Add specification</button>}
+      </div>
+      {area("usage", "How to use / installation", "Steps or tips for using the product")}
+      {area("inBox", "What's in the box", "1 tap, 2 wall flanges, Teflon tape", 2)}
+      {area("care", "Care", "Wipe with a soft dry cloth; no acid cleaners", 2)}
+      {area("warranty", "Warranty", "5-year warranty against manufacturing defects", 2)}
+    </div>
   );
 }
 

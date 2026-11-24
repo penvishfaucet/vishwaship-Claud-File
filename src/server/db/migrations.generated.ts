@@ -817,5 +817,16 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795510701315,
   "hash": "ae4e7dcdaca5ea219573ceea20afe323b17a90fdef7a59a98628c87e79bda0df"
+ },
+ {
+  "tag": "0044_store_product_details",
+  "sql": [
+   "ALTER TABLE \"store_product_variants\" ADD COLUMN \"image\" text;",
+   "\nALTER TABLE \"store_products\" ADD COLUMN \"attributes\" jsonb DEFAULT '[]'::jsonb NOT NULL;",
+   "\nALTER TABLE \"store_products\" ADD COLUMN \"details\" jsonb DEFAULT '{}'::jsonb NOT NULL;"
+  ],
+  "bps": true,
+  "folderMillis": 1795520932364,
+  "hash": "a5771b6a1caf29ef6819ebddd78bd71f809ea820b6e9a913aa23309808fbd687"
  }
 ];

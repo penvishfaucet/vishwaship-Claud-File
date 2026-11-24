@@ -1,5 +1,6 @@
 import { ProductCard, StoreShell } from "@/components/store/Storefront";
 import { bestSellers } from "@/server/store/public";
+import { attrKey, facetsFor } from "@/lib/store-product-details";
 
 const SORTS: Array<[string, string]> = [["", "Featured"], ["best", "Best selling"], ["new", "Newest"], ["price_asc", "Price: low to high"], ["price_desc", "Price: high to low"]];
 const rupee = (v: unknown) => { const n = Number.parseInt(typeof v === "string" ? v : "", 10); return Number.isFinite(n) && n >= 0 && n < 10_000_000 ? n : null; };
@@ -29,6 +30,10 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
     const catName = new Map(sf.categories.map((c) => [c.slug, c.name]));
     list = list.filter((p) => { const hay = `${p.title} ${p.description} ${p.categorySlug ? catName.get(p.categorySlug) ?? "" : ""}`.toLowerCase(); return words.every((w) => hay.includes(w)); });
   }
+  // category-wise filters from product attributes (Finish, Material, Size… / Surface, Pack size…)
+  const facets = facetsFor(list);
+  const picked = facets.flatMap((fc) => { const v = sp[fc.key]; return typeof v === "string" && fc.values.some((x) => x.value === v) ? [[fc.key, v] as const] : []; });
+  for (const [k, v] of picked) list = list.filter((p) => p.attributes.some((a) => attrKey(a.name) === k && a.value === v));
   if (inStock) list = list.filter((p) => p.inStock);
   if (min !== null) list = list.filter((p) => p.pricePaise >= min * 100);
   if (max !== null) list = list.filter((p) => p.pricePaise <= max * 100);
@@ -36,7 +41,7 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
   if (sort === "price_desc") list = [...list].sort((a, b) => b.pricePaise - a.pricePaise);
   if (sort === "new") list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   if (sort === "best") list = [...list].sort((a, b) => b.sold - a.sold || Number(b.featured) - Number(a.featured));
-  const filtersOn = inStock || min !== null || max !== null;
+  const filtersOn = inStock || min !== null || max !== null || picked.length > 0;
   // Best sellers of this category, above the grid (first page, no search / filters)
   const catBest = cat && !term && !filtersOn && !sort && (typeof sp.page !== "string" || sp.page === "1") ? bestSellers(sf.products, 4, cat.slug).filter((p) => p.sold > 0) : [];
   const PER = 48;
@@ -45,7 +50,7 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
   const shown = list.slice((pageNo - 1) * PER, pageNo * PER);
   const keep = keepQs(sf);
   const q = (o: Record<string, string>) => { const u = new URLSearchParams(keep); for (const [k, v] of Object.entries(o)) if (v) u.set(k, v); const s = u.toString(); return s ? `?${s}` : ""; };
-  const cur = { c: cat?.slug ?? "", q: term, sort, stock: inStock ? "1" : "", min: min !== null ? String(min) : "", max: max !== null ? String(max) : "" };
+  const cur: Record<string, string> = { c: cat?.slug ?? "", q: term, sort, stock: inStock ? "1" : "", min: min !== null ? String(min) : "", max: max !== null ? String(max) : "", ...Object.fromEntries(picked) };
   return (
     <StoreShell sf={sf}>
       <div className="sf-wrap sf-page">
@@ -64,6 +69,9 @@ export default async function Shop({ params, searchParams }: { params: SfParams;
             <label>Sort by<select className="sf-input" name="sort" defaultValue={sort}>{SORTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
             <label>Min ₹<input className="sf-input" name="min" inputMode="numeric" pattern="[0-9]*" defaultValue={cur.min} placeholder="0" /></label>
             <label>Max ₹<input className="sf-input" name="max" inputMode="numeric" pattern="[0-9]*" defaultValue={cur.max} placeholder="Any" /></label>
+            {facets.map((fc) => (
+              <label key={fc.key}>{fc.name}<select className="sf-input" name={fc.key} defaultValue={cur[fc.key] ?? ""}><option value="">All</option>{fc.values.map((x) => <option key={x.value} value={x.value}>{x.value} ({x.count})</option>)}</select></label>
+            ))}
             <label className="chk"><input type="checkbox" name="stock" value="1" defaultChecked={inStock} /> In stock only</label>
             <span className="acts"><button className="sf-btn">Apply</button><a className="sf-link" href={`${sf.base}/shop/${q({ c: cur.c, q: term })}`}>Clear all</a></span>
           </form>

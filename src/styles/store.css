@@ -496,3 +496,20 @@
 .sf-ret label{display:grid;gap:4px;font-size:13px;color:var(--sf-muted)}
 .sf-ret-line{grid-template-columns:1fr auto!important;align-items:center;color:var(--sf-text)!important;font-size:14px!important}
 .sf-ret-line .sf-input{width:auto}
+.sf-slide-img{position:absolute;inset:0;z-index:0}
+.sf-slide-img img{width:100%;height:100%;object-fit:cover;display:block}
+.sf-slide.has-img::before{z-index:1}
+.sf-slide .sf-wrap{z-index:2}
+/* product page: highlights, specs, sections */
+.sf-hl{margin:10px 0 0;padding-left:18px;display:grid;gap:4px;font-size:14.5px}
+.sf-acc{border-top:1px solid var(--sf-line);margin:6px 0 20px}
+.sf-acc details{border-bottom:1px solid var(--sf-line)}
+.sf-acc summary{cursor:pointer;padding:14px 0;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+.sf-acc summary::-webkit-details-marker{display:none}
+.sf-acc summary::after{content:"+";font-weight:400;font-size:20px;line-height:1}
+.sf-acc details[open] summary::after{content:"\2212"}
+.sf-acc details>div{padding:0 0 14px}
+.sf-specs{width:100%;border-collapse:collapse;font-size:14px}
+.sf-specs th{text-align:left;font-weight:500;color:var(--sf-muted);width:40%;padding:7px 10px 7px 0;vertical-align:top}
+.sf-specs td{padding:7px 0}
+.sf-specs tr+tr th,.sf-specs tr+tr td{border-top:1px solid var(--sf-line)}

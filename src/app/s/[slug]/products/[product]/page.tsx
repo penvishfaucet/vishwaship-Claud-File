@@ -35,6 +35,7 @@ export default async function ProductPage({ params, searchParams }: { params: P;
   const reviews = sf.demo ? [] : await productReviews(sf.id, p.id);
   const ld = {
     "@context": "https://schema.org", "@type": "Product", name: p.title, description: p.description, image: p.images,
+    ...(p.attributes.length ? { additionalProperty: p.attributes.map((a) => ({ "@type": "PropertyValue", name: a.name, value: a.value })) } : {}),
     offers: { "@type": "Offer", priceCurrency: "INR", price: (p.pricePaise / 100).toFixed(2), availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock" },
     ...(p.rating ? { aggregateRating: { "@type": "AggregateRating", ratingValue: p.rating.avg, reviewCount: p.rating.count } } : {}),
   };
@@ -50,6 +51,7 @@ export default async function ProductPage({ params, searchParams }: { params: P;
             {p.sale && <p style={{ margin: "0 0 6px", fontWeight: 700, color: "var(--sf-primary)" }}>{p.sale.name}: {p.sale.percentOff}% off</p>}
             {p.options.length === 0 && <Price p={p} />}
             {p.options.length === 0 && <p className="sf-note" style={{ marginTop: 4 }}>Inclusive of all taxes</p>}
+            {p.details.highlights.trim() && <ul className="sf-hl">{p.details.highlights.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 8).map((x) => <li key={x}>{x}</li>)}</ul>}
             <AddToCart store={sf.slug} base={sf.base} product={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? null, pricePaise: p.pricePaise, comparePaise: p.comparePaise, inStock: p.inStock, options: p.options, variants: p.variants }} />
             {addons.length > 0 && (
               <div className="sf-recs sf-fbt"><h3>Frequently bought together</h3>{addons.map((x) => <MiniRow key={x.id} store={sf.slug} base={sf.base} p={mini(x)} list="pdp_bought_together" />)}</div>
@@ -59,6 +61,16 @@ export default async function ProductPage({ params, searchParams }: { params: P;
             )}
             <DeliveryCheck store={sf.slug} demo={sf.demo} />
             {p.description && <div className="sf-prose" style={{ marginBottom: 20 }}>{p.description}</div>}
+            {(() => {
+              const specs = [...p.attributes.map((a) => ({ label: a.name, value: a.value })), ...p.details.specs];
+              const parts: Array<[string, React.ReactNode]> = [];
+              if (specs.length) parts.push(["Specifications", <table key="t" className="sf-specs"><tbody>{specs.map((x, i) => <tr key={i}><th scope="row">{x.label}</th><td>{x.value}</td></tr>)}</tbody></table>]);
+              if (p.details.usage.trim()) parts.push(["How to use", <p key="u" className="sf-prose">{p.details.usage}</p>]);
+              if (p.details.inBox.trim()) parts.push(["What's in the box", <p key="b" className="sf-prose">{p.details.inBox}</p>]);
+              if (p.details.care.trim()) parts.push(["Care", <p key="c" className="sf-prose">{p.details.care}</p>]);
+              if (p.details.warranty.trim()) parts.push(["Warranty", <p key="w" className="sf-prose">{p.details.warranty}</p>]);
+              return parts.length ? <div className="sf-acc">{parts.map(([t, body], i) => <details key={t} open={i === 0}><summary>{t}</summary><div>{body}</div></details>)}</div> : null;
+            })()}
             <ul className="sf-perks">
               {sf.settings.checkout.codEnabled && <li>Cash on Delivery available</li>}
               <li>Ships across India with live tracking</li>

@@ -103,6 +103,16 @@ describe("store lifecycle", () => {
     // saving without addonIds keeps them
     await cat.saveProduct(A, { ...input, addonIds: undefined }, one.id);
     expect((await pub.loadStorefront("asha-crafts"))!.products.find((x) => x.id === one.id)?.addons).toEqual([two.id]);
+    // attributes + details + variant photo must be one of the product's photos
+    await cat.saveProduct(A, { ...input, attributes: [{ name: "Finish", value: "Chrome" }], details: { highlights: "Brass body", specs: [{ label: "Body", value: "Brass" }], usage: "", inBox: "1 tap", care: "", warranty: "5 years" } }, one.id);
+    const sf3 = (await pub.loadStorefront("asha-crafts"))!.products.find((x) => x.id === one.id)!;
+    expect(sf3.attributes).toEqual([{ name: "Finish", value: "Chrome" }]);
+    expect(sf3.details).toMatchObject({ highlights: "Brass body", inBox: "1 tap", warranty: "5 years" });
+    const other = await cat.uploadMedia(A, PNG);
+    const withVar = cat.ProductInput.parse({ ...input, options: ["Size"], variants: [{ values: ["S"], priceRupees: 100, stock: 1, image: other }] });
+    await expect(cat.saveProduct(A, withVar, one.id)).rejects.toThrow(/not one of this product/);
+    await cat.saveProduct(A, { ...withVar, variants: [{ ...withVar.variants[0], image: one.images && (one.images as string[])[0] }] }, one.id);
+    expect((await pub.loadStorefront("asha-crafts"))!.products.find((x) => x.id === one.id)!.variants[0].image).toMatch(/store-media/);
     // change draft colour, publish v2, restore v1 into draft
     await svc.saveDraftTheme(A, "bazaar", { ...defaultTheme(), colors: { ...defaultTheme().colors, primary: "#000000" } });
     expect((await pub.loadStorefront("asha-crafts"))?.theme.colors.primary).toBe(defaultTheme().colors.primary); // live unchanged until publish

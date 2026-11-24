@@ -1,4 +1,5 @@
 import "server-only";
+import { ProductAttributes, ProductDetails } from "@/lib/store-product-details";
 import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
@@ -18,6 +19,8 @@ export const VariantInput = z.object({
   compareRupees: z.number().min(0).max(10_00_000).nullable().default(null),
   stock: z.number().int().min(0).max(1_000_000),
   weightGrams: z.number().int().min(1).max(100_000).nullable().default(null),
+  /** One of the product photos to show for this option (null = product photos). */
+  image: z.string().regex(/^sm_[A-Za-z0-9]{8,40}$/).nullable().default(null),
 });
 
 export const ProductInput = z.object({
@@ -45,6 +48,9 @@ export const ProductInput = z.object({
   variants: z.array(VariantInput).max(100).default([]),
   /** "Frequently bought together" add-ons: other active products of this store (max 6). Undefined = keep as it is. */
   addonIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{4,64}$/)).max(6).optional(),
+  /** Filterable attributes + product page details (undefined = keep as they are). */
+  attributes: ProductAttributes.optional(),
+  details: ProductDetails.optional(),
   /** Cost per piece (owner 2026-11-23). productRupees = purchase cost (no variants only; null = leave as it is). */
   costs: z.object({
     productRupees: z.number().min(0).max(10_00_000).nullable().default(null),
@@ -124,6 +130,7 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     if (rows.length !== addonIds.length) throw new StoreError("An add-on product was not found in your store");
   }
   const slug = await uniqueSlug(s.id, input.slug || input.title, id);
+  for (const v of input.variants) if (v.image && !input.images.includes(v.image)) throw new StoreError(`The photo chosen for ${v.values.join(" / ")} is not one of this product's photos`);
   for (const v of input.variants) if (v.compareRupees && v.compareRupees <= v.priceRupees) throw new StoreError(`Compare-at price of ${v.values.join(" / ")} must be more than its price`);
   const hasVariants = input.options.length > 0;
   const values = {
@@ -136,6 +143,8 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     lowStockAt: input.lowStockAt, lengthMm: Math.round(input.lengthCm * 10), breadthMm: Math.round(input.breadthCm * 10), heightMm: Math.round(input.heightCm * 10),
     options: input.options, updatedAt: new Date(),
     ...(addonIds ? { addonIds } : {}),
+    ...(input.attributes ? { attributes: input.attributes } : {}),
+    ...(input.details ? { details: input.details } : {}),
     ...(input.costs ? {
       costExtras: { packagingPaise: toPaise(input.costs.packagingRupees), labourPaise: toPaise(input.costs.labourRupees), otherPaise: toPaise(input.costs.otherRupees), overheadPaise: toPaise(input.costs.overheadRupees) },
       ...(input.costs.productRupees !== null && !hasVariants ? { unitCostPaise: toPaise(input.costs.productRupees) } : {}),
@@ -157,7 +166,7 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     const known = new Set(existing.map((e) => e.id));
     const kept = new Set<string>();
     for (const [i, v] of input.variants.entries()) {
-      const row = { title: v.values.join(" / "), optionValues: v.values, sku: v.sku || null, pricePaise: toPaise(v.priceRupees), comparePaise: v.compareRupees ? toPaise(v.compareRupees) : null, stock: v.stock, weightGrams: v.weightGrams, sort: i, archived: false };
+      const row = { title: v.values.join(" / "), optionValues: v.values, sku: v.sku || null, pricePaise: toPaise(v.priceRupees), comparePaise: v.compareRupees ? toPaise(v.compareRupees) : null, stock: v.stock, weightGrams: v.weightGrams, sort: i, archived: false, image: v.image ?? null };
       if (v.id && known.has(v.id)) {
         await tx.update(schema.storeProductVariants).set(row).where(eq(schema.storeProductVariants.id, v.id)); kept.add(v.id);
         const was = beforeV.find((b) => b.id === v.id)?.stock ?? 0;

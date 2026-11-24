@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { readExtras } from "@/lib/store-costs";
+import { readAttributes, readDetails } from "@/lib/store-product-details";
 import { ProductForm } from "@/components/portal/store/CatalogForms";
 import { getProduct, listCategories, listProducts, productVariants } from "@/server/store/catalog";
 import { requireStorePage } from "@/server/store/portal";
@@ -30,7 +31,8 @@ export default async function EditProduct({ params }: { params: Promise<{ id: st
           sku: p.sku ?? "", hsn: p.hsn ?? "", taxPercent: String(p.taxBps / 100), lowStockAt: String(p.lowStockAt),
           costs: (() => { const x = readExtras(p.costExtras); const r = (v: number) => (v ? String(v / 100) : ""); return { product: p.unitCostPaise === null ? "" : String(p.unitCostPaise / 100), packaging: r(x.packagingPaise), labour: r(x.labourPaise), other: r(x.otherPaise), overhead: r(x.overheadPaise) }; })(), lengthCm: p.lengthMm ? String(p.lengthMm / 10) : "", breadthCm: p.breadthMm ? String(p.breadthMm / 10) : "", heightCm: p.heightMm ? String(p.heightMm / 10) : "",
           addonIds: (p.addonIds as string[] | null) ?? [],
-          options: p.options as string[], variants: variants.map((v) => ({ id: v.id, values: v.optionValues as string[], sku: v.sku ?? "", price: String(v.pricePaise / 100), compare: v.comparePaise ? String(v.comparePaise / 100) : "", stock: String(v.stock), weight: v.weightGrams ? String(v.weightGrams) : "" })),
+          attributes: readAttributes(p.attributes), details: readDetails(p.details),
+          options: p.options as string[], variants: variants.map((v) => ({ image: v.image ?? null, id: v.id, values: v.optionValues as string[], sku: v.sku ?? "", price: String(v.pricePaise / 100), compare: v.comparePaise ? String(v.comparePaise / 100) : "", stock: String(v.stock), weight: v.weightGrams ? String(v.weightGrams) : "" })),
         }} />
     </>
   );

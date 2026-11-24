@@ -8,6 +8,7 @@ import type { SfCategory, SfProduct } from "@/components/store/types";
 import { planState } from "@/lib/store-plan";
 import { couponText, saleFor, salePrice } from "@/lib/store-sale";
 import { activeSales } from "./sales";
+import { readAttributes, readDetails } from "@/lib/store-product-details";
 import { publicTags } from "./marketing";
 import { onlineMethods } from "./checkout";
 
@@ -83,7 +84,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
       const pv = options.length ? vars.filter((v) => v.productId === p.id) : [];
       const sale = saleFor(sales, p.id, p.categoryId);
       const pct = sale?.percentOff ?? null;
-      const variants = pv.map((v) => ({ id: v.id, title: v.title, values: v.optionValues as string[], ...salePair(v.pricePaise, v.comparePaise, pct), inStock: v.stock > 0 }));
+      const variants = pv.map((v) => ({ id: v.id, title: v.title, values: v.optionValues as string[], ...salePair(v.pricePaise, v.comparePaise, pct), inStock: v.stock > 0, image: v.image ? mediaUrl(v.image) : null }));
       const cheapest = variants.length ? variants.reduce((m, v) => (v.pricePaise < m.pricePaise ? v : m)) : null;
       return {
         id: p.id, title: p.title, slug: p.slug, description: p.description ?? "",
@@ -93,6 +94,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
         seo: (p.seo as { title?: string; description?: string }) ?? {},
         options, variants, sale: sale ? { name: sale.name, percentOff: sale.percentOff } : null, rating: rate.get(p.id) ?? null,
         sold: sold.get(p.id) ?? 0, createdAt: p.createdAt.toISOString(),
+        attributes: readAttributes(p.attributes), details: readDetails(p.details),
         addons: [...new Set([...((p.addonIds as string[] | null) ?? []), ...(together.get(p.id) ?? [])])].filter((x) => x !== p.id && activeIds.has(x)).slice(0, 6),
       };
     }),
@@ -166,6 +168,7 @@ function demoStore(themeKey?: string): Storefront {
     images: [`/store-demo/${img}.svg`], inStock: true, featured, categorySlug: cat, seo: {}, options: [], variants: [],
     sale: compare ? { name: "Festive Sale", percentOff: Math.round((1 - price / compare) * 100) } : null, rating: null,
     sold: featured ? 10 : 2, addons: [], createdAt: new Date(0).toISOString(),
+    attributes: [], details: { highlights: "", specs: [], usage: "", inBox: "", care: "", warranty: "" },
   });
   const products = [
     P("indigo-cotton-kurta", "Indigo Cotton Kurta", 1299, 1799, "kurtas", "kurta-indigo", "Breathable hand-block printed cotton kurta. Regular fit."),
@@ -177,6 +180,16 @@ function demoStore(themeKey?: string): Storefront {
     P("cushion-cover", "Block Print Cushion Cover", 449, null, "home-decor", "cushion", "16x16 inch cotton cushion cover, hand block printed.", false),
     P("cotton-stole", "Handloom Cotton Stole", 699, 999, "accessories", "stole", "Soft handloom stole in natural dyes.", false),
   ];
+  // demo attributes (shop filters + Specifications)
+  const attrs: Record<string, Array<[string, string]>> = {
+    "indigo-cotton-kurta": [["Fabric", "Cotton"], ["Colour", "Indigo"], ["Fit", "Regular"]], "mustard-festive-kurta": [["Fabric", "Rayon"], ["Colour", "Mustard"], ["Fit", "Regular"]],
+    "terracotta-planter": [["Material", "Terracotta"]], "brass-diya": [["Material", "Brass"]], "cushion-cover": [["Material", "Cotton"]],
+    "jute-tote": [["Material", "Jute"]], "silver-jhumka": [["Material", "Oxidised silver"]], "cotton-stole": [["Material", "Cotton"]],
+  };
+  for (const p of products) p.attributes = (attrs[p.id] ?? []).map(([name, value]) => ({ name, value }));
+  const kurta = products.find((p) => p.id === "indigo-cotton-kurta")!;
+  kurta.details = { highlights: "Hand-block printed by artisans in Jaipur\nBreathable 100% cotton\nSide pockets", specs: [{ label: "Length", value: "Knee length (44 in for M)" }, { label: "Neck", value: "Round with V placket" }],
+    usage: "", inBox: "1 kurta", care: "Hand wash cold, dry in shade. Colours may bleed in the first wash.", warranty: "" };
   // demo add-ons: kurtas → stole and jhumka; planter → diya
   for (const p of products) p.addons = p.categorySlug === "kurtas" ? ["cotton-stole", "silver-jhumka"] : p.id === "terracotta-planter" ? ["brass-diya"] : [];
   // kurtas show how size variants look

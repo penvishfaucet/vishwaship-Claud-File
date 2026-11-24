@@ -118,7 +118,7 @@ function Section({ s, sf, keep }: { s: StoreSection; sf: Storefront; keep: strin
   switch (s.type) {
     case "hero": {
       const slides = heroSlides(v, sf.base, sf.name).map((s, k) => ({
-        ...s, image: sectionImage(s.image) ?? (sf.demo && k === 0 ? "/store-demo/hero.svg" : null),
+        ...s, image: sectionImage(s.image) ?? (sf.demo && k === 0 ? "/store-demo/hero.svg" : null), imageMobile: sectionImage(s.imageMobile),
         buttons: s.buttons.map((b) => ({ ...b, href: keep && b.href.startsWith(sf.base) ? `${b.href}${b.href.includes("?") ? "&" : "?"}${keep.slice(1)}` : b.href })),
       }));
       const secs = Number.parseInt(v.autoplay ?? "5", 10);

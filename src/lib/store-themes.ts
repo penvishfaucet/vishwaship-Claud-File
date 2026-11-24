@@ -29,7 +29,9 @@ export const SECTION_FIELDS: Record<SectionType, SectionField[]> = {
     { key: "align", label: "Text alignment", kind: "select", options: ["left", "center"] },
     { key: "heading", label: "Heading", kind: "text", group: "Slide 1" },
     { key: "subheading", label: "Text", kind: "textarea", group: "Slide 1" },
-    { key: "image", label: "Image", kind: "image", group: "Slide 1" },
+    { key: "image", label: "Image (wide, for computers)", kind: "image", group: "Slide 1" },
+    { key: "image_mobile", label: "Phone image (optional, tall)", kind: "image", group: "Slide 1" },
+    { key: "image_alt", label: "Image description (for blind users and Google)", kind: "text", group: "Slide 1" },
     { key: "button", label: "Button text", kind: "text", group: "Slide 1" },
     { key: "button_link", label: "Button link (blank = Shop page)", kind: "text", group: "Slide 1" },
     { key: "button2", label: "Second button text (optional)", kind: "text", group: "Slide 1" },
@@ -37,7 +39,9 @@ export const SECTION_FIELDS: Record<SectionType, SectionField[]> = {
     ...[2, 3, 4].flatMap((n) => [
       { key: `s${n}_heading`, label: "Heading (blank = slide hidden)", kind: "text" as const, group: `Slide ${n}` },
       { key: `s${n}_text`, label: "Text", kind: "textarea" as const, group: `Slide ${n}` },
-      { key: `s${n}_image`, label: "Image", kind: "image" as const, group: `Slide ${n}` },
+      { key: `s${n}_image`, label: "Image (wide, for computers)", kind: "image" as const, group: `Slide ${n}` },
+      { key: `s${n}_image_mobile`, label: "Phone image (optional, tall)", kind: "image" as const, group: `Slide ${n}` },
+      { key: `s${n}_alt`, label: "Image description", kind: "text" as const, group: `Slide ${n}` },
       { key: `s${n}_button`, label: "Button text", kind: "text" as const, group: `Slide ${n}` },
       { key: `s${n}_link`, label: "Button link", kind: "text" as const, group: `Slide ${n}` },
     ]),
@@ -204,7 +208,7 @@ export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(
 export const rupees = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
 // ---------- sliding banner ----------
-export type HeroSlide = { heading: string; text: string; image: string; buttons: Array<{ label: string; href: string }> };
+export type HeroSlide = { heading: string; text: string; image: string; imageMobile: string; alt: string; buttons: Array<{ label: string; href: string }> };
 
 /** A merchant-typed link: store-relative paths ("/shop/", "products/x") stay inside the store; full links must be https. */
 export function storeLink(raw: string | undefined, base: string, fallback: string): string {
@@ -219,11 +223,11 @@ export function storeLink(raw: string | undefined, base: string, fallback: strin
 export function heroSlides(v: Record<string, string>, base: string, fallbackHeading: string): HeroSlide[] {
   const shop = `${base}/shop/`;
   const first: HeroSlide = {
-    heading: v.heading || fallbackHeading, text: v.subheading ?? "", image: v.image ?? "",
+    heading: v.heading || fallbackHeading, text: v.subheading ?? "", image: v.image ?? "", imageMobile: v.image_mobile ?? "", alt: v.image_alt ?? "",
     buttons: [{ label: v.button || "Shop now", href: storeLink(v.button_link, base, shop) }, ...(v.button2 ? [{ label: v.button2, href: storeLink(v.button2_link, base, shop) }] : [])],
   };
   const more = [2, 3, 4].filter((n) => v[`s${n}_heading`]).map((n) => ({
-    heading: v[`s${n}_heading`], text: v[`s${n}_text`] ?? "", image: v[`s${n}_image`] ?? "",
+    heading: v[`s${n}_heading`], text: v[`s${n}_text`] ?? "", image: v[`s${n}_image`] ?? "", imageMobile: v[`s${n}_image_mobile`] ?? "", alt: v[`s${n}_alt`] ?? "",
     buttons: v[`s${n}_button`] ? [{ label: v[`s${n}_button`], href: storeLink(v[`s${n}_link`], base, shop) }] : [],
   }));
   return [first, ...more];

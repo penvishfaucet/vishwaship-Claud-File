@@ -1,6 +1,6 @@
 /** Storefront view models (plain data, safe to pass to client components). */
 export type SfCategory = { id: string; name: string; slug: string };
-export type SfVariant = { id: string; title: string; values: string[]; pricePaise: number; comparePaise: number | null; inStock: boolean };
+export type SfVariant = { id: string; title: string; values: string[]; pricePaise: number; comparePaise: number | null; inStock: boolean; image?: string | null };
 export type SfProduct = {
   id: string; title: string; slug: string; description: string;
   pricePaise: number; comparePaise: number | null; images: string[];
@@ -19,6 +19,9 @@ export type SfProduct = {
   addons: string[];
   /** ISO time the product was added (Newest sort). */
   createdAt: string;
+  /** Filterable attributes (Finish = Chrome…) and product page details. */
+  attributes: Array<{ name: string; value: string }>;
+  details: { highlights: string; specs: Array<{ label: string; value: string }>; usage: string; inBox: string; care: string; warranty: string };
 };
 /** Small product card data for the cart drawer and add-on rows (client components). */
 export type SfMini = { id: string; slug: string; title: string; image: string | null; pricePaise: number; comparePaise: number | null; hasOptions: boolean; inStock: boolean };

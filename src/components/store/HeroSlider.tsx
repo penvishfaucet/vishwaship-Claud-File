@@ -2,7 +2,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export type Slide = { heading: string; text: string; image: string | null; buttons: Array<{ label: string; href: string }> };
+export type Slide = { heading: string; text: string; image: string | null; imageMobile?: string | null; alt?: string; buttons: Array<{ label: string; href: string }> };
 
 /**
  * Home page sliding banner. Autoplay pauses on hover/focus, when the tab is hidden and for people who prefer
@@ -41,8 +41,14 @@ export function HeroSlider({ slides, intervalMs, center }: { slides: Slide[]; in
       onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={() => setPaused(false)}>
       <div className="sf-slides" ref={track} onScroll={onScroll}>
         {slides.map((s, k) => (
-          <div className={`sf-slide${s.image ? " has-img" : ""}`} key={k} role="group" aria-roledescription="slide" aria-label={`${k + 1} of ${n}`} aria-hidden={k !== i}
-            style={s.image ? { backgroundImage: `url(${JSON.stringify(s.image).slice(1, -1)})` } : undefined}>
+          <div className={`sf-slide${s.image ? " has-img" : ""}`} key={k} role="group" aria-roledescription="slide" aria-label={`${k + 1} of ${n}`} aria-hidden={k !== i}>
+            {s.image && (
+              // phones get the tall photo when the merchant added one; the first slide loads first (LCP), the rest lazily
+              <picture className="sf-slide-img">
+                {s.imageMobile && <source media="(max-width: 760px)" srcSet={s.imageMobile} />}
+                <img src={s.image} alt={s.alt || ""} loading={k === 0 ? "eager" : "lazy"} fetchPriority={k === 0 ? "high" : "low"} decoding="async" />
+              </picture>
+            )}
             <div className="sf-wrap">
               <div className="copy">
                 {k === 0 ? <h1>{s.heading}</h1> : <h2 className="h1">{s.heading}</h2>}
