@@ -76,6 +76,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
     { id: "settings.notifications", href: "/portal/notifications/", label: "Shipping Notification", icon: Bell },
     { id: "settings.cod", href: "/portal/notifications/cod/", label: "COD Confirmation", icon: BadgeCheck },
     { id: "settings.early_cod", href: "/portal/settings/early-cod/", label: "Early COD Subscription", icon: Timer, module: "early_cod" },
+    { id: "settings.cod_bank", href: "/portal/settings/cod-bank/", label: "COD Bank Account", icon: BadgeIndianRupee },
   ] },
   { id: "warehouse", href: "/portal/addresses/", label: "Warehouse", icon: MapPin, module: "warehouses" },
   { id: "integrations", group: "Integrations", icon: Plug, items: [

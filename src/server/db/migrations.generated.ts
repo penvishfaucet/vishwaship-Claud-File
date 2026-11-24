@@ -839,5 +839,24 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795528368041,
   "hash": "f240500f0497a689575fcfcc27241cb5f2e08a90ccfeae394935b555ba75f5ad"
+ },
+ {
+  "tag": "0046_cod_receipts_payouts",
+  "sql": [
+   "-- COD payouts (owner 2026-11-24): what the couriers paid us per AWB, the client payout bank account, and per payout the\n-- client dues settled from it. Clients are paid only COD a courier has paid in (or under Early COD).\nCREATE TABLE \"cod_receipt_imports\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"source\" text NOT NULL,\n\t\"file_name\" text,\n\t\"rows\" integer DEFAULT 0 NOT NULL,\n\t\"matched\" integer DEFAULT 0 NOT NULL,\n\t\"flagged\" integer DEFAULT 0 NOT NULL,\n\t\"total_paise\" bigint DEFAULT 0 NOT NULL,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nCREATE TABLE \"cod_receipts\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"awb\" text NOT NULL,\n\t\"shipment_id\" text,\n\t\"org_id\" text,\n\t\"amount_paise\" bigint NOT NULL,\n\t\"expected_paise\" bigint,\n\t\"utr\" text,\n\t\"remitted_on\" timestamp with time zone,\n\t\"status\" text NOT NULL,\n\t\"note\" text,\n\t\"import_id\" text,\n\t\"resolved_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone,\n\tCONSTRAINT \"cod_receipts_awb_unique\" UNIQUE(\"awb\")\n);\n",
+   "\nCREATE TABLE \"org_payout_accounts\" (\n\t\"org_id\" text PRIMARY KEY NOT NULL,\n\t\"holder_name\" text NOT NULL,\n\t\"account_enc\" text NOT NULL,\n\t\"account_last4\" text NOT NULL,\n\t\"ifsc\" text NOT NULL,\n\t\"bank_name\" text,\n\t\"updated_by\" text,\n\t\"updated_at\" timestamp with time zone\n);\n",
+   "\nALTER TABLE \"cod_remittances\" ADD COLUMN \"wallet_offset_paise\" bigint DEFAULT 0 NOT NULL;",
+   "\nALTER TABLE \"cod_remittances\" ADD COLUMN \"run_id\" text;",
+   "\nALTER TABLE \"cod_receipts\" ADD CONSTRAINT \"cod_receipts_shipment_id_shipments_id_fk\" FOREIGN KEY (\"shipment_id\") REFERENCES \"public\".\"shipments\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"cod_receipts\" ADD CONSTRAINT \"cod_receipts_org_id_orgs_id_fk\" FOREIGN KEY (\"org_id\") REFERENCES \"public\".\"orgs\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"cod_receipts\" ADD CONSTRAINT \"cod_receipts_import_id_cod_receipt_imports_id_fk\" FOREIGN KEY (\"import_id\") REFERENCES \"public\".\"cod_receipt_imports\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nALTER TABLE \"org_payout_accounts\" ADD CONSTRAINT \"org_payout_accounts_org_id_orgs_id_fk\" FOREIGN KEY (\"org_id\") REFERENCES \"public\".\"orgs\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE INDEX \"cod_receipts_shipment\" ON \"cod_receipts\" USING btree (\"shipment_id\");",
+   "\nCREATE INDEX \"cod_receipts_status\" ON \"cod_receipts\" USING btree (\"status\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795544387232,
+  "hash": "d5c4f39aaa1f38cbc4335a61c0f04b061f601f6e3543aaf0c6f3c731e9471f1a"
  }
 ];

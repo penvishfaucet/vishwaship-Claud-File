@@ -35,7 +35,8 @@ export async function documents(orgId: string, from: Date, to: Date, q?: string)
   return docs.map((d) => ({ ...d, tax: docTax(d, company, org), originalNumber: orig.find((o) => o.id === d.originalDocId)?.number ?? (d.refType === "invoice" ? d.refId : null) }));
 }
 
-const PAY_KINDS = ["recharge_credit"];
+// money paid into the wallet: recharges, and dues paid from the client's COD (a cancelled payout reverses it)
+const PAY_KINDS = ["recharge_credit", "cod_offset", "cod_offset_reversal"];
 const USE: Record<string, string> = {
   reserve_settle: "Shipment charges", weight_charge: "Weight charges", rto_charge: "RTO charges", credits_purchase: "Notification credits",
   store_plan: "Online Store plan", store_fee: "Online Store fees", adjustment_debit: "Debit adjustments", refund_debit: "Refund reversals", store_deposit: "Refundable deposits (not a service)",

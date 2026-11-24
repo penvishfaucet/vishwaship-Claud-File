@@ -38,6 +38,8 @@ const KIND: Record<string, { type: PassbookType; title: string }> = {
   store_fee: { type: "other", title: "Online Store Fee (delivered order)" },
   store_deposit: { type: "other", title: "Managed Ads Security Deposit" },
   store_deposit_refund: { type: "refund", title: "Security Deposit Refund" },
+  cod_offset: { type: "recharge", title: "Dues Paid from COD" },
+  cod_offset_reversal: { type: "recharge", title: "Dues Paid from COD (reversed)" },
 };
 
 export async function passbookHistory(orgId: string, o: { from: Date; to: Date; type?: PassbookType | "all"; limit?: number }): Promise<PassbookItem[]> {

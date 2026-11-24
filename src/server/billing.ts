@@ -62,8 +62,9 @@ export async function shippingCharges(orgId: string, from: Date, to: Date) {
 /** COD: per-shipment reconciliation + remittance batches. */
 export async function codOverview(orgId: string) {
   const db = await getDb();
-  const ships = await db.select({ o: schema.orders, s: schema.shipments, item: schema.codRemittanceItems, r: schema.codRemittances })
+  const ships = await db.select({ o: schema.orders, s: schema.shipments, item: schema.codRemittanceItems, r: schema.codRemittances, rc: schema.codReceipts })
     .from(schema.shipments).innerJoin(schema.orders, eq(schema.orders.id, schema.shipments.orderId))
+    .leftJoin(schema.codReceipts, eq(schema.codReceipts.shipmentId, schema.shipments.id))
     .leftJoin(schema.codRemittanceItems, eq(schema.codRemittanceItems.shipmentId, schema.shipments.id))
     .leftJoin(schema.codRemittances, eq(schema.codRemittances.id, schema.codRemittanceItems.remittanceId))
     .where(and(eq(schema.shipments.orgId, orgId), gt(schema.orders.codAmountPaise, 0))).orderBy(desc(schema.shipments.createdAt)).limit(1000);
@@ -75,10 +76,10 @@ export async function codOverview(orgId: string) {
   const scheduled = live.filter((b) => b.status === "scheduled").reduce((t, b) => t + b.netPaise, 0);
   const deductions = live.reduce((t, b) => t + b.deductionsPaise, 0);
   const unbatched = delivered.filter((x) => !x.item || x.r?.status === "cancelled").reduce((t, x) => t + x.o.codAmountPaise, 0);
-  const rows = ships.map(({ o, s, item, r }) => ({
+  const rows = ships.map(({ o, s, item, r, rc }) => ({
     orderId: o.id, orderNumber: o.orderNumber, awb: s.awb, status: s.status, cod: o.codAmountPaise,
     remittance: r && r.status !== "cancelled" ? { id: r.id, status: r.status, reference: r.reference, expectedPayoutAt: r.expectedPayoutAt, paidAt: r.paidAt } : null,
-    state: r && r.status === "paid" ? "Remitted" : r && r.status === "scheduled" ? "Scheduled" : s.status === "delivered" ? "Awaiting remittance" : ["rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"].includes(s.status) ? "Not collectable" : "Not yet collected",
+    state: r && r.status === "paid" ? "Remitted" : r && r.status === "scheduled" ? "Scheduled" : s.status === "delivered" ? (rc && (rc.status === "matched" || rc.status === "accepted") ? "Received from courier · paying next" : "Awaiting courier remittance") : ["rto_initiated", "rto_in_transit", "rto_delivered", "cancelled", "lost"].includes(s.status) ? "Not collectable" : "Not yet collected",
     item,
   }));
   return { rows, batches, totals: { collected, paid, scheduled, deductions, unbatched } };

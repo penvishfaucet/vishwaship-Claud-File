@@ -5,6 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { activeService } from "@/server/integrations/services";
 import { safeFetch } from "@/server/security/safe-fetch";
 import { newId } from "@/server/util/ids";
+import { codRowsFromMail, importCodReceipts } from "@/server/cod/receipts";
 import { importWeightReport, parseCourierMails } from "./service";
 
 /**
@@ -57,14 +58,22 @@ export function originalSender(from: string): string {
   return ((from.match(/<([^>]+)>/)?.[1] ?? from).trim()).toLowerCase();
 }
 
-export type InboundOutcome = { status: "raised" | "no_match" | "ignored" | "error"; message: string; created?: number };
+export type InboundOutcome = { status: "raised" | "cod_recorded" | "no_match" | "ignored" | "error"; message: string; created?: number };
 
 /** Act on one received mail (already authenticated as coming from Resend). */
 export async function processCourierMail(m: { from: string; subject: string; text: string; dkimFailed?: boolean }): Promise<InboundOutcome> {
   const sender = originalSender(m.from);
   if (!TRUSTED_SENDER.test(sender)) return { status: "ignored", message: `Not from the courier (${sender || "unknown sender"})` };
   if (m.dkimFailed) return { status: "ignored", message: "Courier signature (DKIM) failed — not acted on; paste it manually if genuine" };
-  if (!parseCourierMails(m.text).length) return { status: "ignored", message: "Not a weight-discrepancy mail" };
+  if (!parseCourierMails(m.text).length) {
+    // the courier's COD remittance mail: record what it paid per AWB (clients are paid from it in Admin → COD Remittance)
+    const cod = codRowsFromMail(m.subject, m.text);
+    if (cod.length) {
+      const r = await importCodReceipts(cod, { source: "delhivery_mail", fileName: m.subject.slice(0, 200) || null, actorUserId: null, commit: true });
+      return { status: "cod_recorded", message: `COD remittance: ${cod.length} AWB, ${r.matched} matched, ${r.flagged} to check, ₹${(r.totalPaise / 100).toFixed(2)}`, created: r.matched };
+    }
+    return { status: "ignored", message: "Not a weight-discrepancy or COD remittance mail" };
+  }
   const r = await importWeightReport(m.text, { commit: true, actorUserId: null });
   if (r.error) return { status: "error", message: r.error };
   const notes = r.rows.map((x) => `LR ${x.ref}: ${x.status === "ok" ? "raised" : x.message ?? x.status}`).join("; ");

@@ -43,7 +43,7 @@ const SECTIONS = (supportPhone: string): Section[] => [
     { kind: "group", key: "reports", label: "Reports", icon: FileBarChart, ids: ["reports.shipments", "reports.orders", "reports.ndr", "reports.custom", "store.pnl"] },
   ] },
   { key: "settings", title: "Settings & Warehouse", rows: [
-    { kind: "group", key: "settings", label: "Settings", icon: Settings, ids: ["settings.tracking", "settings.label", "settings.invoice", "settings.auto_assign", "settings.notifications", "settings.cod", "settings.early_cod"],
+    { kind: "group", key: "settings", label: "Settings", icon: Settings, ids: ["settings.tracking", "settings.label", "settings.invoice", "settings.auto_assign", "settings.notifications", "settings.cod", "settings.early_cod", "settings.cod_bank"],
       extra: [{ key: "account", label: "Account & security", href: "/portal/settings/", icon: BadgeCheck }] },
     { kind: "nav", id: "warehouse" },
   ] },

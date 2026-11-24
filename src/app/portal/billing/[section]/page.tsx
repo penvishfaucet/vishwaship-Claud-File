@@ -159,8 +159,14 @@ async function Charges({ orgId, from, to }: { orgId: string; from: Date; to: Dat
 
 async function Cod({ orgId }: { orgId: string }) {
   const c = await codOverview(orgId);
+  const { payoutAccount } = await import("@/server/cod/payouts");
+  const bank = await payoutAccount(orgId);
   return (
     <>
+      <div className={`card mb12 ${bank ? "" : "bl-orange"}`} style={{ padding: "10px 14px" }}>
+        {bank ? <span className="small">COD is paid to <b>{bank.holderName}</b> · ••••{bank.last4} · {bank.ifsc} <Link className="link-navy small" href="/portal/settings/cod-bank/" style={{ marginLeft: 8 }}>Change</Link></span>
+          : <span className="small"><b>Add your bank account</b> to receive COD payouts. <Link className="link-navy small" href="/portal/settings/cod-bank/">Add bank account</Link></span>}
+      </div>
       <div className="stats mb12">
         <div className="stat bl-blue"><div className="t">COD collected (delivered)</div><div className="v">{formatINR(c.totals.collected)}</div></div>
         <div className="stat bl-green"><div className="t">Remitted (paid out)</div><div className="v">{formatINR(c.totals.paid)}</div></div>
@@ -182,7 +188,7 @@ async function Cod({ orgId }: { orgId: string }) {
           </table>
         </div>
       )}
-      <p className="tiny muted mt8">Buyer COD amounts are tracked separately from your shipping wallet. A shipment is included in exactly one payout; status changes only on carrier settlement or an approved finance entry.</p>
+      <p className="tiny muted mt8">Buyer COD amounts are tracked separately from your shipping wallet. A shipment is included in exactly one payout. COD is paid to you the same or next working day after the courier pays it to Vishwaship. Online Store orders: 1.5% + GST platform fee is deducted from their COD; unpaid wallet dues, if any, are cleared from the payout.</p>
     </>
   );
 }

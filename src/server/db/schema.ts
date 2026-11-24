@@ -945,6 +945,9 @@ export const codRemittances = pgTable("cod_remittances", {
   deductionNote: text("deduction_note"),
   status: text("status").notNull().default("scheduled"), // scheduled | paid | cancelled
   earlyCod: boolean("early_cod").notNull().default(false),
+  // the client's unpaid dues (negative wallet) settled from this COD: credited to the wallet when the payout is made
+  walletOffsetPaise: paise("wallet_offset_paise").notNull().default(0),
+  runId: text("run_id"), // one "Pay all" click
   paidAt: ts("paid_at"),
   createdBy: text("created_by"),
   createdAt: created(),
@@ -955,6 +958,50 @@ export const codRemittanceItems = pgTable("cod_remittance_items", {
   shipmentId: text("shipment_id").notNull().unique().references(() => shipments.id), // a shipment is remitted once
   codPaise: paise("cod_paise").notNull(),
 }, (t) => [primaryKey({ columns: [t.remittanceId, t.shipmentId] })]);
+
+// ---------- COD the couriers have paid to Vishwaship (Delhivery remittance mail, Shipmozo portal file) ----------
+export const codReceiptImports = pgTable("cod_receipt_imports", {
+  id: id(),
+  source: text("source").notNull(), // delhivery_mail | courier_file
+  fileName: text("file_name"),
+  rows: integer("rows").notNull().default(0),
+  matched: integer("matched").notNull().default(0),
+  flagged: integer("flagged").notNull().default(0),
+  totalPaise: paise("total_paise").notNull().default(0),
+  createdBy: text("created_by"),
+  createdAt: created(),
+});
+
+export const codReceipts = pgTable("cod_receipts", {
+  id: id(),
+  awb: text("awb").notNull().unique(), // one courier payment per AWB; a re-sent file updates it
+  shipmentId: text("shipment_id").references(() => shipments.id),
+  orgId: text("org_id").references(() => orgs.id),
+  amountPaise: paise("amount_paise").notNull(), // what the courier paid us for this AWB
+  expectedPaise: paise("expected_paise"), // the order's COD amount
+  utr: text("utr"),
+  remittedOn: ts("remitted_on"),
+  // matched: paid in full · short / excess: amount differs · unknown_awb: no such shipment · not_cod: not a COD order
+  // accepted: staff accepted a different amount (that amount is paid to the client)
+  status: text("status").notNull(),
+  note: text("note"),
+  importId: text("import_id").references(() => codReceiptImports.id),
+  resolvedBy: text("resolved_by"),
+  createdAt: created(),
+  updatedAt: ts("updated_at"),
+}, (t) => [index("cod_receipts_shipment").on(t.shipmentId), index("cod_receipts_status").on(t.status)]);
+
+/** Where a client's COD is paid. The account number is stored encrypted; only its last 4 digits are shown. */
+export const orgPayoutAccounts = pgTable("org_payout_accounts", {
+  orgId: text("org_id").primaryKey().references(() => orgs.id),
+  holderName: text("holder_name").notNull(),
+  accountEnc: text("account_enc").notNull(),
+  accountLast4: text("account_last4").notNull(),
+  ifsc: text("ifsc").notNull(),
+  bankName: text("bank_name"),
+  updatedBy: text("updated_by"),
+  updatedAt: ts("updated_at"),
+});
 
 // ---------- Vishwaship billing documents (tax invoices, credit / debit notes) ----------
 export const billingDocuments = pgTable("billing_documents", {

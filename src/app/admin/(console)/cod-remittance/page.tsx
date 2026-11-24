@@ -1,5 +1,8 @@
-import { and, desc, eq, isNull, sql, gt } from "drizzle-orm";
+import { and, desc, eq, isNull, sql, gt, inArray } from "drizzle-orm";
 import { AdminOpForm } from "@/components/admin/AdminOpForm";
+import { CodReceiptImport } from "@/components/admin/CodReceiptImport";
+import { payoutPreview } from "@/server/cod/payouts";
+import { RECEIPT_LABEL, type ReceiptStatus } from "@/server/cod/receipts";
 import { formatINR } from "@/lib/money";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
@@ -21,13 +24,50 @@ export default async function AdminCodRemittance() {
   const subs = await db.select({ e: schema.earlyCodSubscriptions, name: schema.orgs.businessName }).from(schema.earlyCodSubscriptions).innerJoin(schema.orgs, eq(schema.orgs.id, schema.earlyCodSubscriptions.orgId)).orderBy(desc(schema.earlyCodSubscriptions.startedAt)).limit(100);
   const batches = await db.select({ r: schema.codRemittances, name: schema.orgs.businessName }).from(schema.codRemittances).innerJoin(schema.orgs, eq(schema.orgs.id, schema.codRemittances.orgId)).orderBy(desc(schema.codRemittances.createdAt)).limit(100);
   const terms = await earlyCodTerms();
+  const ready = await payoutPreview();
+  const payable = ready.filter((p) => !p.blocked);
+  const payableNet = payable.reduce((t, p) => t + p.netPaise, 0);
+  const toCheck = await db.select({ r: schema.codReceipts, name: schema.orgs.businessName }).from(schema.codReceipts).leftJoin(schema.orgs, eq(schema.orgs.id, schema.codReceipts.orgId))
+    .where(inArray(schema.codReceipts.status, ["short", "excess", "unknown_awb", "not_cod"])).orderBy(desc(schema.codReceipts.createdAt)).limit(100);
+  const imports = await db.select().from(schema.codReceiptImports).orderBy(desc(schema.codReceiptImports.createdAt)).limit(8);
+  const scheduled = batches.filter((b) => b.r.status === "scheduled" && b.r.netPaise > 0);
   const activeEarly = new Set(subs.filter((x) => x.e.status === "active").map((x) => x.e.orgId));
   const inDays = (n: number) => new Date(Date.now() + n * 86400_000).toISOString().slice(0, 10);
   return (
     <>
-      <div className="page-h"><div><h1>COD Remittance &amp; Early COD</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Group delivered COD into payouts, record the bank reference when paid, and manage Early COD terms. Each shipment can be in only one payout.</p></div></div>
+      <div className="page-h"><div><h1>COD Remittance &amp; Early COD</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Courier pays COD → recorded per AWB → <b>Pay all</b> makes each client&apos;s payout (Online Store fee 1.5% + GST, Early COD fee and wallet dues deducted) → upload the bank file → mark paid with the UTR. Each shipment is paid once.</p></div></div>
+      <CodReceiptImport />
+      {imports.length > 0 && <p className="tiny muted" style={{ margin: "-8px 0 16px" }}>Last received: {imports.map((i) => `${d(i.createdAt)} ${i.source === "delhivery_mail" ? "Delhivery mail" : i.fileName ?? "file"} (${i.matched} ok${i.flagged ? `, ${i.flagged} to check` : ""}, ${formatINR(i.totalPaise)})`).join(" · ")}</p>}
+      {toCheck.length > 0 && (
+        <section className="card p0 mb16">
+          <h2 className="b small card-h" style={{ margin: 0 }}>Check: courier COD that does not match ({toCheck.length})</h2>
+          <p className="tiny muted" style={{ padding: "0 16px" }}>These AWBs are not paid to the client until you accept the courier&apos;s amount (or the courier sends the rest).</p>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>AWB</th><th>Client</th><th style={{ textAlign: "right" }}>Order COD</th><th style={{ textAlign: "right" }}>Courier paid</th><th>UTR</th><th>Issue</th><th>Action</th></tr></thead>
+            <tbody>{toCheck.map(({ r, name }) => (
+              <tr key={r.id}><td className="mono tiny">{r.awb}</td><td className="small">{name ?? "—"}</td><td style={{ textAlign: "right" }} className="small">{r.expectedPaise != null ? formatINR(r.expectedPaise) : "—"}</td><td style={{ textAlign: "right" }} className="small b">{formatINR(r.amountPaise)}</td><td className="mono tiny">{r.utr ?? "—"}</td>
+                <td><span className="chip c-pending">{RECEIPT_LABEL[r.status as ReceiptStatus] ?? r.status}</span></td>
+                <td>{remit && r.shipmentId && (r.status === "short" || r.status === "excess") ? <AdminOpForm op="cod_receipt_accept" submit={`Pay client ${formatINR(r.amountPaise)}`} confirmText={`Pay the client ${formatINR(r.amountPaise)} for AWB ${r.awb} (what the courier paid)?`} fields={[{ name: "id", label: "", type: "hidden", value: r.id }]} /> : <span className="tiny muted">—</span>}</td></tr>
+            ))}</tbody></table></div>
+        </section>
+      )}
       <section className="card p0 mb16">
-        <h2 className="b small card-h" style={{ margin: 0 }}>Delivered COD awaiting remittance</h2>
+        <div className="row between" style={{ padding: "12px 16px", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h2 className="b small" style={{ margin: 0 }}>2 · Ready to pay clients</h2>
+          {payable.length > 0 && <AdminOpForm op="cod_run" disabled={!remit} submit={`Pay all · ${payable.length} client${payable.length === 1 ? "" : "s"} · ${formatINR(payableNet)}`} confirmText={`Create payouts for ${payable.length} client(s), ${formatINR(payableNet)} in total? Next: download the bank file and transfer.`} fields={[]} />}
+        </div>
+        {ready.length === 0 ? <p className="small muted" style={{ padding: 16 }}>Nothing to pay. COD becomes payable when the courier&apos;s COD for the AWB is recorded above (or under Early COD).</p> : (
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Client</th><th>Shipments</th><th style={{ textAlign: "right" }}>COD received</th><th style={{ textAlign: "right" }}>Store fee 1.5% + GST</th><th style={{ textAlign: "right" }}>Early COD fee + GST</th><th style={{ textAlign: "right" }}>Wallet dues</th><th style={{ textAlign: "right" }}>Pay client</th><th>Bank</th></tr></thead>
+            <tbody>{ready.map((p) => (
+              <tr key={p.orgId}><td className="small b">{p.name}{p.early && <span className="chip c-pending" style={{ marginLeft: 6 }}>Early</span>}{p.awaitingCourier > 0 && <div className="tiny muted">{p.awaitingCourier} more waiting for courier ({formatINR(p.awaitingCourierPaise)})</div>}</td>
+                <td className="small">{p.shipments.length}</td><td style={{ textAlign: "right" }} className="small">{formatINR(p.grossPaise)}</td>
+                <td style={{ textAlign: "right" }} className="small">{p.storeFeePaise ? `− ${formatINR(p.storeFeePaise)}` : "—"}</td><td style={{ textAlign: "right" }} className="small">{p.earlyFeePaise ? `− ${formatINR(p.earlyFeePaise + p.earlyGstPaise)}` : "—"}</td>
+                <td style={{ textAlign: "right" }} className="small">{p.duesPaise ? `− ${formatINR(p.duesPaise)}` : "—"}</td><td style={{ textAlign: "right" }} className="small b">{p.shipments.length ? formatINR(p.netPaise) : "—"}</td>
+                <td className="small">{p.bank ? <>{p.bank.holderName}<div className="tiny muted mono">••••{p.bank.last4} · {p.bank.ifsc}</div></> : p.shipments.length ? <details><summary className="t-debit tiny">No bank account — add</summary><AdminOpForm op="payout_account_set" submit="Save bank" disabled={!termsWrite} fields={[{ name: "orgId", label: "", type: "hidden", value: p.orgId }, { name: "holderName", label: "Account holder" }, { name: "accountNumber", label: "Account number" }, { name: "ifsc", label: "IFSC" }, { name: "bankName", label: "Bank" }]} /></details> : <span className="tiny muted">{p.blocked}</span>}</td></tr>
+            ))}</tbody></table></div>
+        )}
+      </section>
+      <section className="card p0 mb16">
+        <h2 className="b small card-h" style={{ margin: 0 }}>Manual payout (without the courier&apos;s COD record)</h2>
         {pending.length === 0 ? <p className="small muted" style={{ padding: 16 }}>Nothing waiting.</p> : (
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Customer</th><th>Shipments</th><th style={{ textAlign: "right" }}>COD</th><th>Early COD</th><th>Create payout</th></tr></thead>
             <tbody>{pending.map((p) => (
@@ -38,7 +78,13 @@ export default async function AdminCodRemittance() {
         )}
       </section>
       <section className="card p0 mb16">
-        <h2 className="b small card-h" style={{ margin: 0 }}>Payouts</h2>
+        <div className="row between" style={{ padding: "12px 16px", alignItems: "end", gap: 8, flexWrap: "wrap" }}>
+          <h2 className="b small" style={{ margin: 0 }}>3 · Payouts</h2>
+          {scheduled.length > 0 && remit && <div className="row wrap" style={{ gap: 8, alignItems: "end" }}>
+            <a className="btn btn-sm btn-navy" href={`/api/admin/cod/bank-file?ids=${scheduled.map((b) => b.r.id).join(",")}`}>Download bank file · {scheduled.length} · {formatINR(scheduled.reduce((t, b) => t + b.r.netPaise, 0))}</a>
+            <AdminOpForm op="cod_paid_all" submit="Mark all paid" confirmText={`Mark all ${scheduled.length} scheduled payouts paid with this reference?`} fields={[{ name: "ids", label: "", type: "hidden", value: scheduled.map((b) => b.r.id).join(",") }, { name: "reference", label: "Bank batch ref / UTR", placeholder: "UTR" }]} />
+          </div>}
+        </div>
         {batches.length === 0 ? <p className="small muted" style={{ padding: 16 }}>No payouts yet.</p> : (
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Created</th><th>Customer</th><th style={{ textAlign: "right" }}>Gross</th><th style={{ textAlign: "right" }}>Deductions</th><th style={{ textAlign: "right" }}>Net</th><th>Due</th><th>Status</th><th>Reference / action</th></tr></thead>
             <tbody>{batches.map(({ r, name }) => (

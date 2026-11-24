@@ -13,6 +13,8 @@ import { withLedger } from "@/server/ledger/db-store";
 import { credit, debit } from "@/server/ledger/wallet";
 import { getSetting } from "@/server/quotes/service";
 import { codFeesFor, feeRates } from "@/server/store/fee";
+import { acceptReceipt } from "@/server/cod/receipts";
+import { cancelPayout, createPayoutRun, markPayoutsPaid, savePayoutAccount } from "@/server/cod/payouts";
 import { newId } from "@/server/util/ids";
 
 const code = z.string().regex(/^[a-z0-9-]{2,40}$/);
@@ -28,13 +30,17 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("remittance_create"), orgId: z.string().min(3), early: bool, payoutDate: day }),
   z.object({ op: z.literal("remittance_paid"), id: z.string().min(3), reference: z.string().trim().min(4).max(60) }),
   z.object({ op: z.literal("remittance_cancel"), id: z.string().min(3) }),
+  z.object({ op: z.literal("cod_run"), orgId: z.string().min(3).optional() }),
+  z.object({ op: z.literal("cod_paid_all"), ids: z.union([z.array(z.string().min(3)).max(500), z.string().transform((v) => v.split(",").map((x) => x.trim()).filter(Boolean))]), reference: z.string().trim().min(4).max(60) }),
+  z.object({ op: z.literal("cod_receipt_accept"), id: z.string().min(3) }),
+  z.object({ op: z.literal("payout_account_set"), orgId: z.string().min(3), holderName: z.string().trim().min(2).max(120), accountNumber: z.string().trim().min(9).max(24), ifsc: z.string().trim().min(11).max(11), bankName: z.string().trim().max(80).optional() }),
   z.object({ op: z.literal("invoice_generate"), orgId: z.string().min(3), from: day, to: day }),
   z.object({ op: z.literal("note_issue"), orgId: z.string().min(3), kind: z.enum(["credit_note", "debit_note"]), amount: rupees.refine((n) => n > 0, "Amount must be more than 0"), reason: z.string().trim().min(5).max(200), refType: z.enum(["shipment", "invoice", "dispute", "other"]), refId: z.string().trim().max(60).default(""), postToWallet: bool }),
   z.object({ op: z.literal("oms_status"), orgId: z.string().min(3), status: z.enum(["requested", "in_progress", "connected", "rejected"]), note: z.string().trim().max(300).default("") }),
 ]);
 const PERM: Record<string, Permission> = {
   courier_availability: "pricing.write", price_list_zones: "pricing.write", early_cod_terms: "finance.adjust", company_billing: "finance.adjust",
-  remittance_create: "cod.remit", remittance_paid: "cod.remit", remittance_cancel: "cod.remit", invoice_generate: "finance.adjust", note_issue: "finance.adjust", oms_status: "integrations.write",
+  remittance_create: "cod.remit", remittance_paid: "cod.remit", remittance_cancel: "cod.remit", cod_run: "cod.remit", cod_paid_all: "cod.remit", cod_receipt_accept: "cod.remit", payout_account_set: "finance.adjust", invoice_generate: "finance.adjust", note_issue: "finance.adjust", oms_status: "integrations.write",
 };
 
 /** Admin commercial & operations settings. Every op checks its own permission and is audited. */
@@ -105,19 +111,40 @@ export async function POST(req: Request) {
       return done(`Remittance scheduled: ${rows.length} shipments, net ₹${((gross - fee - gst - storeFee) / 100).toFixed(2)}`, { id, shipments: rows.length, gross, fee, gst, storeFee }, b.orgId);
     }
     case "remittance_paid": {
-      const u = await db.update(schema.codRemittances).set({ status: "paid", reference: b.reference, paidAt: new Date() }).where(and(eq(schema.codRemittances.id, b.id), eq(schema.codRemittances.status, "scheduled"))).returning();
-      if (!u.length) return apiError(409, "conflict", "Only a scheduled remittance can be marked paid");
-      await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: u[0].orgId, kind: "cod", title: `COD remittance of ₹${(u[0].netPaise / 100).toFixed(2)} paid (ref ${b.reference})`, href: "/portal/billing/cod-remittance/" });
-      return done("Marked paid", { id: b.id, reference: b.reference }, u[0].orgId);
+      const [u] = await markPayoutsPaid([{ id: b.id, reference: b.reference }]);
+      if (!u) return apiError(409, "conflict", "Only a scheduled remittance can be marked paid");
+      return done("Marked paid", { id: b.id, reference: b.reference }, u.orgId);
     }
     case "remittance_cancel": {
-      const [r] = await db.select().from(schema.codRemittances).where(and(eq(schema.codRemittances.id, b.id), eq(schema.codRemittances.status, "scheduled")));
+      const r = await cancelPayout(b.id);
       if (!r) return apiError(409, "conflict", "Only a scheduled remittance can be cancelled");
-      await db.transaction(async (tx) => {
-        await tx.delete(schema.codRemittanceItems).where(eq(schema.codRemittanceItems.remittanceId, r.id)); // shipments return to the next cycle
-        await tx.update(schema.codRemittances).set({ status: "cancelled" }).where(eq(schema.codRemittances.id, r.id));
-      });
-      return done("Remittance cancelled; shipments return to the next cycle", { id: r.id }, r.orgId);
+      return done(r.walletOffsetPaise ? "Remittance cancelled; shipments return to the next cycle and the dues credit is reversed" : "Remittance cancelled; shipments return to the next cycle", { id: r.id }, r.orgId);
+    }
+    case "cod_run": {
+      const r = await createPayoutRun(s.userId, b.orgId ? [b.orgId] : undefined);
+      if (!r.made.length) return apiError(409, "conflict", r.skipped.length ? `Nothing paid: ${r.skipped.map((x) => `${x.name} (${x.reason})`).join("; ")}` : "No client has COD ready to pay (waiting for the courier's COD)");
+      const total = r.made.reduce((t, x) => t + x.netPaise, 0);
+      return done(`${r.made.length} payout${r.made.length === 1 ? "" : "s"} created · ₹${(total / 100).toFixed(2)} to transfer${r.skipped.length ? ` · skipped: ${r.skipped.map((x) => `${x.name} (${x.reason})`).join("; ")}` : ""}. Download the bank file next.`, { runId: r.runId, made: r.made, skipped: r.skipped });
+    }
+    case "cod_paid_all": {
+      const ids = Array.isArray(b.ids) ? b.ids : [];
+      if (!ids.length) return apiError(422, "validation_error", "No payouts selected");
+      const u = await markPayoutsPaid(ids.map((id) => ({ id, reference: b.reference })));
+      if (!u.length) return apiError(409, "conflict", "None of these payouts is scheduled");
+      return done(`${u.length} payout${u.length === 1 ? "" : "s"} marked paid (ref ${b.reference})`, { ids: u.map((x) => x.id), reference: b.reference });
+    }
+    case "cod_receipt_accept": {
+      const r = await acceptReceipt(b.id, s.userId);
+      if (!r.ok) return apiError(409, "conflict", r.message);
+      return done(`Accepted ₹${(r.receipt.amountPaise / 100).toFixed(2)} for AWB ${r.receipt.awb}; it is paid to the client in the next payout`, { id: b.id, awb: r.receipt.awb, amountPaise: r.receipt.amountPaise }, r.receipt.orgId ?? undefined);
+    }
+    case "payout_account_set": {
+      if (!(await orgOk(b.orgId))) return apiError(404, "not_found", "Customer not found");
+      try {
+        const a = await savePayoutAccount(b.orgId, b, s.userId);
+        await db.insert(schema.inAppAlerts).values({ id: newId("al"), orgId: b.orgId, kind: "cod", title: `COD payout bank account set to ••••${a.last4} (${a.ifsc}) by Vishwaship`, href: "/portal/settings/cod-bank/" });
+        return done(`Payout account saved (••••${a.last4})`, { last4: a.last4, ifsc: a.ifsc }, b.orgId);
+      } catch (e) { return apiError(422, "validation_error", (e as Error).message); }
     }
     case "invoice_generate": {
       if (!(await orgOk(b.orgId))) return apiError(404, "not_found", "Customer not found");
