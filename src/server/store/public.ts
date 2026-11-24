@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { type StoreSettings, type ThemeConfig, defaultTheme, readSettings, readTheme, themeByKey } from "@/lib/store-themes";
@@ -69,6 +69,8 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
   const offers = offerRows.filter((c) => (!c.startsAt || c.startsAt.getTime() <= now) && (!c.endsAt || c.endsAt.getTime() > now) && (c.maxUses === null || c.used < c.maxUses))
     .slice(0, 5).map((c) => ({ code: c.code, text: couponText(c) }));
   const rate = new Map(ratings.map((r) => [r.productId, { avg: Math.round(r.avg * 10) / 10, count: r.n }]));
+  const { sold, together } = await salesSignals(s.id);
+  const activeIds = new Set(prods.map((p) => p.id));
   const salePair = (price: number, compare: number | null, pct: number | null) =>
     pct ? { pricePaise: salePrice(price, pct), comparePaise: Math.max(compare ?? 0, price) } : { pricePaise: price, comparePaise: compare };
   const banner = [...sales].sort((a, b) => b.percentOff - a.percentOff)[0] ?? null;
@@ -90,6 +92,8 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
         categorySlug: p.categoryId ? catSlug.get(p.categoryId) ?? null : null,
         seo: (p.seo as { title?: string; description?: string }) ?? {},
         options, variants, sale: sale ? { name: sale.name, percentOff: sale.percentOff } : null, rating: rate.get(p.id) ?? null,
+        sold: sold.get(p.id) ?? 0, createdAt: p.createdAt.toISOString(),
+        addons: [...new Set([...((p.addonIds as string[] | null) ?? []), ...(together.get(p.id) ?? [])])].filter((x) => x !== p.id && activeIds.has(x)).slice(0, 6),
       };
     }),
     sale: banner ? { name: banner.name, text: banner.bannerText || `${banner.name}: ${banner.percentOff}% off`, endsAt: banner.endsAt.toISOString() } : null,
@@ -99,6 +103,53 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });
+
+/**
+ * Best-seller counts (units, last 90 days) and "bought together" pairs (last 180 days) from placed store orders.
+ * Cancelled orders and refunded / refund-due payments are left out.
+ */
+async function salesSignals(storeId: string) {
+  const db = await getDb();
+  const since = new Date(Date.now() - 180 * 86400_000), recent = Date.now() - 90 * 86400_000;
+  const rows = await db.select({ lines: schema.storeOrders.lines, at: schema.storeOrders.placedAt }).from(schema.storeOrders)
+    .where(and(eq(schema.storeOrders.storeId, storeId), eq(schema.storeOrders.status, "placed"), gte(schema.storeOrders.placedAt, since),
+      notInArray(schema.storeOrders.paymentStatus, ["refunded", "refund_due"])))
+    .orderBy(desc(schema.storeOrders.placedAt)).limit(5000);
+  const sold = new Map<string, number>();
+  const pairs = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const lines = ((r.lines as Array<{ productId?: string; qty?: number }>) ?? []).filter((l) => typeof l.productId === "string");
+    if (r.at && r.at.getTime() >= recent) for (const l of lines) sold.set(l.productId!, (sold.get(l.productId!) ?? 0) + Math.max(0, Number(l.qty) || 0));
+    const ids = [...new Set(lines.map((l) => l.productId!))];
+    for (const a of ids) for (const b of ids) if (a !== b) { const m = pairs.get(a) ?? new Map<string, number>(); m.set(b, (m.get(b) ?? 0) + 1); pairs.set(a, m); }
+  }
+  // "bought together" only when it happened in at least 2 orders (one order is a coincidence)
+  const together = new Map([...pairs].map(([a, m]) => [a, [...m].filter(([, n]) => n >= 2).sort((x, y) => y[1] - x[1]).map(([b]) => b).slice(0, 4)]));
+  return { sold, together };
+}
+
+/** Best sellers: units sold first; stores with little sales data fall back to the merchant's Featured picks, then newest. */
+export function bestSellers(products: SfProduct[], n: number, categorySlug?: string | null) {
+  const pool = products.filter((p) => p.inStock && (!categorySlug || p.categorySlug === categorySlug));
+  return [...pool].sort((a, b) => b.sold - a.sold || Number(b.featured) - Number(a.featured) || b.createdAt.localeCompare(a.createdAt)).slice(0, n);
+}
+
+/** What the cart drawer / cart page need for "Complete your purchase" and empty-cart Best sellers. */
+export function recData(sf: Storefront) {
+  const best = bestSellers(sf.products, 8).map((p) => p.id);
+  const recs = Object.fromEntries(sf.products.filter((p) => p.addons.length).map((p) => [p.id, p.addons]));
+  const ids = new Set([...best, ...Object.values(recs).flat()]);
+  return { recs, best, pool: sf.products.filter((p) => ids.has(p.id)).map(mini) };
+}
+
+/** Checkout facts the cart drawer / cart page show before the buyer reaches checkout. */
+export function cartCheckoutInfo(sf: Storefront) {
+  const ck = sf.settings.checkout;
+  return { codEnabled: ck.codEnabled, shippingFeePaise: ck.shippingFeePaise, freeShippingAbovePaise: ck.freeShippingAbovePaise, ready: !sf.demo && !sf.preview && sf.status === "live" && sf.ordersOpen, demo: sf.demo };
+}
+
+/** Card data for client components (cart drawer, add-on rows). */
+export const mini = (p: SfProduct) => ({ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? null, pricePaise: p.pricePaise, comparePaise: p.comparePaise, hasOptions: p.options.length > 0, inStock: p.inStock });
 
 export const logoUrl = (sf: Storefront) => (sf.theme.logo ? mediaUrl(sf.theme.logo) : null);
 export const sectionImage = (ref: string | undefined) => (ref ? mediaUrl(ref) : null);
@@ -114,6 +165,7 @@ function demoStore(themeKey?: string): Storefront {
     id, title, slug: id, description: desc, pricePaise: price * 100, comparePaise: compare ? compare * 100 : null,
     images: [`/store-demo/${img}.svg`], inStock: true, featured, categorySlug: cat, seo: {}, options: [], variants: [],
     sale: compare ? { name: "Festive Sale", percentOff: Math.round((1 - price / compare) * 100) } : null, rating: null,
+    sold: featured ? 10 : 2, addons: [], createdAt: new Date(0).toISOString(),
   });
   const products = [
     P("indigo-cotton-kurta", "Indigo Cotton Kurta", 1299, 1799, "kurtas", "kurta-indigo", "Breathable hand-block printed cotton kurta. Regular fit."),
@@ -125,6 +177,8 @@ function demoStore(themeKey?: string): Storefront {
     P("cushion-cover", "Block Print Cushion Cover", 449, null, "home-decor", "cushion", "16x16 inch cotton cushion cover, hand block printed.", false),
     P("cotton-stole", "Handloom Cotton Stole", 699, 999, "accessories", "stole", "Soft handloom stole in natural dyes.", false),
   ];
+  // demo add-ons: kurtas → stole and jhumka; planter → diya
+  for (const p of products) p.addons = p.categorySlug === "kurtas" ? ["cotton-stole", "silver-jhumka"] : p.id === "terracotta-planter" ? ["brass-diya"] : [];
   // kurtas show how size variants look
   for (const p of products.filter((x) => x.categorySlug === "kurtas")) {
     p.options = ["Size"];

@@ -12,7 +12,10 @@ export type ProductFormValue = {
   options: string[]; variants: VariantRow[];
   /** cost per piece in rupees (text inputs); product = purchase cost */
   costs?: { product: string; packaging: string; labour: string; other: string; overhead: string };
+  /** "Frequently bought together" add-on product ids */
+  addonIds?: string[];
 };
+export type CatalogItem = { id: string; title: string; sku: string | null; status: string };
 const NO_COSTS = { product: "", packaging: "", labour: "", other: "", overhead: "" };
 export type VariantRow = { id: string | null; values: string[]; sku: string; price: string; compare: string; stock: string; weight: string };
 
@@ -23,7 +26,7 @@ function combos(lists: string[][]): string[][] {
   return lists.reduce<string[][]>((acc, vals) => acc.flatMap((a) => vals.map((v) => [...a, v])), [[]]).filter((c) => c.length === lists.length);
 }
 
-export function ProductForm({ id, initial, categories, storeSlug }: { id?: string; initial: ProductFormValue; categories: Cat[]; storeSlug: string }) {
+export function ProductForm({ id, initial, categories, storeSlug, catalog = [] }: { id?: string; initial: ProductFormValue; categories: Cat[]; storeSlug: string; catalog?: CatalogItem[] }) {
   const router = useRouter();
   const [f, setF] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -61,6 +64,7 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
       sku: f.sku, hsn: f.hsn, taxPercent: Number(f.taxPercent) || 0, lowStockAt: Math.floor(num(f.lowStockAt) || 0),
       lengthCm: num(f.lengthCm) || 0, breadthCm: num(f.breadthCm) || 0, heightCm: num(f.heightCm) || 0,
       options: f.options, variants: hasVariants ? variants : [],
+      addonIds: f.addonIds ?? [],
       costs: { productRupees: !hasVariants && cs.product.trim() ? Number(cs.product) || 0 : null, packagingRupees: Number(cs.packaging) || 0, labourRupees: Number(cs.labour) || 0, otherRupees: Number(cs.other) || 0, overheadRupees: Number(cs.overhead) || 0 },
     };
     if (hasVariants && variants.some((v) => !(v.priceRupees > 0))) { setBusy(false); setMsg({ err: "Enter a price for every variant" }); return; }
@@ -182,6 +186,7 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
           <div className="field" style={{ marginTop: 10 }}><label htmlFor="pca">Category</label>
             <select id="pca" className="input select" value={f.categoryId} onChange={(e) => set("categoryId", e.target.value)}><option value="">No category</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
           <label className="row" style={{ gap: 8, marginTop: 12, fontWeight: 500 }}><input type="checkbox" checked={f.featured} onChange={(e) => set("featured", e.target.checked)} /> Show in Featured products</label>
+          {catalog.length > 0 && <AddonPicker catalog={catalog.filter((c) => c.id !== id)} value={f.addonIds ?? []} onChange={(v) => set("addonIds", v)} />}
           <Msg m={msg} />
           <button className="btn btn-orange" style={{ width: "100%", marginTop: 14 }} disabled={busy}>{busy ? "Saving…" : id ? "Save product" : "Add product"}</button>
           {id && f.status !== "archived" && <button type="button" className="btn btn-outline" style={{ width: "100%", marginTop: 8 }} onClick={archive}>Archive</button>}
@@ -189,6 +194,28 @@ export function ProductForm({ id, initial, categories, storeSlug }: { id?: strin
       </div>
       <style>{`@media (max-width:900px){.os-pform{grid-template-columns:1fr!important}}`}</style>
     </form>
+  );
+}
+
+/** Pick up to 6 compatible add-ons (e.g. Overhead shower → Shower arm). Shown with the buy buttons and in the cart. */
+function AddonPicker({ catalog, value, onChange }: { catalog: CatalogItem[]; value: string[]; onChange: (v: string[]) => void }) {
+  const [q, setQ] = useState("");
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  const term = q.trim().toLowerCase();
+  const hits = term ? catalog.filter((c) => !value.includes(c.id) && `${c.title} ${c.sku ?? ""}`.toLowerCase().includes(term)).slice(0, 8) : [];
+  return (
+    <div className="field" style={{ marginTop: 14 }}>
+      <label htmlFor="paddon">Frequently bought together</label>
+      <p className="tiny muted" style={{ margin: "0 0 6px" }}>Compatible add-ons shown next to Buy and in the cart (max 6). Example: shower arm for an overhead shower.</p>
+      {value.length > 0 && <div className="row wrap" style={{ gap: 6, marginBottom: 6 }}>{value.map((id) => {
+        const c = byId.get(id);
+        return <span key={id} className="chip c-draft" style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>{c ? c.title : "Removed product"}{c && c.status !== "active" ? " (hidden)" : ""}<button type="button" className="link" aria-label={`Remove ${c?.title ?? "add-on"}`} onClick={() => onChange(value.filter((x) => x !== id))}>×</button></span>;
+      })}</div>}
+      {value.length < 6 && <input id="paddon" className="input" placeholder="Search product name or SKU" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />}
+      {hits.length > 0 && <ul className="plain-list" style={{ border: "1px solid var(--line, #e5e7eb)", borderRadius: 8, marginTop: 4, maxHeight: 220, overflow: "auto" }}>{hits.map((c) => (
+        <li key={c.id}><button type="button" className="link" style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 10px" }} onClick={() => { onChange([...value, c.id]); setQ(""); }}>{c.title}{c.sku ? <span className="tiny muted"> · {c.sku}</span> : null}{c.status !== "active" ? <span className="tiny muted"> · {c.status}</span> : null}</button></li>
+      ))}</ul>}
+    </div>
   );
 }
 

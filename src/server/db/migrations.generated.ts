@@ -794,5 +794,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795448040728,
   "hash": "e02f6dad9e7f583346afe5d1798913a4b2899745c56545a3eeee29c8fb4d0286"
+ },
+ {
+  "tag": "0042_store_addons",
+  "sql": [
+   "ALTER TABLE \"store_products\" ADD COLUMN \"addon_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL;"
+  ],
+  "bps": true,
+  "folderMillis": 1795505417013,
+  "hash": "83e6f2185b3098c680decafb3909937fe2a7b6343271053cc70eba8a925f4c6c"
  }
 ];

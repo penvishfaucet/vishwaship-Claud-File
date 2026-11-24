@@ -43,6 +43,8 @@ export const ProductInput = z.object({
   heightCm: z.number().min(0).max(500).default(0),
   options: z.array(z.string().trim().min(1, "Name every option").max(30)).max(3).default([]),
   variants: z.array(VariantInput).max(100).default([]),
+  /** "Frequently bought together" add-ons: other active products of this store (max 6). Undefined = keep as it is. */
+  addonIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{4,64}$/)).max(6).optional(),
   /** Cost per piece (owner 2026-11-23). productRupees = purchase cost (no variants only; null = leave as it is). */
   costs: z.object({
     productRupees: z.number().min(0).max(10_00_000).nullable().default(null),
@@ -72,14 +74,14 @@ async function requireStore(orgId: string) {
 }
 export class StoreError extends Error {}
 
-export async function listProducts(orgId: string, f: { q?: string; status?: string; categoryId?: string } = {}) {
+export async function listProducts(orgId: string, f: { q?: string; status?: string; categoryId?: string; limit?: number } = {}) {
   const s = await requireStore(orgId);
   const db = await getDb();
   const conds = [eq(schema.storeProducts.storeId, s.id)];
   if (f.status && ["draft", "active", "archived"].includes(f.status)) conds.push(eq(schema.storeProducts.status, f.status));
   if (f.categoryId) conds.push(eq(schema.storeProducts.categoryId, f.categoryId));
   if (f.q) conds.push(or(ilike(schema.storeProducts.title, `%${f.q.replace(/[%_]/g, "")}%`), ilike(schema.storeProducts.slug, `%${f.q.replace(/[%_]/g, "")}%`))!);
-  return db.select().from(schema.storeProducts).where(and(...conds)).orderBy(desc(schema.storeProducts.updatedAt)).limit(500);
+  return db.select().from(schema.storeProducts).where(and(...conds)).orderBy(desc(schema.storeProducts.updatedAt)).limit(Math.min(f.limit ?? 500, 2000));
 }
 
 export async function getProduct(orgId: string, id: string) {
@@ -115,6 +117,12 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     if (rows.length !== new Set(input.images).size) throw new StoreError("Image not found");
   }
   if (input.compareRupees !== null && input.compareRupees > 0 && input.compareRupees <= input.priceRupees) throw new StoreError("Compare-at price must be more than the price");
+  const addonIds = input.addonIds ? [...new Set(input.addonIds)].filter((x) => x !== id) : undefined;
+  if (addonIds?.length) {
+    const rows = await db.select({ id: schema.storeProducts.id }).from(schema.storeProducts)
+      .where(and(eq(schema.storeProducts.storeId, s.id), inArray(schema.storeProducts.id, addonIds)));
+    if (rows.length !== addonIds.length) throw new StoreError("An add-on product was not found in your store");
+  }
   const slug = await uniqueSlug(s.id, input.slug || input.title, id);
   for (const v of input.variants) if (v.compareRupees && v.compareRupees <= v.priceRupees) throw new StoreError(`Compare-at price of ${v.values.join(" / ")} must be more than its price`);
   const hasVariants = input.options.length > 0;
@@ -127,6 +135,7 @@ export async function saveProduct(orgId: string, input: ProductInput, id?: strin
     seo: { title: input.seoTitle, description: input.seoDescription }, sku: input.sku || null, hsn: input.hsn || null, taxBps: Math.round(input.taxPercent * 100),
     lowStockAt: input.lowStockAt, lengthMm: Math.round(input.lengthCm * 10), breadthMm: Math.round(input.breadthCm * 10), heightMm: Math.round(input.heightCm * 10),
     options: input.options, updatedAt: new Date(),
+    ...(addonIds ? { addonIds } : {}),
     ...(input.costs ? {
       costExtras: { packagingPaise: toPaise(input.costs.packagingRupees), labourPaise: toPaise(input.costs.labourRupees), otherPaise: toPaise(input.costs.otherRupees), overheadPaise: toPaise(input.costs.overheadRupees) },
       ...(input.costs.productRupees !== null && !hasVariants ? { unitCostPaise: toPaise(input.costs.productRupees) } : {}),

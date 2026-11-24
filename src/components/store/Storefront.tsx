@@ -3,7 +3,8 @@ import { BadgeCheck, Facebook, Instagram, MessageCircle, RotateCcw, ShieldCheck,
 import { POLICY_KINDS, RADIUS_PX, type StoreSection, fontsHref, heroSlides, rupees } from "@/lib/store-themes";
 import { HeroSlider } from "./HeroSlider";
 import type { Storefront } from "@/server/store/public";
-import { logoUrl, sectionImage } from "@/server/store/public";
+import { bestSellers, cartCheckoutInfo, logoUrl, recData, sectionImage } from "@/server/store/public";
+import { CartDrawer } from "./CartDrawer";
 import { AttributionCapture, HeaderNav, SaleBar } from "./StoreClient";
 import { StoreTracking } from "./Tracking";
 import type { SfProduct } from "./types";
@@ -40,6 +41,7 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
       </header>
       {!sf.demo && !sf.preview && <><AttributionCapture store={sf.slug} /><StoreTracking store={sf.slug} tags={sf.tags} policyHref={`${sf.base}/policies/privacy/`} /></>}
       <main className="sf-main" id="main">{children}</main>
+      <CartDrawer store={sf.slug} base={sf.base} checkout={cartCheckoutInfo(sf)} data={recData(sf)} />
       <footer className="sf-foot">
         <div className="sf-wrap">
           <div className="cols">
@@ -98,7 +100,7 @@ export function ProductCard({ p, base, q = "" }: { p: SfProduct; base: string; q
       <span className="t">{p.title}</span>
       {p.rating && <Stars avg={p.rating.avg} count={p.rating.count} />}
       <Price p={p} />
-      {!p.inStock && <span className="sf-oos">Out of stock</span>}
+      {!p.inStock ? <span className="sf-oos">Out of stock</span> : p.options.length > 0 ? <span className="sf-note">{p.variants.length} options</span> : null}
     </a>
   );
 }
@@ -136,11 +138,22 @@ function Section({ s, sf, keep }: { s: StoreSection; sf: Storefront; keep: strin
       );
     case "featured_products": {
       const n = Number(v.count) || 8;
-      const list = [...sf.products].sort((a, b) => Number(b.featured) - Number(a.featured)).slice(0, n);
+      const list = [...sf.products].sort((a, b) => Number(b.featured) - Number(a.featured) || b.sold - a.sold).slice(0, n);
       return (
         <section className="sf-sec"><div className="sf-wrap">
           <h2>{v.heading || "Featured products"}</h2>
           {list.length ? <div className="sf-grid">{list.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep} />)}</div> : <p className="sf-note">Products will appear here soon.</p>}
+        </div></section>
+      );
+    }
+    case "best_sellers": {
+      const n = Number(v.count) || 8;
+      const list = bestSellers(sf.products, n);
+      if (!list.length) return null;
+      return (
+        <section className="sf-sec"><div className="sf-wrap">
+          <div className="sf-sec-h"><h2>{v.heading || "Best sellers"}</h2><a className="sf-link" href={`${sf.base}/shop/?sort=best${keep ? `&${keep.slice(1)}` : ""}`}>View all</a></div>
+          <div className="sf-grid">{list.map((p) => <ProductCard key={p.id} p={p} base={sf.base} q={keep} />)}</div>
         </div></section>
       );
     }

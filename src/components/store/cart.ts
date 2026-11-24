@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { track } from "./Tracking";
 /**
  * Buyer cart kept in the browser (per store). Prices here are for display only:
@@ -34,6 +35,44 @@ export function addToCart(store: string, line: Omit<CartLine, "qty" | "id">, qty
 }
 
 export const clearCart = (store: string) => writeCart(store, []);
+
+/** null until the browser cart has been read (avoids flashing "empty" on load). Follows changes from other tabs too. */
+export function useCartState(store: string) {
+  const [lines, setLines] = useState<CartLine[] | null>(null);
+  useEffect(() => {
+    const sync = () => setLines(readCart(store));
+    sync();
+    const on = (e: Event) => { if ((e as CustomEvent).detail === store) sync(); };
+    window.addEventListener("sf-cart", on);
+    window.addEventListener("storage", sync);
+    return () => { window.removeEventListener("sf-cart", on); window.removeEventListener("storage", sync); };
+  }, [store]);
+  return lines;
+}
+
+/** Opens the cart drawer (mounted once per storefront page). */
+export const openCart = (store: string) => window.dispatchEvent(new CustomEvent("sf-cart-open", { detail: store }));
+
+/**
+ * Buy now: one product checked out on its own. Kept apart from the cart (this tab only), so the items already
+ * in the cart stay there. The order page clears whichever of the two was checked out.
+ */
+const buyKey = (store: string) => `sf-buy:${store}`;
+export const BUY_ACTIVE = (store: string) => `sf-buy-active:${store}`;
+export function setBuyNow(store: string, line: Omit<CartLine, "qty" | "id">, qty: number) {
+  const id = line.variantId ? `${line.productId}:${line.variantId}` : line.productId;
+  try { sessionStorage.setItem(buyKey(store), JSON.stringify([{ ...line, id, qty: Math.min(MAX_QTY, qty) }])); } catch { /* storage blocked */ }
+  track({ name: "add_to_cart", item: { id: line.variantId ?? line.productId, name: line.title, price: line.pricePaise / 100, qty } });
+}
+export function readBuyNow(store: string): CartLine[] {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(buyKey(store)) ?? "[]");
+    return Array.isArray(v) ? v.filter((l) => l && typeof l.id === "string" && Number.isInteger(l.qty) && l.qty > 0) : [];
+  } catch { return []; }
+}
+export function clearBuyNow(store: string) {
+  try { sessionStorage.removeItem(buyKey(store)); sessionStorage.removeItem(BUY_ACTIVE(store)); } catch { /* ignore */ }
+}
 export const cartCount = (lines: CartLine[]) => lines.reduce((n, l) => n + l.qty, 0);
 
 /** UTM / click ids from the first landing page of this visit (used for ad attribution). */

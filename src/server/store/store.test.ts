@@ -88,6 +88,21 @@ describe("store lifecycle", () => {
     const live = await pub.loadStorefront("asha-crafts");
     expect(live?.indexable).toBe(true);
     expect(live?.products.map((x) => x.slug)).toContain("silk-saree");
+    // "Frequently bought together": only this store's products; shown on the product and in the cart data
+    const prods = await cat.listProducts(A, { limit: 2000 });
+    const [one, two] = [prods.find((x) => x.slug === "silk-saree")!, prods.find((x) => x.slug === "silk-saree-2")!];
+    const input = cat.ProductInput.parse({ title: one.title, priceRupees: 1499, compareRupees: 1999, categoryId: one.categoryId, images: one.images, stock: 3, weightGrams: 600, status: "active", addonIds: [two.id] });
+    await expect(cat.saveProduct(B, { ...input, images: [], categoryId: null, addonIds: [two.id] })).rejects.toThrow();
+    await expect(cat.saveProduct(A, { ...input, addonIds: ["sp_not_in_this_store"] }, one.id)).rejects.toThrow(/add-on product was not found/);
+    await cat.saveProduct(A, { ...input, addonIds: [two.id, one.id] }, one.id); // itself is dropped
+    const sf2 = (await pub.loadStorefront("asha-crafts"))!;
+    expect(sf2.products.find((x) => x.id === one.id)?.addons).toEqual([two.id]);
+    expect(pub.recData(sf2).recs[one.id]).toEqual([two.id]);
+    expect(pub.recData(sf2).pool.map((x) => x.id)).toContain(two.id);
+    expect(pub.bestSellers(sf2.products, 8).length).toBeGreaterThan(0);
+    // saving without addonIds keeps them
+    await cat.saveProduct(A, { ...input, addonIds: undefined }, one.id);
+    expect((await pub.loadStorefront("asha-crafts"))!.products.find((x) => x.id === one.id)?.addons).toEqual([two.id]);
     // change draft colour, publish v2, restore v1 into draft
     await svc.saveDraftTheme(A, "bazaar", { ...defaultTheme(), colors: { ...defaultTheme().colors, primary: "#000000" } });
     expect((await pub.loadStorefront("asha-crafts"))?.theme.colors.primary).toBe(defaultTheme().colors.primary); // live unchanged until publish

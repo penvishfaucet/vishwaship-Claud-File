@@ -1300,6 +1300,8 @@ export const storeProducts = pgTable("store_products", {
   unitCostPaise: paise("unit_cost_paise"),
   /** Per-piece costs on top of the purchase cost: { packagingPaise, labourPaise, otherPaise, overheadPaise } (owner 2026-11-23). */
   costExtras: jsonb("cost_extras"),
+  /** "Frequently bought together": up to 6 other product ids of this store chosen by the merchant (compatible add-ons). */
+  addonIds: jsonb("addon_ids").notNull().default([]),
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("store_products_slug").on(t.storeId, t.slug), index("store_products_store").on(t.storeId, t.status)]);

@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type CartLine, clearCart, readAttribution } from "./cart";
-import { useCartState } from "./StoreClient";
+import { BUY_ACTIVE, type CartLine, clearBuyNow, clearCart, readAttribution, readBuyNow } from "./cart";
+import { useCartState } from "./cart";
 import { browserIds, track } from "./Tracking";
 
 import { rupees } from "@/lib/store-themes";
@@ -45,8 +45,17 @@ function loadRazorpay(): Promise<boolean> {
   });
 }
 
-export function Checkout({ store, base, storeName }: { store: string; base: string; storeName: string }) {
-  const cart = useCartState(store);
+export function Checkout({ store, base, storeName, buyNow = false }: { store: string; base: string; storeName: string; buyNow?: boolean }) {
+  const cartLines = useCartState(store);
+  // Buy now checks out only the item picked on the product page; the cart is left as it is
+  const [buyLines, setBuyLines] = useState<CartLine[] | null>(null);
+  useEffect(() => {
+    if (!buyNow) { try { sessionStorage.removeItem(BUY_ACTIVE(store)); } catch { /* ignore */ } return; }
+    setBuyLines(readBuyNow(store));
+    try { sessionStorage.setItem(BUY_ACTIVE(store), "1"); } catch { /* ignore */ }
+  }, [buyNow, store]);
+  const cart = buyNow ? buyLines : cartLines;
+  const ckKey = `sf-ck:${store}${buyNow ? ":buy" : ""}`;
   const api = `/api/store/${store}/checkout/`;
   const [b, setB] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: "", city: "", state: "" });
   const [method, setMethod] = useState<"cod" | "online" | null>(null);
@@ -61,9 +70,9 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
 
   // one checkout key per cart + details, kept across reloads so a retry never creates a second order
   useEffect(() => {
-    try { keyRef.current = sessionStorage.getItem(`sf-ck:${store}`) || newKey(); sessionStorage.setItem(`sf-ck:${store}`, keyRef.current); }
+    try { keyRef.current = sessionStorage.getItem(ckKey) || newKey(); sessionStorage.setItem(ckKey, keyRef.current); }
     catch { keyRef.current = newKey(); }
-  }, [store]);
+  }, [ckKey]);
 
   const refresh = useCallback(async (c: string, m: "cod" | "online" | null) => {
     if (!lines.length) return;
@@ -98,8 +107,8 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
 
   const done = (orderId: string, number: string, token: string) => {
     void orderId;
-    clearCart(store);
-    try { sessionStorage.removeItem(`sf-ck:${store}`); } catch { /* ignore */ }
+    if (buyNow) clearBuyNow(store); else clearCart(store);
+    try { sessionStorage.removeItem(ckKey); } catch { /* ignore */ }
     window.location.href = `${base}/order/${encodeURIComponent(number)}/?t=${encodeURIComponent(token)}`;
   };
 
@@ -109,7 +118,7 @@ export function Checkout({ store, base, storeName }: { store: string; base: stri
     setBusy(true); setErr(null);
     const r = await fetch(api, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ checkoutKey: keyRef.current, lines, buyer: b, paymentMethod: method === "online" ? q?.onlineMethod : "cod", coupon, attribution: { ...readAttribution(store), ...browserIds(store) } }) });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { setBusy(false); setErr({ msg: j?.error?.message ?? "Could not place the order", field: j?.error?.field }); if (j?.error?.message?.includes("cancelled")) { keyRef.current = newKey(); try { sessionStorage.setItem(`sf-ck:${store}`, keyRef.current); } catch { /* ignore */ } } return; }
+    if (!r.ok) { setBusy(false); setErr({ msg: j?.error?.message ?? "Could not place the order", field: j?.error?.field }); if (j?.error?.message?.includes("cancelled")) { keyRef.current = newKey(); try { sessionStorage.setItem(ckKey, keyRef.current); } catch { /* ignore */ } } return; }
     if (j.kind === "placed") { done(j.orderId, j.number, j.token); return; }
     if (j.kind === "gateway") {
       if (!(await goToGateway(j.start as GatewayStart))) { setBusy(false); setErr({ msg: "Could not open the payment page. Check your connection and try again." }); }

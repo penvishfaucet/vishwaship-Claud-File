@@ -14,6 +14,8 @@ export type TrackEvent =
   | { name: "view_item"; item: Item }
   | { name: "add_to_cart"; item: Item }
   | { name: "begin_checkout"; value: number; items: Item[] }
+  /** Recommendation shown in "Complete your purchase" / Best sellers: clicked (opened) or added straight to the cart. */
+  | { name: "recommendation_click" | "recommendation_add"; list: string; item: Item }
   | { name: "purchase"; eventId: string; orderNumber: string; value: number; items: Item[] };
 
 declare global { interface Window { fbq?: ((...a: unknown[]) => void) & { q?: unknown[]; loaded?: boolean }; dataLayer?: unknown[]; gtag?: (...a: unknown[]) => void } }
@@ -78,6 +80,9 @@ function send(e: TrackEvent, tags: Tags, c: Consent) {
   const gaItems = (items: Item[]) => items.map((i) => ({ item_id: i.id, item_name: i.name, price: i.price, quantity: i.qty }));
   if (e.name === "view_item") { ga("view_item", { value: e.item.price, items: gaItems([e.item]) }); fb("ViewContent", { value: e.item.price, content_ids: [e.item.id], content_type: "product" }); }
   if (e.name === "add_to_cart") { ga("add_to_cart", { value: e.item.price * e.item.qty, items: gaItems([e.item]) }); fb("AddToCart", { value: e.item.price * e.item.qty, content_ids: [e.item.id], content_type: "product" }); }
+  if (e.name === "recommendation_click") ga("select_item", { item_list_name: e.list, items: gaItems([e.item]) });
+  // the cart add itself is already sent as add_to_cart; this only says it came from a recommendation
+  if (e.name === "recommendation_add") ga("recommendation_add", { item_list_name: e.list, items: gaItems([e.item]) });
   if (e.name === "begin_checkout") { ga("begin_checkout", { value: e.value, items: gaItems(e.items) }); fb("InitiateCheckout", { value: e.value, num_items: e.items.reduce((n, i) => n + i.qty, 0) }); }
   if (e.name === "purchase") {
     ga("purchase", { transaction_id: e.orderNumber, value: e.value, items: gaItems(e.items) });

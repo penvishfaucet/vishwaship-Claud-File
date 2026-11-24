@@ -13,4 +13,12 @@ export type SfProduct = {
   sale: { name: string; percentOff: number } | null;
   /** Published reviews. */
   rating: { avg: number; count: number } | null;
+  /** Units sold in the last 90 days (placed orders, not cancelled or refunded). Drives Best Sellers. */
+  sold: number;
+  /** Add-ons: merchant-chosen compatible products first, then products often bought in the same order. */
+  addons: string[];
+  /** ISO time the product was added (Newest sort). */
+  createdAt: string;
 };
+/** Small product card data for the cart drawer and add-on rows (client components). */
+export type SfMini = { id: string; slug: string; title: string; image: string | null; pricePaise: number; comparePaise: number | null; hasOptions: boolean; inStock: boolean };

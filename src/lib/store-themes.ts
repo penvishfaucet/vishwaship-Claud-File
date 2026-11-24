@@ -6,13 +6,14 @@ import { z } from "zod";
  */
 
 export const FONT_CHOICES = ["Poppins", "Inter", "Playfair Display", "Lora", "Montserrat", "DM Sans", "Nunito", "Merriweather"] as const;
-export const SECTION_TYPES = ["announcement", "hero", "categories", "featured_products", "image_text", "testimonials", "trust_badges"] as const;
+export const SECTION_TYPES = ["announcement", "hero", "categories", "best_sellers", "featured_products", "image_text", "testimonials", "trust_badges"] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];
 
 export const SECTION_LABEL: Record<SectionType, string> = {
   announcement: "Announcement bar",
   hero: "Sliding banner",
   categories: "Shop by category",
+  best_sellers: "Best sellers (by sales)",
   featured_products: "Featured products",
   image_text: "Image with text",
   testimonials: "Customer reviews",
@@ -42,6 +43,10 @@ export const SECTION_FIELDS: Record<SectionType, SectionField[]> = {
     ]),
   ],
   categories: [{ key: "heading", label: "Heading", kind: "text" }],
+  best_sellers: [
+    { key: "heading", label: "Heading", kind: "text" },
+    { key: "count", label: "Number of products", kind: "select", options: ["4", "8", "12"] },
+  ],
   featured_products: [
     { key: "heading", label: "Heading", kind: "text" },
     { key: "count", label: "Number of products", kind: "select", options: ["4", "8", "12"] },
@@ -83,11 +88,12 @@ export type ThemeDef = { key: string; name: string; tagline: string; config: The
 const sections = (o: Partial<Record<SectionType, Record<string, string>>>, order: SectionType[]): StoreSection[] =>
   order.map((type) => ({ id: type, type, enabled: true, settings: o[type] ?? {} }));
 
-const ORDER: SectionType[] = ["announcement", "hero", "trust_badges", "categories", "featured_products", "image_text", "testimonials"];
+const ORDER: SectionType[] = ["announcement", "hero", "trust_badges", "categories", "best_sellers", "featured_products", "image_text", "testimonials"];
 const COMMON = {
   trust_badges: { items: "Cash on Delivery\nFast shipping across India\nSecure payments\nEasy returns" },
   categories: { heading: "Shop by category" },
-  featured_products: { heading: "Bestsellers", count: "8" },
+  best_sellers: { heading: "Best sellers", count: "8" },
+  featured_products: { heading: "Featured products", count: "8" },
   testimonials: { heading: "What customers say", items: "Quality is great and delivery was quick. — Priya, Pune\nPacked well, exactly as shown. — Rahul, Jaipur\nWill order again! — Ayesha, Lucknow" },
 };
 

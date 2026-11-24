@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { AddToCart, DeliveryCheck, ProductGallery, ReviewForm } from "@/components/store/StoreClient";
 import { productReviews } from "@/server/store/reviews";
 import { Price, ProductCard, Stars, StoreShell } from "@/components/store/Storefront";
+import { MiniRow } from "@/components/store/CartDrawer";
+import { bestSellers, mini } from "@/server/store/public";
 import { TrackOnMount } from "@/components/store/Tracking";
 import { type SfSearch, keepQs, resolveSf, sfMeta } from "../../_sf";
 
@@ -23,7 +25,12 @@ export default async function ProductPage({ params, searchParams }: { params: P;
   const p = sf.products.find((x) => x.slug === product);
   if (!p) notFound();
   const cat = sf.categories.find((c) => c.slug === p.categorySlug);
-  const related = sf.products.filter((x) => x.id !== p.id && x.categorySlug === p.categorySlug).slice(0, 4);
+  // Frequently bought together: merchant-chosen compatible add-ons first, then often bought in the same order
+  const addons = p.addons.map((id) => sf.products.find((x) => x.id === id)).filter((x): x is NonNullable<typeof x> => !!x && x.inStock).slice(0, 3);
+  // You may also like: same category (best sellers first), never the product itself or its add-ons; thin categories fill up with store best sellers
+  const skip = new Set([p.id, ...addons.map((x) => x.id)]);
+  const sameCat = p.categorySlug ? bestSellers(sf.products, 24, p.categorySlug).filter((x) => !skip.has(x.id)) : [];
+  const related = [...sameCat, ...bestSellers(sf.products, 12).filter((x) => !skip.has(x.id) && !sameCat.includes(x))].slice(0, 4);
   const keep = keepQs(sf) ? `?${keepQs(sf)}` : "";
   const reviews = sf.demo ? [] : await productReviews(sf.id, p.id);
   const ld = {
@@ -44,6 +51,9 @@ export default async function ProductPage({ params, searchParams }: { params: P;
             {p.options.length === 0 && <Price p={p} />}
             {p.options.length === 0 && <p className="sf-note" style={{ marginTop: 4 }}>Inclusive of all taxes</p>}
             <AddToCart store={sf.slug} base={sf.base} product={{ id: p.id, slug: p.slug, title: p.title, image: p.images[0] ?? null, pricePaise: p.pricePaise, comparePaise: p.comparePaise, inStock: p.inStock, options: p.options, variants: p.variants }} />
+            {addons.length > 0 && (
+              <div className="sf-recs sf-fbt"><h3>Frequently bought together</h3>{addons.map((x) => <MiniRow key={x.id} store={sf.slug} base={sf.base} p={mini(x)} list="pdp_bought_together" />)}</div>
+            )}
             {sf.offers.length > 0 && (
               <div className="sf-offers"><b>Offers</b>{sf.offers.map((o) => <div key={o.code}><b className="code">{o.code}</b>{o.text}</div>)}<span className="sf-note">Apply the code at checkout.</span></div>
             )}
