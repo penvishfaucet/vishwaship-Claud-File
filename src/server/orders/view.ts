@@ -190,6 +190,13 @@ export async function listOrderRows(orgId: string | null, f: OrderFilters, opts:
     const priced = q?.priced as PricedQuote | undefined;
     const dispute = s ? disputes.find((d) => d.shipmentId === s.id && ["charged", "accepted"].includes(d.status)) : undefined;
     const charged = s ? s.sellPaise + (dispute?.chargePaise ?? 0) : null;
+    // Latest weight discrepancy on this shipment (red mark in the Orders lists; waived ones are not marked)
+    const wd = s ? disputes.filter((d) => d.shipmentId === s.id).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0] : undefined;
+    const weight = wd && wd.status !== "waived" ? {
+      id: wd.id, status: wd.status, chargePaise: wd.chargePaise, carrierGrams: wd.carrierGrams, deadline: wd.deadlineAt.toISOString(),
+      canDispute: wd.status === "open" && wd.deadlineAt.getTime() > Date.now(),
+      receiverPays: wd.chargePaise === 0 && !!(wd.calc as { fod?: boolean } | null)?.fod,
+    } : null;
     const lines: ChargeLine[] = priced?.lines?.map((l) => ({ label: l.label, amount: l.sellPreTax })) ?? [];
     const cod = cods.find((c) => c.orderId === o.id) ?? null;
     const msg = msgs.find((m) => m.orderId === o.id);
@@ -225,6 +232,7 @@ export async function listOrderRows(orgId: string | null, f: OrderFilters, opts:
       cancellableOrder: !s && ["draft", "ready", "cod_hold", "booking_failed"].includes(o.status),
       cod: codIn, codDecidedAt: cod?.decidedAt?.toISOString() ?? null, codResponse: cod?.buyerResponse ?? null,
       tags: tags.filter((t) => t.orderId === o.id).map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      weight,
     };
   });
   return { rows, total: Number(total), page: f.page, pageSize: f.pageSize };

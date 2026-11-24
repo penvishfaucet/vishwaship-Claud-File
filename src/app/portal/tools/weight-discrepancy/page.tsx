@@ -13,7 +13,7 @@ const STATUS: Record<string, [string, string]> = { open: ["Action needed", "c-pe
 type Ev = { label: string; url?: string; urls?: string[]; note?: string; by?: string; claimedGrams?: number };
 type Calc = { before?: { total: number }; after?: { total: number }; fod?: boolean; receiverBeforePaise?: number; receiverAfterPaise?: number } | null;
 
-export default async function WeightDiscrepancyPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export default async function WeightDiscrepancyPage({ searchParams }: { searchParams: Promise<{ status?: string; id?: string }> }) {
   const sp = await searchParams;
   const ctx = await portalContext();
   const db = await getDb();
@@ -24,7 +24,9 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
   const now = new Date();
 
   // Everything each row / card shows, worked out once.
-  const items = all.filter((r) => !sp.status || r.w.status === sp.status).map(({ w, s, o }) => {
+  // ?id= comes from the red "Weight discrepancy" mark on an order in Orders: show just that one, dispute form already open
+  const one = sp.id ? all.find((r) => r.w.id === sp.id) : undefined;
+  const items = all.filter((r) => (one ? r === one : !sp.status || r.w.status === sp.status)).map(({ w, s, o }) => {
     const boxes = pk.filter((p) => p.orderId === o.id);
     const actual = boxes.reduce((t, b) => t + b.actualWeightGrams * b.count, 0);
     const vol = boxes.reduce((t, b) => t + Math.ceil((b.lengthMm * b.breadthMm * b.heightMm) / 1000 / 5000 * 1000) * b.count, 0);
@@ -39,7 +41,7 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
     const evidence = ev.length ? ev.map((e, i) => (
       <div key={i}>{e.url ? <a className="link" href={e.url} target="_blank" rel="noreferrer">{e.label}</a> : e.label}{e.by === "seller" && e.claimedGrams ? ` (you: ${kg(e.claimedGrams)})` : ""}{e.urls?.map((u, j) => <a key={j} className="link" href={u} target="_blank" rel="noreferrer" style={{ marginLeft: 4 }}>[{j + 1}]</a>)}</div>
     )) : "—";
-    const form = (m: string) => (open ? <DisputeForm id={w.id} idSuffix={m} declaredKg={Number(((actual || w.declaredGrams) / 1000).toFixed(2))} /> : null);
+    const form = (m: string) => (open ? <DisputeForm id={w.id} idSuffix={m} startOpen={!!one} declaredKg={Number(((actual || w.declaredGrams) / 1000).toFixed(2))} /> : null);
     return { w, s, o, fodInfo, actual, vol, label, chip, due, charge, chargeNote, evidence, form };
   });
 
@@ -48,6 +50,14 @@ export default async function WeightDiscrepancyPage({ searchParams }: { searchPa
       <div className="page-h"><div><h1>Weight Discrepancy</h1>
         <p className="small muted" style={{ margin: "4px 0 0" }}>When the courier’s measured weight is higher than what you booked, it appears here (you also get an email). Extra charge = your same rate for the courier’s weight minus what you paid at booking, plus GST. Not disputed within 7 days → debited from your wallet. FoD (freight on delivery): nothing is charged to you — the receiver pays at delivery.</p>
       </div></div>
+      {one && (
+        <div className={`note mb12 ${one.w.status === "open" && one.w.deadlineAt > now ? "wd-focus" : ""}`} role="status">
+          <b>Order {one.o.orderNumber}{one.s.awb ? ` · AWB ${one.s.awb}` : ""}</b> — {one.w.status === "open" && one.w.deadlineAt > now
+            ? <>the courier weighed this parcel at <b>{kg(one.w.carrierGrams)}</b>. If that is wrong, fill in the dispute below with your weight and photos before <b>{one.w.deadlineAt.toLocaleDateString("en-IN")}</b>.</>
+            : <>details of this weight discrepancy are below.</>}{" "}
+          <Link className="link" href="/portal/tools/weight-discrepancy/">Show all</Link>
+        </div>
+      )}
       <nav className="pills mb12 wd-pills" aria-label="Status">
         <Link className={!sp.status ? "pill on" : "pill"} href="/portal/tools/weight-discrepancy/">All {all.length}</Link>
         {Object.entries(STATUS).map(([k, [l]]) => <Link key={k} className={sp.status === k ? "pill on" : "pill"} href={`/portal/tools/weight-discrepancy/?status=${k}`}>{l} {all.filter((r) => r.w.status === k).length}</Link>)}

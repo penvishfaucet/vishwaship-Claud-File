@@ -574,6 +574,30 @@ const COD_BADGE: Partial<Record<string, { text: string; cls: string }>> = {
   confirmed: { text: "✓ Buyer confirmed — ship", cls: "ok" }, rejected: { text: "✕ Buyer cancelled", cls: "bad" },
   no_response: { text: "COD: no reply from buyer", cls: "warn" }, message_failed: { text: "COD message not sent", cls: "bad" },
 };
+/**
+ * Red mark on an order that has a weight discrepancy. Click: Customer Portal → Weight Discrepancy page showing this one
+ * (with Raise Dispute while the window is open); Admin → Weight Disputes showing this one.
+ */
+function WeightMark({ r }: { r: OrderRow }) {
+  const admin = useContext(AdminMode);
+  const w = r.weight;
+  if (!w) return null;
+  const href = admin ? `/admin/disputes/?id=${encodeURIComponent(w.id)}` : `/portal/tools/weight-discrepancy/?id=${encodeURIComponent(w.id)}`;
+  const by = new Date(w.deadline).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
+  const amount = w.receiverPays ? "receiver pays (FoD)" : inr(w.chargePaise);
+  const [title, sub, tone] =
+    w.status === "disputed" ? ["Weight dispute", "Under review", "amber"]
+    : w.status === "charged" || w.status === "accepted" ? ["Weight charge", amount, "red"]
+    : w.canDispute ? ["Weight discrepancy", admin ? `${amount} · client can dispute till ${by}` : `${amount} · Raise dispute by ${by}`, "red live"]
+    : ["Weight discrepancy", amount, "red"];
+  return (
+    <Link className={`ov-wd ${tone}`} href={href} title={admin ? "Open in Weight Disputes" : w.canDispute ? "Open Weight Discrepancy to raise a dispute" : "Open Weight Discrepancy"}>
+      <span className="ov-wd-dot" aria-hidden />
+      <span className="ov-wd-t"><b>{title}</b><span>{sub}</span></span>
+    </Link>
+  );
+}
+
 function CodBadge({ r, open }: { r: OrderRow; open: (d: DialogState) => void }) {
   const c = codDisplay(r.cod);
   const shown = c.cancellation === "cancelled" ? { text: "✕ Cancelled by buyer", cls: "bad" } : COD_BADGE[c.buyer];
@@ -655,7 +679,7 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
   const detail = admin ? adminHref(r) : !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (
     <>
-      <tr className={`orow${selected ? " sel" : ""}`}>
+      <tr className={`orow${selected ? " sel" : ""}${r.weight ? " has-wd" : ""}`}>
         <td><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} /></td>
         {show("orderDate") && <td className="date">{istDate(r.createdAt)} | {istTime(r.createdAt)}<div className="b">{SOURCE[r.source] ?? r.source}</div></td>}
         <td className="ord">
@@ -663,6 +687,7 @@ function DesktopRow({ r, show, colCount, selected, onToggle, codLabel, open, bus
           <div>Ref. ID: {r.externalOrderId ?? r.invoiceNumber ?? "--"}</div>
           <span className={`ov-badge ${b.cls}`}>{b.text}</span>
           <CodBadge r={r} open={open} />
+          <WeightMark r={r} />
           {r.tags.length > 0 && <div className="row wrap" style={{ gap: 4, marginTop: 4 }}>{r.tags.map((t) => <span key={t.id} className="ov-badge" style={{ background: t.color, color: "#fff" }}><Tag size={10} aria-hidden /> {t.name}</span>)}</div>}
         </td>
         {admin && <td className="cust"><Link className="ov-link" href={`/admin/customers/${r.customer.id}/`}>{r.customer.name}</Link><div className="tiny muted mono">{r.customer.id}</div></td>}
@@ -698,11 +723,12 @@ function MobileCard({ r, selected, onToggle, open, defaultLabel, codLabel, onLab
   const fmt = s?.labelFormats.find((x) => x.key === defaultLabel && x.ok) ?? s?.labelFormats.find((x) => x.ok);
   const canCancel = s ? s.cancellable : r.cancellableOrder;
   return (
-    <article className="ov-mc" aria-label={`Order ${r.orderNumber}`} style={selected ? { borderColor: "var(--ov-orange)" } : undefined}>
+    <article className={`ov-mc${r.weight ? " has-wd" : ""}`} aria-label={`Order ${r.orderNumber}`} style={selected ? { borderColor: "var(--ov-orange)" } : undefined}>
       <div className="r">
         <label className="row" style={{ gap: 8 }}><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} /><Link className="ov-link" href={`/portal/orders/${r.id}/`}>{r.orderNumber}</Link></label>
         <span className={`ov-badge ${b.cls}`}>{b.text}</span>
       </div>
+      <WeightMark r={r} />
       <div className="ov-awb">
         {s ? <><span className="muted small">AWB</span> {s.awb ? <><b className="mono">{s.awb}</b><CopyBtn value={s.awb} label="AWB" /></> : <span className="ov-badge orange">AWB Pending</span>}</> : <span className="muted small">Not shipped yet</span>}
       </div>
@@ -764,12 +790,13 @@ function SimpleCard({ r, selected, onToggle, onCancel, onClone, busy }: { r: Ord
   const pay = r.payment === "cod" ? <>COD <b>{inr(r.codPaise)}</b></> : r.payment === "fod" ? <>FOD <b>{inr(r.receiverFreightPaise)}</b>{r.codPaise > 0 && <> + COD <b>{inr(r.codPaise)}</b></>}</> : <>Prepaid</>;
   const ticket = `/portal/support/new/?order=${encodeURIComponent(r.orderNumber)}${s?.awb ? `&awb=${encodeURIComponent(s.awb)}` : ""}`;
   return (
-    <article className="ov-sc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
+    <article className={`ov-sc${r.weight ? " has-wd" : ""}`} aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
       <div className="ov-sc-top">
         <label className="ov-sc-id"><input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} />
           <Link href={!s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`}>{r.orderNumber}</Link></label>
         <span className={`ov-badge ${b.cls}`}>{b.text}</span>
       </div>
+      <WeightMark r={r} />
       <div className="ov-sc-mid">
         <span className={`ov-pay ${r.payment}`}>{pay}</span>
         <span className="tiny muted">{istDate(r.createdAt)}</span>
@@ -799,7 +826,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
   const admin = useContext(AdminMode);
   const detail = admin ? adminHref(r) : !s && r.orderStatus === "draft" ? `/portal/orders/new/?draft=${r.id}` : `/portal/orders/${r.id}/`;
   return (
-    <article className="oc" aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
+    <article className={`oc${r.weight ? " has-wd" : ""}`} aria-label={`Order ${r.orderNumber}`} data-selected={selected || undefined}>
       <header className="oc-top">
         <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select order ${r.orderNumber}`} />
         <Package size={20} aria-hidden className="oc-ico" />
@@ -809,6 +836,7 @@ function ShipCard({ r, selected, onToggle, open, defaultLabel, onLabel, onCancel
         <ActionMenu r={r} open={open} onLabel={onLabel} onCancel={onCancel} onClone={onClone} onArchive={onArchive} onMenu={onMenu} />
       </header>
       {admin && <div className="oc-cust"><Building2 size={15} aria-hidden /> <Link href={`/admin/customers/${r.customer.id}/`}>{r.customer.name}</Link></div>}
+      {r.weight && <div className="oc-wd"><WeightMark r={r} /></div>}
       <div className="oc-mid">
         <div className="oc-svc">{s ? (s.serviceName && s.serviceName !== s.carrierName ? `${s.carrierName} ${s.serviceName}` : s.carrierName) : "Courier not assigned"}</div>
         {s && (

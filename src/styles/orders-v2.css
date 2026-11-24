@@ -396,3 +396,22 @@ html .oc-split .oc-btn:disabled{background:#e6ebf2!important;color:#4f5d78!impor
   html body .ovt-admin .ov-table td.date{min-width:86px}
   html body .ovt-admin .ov-table .ov-addr{min-width:125px}
 }
+
+/* Weight discrepancy mark on an order (Orders lists, Customer Portal + Admin) */
+.ov-wd { display: flex; align-items: flex-start; gap: 7px; margin-top: 6px; padding: 5px 9px 5px 7px; border-radius: 8px; text-decoration: none; width: fit-content; max-width: 100%;
+  background: #fdecec; border: 1px solid #f3b4b4; color: #b42318; font-size: 12px; line-height: 1.25; }
+.ov-wd:hover { background: #fbdada; border-color: #e58a8a; }
+.ov-wd:focus-visible { outline: 2px solid #b42318; outline-offset: 2px; }
+.ov-wd-t { display: flex; flex-direction: column; }
+.ov-wd-t b { font-weight: 700; }
+.ov-wd-t span { color: #912018; }
+.ov-wd-dot { flex: none; width: 9px; height: 9px; margin-top: 3px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, .18); }
+.ov-wd.live .ov-wd-dot { animation: ov-wd-pulse 1.6s ease-out infinite; }
+.ov-wd.amber { background: #fff4e5; border-color: #f7c98b; color: #93370d; }
+.ov-wd.amber .ov-wd-t span { color: #93370d; }
+.ov-wd.amber .ov-wd-dot { background: #f79009; box-shadow: 0 0 0 3px rgba(247, 144, 9, .2); }
+@keyframes ov-wd-pulse { 0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .55); } 70% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); } 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); } }
+@media (prefers-reduced-motion: reduce) { .ov-wd.live .ov-wd-dot { animation: none; } }
+tr.orow.has-wd > td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
+.ov-mc.has-wd, .ov-sc.has-wd, .oc.has-wd { border-left: 4px solid #dc2626 !important; }
+.oc-wd { padding: 0 14px 4px; }

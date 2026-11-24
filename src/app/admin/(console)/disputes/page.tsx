@@ -9,20 +9,24 @@ import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { inboundSecret, recentCourierMails } from "@/server/weight/inbound-mail";
 
-export default async function Disputes() {
+export default async function Disputes({ searchParams }: { searchParams: Promise<{ id?: string }> }) {
+  const sp = await searchParams;
   const s = await requireStaff("shipments.read");
   const db = await getDb();
-  const rows = await db.select({ d: schema.weightDisputes, sh: schema.shipments, o: schema.orgs }).from(schema.weightDisputes)
+  const allRows = await db.select({ d: schema.weightDisputes, sh: schema.shipments, o: schema.orgs }).from(schema.weightDisputes)
     .innerJoin(schema.shipments, eq(schema.shipments.id, schema.weightDisputes.shipmentId)).innerJoin(schema.orgs, eq(schema.orgs.id, schema.weightDisputes.orgId)).orderBy(desc(schema.weightDisputes.createdAt));
+  // ?id= comes from the red weight mark on an order in All Shipments: show just that dispute
+  const focus = sp.id ? allRows.find((r) => r.d.id === sp.id) : undefined;
+  const rows = focus ? [focus] : allRows;
   const fin = can(s.role, "finance.adjust");
   const [mails, auto] = fin ? await Promise.all([recentCourierMails(), inboundSecret().then(Boolean)]) : [[], false];
   const cmail = fin ? await courierMailSettings() : { to: [], cc: [] };
   return (
     <>
       <div className="page-h"><div><h1>Weight Disputes</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Courier weight above the booked chargeable weight is passed on to the client: re-rated at the booking rate with the same markup, plus GST. Clients get 7 days to dispute; undisputed ones are debited automatically.</p></div></div>
-      {fin && <CourierMailSettings to={cmail.to.join(", ")} cc={cmail.cc.join(", ")} />}
-      {fin && <WeightImport />}
-      {fin && (
+      {fin && !focus && <CourierMailSettings to={cmail.to.join(", ")} cc={cmail.cc.join(", ")} />}
+      {fin && !focus && <WeightImport />}
+      {fin && !focus && (
         <div className="card mb12">
           <h2 className="h3" style={{ marginTop: 0 }}>Courier mails received (automatic)</h2>
           <p className="small muted" style={{ margin: "0 0 8px" }}>{auto ? "ON — courier weight-discrepancy mails forwarded to noreply@vishwaship.com are read automatically: the discrepancy is raised and the client is told by portal alert and email." : "OFF — set it up once in Admin → API Keys & Services → Resend (steps are on that page). Until then, paste the mail above."}</p>
@@ -36,6 +40,7 @@ export default async function Disputes() {
           )}
         </div>
       )}
+      {focus && <p className="note mb12" role="status">Showing the weight discrepancy for AWB <b className="mono">{focus.sh.awb}</b> ({focus.o.businessName}). <a className="link" href="/admin/disputes/">Show all</a></p>}
       <div className="card p0 tbl-wrap only-desktop"><table className="tbl"><thead><tr><th>Customer</th><th>AWB</th><th>Declared</th><th>Carrier</th><th>Revised</th><th>Charge</th><th>Courier extra</th><th>Deadline</th><th>Status</th><th /></tr></thead>
         <tbody>{rows.map(({ d, sh, o }) => (
           <tr key={d.id}><td className="small">{o.businessName}</td><td className="mono tiny">{sh.awb}</td><td>{d.declaredGrams / 1000} kg</td><td>{d.carrierGrams / 1000} kg</td><td>{d.revisedChargeableGrams / 1000} kg</td><td>{formatINR(d.chargePaise)}<div className="tiny muted">{d.source}</div></td><td className="small">{(() => { const c = d.calc as { extraCostPreTax?: number; basis?: string } | null; return c?.extraCostPreTax != null ? <>{formatINR(c.extraCostPreTax)}<div className="tiny muted">{c.basis === "courier" ? "from report" : "re-rated"} · pre-GST</div></> : "—"; })()}</td><td className="small">{d.deadlineAt.toLocaleDateString("en-IN")}</td><td><span className={`chip ${d.status === "disputed" ? "c-failed" : d.status === "open" ? "c-active" : "c-draft"}`}>{d.status === "disputed" ? "● client disputed" : d.status === "open" ? "● open" : d.status}</span>{(d.evidence as Array<{ by?: string; note?: string; claimedGrams?: number; urls?: string[] }>).filter((e) => e.by === "seller").map((e, i) => <div key={i} className="tiny" style={{ maxWidth: 260 }}><b>Seller:</b> {e.claimedGrams ? `${e.claimedGrams / 1000} kg — ` : ""}{e.note}{e.urls?.map((u, j) => <a key={j} className="link" href={u} target="_blank" rel="noreferrer noopener" style={{ marginLeft: 4 }}>[{j + 1}]</a>)}</div>)}</td>

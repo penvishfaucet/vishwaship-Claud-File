@@ -2,8 +2,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function DisputeForm({ id, declaredKg, idSuffix = "" }: { id: string; declaredKg: number; idSuffix?: string }) {
-  const [open, setOpen] = useState(false);
+export function DisputeForm({ id, declaredKg, idSuffix = "", startOpen = false }: { id: string; declaredKg: number; idSuffix?: string; startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const router = useRouter();
