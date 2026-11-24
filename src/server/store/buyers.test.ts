@@ -19,6 +19,7 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 const mails: Array<{ event: string; to: string; vars: Record<string, string> }> = [];
+vi.mock("@/server/auth/firebase-phone", () => ({ firebasePhoneConfig: async () => ({ apiKey: "AIza-vs", authDomain: "vs.firebaseapp.com", projectId: "vishwaship-app" }) }));
 vi.mock("@/server/email/service", () => ({
   getAuthSettings: async () => ({ googleEnabled: true, otpValidityMin: 10, otpCooldownSec: 0, otpMaxAttempts: 3 }),
   sendEmail: async (a: { event: string; to: string; vars: Record<string, string> }) => { mails.push(a); return { status: "sent" }; },
@@ -93,6 +94,24 @@ describe("store buyer accounts", () => {
     cur = (await B.currentBuyer(store.id))!;
     expect(cur.addresses.filter((a) => a.isDefault)).toHaveLength(1);
     await expect(B.upsertAddress(cur, { name: "R", mobile: "123", line1: "x", pincode: "1", city: "", state: "" })).rejects.toThrow();
+  });
+});
+
+describe("buyer OTP source and charges (Connect apps)", () => {
+  it("Vishwaship OTP by default, own Firebase when filled in, none for email-only", async () => {
+    expect((await B.buyerOtpConfig({}))?.source).toBe("vishwaship");
+    expect(await B.buyerOtpConfig({ buyerLogin: { otp: "email_only" } })).toBeNull();
+    expect(await B.buyerOtpConfig({ buyerLogin: { otp: "own_firebase", firebase: { apiKey: "", authDomain: "", projectId: "" } } })).toBeNull();
+    const own = await B.buyerOtpConfig({ buyerLogin: { otp: "own_firebase", firebase: { apiKey: "AIza-own", authDomain: "brand.firebaseapp.com", projectId: "brand-1", appId: "" } } });
+    expect(own).toEqual({ source: "own", config: { apiKey: "AIza-own", authDomain: "brand.firebaseapp.com", projectId: "brand-1" } });
+  });
+  it("Vishwaship OTP logins take credits once per number per 10 minutes, and stop at zero", async () => {
+    await db.insert(schema.creditBalances).values({ orgId: store.orgId, credits: 6 }).onConflictDoNothing();
+    expect(await B.chargeOtpCredits(store.orgId, store.id, "9333333333")).toBe(true);
+    expect(await B.chargeOtpCredits(store.orgId, store.id, "9333333333")).toBe(true); // same number again: free
+    const [bal] = await db.select().from(schema.creditBalances).where(eq(schema.creditBalances.orgId, store.orgId));
+    expect(bal.credits).toBe(2);
+    expect(await B.chargeOtpCredits(store.orgId, store.id, "9444444444")).toBe(false); // 2 left, needs 4
   });
 });
 

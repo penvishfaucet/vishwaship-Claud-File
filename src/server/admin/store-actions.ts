@@ -176,3 +176,20 @@ export async function decideStoreDeposit(fd: FormData) {
   try { await decideDepositRefund(staff.userId, str(fd, "depositId"), approve, refundPaise, str(fd, "note")); } catch (e) { redirect(`${from}err=${msg(e)}`); }
   redirect(`${from}ok=${approve ? "Refund+approved+and+credited+to+the+wallet" : "Refund+request+rejected"}`);
 }
+
+/** One-click checkout (Store → Connect apps): Vishwaship staff switch the merchant's request on or off after the provider confirms. */
+export async function setOneClickStatus(fd: FormData) {
+  const staff = await requireStaff("modules.manage");
+  const s = await storeById(str(fd, "storeId"));
+  if (!s) redirect("/admin/online-stores/?err=Store+not+found");
+  const status = str(fd, "status");
+  if (!["active", "requested", "off"].includes(status)) back(s.id, "err=Choose+a+status");
+  const { readSettings } = await import("@/lib/store-themes");
+  const cur = readSettings(s.settings);
+  if (status !== "off" && cur.oneClick.provider === "none") back(s.id, "err=The+merchant+has+not+chosen+a+provider");
+  const next = { ...cur, oneClick: { ...cur.oneClick, status: status as "active" | "requested" | "off", ...(status === "off" ? { provider: "none" as const } : {}) } };
+  const db = await getDb();
+  await db.update(schema.stores).set({ settings: next, updatedAt: new Date() }).where(eq(schema.stores.id, s.id));
+  await audit({ actorUserId: staff.userId, actorKind: "staff", orgId: s.orgId, action: "store.one_click", targetType: "store", targetId: s.id, details: { provider: cur.oneClick.provider, status } });
+  back(s.id, `ok=One-click+checkout+${status}`);
+}

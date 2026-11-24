@@ -179,6 +179,29 @@ export const StoreSettings = z.object({
     /** Buyers may ask for an exchange (another size / colour) instead of a refund. */
     exchangeEnabled: z.boolean().default(true),
   }).default({}),
+  /**
+   * Buyer login on My Account (phase 8): Vishwaship's mobile OTP (credits per login), the merchant's OWN Firebase
+   * project (no Vishwaship charge; their own SMS bill), or email codes only. Firebase web config values are public by design.
+   */
+  buyerLogin: z.object({
+    otp: z.enum(["vishwaship", "own_firebase", "email_only"]).default("vishwaship"),
+    firebase: z.object({
+      apiKey: z.string().trim().max(100).default(""), authDomain: z.string().trim().max(120).default(""),
+      projectId: z.string().trim().max(60).default(""), appId: z.string().trim().max(120).default(""),
+    }).default({}),
+  }).default({}),
+  /**
+   * One-click checkout (phase 8). The merchant asks for a provider; it goes live only after the provider and Vishwaship
+   * activate it (status is set by Vishwaship, never by the merchant).
+   */
+  oneClick: z.object({
+    provider: z.enum(["none", "razorpay_magic", "gokwik", "shopflo", "cashfree_1cc"]).default("none"),
+    status: z.enum(["off", "requested", "active"]).default("off"),
+    merchantId: z.string().trim().max(80).default(""),
+    contact: z.string().trim().max(160).default(""),
+    note: z.string().trim().max(500).default(""),
+    requestedAt: z.string().max(40).default(""),
+  }).default({}),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;
 export const readSettings = (raw: unknown): StoreSettings => {

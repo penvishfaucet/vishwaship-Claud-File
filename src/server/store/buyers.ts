@@ -69,6 +69,41 @@ async function signIn(store: Store, by: { mobile?: string; email?: string }, nam
   return toBuyer(r);
 }
 
+/** Which mobile OTP the store's buyers get (Store → Connect apps). null = email codes only. */
+export async function buyerOtpConfig(settingsRaw: unknown): Promise<{ source: "vishwaship" | "own"; config: { apiKey: string; authDomain: string; projectId: string; appId?: string } } | null> {
+  const { readSettings } = await import("@/lib/store-themes");
+  const bl = readSettings(settingsRaw).buyerLogin;
+  if (bl.otp === "email_only") return null;
+  if (bl.otp === "own_firebase") {
+    const f = bl.firebase;
+    return f.apiKey && f.authDomain && f.projectId ? { source: "own", config: { apiKey: f.apiKey, authDomain: f.authDomain, projectId: f.projectId, ...(f.appId ? { appId: f.appId } : {}) } } : null;
+  }
+  const { firebasePhoneConfig } = await import("@/server/auth/firebase-phone");
+  const cfg = await firebasePhoneConfig();
+  return cfg ? { source: "vishwaship", config: cfg } : null;
+}
+
+/**
+ * Vishwaship's OTP costs us an SMS: each successful login takes notification credits from the merchant
+ * (Admin → Notifications "store_otp", default 4 credits). One charge per number per 10 minutes (retries are free).
+ */
+export async function chargeOtpCredits(orgId: string, storeId: string, mobile: string): Promise<boolean> {
+  const { getSetting } = await import("@/server/quotes/service");
+  const n = (await getSetting<Record<string, number>>("notification_credit_cost", {})).value.store_otp ?? 4;
+  if (n <= 0) return true;
+  const key = `sfb-otp:${storeId}:${mobile}:${Math.floor(Date.now() / 600_000)}`;
+  const db = await getDb();
+  return db.transaction(async (tx) => {
+    const [done] = await tx.select({ id: schema.creditEntries.id }).from(schema.creditEntries).where(eq(schema.creditEntries.idempotencyKey, key));
+    if (done) return true;
+    const upd = await tx.update(schema.creditBalances).set({ credits: sql`${schema.creditBalances.credits} - ${n}` })
+      .where(and(eq(schema.creditBalances.orgId, orgId), sql`${schema.creditBalances.credits} >= ${n}`)).returning({ c: schema.creditBalances.credits });
+    if (!upd.length) return false;
+    await tx.insert(schema.creditEntries).values({ id: newId("ce"), orgId, kind: "settle", credits: -n, idempotencyKey: key, refType: "store_buyer_otp", refId: storeId });
+    return true;
+  });
+}
+
 /** Mobile OTP: the browser verified the number with Firebase; the server checks the ID token. */
 export async function loginWithPhoneToken(store: Store, mobile: string) {
   if (!MOBILE.test(mobile)) throw new BuyerError("Use a 10-digit Indian mobile number");

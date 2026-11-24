@@ -62,7 +62,7 @@ export const MIN_TERM_DAYS = 90;
 /** Minimum ad budget the merchant runs in their own Meta / Google account (₹1,000 a day). */
 export const MIN_DAILY_AD_RUPEES = 1000;
 
-export const BILLING_DEFAULTS: BillingConfig = { trialDays: 15, depositPaise: 294_882, terms: DEFAULT_TERMS, termsVersion: 2, refundDays: 7, disabledThemes: [] };
+export const BILLING_DEFAULTS: BillingConfig = { trialDays: 30, depositPaise: 294_882, terms: DEFAULT_TERMS, termsVersion: 2, refundDays: 7, disabledThemes: [] };
 const CONFIG_KEY = "store_billing";
 
 export async function billingConfig(): Promise<BillingConfig> {

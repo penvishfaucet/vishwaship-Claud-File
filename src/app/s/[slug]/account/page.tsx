@@ -1,8 +1,9 @@
 import { rupees } from "@/lib/store-themes";
 import { AddressBook, BuyerLogin, LogoutButton, ProfileName } from "@/components/store/BuyerAccount";
 import { StoreShell } from "@/components/store/Storefront";
-import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
-import { currentBuyer } from "@/server/store/buyers";
+import { buyerOtpConfig, currentBuyer } from "@/server/store/buyers";
+import { getDb, schema } from "@/server/db/client";
+import { eq } from "drizzle-orm";
 import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrders } from "@/server/store/orders";
 import { RETURN_STATUS_LABEL } from "@/server/store/returns";
 import { type SfParams, type SfSearch, resolveSf, sfMeta } from "../_sf";
@@ -26,7 +27,10 @@ export default async function Account({ params, searchParams }: { params: SfPara
   }
   const me = await currentBuyer(sf.id);
   if (!me) {
-    return <StoreShell sf={sf}><div className="sf-wrap sf-page" style={{ maxWidth: 480 }}><BuyerLogin store={sf.slug} phone={await firebasePhoneConfig()} next={next} /></div></StoreShell>;
+    const db = await getDb();
+    const [st] = await db.select({ settings: schema.stores.settings }).from(schema.stores).where(eq(schema.stores.id, sf.id));
+    const otp = await buyerOtpConfig(st?.settings);
+    return <StoreShell sf={sf}><div className="sf-wrap sf-page" style={{ maxWidth: 480 }}><BuyerLogin store={sf.slug} phone={otp?.config ?? null} next={next} /></div></StoreShell>;
   }
   const orders = await buyerOrders(me);
   return (

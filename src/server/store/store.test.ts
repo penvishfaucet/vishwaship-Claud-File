@@ -111,7 +111,7 @@ describe("store lifecycle", () => {
     const other = await cat.uploadMedia(A, PNG);
     const withVar = cat.ProductInput.parse({ ...input, options: ["Size"], variants: [{ values: ["S"], priceRupees: 100, stock: 1, image: other }] });
     await expect(cat.saveProduct(A, withVar, one.id)).rejects.toThrow(/not one of this product/);
-    await cat.saveProduct(A, { ...withVar, variants: [{ ...withVar.variants[0], image: one.images && (one.images as string[])[0] }] }, one.id);
+    await cat.saveProduct(A, { ...withVar, variants: [{ ...withVar.variants[0], image: (one.images as string[])[0] ?? null }] }, one.id);
     expect((await pub.loadStorefront("asha-crafts"))!.products.find((x) => x.id === one.id)!.variants[0].image).toMatch(/store-media/);
     // change draft colour, publish v2, restore v1 into draft
     await svc.saveDraftTheme(A, "bazaar", { ...defaultTheme(), colors: { ...defaultTheme().colors, primary: "#000000" } });

@@ -35,6 +35,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
     { id: "store.sales", href: "/portal/store/sales/", label: "Sale Events", icon: Timer, module: "online_store" },
     { id: "store.coupons", href: "/portal/store/coupons/", label: "Coupons", icon: Tag, module: "online_store" },
     { id: "store.reviews", href: "/portal/store/reviews/", label: "Product Reviews", icon: MessagesSquare, module: "online_store" },
+    { id: "store.connect", href: "/portal/store/connect/", label: "Connect apps", icon: Link2, module: "online_store" },
     { id: "store.payments", href: "/portal/store/payments/", label: "Online Payments", icon: CreditCard, module: "online_store" },
     { id: "store.pages", href: "/portal/store/pages/", label: "Pages & SEO", icon: FileText, module: "online_store" },
     { id: "store.domains", href: "/portal/store/domains/", label: "Domains", icon: Link2, module: "online_store" },

@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { and, desc, eq, like } from "drizzle-orm";
 import { THEMES, readSettings, readTheme } from "@/lib/store-themes";
-import { applyCustomDesign, setDomainSsl, setStoreSuspended } from "@/server/admin/store-actions";
+import { applyCustomDesign, setDomainSsl, setOneClickStatus, setStoreSuspended } from "@/server/admin/store-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -38,6 +38,17 @@ export default async function AdminStoreDetail({ params, searchParams }: { param
       {sp.ok && <p className="note small mb12">{sp.ok}</p>}
       {sp.err && <p className="err-box small mb12" role="alert">{sp.err}</p>}
       <StoreOps store={s} />
+      {settings.oneClick.provider !== "none" && (
+        <section className="card mb12" style={{ padding: 16 }}>
+          <h2 className="h3" style={{ margin: 0 }}>One-click checkout · {settings.oneClick.provider} · <span className={`chip ${settings.oneClick.status === "active" ? "c-active" : "c-pending"}`}>{settings.oneClick.status}</span></h2>
+          <p className="small" style={{ margin: "6px 0" }}>Merchant ID: <b className="mono">{settings.oneClick.merchantId || "—"}</b> · Contact: {settings.oneClick.contact || "—"}{settings.oneClick.requestedAt ? ` · asked ${when(new Date(settings.oneClick.requestedAt))}` : ""}</p>
+          {settings.oneClick.note && <p className="small muted" style={{ margin: "0 0 6px" }}>{settings.oneClick.note}</p>}
+          <p className="tiny muted" style={{ margin: "0 0 8px" }}>Switch it Active only after the provider has enabled this merchant for a custom website and the store checkout has been connected to it. Until then buyers use the normal checkout.</p>
+          {manage && <form action={setOneClickStatus} className="row wrap" style={{ gap: 8 }}><input type="hidden" name="storeId" value={s.id} />
+            <select name="status" className="select" defaultValue={settings.oneClick.status}><option value="requested">Requested</option><option value="active">Active</option><option value="off">Off (clear request)</option></select>
+            <button className="btn btn-sm btn-navy">Save</button></form>}
+        </section>
+      )}
       <div className="grid2" style={{ alignItems: "start" }}>
         <div className="card" style={{ padding: 16 }}>
           <h3 style={{ fontSize: 14, marginBottom: 8 }}>Overview</h3>

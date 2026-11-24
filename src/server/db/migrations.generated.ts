@@ -828,5 +828,16 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795520932364,
   "hash": "a5771b6a1caf29ef6819ebddd78bd71f809ea820b6e9a913aa23309808fbd687"
+ },
+ {
+  "tag": "0045_store_selfserve_plan",
+  "sql": [
+   "-- Online Store self-serve plan (owner 2026-11-24): 1 month free trial, then Rs 2,499 + GST a month. The Growth Package\n-- (refundable deposit, managed service) stays available next to it.\nUPDATE \"store_plans\" SET \"name\" = 'Monthly (self-serve)', \"price_paise\" = 249900, \"active\" = true, \"updated_at\" = now() WHERE \"id\" = 'spl_monthly';",
+   "\nINSERT INTO \"store_plans\" (\"id\", \"name\", \"interval\", \"price_paise\", \"active\", \"sort\") VALUES ('spl_monthly', 'Monthly (self-serve)', 'month', 249900, true, 1) ON CONFLICT DO NOTHING;",
+   "\nUPDATE \"pricing_settings\" SET \"value\" = jsonb_set(\"value\", '{trialDays}', '30'::jsonb), \"version\" = \"version\" + 1, \"updated_at\" = now() WHERE \"key\" = 'store_billing';\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795528368041,
+  "hash": "f240500f0497a689575fcfcc27241cb5f2e08a90ccfeae394935b555ba75f5ad"
  }
 ];

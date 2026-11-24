@@ -513,3 +513,4 @@
 .sf-specs th{text-align:left;font-weight:500;color:var(--sf-muted);width:40%;padding:7px 10px 7px 0;vertical-align:top}
 .sf-specs td{padding:7px 0}
 .sf-specs tr+tr th,.sf-specs tr+tr td{border-top:1px solid var(--sf-line)}
+.os-steps{margin:10px 0 0;padding-left:20px;display:grid;gap:7px;font-size:14px;line-height:1.5}

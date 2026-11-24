@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJson } from "@/server/http";
-import { PhoneTokenError, firebasePhoneConfig, verifyFirebasePhoneToken } from "@/server/auth/firebase-phone";
+import { PhoneTokenError, verifyFirebasePhoneToken } from "@/server/auth/firebase-phone";
 import { rateLimit } from "@/server/security/rate-limit";
-import { AddressInput, BuyerError, currentBuyer, deleteAddress, loginWithEmailCode, loginWithPhoneToken, logoutBuyer, sendEmailCode, updateProfile, upsertAddress } from "@/server/store/buyers";
+import { AddressInput, BuyerError, buyerOtpConfig, chargeOtpCredits, currentBuyer, deleteAddress, loginWithEmailCode, loginWithPhoneToken, logoutBuyer, sendEmailCode, updateProfile, upsertAddress } from "@/server/store/buyers";
 import { CheckoutError, liveStore } from "@/server/store/checkout";
 
 /**
@@ -31,15 +31,19 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     if (b.op === "email_code") return NextResponse.json({ ok: true, ...(await sendEmailCode(store, b.email, ip)) });
     if (b.op === "email_login") { await loginWithEmailCode(store, b.email, b.code); return NextResponse.json({ ok: true }); }
     if (b.op === "phone_login") {
-      const cfg = await firebasePhoneConfig();
-      if (!cfg) return apiError(503, "provider_error", "Login with mobile OTP is not available right now. Use your email instead.");
+      // the store's own Firebase project, or Vishwaship's (credits per login)
+      const otp = await buyerOtpConfig(store.settings);
+      if (!otp) return apiError(503, "provider_error", "Login with mobile OTP is not available for this store. Use your email instead.");
       let mobile: string;
-      try { ({ mobile } = await verifyFirebasePhoneToken(b.idToken, cfg.projectId)); }
+      try { ({ mobile } = await verifyFirebasePhoneToken(b.idToken, otp.config.projectId)); }
       catch (e) {
         if (e instanceof PhoneTokenError) return apiError(401, "unauthorized", "The OTP could not be confirmed. Please request a new OTP.");
         throw e;
       }
       if (!(await rateLimit(`sf-account:m:${store.id}:${mobile}`, 10, 900)).ok) return apiError(429, "rate_limited", "Too many attempts for this number. Please wait a few minutes.");
+      if (otp.source === "vishwaship" && !(await chargeOtpCredits(store.orgId, store.id, mobile))) {
+        return apiError(402, "insufficient_balance", "Mobile OTP login is paused for this store right now. Please log in with your email.");
+      }
       await loginWithPhoneToken(store, mobile);
       return NextResponse.json({ ok: true });
     }
