@@ -191,7 +191,8 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
       const scans: PageScan[] = [];
       const got = await courierLabel(s, src.carrierFormat, scans);
       if (!got.doc) { skip(got.error, got.retryable); continue; }
-      if (!scans.length || scans.length !== got.doc.getPageCount() || scans.some((x) => !x.codes.length)) {
+      // one or more labels per courier page (Shipmozo puts a Delhivery B2B LR's labels on one sheet); every one must read
+      if (!scans.length || scans.length < got.doc.getPageCount() || scans.some((x) => !x.codes.length)) {
         // a barcode we cannot read is never guessed: this shipment gets the courier's own label (barcodes unchanged)
         notices.add(`${o.orderNumber}: the courier's own label is included for this shipment (its barcodes could not be read for the Vishwaship label).`);
         await coverBranding(got.doc, s.provider);
@@ -199,7 +200,8 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
         for (const pg of await doc.copyPages(got.doc, got.doc.getPageIndices())) doc.addPage(pg);
         continue;
       }
-      const isLR = s.provider === "delhivery_b2b";
+      // LR bookings: Delhivery B2B direct, and Delhivery B2B booked through Shipmozo (its LRN differs from the master waybill)
+      const isLR = s.provider === "delhivery_b2b" || (s.provider === "shipmozo" && !!s.lrNumber && s.lrNumber !== s.awb);
       const pkgs = await db.select().from(schema.packages).where(eq(schema.packages.orderId, o.id));
       const boxes = Math.max(1, pkgs.reduce((t, x) => t + x.count, 0));
       // Delhivery B2B: one label per carton, then "MPS: Documents" (the shipment document with its own waybill)
@@ -223,7 +225,7 @@ export async function renderLabels(orgId: string | null, shipmentIds: string[], 
           shipper: { company: inv(org.id).businessName || org.businessName, gstin: inv(org.id).gstin || org.gstin || null, pickup },
           orderNumber: o.orderNumber, invoiceNumber: o.invoiceNumber ?? null, invoicePaise: meta.grandTotalPaise ?? o.declaredValuePaise,
           products: productLine(products), weightKg: s.chargeableWeightGrams / 1000,
-          date: bookedOn, masterId: isLR && cartons > 1 ? main(scans[0]) : null,
+          date: bookedOn, masterId: isLR && scans.length > 1 ? main(scans[0]) : null, // as the courier prints it (also on its document label)
           ...(i === docIndex ? { kind: "document" as const, ewayBill: o.ewayBill ?? null } : {}),
         };
         branded.push(l); brandedOf.set(l, s.id);
@@ -420,7 +422,7 @@ export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf
     if (isPdf) {
       const srcDoc = await PDFDocument.load(b, { ignoreEncryption: true });
       for (const p of await doc.copyPages(srcDoc, srcDoc.getPageIndices())) { doc.addPage(p); added++; }
-      if (scans) for (const i of srcDoc.getPageIndices()) scans.push(mergeScans(pdfPageImages(srcDoc, i).map((im) => scanLabelImage(im.rgba, im.width, im.height))));
+      if (scans) for (const i of srcDoc.getPageIndices()) scans.push(...labelsOnPage((await pdfPageImages(srcDoc, i)).map((im) => scanLabelImage(im.rgba, im.width, im.height))));
       return;
     }
     const text = Buffer.from(b).toString("utf8").trim().replace(/^"|"$/g, "");
@@ -444,18 +446,37 @@ export async function placeCarrierLabel(doc: PDFDocument, v: { url?: string; pdf
   return added;
 }
 
-/** 8-bit RGB / grey Flate (or plain) images drawn on a PDF page, as RGBA (soft masks applied); others are skipped. */
-function pdfPageImages(doc: PDFDocument, index: number): Array<{ width: number; height: number; rgba: Uint8Array }> {
+/**
+ * The labels on one courier page, from the scans of its images. A sheet with several labels (Shipmozo's Delhivery B2B
+ * file: master carton + "MPS: Documents" on one page) has one waybill barcode image per label, each its own label.
+ * Anything else is one label (e.g. a thermal label image carrying the AWB and an order-id barcode).
+ */
+export function labelsOnPage(images: PageScan[]): PageScan[] {
+  const withCode = images.filter((x) => x.codes.length);
+  const waybill = (x: PageScan) => x.codes.length === 1 && /^\d{10,}$/.test(x.codes[0].text);
+  if (withCode.length >= 2 && withCode.every(waybill) && new Set(withCode.map((x) => x.codes[0].text.length)).size === 1
+    && new Set(withCode.map((x) => x.codes[0].text)).size === withCode.length) return withCode.map((x) => ({ codes: x.codes, matrix: null }));
+  return [mergeScans(images)];
+}
+
+/** 8-bit RGB / grey Flate (or plain) and JPEG images drawn on a PDF page, as RGBA (soft masks applied); others are skipped. */
+async function pdfPageImages(doc: PDFDocument, index: number): Promise<Array<{ width: number; height: number; rgba: Uint8Array }>> {
   const out: Array<{ width: number; height: number; rgba: Uint8Array }> = [];
   const look = (v: unknown) => (v instanceof PDFRef ? doc.context.lookup(v) : v);
   const xo = look(doc.getPage(index).node.Resources()?.get(PDFName.of("XObject"))) as PDFDict | undefined;
   if (!xo || !("entries" in xo)) return out;
-  const pixels = (st: PDFRawStream) => {
+  const pixels = async (st: PDFRawStream) => {
     const d = st.dict;
     const w = (look(d.get(PDFName.of("Width"))) as { asNumber(): number }).asNumber(), h = (look(d.get(PDFName.of("Height"))) as { asNumber(): number }).asNumber();
     const bpc = (look(d.get(PDFName.of("BitsPerComponent"))) as { asNumber(): number } | undefined)?.asNumber();
     const cs = String(look(d.get(PDFName.of("ColorSpace"))) ?? "");
     const filter = String(look(d.get(PDFName.of("Filter"))) ?? "");
+    if (filter === "/DCTDecode") {
+      // a JPEG (Shipmozo draws Delhivery's barcodes as JPEG images): decoded to plain pixels
+      const sharp = (await import("sharp")).default;
+      const { data, info } = await sharp(Buffer.from(st.contents), { limitInputPixels: 25_000_000 }).removeAlpha().toColourspace("srgb").raw().toBuffer({ resolveWithObject: true });
+      return info.width === w && info.height === h ? { w, h, ch: info.channels, data: new Uint8Array(data) } : null;
+    }
     if (bpc !== 8 || !["/DeviceRGB", "/DeviceGray"].includes(cs) || !["", "/FlateDecode"].includes(filter) || d.get(PDFName.of("DecodeParms"))) return null;
     const data = decodePDFRawStream(st).decode();
     const ch = cs === "/DeviceRGB" ? 3 : 1;
@@ -465,10 +486,10 @@ function pdfPageImages(doc: PDFDocument, index: number): Array<{ width: number; 
     const st = look(ref);
     if (!(st instanceof PDFRawStream) || String(st.dict.get(PDFName.of("Subtype"))) !== "/Image") continue;
     try {
-      const im = pixels(st);
+      const im = await pixels(st);
       if (!im) continue;
       const sm = look(st.dict.get(PDFName.of("SMask")));
-      const alpha = sm instanceof PDFRawStream ? pixels(sm) : null;
+      const alpha = sm instanceof PDFRawStream ? await pixels(sm) : null;
       const rgba = new Uint8Array(im.w * im.h * 4);
       for (let p = 0; p < im.w * im.h; p++) {
         rgba[p * 4] = im.data[p * im.ch]; rgba[p * 4 + 1] = im.data[p * im.ch + (im.ch > 1 ? 1 : 0)]; rgba[p * 4 + 2] = im.data[p * im.ch + (im.ch > 1 ? 2 : 0)];

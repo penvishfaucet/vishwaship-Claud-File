@@ -3,7 +3,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { eq } from "drizzle-orm";
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument, PDFName, rgb } from "pdf-lib";
 import * as schema from "@/server/db/schema";
 
 const client = new PGlite();
@@ -449,6 +449,82 @@ describe("Vishwaship label with the courier's own barcodes (A4 · 4 per page, th
     expect(decodeBarcodes(pages[0]).sort()).toEqual(["22784714402661", "61041AP392196925018"]);
     expect(pages[0].text).toContain("AWB: 22784714402661");
     expect(pages[0].text).not.toMatch(/SHIPMENT DOCUMENT|LRN/);
+  });
+
+  /** Shipmozo's file for a Delhivery B2B LR: ONE page with the master carton label and the "MPS: Documents" label,
+   *  each barcode a small JPEG (2 px modules), the account name written one letter per Tj ("SHIPMOZO B2BC"). */
+  async function shipmozoLrPdf(codes: string[]) {
+    const sharp = (await import("sharp")).default;
+    const { StandardFonts, PDFHexString, beginText, endText, setFontAndSize, moveText, showText, setTextMatrix } = await import("pdf-lib");
+    const d = await PDFDocument.create(); const page = d.addPage([574.6, 821.8]);
+    const font = await d.embedFont(StandardFonts.HelveticaBold);
+    page.node.setFontDictionary(PDFName.of("F9"), font.ref);
+    for (const [k, code] of codes.entries()) {
+      const W = 244, H = 52, px = new Uint8Array(W * H * 3).fill(255);
+      let x = 9, dark = true;
+      for (const dgt of widths(code)) { const w = Number(dgt) * 2; if (dark) for (let xx = x; xx < x + w && xx < W; xx++) for (let y = 0; y < H; y++) px.fill(0, (y * W + xx) * 3, (y * W + xx) * 3 + 3); x += w; dark = !dark; }
+      const jpg = await d.embedJpg(await sharp(Buffer.from(px), { raw: { width: W, height: H, channels: 3 } }).jpeg({ quality: 80 }).toBuffer());
+      const top = 821.8 - k * 410;
+      page.drawImage(jpg, { x: 360, y: top - 140, width: 207, height: 40 });
+      page.drawText(`LRN: 323404758   Master: ${codes[0]}`, { x: 20, y: top - 40, size: 9, font });
+      // "SHIPMOZO B2BC" letter by letter in one text block (routing box), then the return address line
+      for (const [line, y] of [["SHIPMOZO\tB2BC", top - 200], ["SHIPMOZO\tB2BC,Arihant vihar khankhal", top - 380]] as const) {
+        const ops = [beginText(), setFontAndSize("F9", 11), setTextMatrix(1, 0, 0, 1, 20, y)];
+        for (const ch of line) { ops.push(showText(PDFHexString.of(Buffer.from(ch === "\t" ? " " : ch, "latin1").toString("hex"))), moveText(7, 0)); }
+        ops.push(endText());
+        page.pushOperators(...ops);
+      }
+    }
+    return d.save();
+  }
+
+  it("Shipmozo-booked Delhivery B2B LR: one courier page with 2 JPEG barcodes → 2 Vishwaship labels (master + MPS: Documents), 4 × 6 and A4", async () => {
+    const codes = ["25449515998716", "25449515998720"];
+    const sid = await ship({ mode: "B2B", provider: "shipmozo", awb: codes[0], boxes: 1 });
+    await db.update(schema.shipments).set({ lrNumber: "323404758" }).where(eq(schema.shipments.id, sid));
+    const pdf = await shipmozoLrPdf(codes);
+    carrierReply = [() => ({ ok: true, value: { pdf, formatsAvailable: [] } })];
+    const r = await renderLabels(ORG, [sid], "thermal_4x6");
+    expect(r.notices.join()).not.toMatch(/courier's own label/);
+    expect(r.labels).toBe(2);
+    const pages = await pdfPages(r.pdf!);
+    expect(pages).toHaveLength(2);
+    expect(pages.map((p) => [Math.round(p.w), Math.round(p.h)])).toEqual([[288, 432], [288, 432]]);
+    expect(pages.map((p) => decodeBarcodes(p))).toEqual([[codes[0]], [codes[1]]]);
+    expect(pages[0].text).toContain("LRN: 323404758"); expect(pages[0].text).toContain("Box : 1/1");
+    expect(pages[1].text).toContain("MPS: Documents"); expect(pages[1].text).toContain(`Master: ${codes[0]}`);
+    for (const p of pages) expect(p.text).not.toMatch(/shipmozo/i);
+
+    carrierReply = [() => ({ ok: true, value: { pdf, formatsAvailable: [] } })];
+    const r4 = await renderLabels(ORG, [sid], "a4_4up");
+    expect(r4.labels).toBe(2);
+    const a4 = await pdfPages(r4.pdf!);
+    expect(a4).toHaveLength(1); // both labels side by side on one sheet (the test reader cannot split bars on one row)
+    for (const c of codes) expect(a4[0].text).toContain(c);
+    expect(a4[0].text).not.toMatch(/shipmozo/i);
+  });
+
+  it("courier's own label for that LR: no logo stamped on it (another layout), SHIPMOZO B2BC → VISHWASHIP everywhere", async () => {
+    const codes = ["25449515998731", "25449515998742"];
+    const sid = await ship({ mode: "B2B", provider: "shipmozo", awb: codes[0], boxes: 1 });
+    await db.update(schema.shipments).set({ lrNumber: "323404759" }).where(eq(schema.shipments.id, sid));
+    const pdf = await shipmozoLrPdf(codes);
+    carrierReply = [() => ({ ok: true, value: { pdf, formatsAvailable: [] } })];
+    const r = await renderLabels(ORG, [sid], "original");
+    const [p] = await pdfPages(r.pdf!);
+    expect(p.text).not.toMatch(/shipmozo/i);
+    expect(p.text.match(/VISHWASHIP/g)).toHaveLength(4);
+    expect(p.text.replace(/\s/g, "")).toContain(",Arihantviharkhankhal"); // the rest of the address stays
+    const images = p.ops.fnArray.filter((f: number) => f === p.OPS.paintImageXObject).length;
+    expect(images).toBe(2); // only the courier's two barcode images: no logo drawn over them
+  });
+
+  it("a thermal label image with the AWB and an order-id barcode stays one label", async () => {
+    const { labelsOnPage } = await import("./render");
+    const c = (text: string) => ({ text, x0: 0, x1: 100, y0: 0, y1: 10 });
+    expect(labelsOnPage([{ codes: [c("22784714402661"), c("61041AP392196925018")], matrix: null }])).toHaveLength(1);
+    expect(labelsOnPage([{ codes: [c("22784714402661")], matrix: null }, { codes: [c("61041AP392196925018")], matrix: null }])).toHaveLength(1);
+    expect(labelsOnPage([{ codes: [c("25449515998716")], matrix: null }, { codes: [], matrix: null }, { codes: [c("25449515998720")], matrix: null }])).toHaveLength(2);
   });
 
   it("a barcode that cannot be read is never guessed: that shipment gets the courier's own label, with a notice", async () => {
