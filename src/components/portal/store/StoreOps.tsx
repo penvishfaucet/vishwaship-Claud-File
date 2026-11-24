@@ -221,3 +221,32 @@ export function CsvImport() {
     </div>
   );
 }
+
+/** Buyer's return / exchange request on a store order: Approve / Reject (reason) / Mark completed. */
+export function ReturnDecision({ id, status }: { id: string; status: "requested" | "approved" | "rejected" | "completed" }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState("");
+  async function go(action: "return_approve" | "return_reject" | "return_complete") {
+    if (action === "return_reject" && note.trim().length < 3) { setErr("Write a short reason for the buyer"); return; }
+    setBusy(true); setErr("");
+    const r = await fetch(`/api/portal/store/orders/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, reason: note }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) { setErr(j?.error?.message ?? "Could not save"); return; }
+    setNote(""); router.refresh();
+  }
+  if (status === "rejected" || status === "completed") return null;
+  return (
+    <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+      <label className="field" style={{ margin: 0 }}><span className="small muted">Message to the buyer {status === "requested" ? "(needed to reject; on approve, how to send it back)" : "(optional)"}</span>
+        <textarea className="input" rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder={status === "requested" ? "e.g. Courier will pick it up in 2 days / Send it to our address" : "e.g. Refunded to your UPI"} /></label>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {status === "requested" && <><button type="button" className="btn btn-orange btn-sm" disabled={busy} onClick={() => go("return_approve")}>Approve</button><button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => go("return_reject")}>Reject</button></>}
+        {status === "approved" && <button type="button" className="btn btn-orange btn-sm" disabled={busy} onClick={() => go("return_complete")}>Mark completed (item received / exchanged / refunded)</button>}
+      </div>
+      {err && <p className="small red" role="alert" style={{ margin: 0 }}>{err}</p>}
+    </div>
+  );
+}

@@ -156,7 +156,7 @@ type PgSession = { pgOrderId: string; start: GatewayStart; at: number };
 const SESSION_REUSE_MS: Record<GatewayKey, number> = { cashfree: 25 * 60_000, phonepe: 25 * 60_000, paytm: 12 * 60_000 };
 
 /** Create the order (idempotent per checkoutKey). COD orders are placed at once; online orders wait for payment. */
-export async function placeOrder(slug: string, input: CheckoutInput): Promise<PlaceResult> {
+export async function placeOrder(slug: string, input: CheckoutInput, opts: { buyerId?: string | null } = {}): Promise<PlaceResult> {
   const store = await liveStore(slug, { allowExpired: true });
   const db = await getDb();
   const [existing] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.storeId, store.id), eq(schema.storeOrders.checkoutKey, input.checkoutKey)));
@@ -188,6 +188,7 @@ export async function placeOrder(slug: string, input: CheckoutInput): Promise<Pl
         buyerToken: randomToken(18), status: cod ? "placed" : "pending_payment", paymentMethod: input.paymentMethod, paymentStatus: cod ? "cod_pending" : "pending",
         buyer: { ...input.buyer }, lines: q.lines, subtotalPaise: q.subtotalPaise, discountPaise: q.discountPaise, shippingPaise: q.shippingPaise,
         codFeePaise: q.codFeePaise, totalPaise: q.totalPaise, couponCode: q.coupon?.code ?? null, attribution: input.attribution, placedAt: cod ? new Date() : null,
+        buyerId: opts.buyerId ?? null,
       }).returning();
       await logOrderEvent(tx, row, "placed", cod ? "Order placed (Cash on Delivery)" : `Order created; waiting for ${input.paymentMethod} payment`);
       return row;

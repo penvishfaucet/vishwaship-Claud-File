@@ -11,6 +11,7 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
     codEnabled: initial.codEnabled, codFee: toRupees(initial.codFeePaise), codMin: toRupees(initial.codMinPaise), codMax: toRupees(initial.codMaxPaise),
     ship: toRupees(initial.shippingFeePaise), freeAbove: toRupees(initial.freeShippingAbovePaise), warehouseId: initial.warehouseId ?? warehouses[0]?.id ?? "",
     autoAccept: initial.autoAccept, acceptHours: String(initial.acceptWithinHours),
+    returnDays: String(initial.returnDays), exchangeEnabled: initial.exchangeEnabled,
   });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: string; err?: string } | null>(null);
@@ -24,6 +25,7 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
       codEnabled: f.codEnabled, codFeePaise: toPaise(f.codFee), codMinPaise: toPaise(f.codMin), codMaxPaise: toPaise(f.codMax),
       shippingFeePaise: toPaise(f.ship), freeShippingAbovePaise: toPaise(f.freeAbove), warehouseId: f.warehouseId,
       autoAccept: f.autoAccept, acceptWithinHours: Math.min(168, Math.max(1, Math.round(Number(f.acceptHours) || 24))),
+      returnDays: Math.min(30, Math.max(0, Math.round(Number(f.returnDays) || 0))), exchangeEnabled: f.exchangeEnabled,
     } } });
     setBusy(false);
     if (!r.ok) { setMsg({ err: r.error }); return; }
@@ -59,6 +61,13 @@ export function CheckoutStep({ initial, warehouses }: { initial: StoreSettings["
       </label>
       {f.codEnabled && <div className="grid3" style={{ marginTop: 10 }}>{money("codFee", "COD fee (₹)")}{money("codMin", "Min order for COD (₹)")}{money("codMax", "Max order for COD (₹)")}</div>}
       <p className="small muted" style={{ marginTop: 8 }}>COD orders use your existing COD confirmation settings (WhatsApp confirm / cancel) before pickup.</p>
+      <h3 style={{ margin: "20px 0 8px" }}>Returns &amp; exchanges</h3>
+      <div className="field" style={{ maxWidth: 260 }}><label htmlFor="rdays">Buyers can request a return within (days after delivery)</label>
+        <input id="rdays" className="input" inputMode="numeric" value={f.returnDays} onChange={(e) => set("returnDays", e.target.value.replace(/D/g, "").slice(0, 2))} />
+        <span className="small muted">0 = no return requests from the store. You approve or reject every request.</span></div>
+      <label className="row" style={{ gap: 8, alignItems: "center", fontWeight: 500, marginTop: 8 }}>
+        <input type="checkbox" checked={f.exchangeEnabled} onChange={(e) => set("exchangeEnabled", e.target.checked)} /> Allow exchange (another size / colour) requests
+      </label>
       <h3 style={{ margin: "20px 0 8px" }}>Online payments</h3>
       <p className="small muted">Connect your own Razorpay account in <a className="orange" href="/portal/store/payments/">Online Payments</a>. Store payments go to your Razorpay account, not your Vishwaship wallet. Without it, buyers see Cash on Delivery only.</p>
       <Msg m={msg} />

@@ -4,7 +4,7 @@
  * Bodies are plain text with {{placeholders}}; the server wraps them in the branded layout (logo + button).
  */
 export type EmailEventKey =
-  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled" | "store_order_accepted" | "store_order_dispatched" | "store_plan_reminder";
+  | "signup_otp" | "password_reset_otp" | "shipment_picked_up" | "shipment_in_transit" | "shipment_out_for_delivery" | "shipment_delivered" | "shipment_rto" | "weight_discrepancy" | "courier_weight_dispute" | "store_order_cancelled" | "store_order_accepted" | "store_order_dispatched" | "store_plan_reminder" | "store_buyer_otp" | "store_return_update";
 
 export type EmailEventDef = {
   key: EmailEventKey; label: string; audience: "signup" | "shipment";
@@ -126,6 +126,33 @@ Your dashboard, orders, labels, refunds, RTO, COD, inventory and reports keep wo
 
 Team Vishwaship`,
     defaults: { enabled: true, toClient: true, toRecipient: false } },
+  { key: "store_buyer_otp", label: "Online Store: buyer login code (OTP)", audience: "signup",
+    placeholders: ["store_name", "otp", "otp_validity"], secret: ["otp"],
+    subject: "{{otp}} is your {{store_name}} login code",
+    body: `Hello,
+
+Your code to log in to {{store_name}} is:
+
+{{otp}}
+
+It is valid for {{otp_validity}}. Do not share this code with anyone.
+
+If you did not try to log in, you can ignore this email.
+
+{{store_name}}`,
+    defaults: { enabled: true, toClient: true, toRecipient: false } },
+  { key: "store_return_update", label: "Online Store: return / exchange request update (to the buyer)", audience: "shipment", button: "View order",
+    placeholders: ["customer_name", "order_id", "store_name", "request_type", "status", "note", "tracking_link"],
+    subject: "Your {{request_type}} request for order {{order_id}}: {{status}}",
+    body: `Hello {{customer_name}},
+
+Your {{request_type}} request for order {{order_id}} is now: {{status}}.
+
+{{note}}
+
+Regards,
+{{store_name}}`,
+    defaults: { enabled: true, toClient: false, toRecipient: true } },
   { key: "store_order_cancelled", label: "Online Store: order cancelled by the seller (to the buyer)", audience: "shipment", button: "Track order",
     placeholders: ["customer_name", "order_id", "store_name", "reason", "refund_line", "tracking_link"],
     subject: "Your order {{order_id}} from {{store_name}} was cancelled",

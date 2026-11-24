@@ -1353,6 +1353,22 @@ export const storeCoupons = pgTable("store_coupons", {
  * collection and remittance) lives on the linked shipping order (orders.id) and its shipment, so it is never copied.
  * Online payments go to the merchant's own Razorpay account and never touch the Vishwaship wallet.
  */
+/** Online Store buyer accounts (per store). Login by mobile OTP (Firebase) or email code; no passwords. */
+export const storeBuyers = pgTable("store_buyers", {
+  id: id(),
+  storeId: text("store_id").notNull().references(() => stores.id),
+  orgId: text("org_id").notNull(),
+  /** 10-digit Indian mobile, verified by OTP when set through login. */
+  mobile: text("mobile"),
+  /** Lower-case email, verified by an email code when set through login. */
+  email: text("email"),
+  name: text("name").notNull().default(""),
+  /** Saved delivery addresses: [{id, label, name, mobile, line1, line2, pincode, city, state, isDefault}] (max 10). */
+  addresses: jsonb("addresses").notNull().default([]),
+  lastLoginAt: ts("last_login_at"),
+  createdAt: created(),
+}, (t) => [uniqueIndex("store_buyers_mobile").on(t.storeId, t.mobile), uniqueIndex("store_buyers_email").on(t.storeId, t.email)]);
+
 export const storeOrders = pgTable("store_orders", {
   id: id(),
   storeId: text("store_id").notNull().references(() => stores.id),
@@ -1410,6 +1426,10 @@ export const storeOrders = pgTable("store_orders", {
   costs: jsonb("costs"),
   /** UTM / click ids captured on the storefront (used by marketing attribution). */
   attribution: jsonb("attribution").notNull().default({}),
+  /** Store buyer account that placed the order (null = guest checkout). */
+  buyerId: text("buyer_id"),
+  /** Buyer return / exchange request: {type, reason, note, lines, status, requestedAt, decidedAt, decidedBy, merchantNote, history}. */
+  returnRequest: jsonb("return_request"),
   note: text("note"),
   paidAt: ts("paid_at"),
   placedAt: ts("placed_at"),

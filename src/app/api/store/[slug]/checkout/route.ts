@@ -3,6 +3,7 @@ import { z } from "zod";
 import { readSettings } from "@/lib/store-themes";
 import { apiError, parseJson } from "@/server/http";
 import { rateLimit } from "@/server/security/rate-limit";
+import { currentBuyer, rememberAddress } from "@/server/store/buyers";
 import { CheckoutError, CheckoutInput, PAY_METHODS, assertOrdersOpen, confirmCheckoutPayment, liveStore, placeOrder, quoteCart } from "@/server/store/checkout";
 
 type Ctx = { params: Promise<{ slug: string }> };
@@ -45,7 +46,13 @@ export async function POST(req: Request, ctx: Ctx) {
   const clean: Record<string, string> = Object.fromEntries(Object.entries(a).filter(([k]) => [...keep, ...marketingKeys, ...analyticsKeys].includes(k)));
   if (consent) clean.consent = consent;
   if (consent.includes("marketing")) { clean.ip = ip(req).slice(0, 60); clean.ua = (req.headers.get("user-agent") ?? "").slice(0, 300); }
-  try { return NextResponse.json(await placeOrder(slug, { ...p.data, attribution: clean })); } catch (e) { return fail(e); }
+  try {
+    // logged-in buyer (My Account): link the order and remember a new delivery address
+    const me = await currentBuyer((await liveStore(slug, { allowExpired: true })).id);
+    const r = await placeOrder(slug, { ...p.data, attribution: clean }, { buyerId: me?.id ?? null });
+    if (me) await rememberAddress(me.id, p.data.buyer).catch(() => null);
+    return NextResponse.json(r);
+  } catch (e) { return fail(e); }
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {

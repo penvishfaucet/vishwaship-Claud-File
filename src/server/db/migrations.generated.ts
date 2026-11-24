@@ -803,5 +803,19 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795505417013,
   "hash": "83e6f2185b3098c680decafb3909937fe2a7b6343271053cc70eba8a925f4c6c"
+ },
+ {
+  "tag": "0043_store_buyers",
+  "sql": [
+   "CREATE TABLE \"store_buyers\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"store_id\" text NOT NULL,\n\t\"org_id\" text NOT NULL,\n\t\"mobile\" text,\n\t\"email\" text,\n\t\"name\" text DEFAULT '' NOT NULL,\n\t\"addresses\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"last_login_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"buyer_id\" text;",
+   "\nALTER TABLE \"store_orders\" ADD COLUMN \"return_request\" jsonb;",
+   "\nALTER TABLE \"store_buyers\" ADD CONSTRAINT \"store_buyers_store_id_stores_id_fk\" FOREIGN KEY (\"store_id\") REFERENCES \"public\".\"stores\"(\"id\") ON DELETE no action ON UPDATE no action;",
+   "\nCREATE UNIQUE INDEX \"store_buyers_mobile\" ON \"store_buyers\" USING btree (\"store_id\",\"mobile\");",
+   "\nCREATE UNIQUE INDEX \"store_buyers_email\" ON \"store_buyers\" USING btree (\"store_id\",\"email\");"
+  ],
+  "bps": true,
+  "folderMillis": 1795510701315,
+  "hash": "ae4e7dcdaca5ea219573ceea20afe323b17a90fdef7a59a98628c87e79bda0df"
  }
 ];

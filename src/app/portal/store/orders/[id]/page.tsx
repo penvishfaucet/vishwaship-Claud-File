@@ -1,7 +1,8 @@
 import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { rupees } from "@/lib/store-themes";
-import { OrderActions } from "@/components/portal/store/StoreOps";
+import { OrderActions, ReturnDecision } from "@/components/portal/store/StoreOps";
+import { RETURN_STATUS_LABEL } from "@/server/store/returns";
 import { orderTimeline } from "@/server/store/ops";
 import { PAYMENT_LABEL, STAGE_LABEL, storeOrderForOrg } from "@/server/store/orders";
 import { REFUND_LABEL } from "@/server/store/refunds";
@@ -30,6 +31,19 @@ export default async function StoreOrderDetail({ params }: { params: Promise<{ i
         </div>
         <OrderActions id={o.id} stage={o.stage} paymentStatus={o.paymentStatus} shippingOrderId={o.shippingOrderId} canCancel={canCancel} prepaid={prepaid} refundStatus={o.refund?.status ?? null} />
       </div>
+      {o.returnRequest && (() => {
+        const rr = o.returnRequest;
+        return (
+          <div className="card mb12" style={{ padding: 16, borderLeft: `4px solid ${rr.status === "requested" ? "#e5540c" : rr.status === "rejected" ? "#b42318" : "#15803d"}` }}>
+            <h2 className="h3" style={{ margin: 0 }}>{rr.type === "exchange" ? "Exchange" : "Return"} request · {RETURN_STATUS_LABEL[rr.status]}</h2>
+            <p className="small" style={{ margin: "6px 0 0" }}><b>Reason:</b> {rr.reason}{rr.note ? ` — ${rr.note}` : ""}</p>
+            <p className="small" style={{ margin: "4px 0 0" }}><b>Items:</b> {rr.lines.map((l) => { const x = o.lines[l.index]; return x ? `${x.title}${x.variantTitle ? ` (${x.variantTitle})` : ""} × ${l.qty}` : ""; }).filter(Boolean).join(", ")}</p>
+            <p className="tiny muted" style={{ margin: "4px 0 0" }}>Asked {ist(new Date(rr.requestedAt))}{rr.merchantNote ? ` · Your note: ${rr.merchantNote}` : ""}</p>
+            {rr.status === "approved" && <p className="small muted" style={{ margin: "6px 0 0" }}>Book the pickup with <a className="link" href="/portal/orders/new/?direction=reverse">Create return</a>, check the goods on <a className="link" href={`/portal/store/inventory/?return=${o.id}`}>Inventory</a>, refund from your payment gateway if needed, then mark it completed.</p>}
+            <ReturnDecision id={o.id} status={rr.status} />
+          </div>
+        );
+      })()}
       <div className="grid2" style={{ alignItems: "start" }}>
         <div style={{ display: "grid", gap: 12 }}>
           <div className="card" style={{ padding: 16 }}>

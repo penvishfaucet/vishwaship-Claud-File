@@ -170,6 +170,10 @@ export const StoreSettings = z.object({
     acceptWithinHours: z.number().int().min(1).max(168).default(24),
     /** Accepted orders not picked up by the courier within this many hours of the order are "Delayed". */
     dispatchWithinHours: z.number().int().min(12).max(240).default(24),
+    /** Buyers can ask for a return from My Account / the order page within this many days of delivery (0 = no return requests). */
+    returnDays: z.number().int().min(0).max(30).default(7),
+    /** Buyers may ask for an exchange (another size / colour) instead of a refund. */
+    exchangeEnabled: z.boolean().default(true),
   }).default({}),
 });
 export type StoreSettings = z.infer<typeof StoreSettings>;

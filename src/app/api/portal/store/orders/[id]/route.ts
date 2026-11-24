@@ -6,15 +6,23 @@ import { cancelStoreOrder, ensureShippingOrder, markRefunded } from "@/server/st
 import { acceptOrders, rejectOrders } from "@/server/store/ops";
 import { storeOrderForOrg } from "@/server/store/orders";
 import { startRefund } from "@/server/store/refunds";
+import { ReturnError, decideReturn } from "@/server/store/returns";
 
 /** accept | reject (reason required) | cancel | refund (retry at the gateway) | refunded (marked by hand) | ship (open the shipping order). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const g = await storeGuard(); if (g.err) return g.err;
   const { id } = await ctx.params;
-  const p = await parseJson(req, z.object({ action: z.enum(["accept", "reject", "cancel", "refund", "refunded", "ship"]), reason: z.string().max(300).default("") })); if (!p.ok) return p.res;
+  const p = await parseJson(req, z.object({ action: z.enum(["accept", "reject", "cancel", "refund", "refunded", "ship", "return_approve", "return_reject", "return_complete"]), reason: z.string().max(300).default("") })); if (!p.ok) return p.res;
   const o = await storeOrderForOrg(g.s.orgId, id);
   if (!o) return fail("Order not found", 404);
   const a = p.data.action;
+  if (a === "return_approve" || a === "return_reject" || a === "return_complete") {
+    try {
+      const r = await decideReturn(g.s.orgId, id, a === "return_approve" ? "approve" : a === "return_reject" ? "reject" : "complete", p.data.reason);
+      await storeAudit(g.s, `order.${a}`, id, { number: o.number, status: r.status });
+      return NextResponse.json({ ok: true, status: r.status });
+    } catch (e) { if (e instanceof ReturnError) return fail(e.message); throw e; }
+  }
   if (a === "ship") {
     if (o.status !== "placed" || o.acceptance !== "accepted") return fail("Accept the order first");
     const sid = await ensureShippingOrder(o.id);

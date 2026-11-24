@@ -59,7 +59,7 @@ function stageOf(o: typeof schema.storeOrders.$inferSelect, ship: Ship): Stage {
   return "in_transit";
 }
 
-type Ship = { awb: string | null; carrierName: string; status: string; bookingStatus: string; id: string } | null;
+type Ship = { awb: string | null; carrierName: string; status: string; bookingStatus: string; id: string; deliveredAt?: Date | null } | null;
 
 function fulfilment(orderStatus: string | null, ship: Ship): Fulfilment {
   if (orderStatus === null) return "unfulfilled";
@@ -79,7 +79,7 @@ async function shipFacts(shippingOrderIds: string[]) {
   const db = await getDb();
   if (!shippingOrderIds.length) return { orders: new Map<string, string>(), ships: new Map<string, NonNullable<Ship>>(), remitted: new Set<string>() };
   const os = await db.select({ id: schema.orders.id, status: schema.orders.status }).from(schema.orders).where(inArray(schema.orders.id, shippingOrderIds));
-  const ss = await db.select({ id: schema.shipments.id, orderId: schema.shipments.orderId, awb: schema.shipments.awb, carrierName: schema.shipments.carrierName, status: schema.shipments.status, bookingStatus: schema.shipments.bookingStatus, createdAt: schema.shipments.createdAt })
+  const ss = await db.select({ id: schema.shipments.id, orderId: schema.shipments.orderId, awb: schema.shipments.awb, carrierName: schema.shipments.carrierName, status: schema.shipments.status, deliveredAt: schema.shipments.deliveredAt, bookingStatus: schema.shipments.bookingStatus, createdAt: schema.shipments.createdAt })
     .from(schema.shipments).where(and(inArray(schema.shipments.orderId, shippingOrderIds), ne(schema.shipments.bookingStatus, "cancelled"))).orderBy(desc(schema.shipments.createdAt));
   const ships = new Map<string, NonNullable<Ship>>();
   for (const s of ss) if (!ships.has(s.orderId)) ships.set(s.orderId, s);
@@ -103,6 +103,8 @@ function present(o: typeof schema.storeOrders.$inferSelect, f: Awaited<ReturnTyp
     codFeePaise: o.codFeePaise, totalPaise: o.totalPaise, couponCode: o.couponCode, shippingOrderId: o.shippingOrderId, note: o.note,
     awb: ship?.awb ?? null, shipmentId: ship?.id ?? null, carrierName: ship?.carrierName ?? null, trackingLabel: ship ? STATUS_LABEL[ship.status] ?? ship.status : null,
     createdAt: o.createdAt, paidAt: o.paidAt, cancelledAt: o.cancelledAt, attribution: o.attribution as Record<string, string>,
+    deliveredAt: ship?.status === "delivered" ? ship.deliveredAt ?? null : null,
+    buyerId: o.buyerId, returnRequest: o.returnRequest as import("./returns").ReturnRequest | null,
   };
 }
 export type StoreOrderView = ReturnType<typeof present>;
@@ -113,6 +115,23 @@ export async function buyerOrder(storeId: string, number: string, token: string)
   const [o] = await db.select().from(schema.storeOrders).where(and(eq(schema.storeOrders.storeId, storeId), eq(schema.storeOrders.number, number)));
   if (!o || !token || !safeEqual(o.buyerToken, token)) return null;
   return present(o, await shipFacts(o.shippingOrderId ? [o.shippingOrderId] : []));
+}
+
+/** My Account: the logged-in buyer's orders (account-linked, or placed with their verified mobile / email), newest first. */
+export async function buyerOrders(buyer: import("./buyers").Buyer, limit = 100) {
+  const { buyerOrderFilter } = await import("./buyers");
+  const db = await getDb();
+  const rows = await db.select().from(schema.storeOrders).where(buyerOrderFilter(buyer)).orderBy(desc(schema.storeOrders.createdAt)).limit(limit);
+  const facts = await shipFacts(rows.map((r) => r.shippingOrderId).filter((x): x is string => !!x));
+  return rows.map((r) => present(r, facts));
+}
+
+/** One order of the logged-in buyer by number (null if it is not theirs). */
+export async function buyerOwnOrder(buyer: import("./buyers").Buyer, number: string) {
+  const { buyerOrderFilter } = await import("./buyers");
+  const db = await getDb();
+  const [o] = await db.select().from(schema.storeOrders).where(and(buyerOrderFilter(buyer), eq(schema.storeOrders.number, number)));
+  return o ? present(o, await shipFacts(o.shippingOrderId ? [o.shippingOrderId] : [])) : null;
 }
 
 /** Buyer "Track order" by order number + mobile number. */

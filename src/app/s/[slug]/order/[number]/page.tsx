@@ -5,7 +5,12 @@ import { StoreShell } from "@/components/store/Storefront";
 import { ClearCartOnMount } from "@/components/store/StoreClient";
 import { TrackOnMount } from "@/components/store/Tracking";
 import { purchaseEventId } from "@/server/store/marketing";
-import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrder } from "@/server/store/orders";
+import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrder, buyerOwnOrder } from "@/server/store/orders";
+import { ReturnForm } from "@/components/store/BuyerAccount";
+import { currentBuyer } from "@/server/store/buyers";
+import { RETURN_REASONS, RETURN_STATUS_LABEL, returnWindow } from "@/server/store/returns";
+import { getDb, schema } from "@/server/db/client";
+import { eq } from "drizzle-orm";
 import { type SfSearch, resolveSf, sfMeta } from "../../_sf";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +26,15 @@ export default async function OrderConfirmation({ params, searchParams }: { para
   const { number } = await params;
   const sp = await searchParams;
   const t = sp.t;
-  const o = sf.demo ? null : await buyerOrder(sf.id, decodeURIComponent(number), typeof t === "string" ? t : "");
+  const num = decodeURIComponent(number);
+  // the secret link from checkout / emails, or the logged-in buyer who placed it (My Account)
+  const me = sf.demo ? null : await currentBuyer(sf.id);
+  const o = sf.demo ? null : (typeof t === "string" && t ? await buyerOrder(sf.id, num, t) : null) ?? (me ? await buyerOwnOrder(me, num) : null);
   if (!o) notFound();
+  const db = await getDb();
+  const [st] = await db.select({ settings: schema.stores.settings }).from(schema.stores).where(eq(schema.stores.id, sf.id));
+  const rw = returnWindow(o, st?.settings);
+  const rr = o.returnRequest;
   const waiting = o.status === "pending_payment";
   const Icon = o.status === "cancelled" ? XCircle : waiting ? Clock : CheckCircle2;
   return (
@@ -60,6 +72,16 @@ export default async function OrderConfirmation({ params, searchParams }: { para
         {o.status === "placed" && (o.paymentStatus === "paid" || (o.paymentMethod === "cod" && sf.tags.codMilestone === "placed")) && (
           <TrackOnMount onceKey={`sf-purchase:${o.id}`} event={{ name: "purchase", eventId: purchaseEventId(o.id), orderNumber: o.number, value: o.totalPaise / 100, items: o.lines.map((l) => ({ id: l.variantId ?? l.productId, name: l.title, price: l.unitPaise / 100, qty: l.qty })) }} />
         )}
+        {rr && (
+          <div className="sf-summary" style={{ marginTop: 16 }} role="status">
+            <b>{rr.type === "exchange" ? "Exchange" : "Return"} request: {RETURN_STATUS_LABEL[rr.status]}</b>
+            <span className="sf-note">{rr.reason}{rr.note ? ` — ${rr.note}` : ""}</span>
+            {rr.merchantNote && <span>Store: {rr.merchantNote}</span>}
+            {rr.status === "approved" && <span className="sf-note">The store will tell you how to send the item back.</span>}
+          </div>
+        )}
+        {!rr && rw.allowed && <ReturnForm store={sf.slug} number={o.number} token={typeof t === "string" ? t : ""} lines={o.lines.map((l) => ({ title: l.title, variantTitle: l.variantTitle ?? null, qty: l.qty }))} reasons={RETURN_REASONS} exchange={rw.exchange} until={rw.until.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })} />}
+        {me && <p className="sf-note" style={{ marginTop: 16 }}><a href={`${sf.base}/account/`} style={{ textDecoration: "underline" }}>← All my orders</a></p>}
         <p className="sf-note" style={{ marginTop: 16 }}>Save this page link to check your order later, or use <a href={`${sf.base}/track/`} style={{ textDecoration: "underline" }}>Track order</a> with your order number and mobile number.</p>
       </div>
     </StoreShell>

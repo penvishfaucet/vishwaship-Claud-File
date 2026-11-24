@@ -21,7 +21,7 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
   const logo = logoUrl(sf);
   const links = [
     { href: `${sf.base}/`, label: "Home" }, { href: `${sf.base}/shop/`, label: "Shop" },
-    { href: `${sf.base}/about/`, label: "About" }, { href: `${sf.base}/contact/`, label: "Contact" }, { href: `${sf.base}/track/`, label: "Track order" },
+    { href: `${sf.base}/about/`, label: "About" }, { href: `${sf.base}/contact/`, label: "Contact" }, { href: `${sf.base}/track/`, label: "Track order" }, { href: `${sf.base}/account/`, label: "My account" },
   ];
   const keep = sf.demo ? `?theme=${sf.themeKey}` : sf.preview ? "?preview=1" : "";
   return (
@@ -53,6 +53,7 @@ export function StoreShell({ sf, children }: { sf: Storefront; children: React.R
             <div><h3>Shop</h3><ul><li><a href={`${sf.base}/shop/${keep}`}>All products</a></li>{sf.categories.slice(0, 5).map((cat) => <li key={cat.id}><a href={`${sf.base}/shop/?c=${cat.slug}${keep ? `&${keep.slice(1)}` : ""}`}>{cat.name}</a></li>)}</ul></div>
             <div><h3>Help</h3><ul>
               <li><a href={`${sf.base}/track/${keep}`}>Track order</a></li>
+              <li><a href={`${sf.base}/account/${keep}`}>My account</a></li>
               <li><a href={`${sf.base}/contact/${keep}`}>Contact us</a></li>
               {(Object.keys(POLICY_KINDS) as Array<keyof typeof POLICY_KINDS>).filter((k) => sf.settings.policies[k]).map((k) => <li key={k}><a href={`${sf.base}/policies/${k}/${keep}`}>{POLICY_KINDS[k]}</a></li>)}
             </ul></div>

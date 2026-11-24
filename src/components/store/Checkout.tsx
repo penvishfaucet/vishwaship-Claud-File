@@ -45,7 +45,9 @@ function loadRazorpay(): Promise<boolean> {
   });
 }
 
-export function Checkout({ store, base, storeName, buyNow = false }: { store: string; base: string; storeName: string; buyNow?: boolean }) {
+export type CheckoutAccount = { name: string; mobile: string | null; email: string | null; addresses: Array<{ id: string; label: string; name: string; mobile: string; line1: string; line2: string; pincode: string; city: string; state: string; isDefault: boolean }> } | null;
+
+export function Checkout({ store, base, storeName, buyNow = false, account = null }: { store: string; base: string; storeName: string; buyNow?: boolean; account?: CheckoutAccount }) {
   const cartLines = useCartState(store);
   // Buy now checks out only the item picked on the product page; the cart is left as it is
   const [buyLines, setBuyLines] = useState<CartLine[] | null>(null);
@@ -57,7 +59,11 @@ export function Checkout({ store, base, storeName, buyNow = false }: { store: st
   const cart = buyNow ? buyLines : cartLines;
   const ckKey = `sf-ck:${store}${buyNow ? ":buy" : ""}`;
   const api = `/api/store/${store}/checkout/`;
-  const [b, setB] = useState({ name: "", mobile: "", email: "", line1: "", line2: "", pincode: "", city: "", state: "" });
+  // logged-in buyer: start from the default saved address (the buyer can pick another or edit any field)
+  const def = account?.addresses.find((a) => a.isDefault) ?? account?.addresses[0];
+  const fromAddr = (a: NonNullable<typeof def>) => ({ name: a.name, mobile: a.mobile, email: account?.email ?? "", line1: a.line1, line2: a.line2, pincode: a.pincode, city: a.city, state: a.state });
+  const [b, setB] = useState(def ? fromAddr(def) : { name: account?.name ?? "", mobile: account?.mobile ?? "", email: account?.email ?? "", line1: "", line2: "", pincode: "", city: "", state: "" });
+  const [addrId, setAddrId] = useState(def?.id ?? "");
   const [method, setMethod] = useState<"cod" | "online" | null>(null);
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState("");
@@ -149,6 +155,13 @@ export function Checkout({ store, base, storeName, buyNow = false }: { store: st
     <form className="sf-cartgrid" onSubmit={place}>
       <div style={{ display: "grid", gap: 14 }}>
         <h2 style={{ fontSize: 18, margin: 0 }}>Delivery details</h2>
+        {account ? (account.addresses.length > 0 && (
+          <label style={{ display: "grid", gap: 4 }}><span className="sf-note">Saved addresses</span>
+            <select className="sf-input" value={addrId} onChange={(e) => { const a = account.addresses.find((x) => x.id === e.target.value); setAddrId(e.target.value); if (a) setB(fromAddr(a)); else setB({ name: account.name, mobile: account.mobile ?? "", email: account.email ?? "", line1: "", line2: "", pincode: "", city: "", state: "" }); }}>
+              {account.addresses.map((a) => <option key={a.id} value={a.id}>{a.label}: {a.name}, {a.line1}, {a.city} {a.pincode}</option>)}
+              <option value="">+ A new address</option>
+            </select></label>
+        )) : <p className="sf-note" style={{ margin: 0 }}>Ordered before? <a className="sf-link" href={`${base}/account/?next=${encodeURIComponent(`${base}/checkout/${buyNow ? "?buy=1" : ""}`)}`}>Log in</a> to use your saved addresses.</p>}
         {fld("name", "Full name", { required: true, autoComplete: "name", maxLength: 80 })}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {fld("mobile", "Mobile number", { required: true, inputMode: "numeric", maxLength: 10, autoComplete: "tel-national", placeholder: "10-digit mobile" })}

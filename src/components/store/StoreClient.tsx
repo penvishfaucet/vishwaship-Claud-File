@@ -1,5 +1,5 @@
 "use client";
-import { CheckCircle2, ChevronLeft, ChevronRight, Menu, Minus, Plus, Search, ShoppingBag, Star, Trash2, Truck, X, ZoomIn } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Menu, Minus, Plus, Search, ShoppingBag, Star, Trash2, Truck, User, X, ZoomIn } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { BUY_ACTIVE, MAX_QTY, addToCart, captureAttribution, cartCount, clearBuyNow, clearCart, openCart, readCart, setBuyNow, useCartState, writeCart } from "./cart";
 import { MiniRow, type RecData, bestMinis, pickAddons } from "./CartDrawer";
@@ -22,6 +22,7 @@ export function HeaderNav({ store, base, links, keep = "" }: { store: string; ba
       <div className="sf-icons">
         <button className="sf-ic" aria-label="Search products" aria-expanded={search} onClick={() => setSearch(!search)}><Search size={20} aria-hidden /></button>
         <a className="sf-ic sf-hide-sm" href={`${base}/track/${keep}`} aria-label="Track order" title="Track order"><Truck size={20} aria-hidden /></a>
+        <a className="sf-ic sf-hide-sm" href={`${base}/account/${keep}`} aria-label="My account" title="My account"><User size={20} aria-hidden /></a>
         <a className="sf-cart" href={`${base}/cart/${keep}`} aria-label={`Cart, ${n} item${n === 1 ? "" : "s"}`} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); window.dispatchEvent(new CustomEvent("sf-cart-open", { detail: { store, browse: true } })); }}>
           <ShoppingBag size={20} aria-hidden />{n > 0 && <span className="n">{n}</span>}
         </a>
