@@ -7,7 +7,7 @@ import { type Confirmation, type PhoneOtpConfig, confirmPhoneOtp, fbError, fireb
 export type { PhoneOtpConfig } from "@/lib/firebase-phone-client";
 
 /** "Login with Mobile OTP" — on the login and signup pages, shown only when Admin has switched Firebase ON. */
-export function PhoneOtpLogin({ config, next }: { config: PhoneOtpConfig | null; next?: string }) {
+export function PhoneOtpLogin({ config, next, staff }: { config: PhoneOtpConfig | null; next?: string; staff?: boolean }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"mobile" | "code" | "signup">("mobile");
   const [mobile, setMobile] = useState("");
@@ -46,7 +46,7 @@ export function PhoneOtpLogin({ config, next }: { config: PhoneOtpConfig | null;
     try {
       let token: string;
       try { token = await confirmPhoneOtp(config!, conf.current, code); } catch (e) { setErr(fbError(e)); setBusy(false); return; }
-      const j = await post({ op: "verify", idToken: token });
+      const j = await post({ op: staff ? "staff_verify" : "verify", idToken: token });
       if (j.redirect) { window.location.assign(j.redirect); return; }
       if (j.signup) { setShown(j.mobile ?? `+91 ${mobile}`); setStep("signup"); }
     } catch (e) { setErr((e as Error).message); }

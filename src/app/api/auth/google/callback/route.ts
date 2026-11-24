@@ -12,6 +12,8 @@ import { getDb, schema } from "@/server/db/client";
  * Google redirects here. Returning customer (same Google id) → signed in. Email of an existing account → the customer
  * signs in with their password once to confirm the link (old shipments, wallet and profile stay on that account).
  * New email → a Customer account is created (the email is verified by Google) and onboarding starts.
+ * Started from the Admin login page (next = /admin/…): only an ACTIVE staff user with exactly that email is signed in
+ * as staff; nothing is created or linked, and an unknown email goes back to the Admin login page.
  */
 export async function GET(req: Request) {
   const u = new URL(req.url);
@@ -24,6 +26,16 @@ export async function GET(req: Request) {
   if (!r.ok) return to(`/login/?err=google&msg=${encodeURIComponent(r.message)}`);
   const meta = { ip: (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: req.headers.get("user-agent") ?? "" };
   const db = await getDb();
+  if (r.next === "/admin" || r.next.startsWith("/admin/")) {
+    const [st] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "staff"), eq(schema.users.email, r.id.email)));
+    if (!st || !st.staffRole || !st.active) {
+      await audit({ actorKind: "system", action: "auth.staff_login_failed", details: { via: "google", email: r.id.email } });
+      return to("/admin/login/?err=google_staff");
+    }
+    await createSession(st.id, "staff", meta);
+    await audit({ actorUserId: st.id, actorKind: "staff", action: "auth.staff_login", details: { via: "google" } });
+    return to("/admin/");
+  }
   const [bySub] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.googleSub, r.id.sub)));
   if (bySub) {
     if (!bySub.active) return to("/login/?err=inactive");

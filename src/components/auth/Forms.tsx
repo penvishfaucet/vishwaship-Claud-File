@@ -83,17 +83,17 @@ const GoogleIcon = () => (
  * Continue with Google. The site's own Google sign-in when it is set up; otherwise Google through Firebase (popup)
  * when Admin has the Firebase card ON (`firebase` is then its web config, chosen on the server).
  */
-function GoogleButton({ enabled, firebase, next, label }: { enabled: boolean; firebase?: PhoneOtpConfig | null; next?: string; label: string }) {
+function GoogleButton({ enabled, firebase, next, label, staff }: { enabled: boolean; firebase?: PhoneOtpConfig | null; next?: string; label: string; staff?: boolean }) {
   if (enabled) return (
     <>
       <a className="btn-google" href={`/api/auth/google/start${next ? `?next=${encodeURIComponent(next)}` : ""}`}><GoogleIcon />{label}</a>
       <div className="or-line"><span>or</span></div>
     </>
   );
-  return firebase ? <FirebaseGoogleButton config={firebase} next={next} label={label} /> : null;
+  return firebase ? <FirebaseGoogleButton config={firebase} next={next} label={label} staff={staff} /> : null;
 }
 
-function FirebaseGoogleButton({ config, next, label }: { config: PhoneOtpConfig; next?: string; label: string }) {
+function FirebaseGoogleButton({ config, next, label, staff }: { config: PhoneOtpConfig; next?: string; label: string; staff?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => { void preloadFirebaseGoogle(config).catch(() => {}); }, [config]);
@@ -104,7 +104,7 @@ function FirebaseGoogleButton({ config, next, label }: { config: PhoneOtpConfig;
     try { idToken = await firebaseGoogleSignIn(config); }
     catch (e) { setNote({ ok: googleCancelled(e), text: googleError(e) }); setBusy(false); return; }
     try {
-      const r = await fetch("/api/auth/firebase-phone/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "google", idToken, next: next ?? "" }) });
+      const r = await fetch("/api/auth/firebase-phone/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: staff ? "staff_google" : "google", idToken, next: next ?? "" }) });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.redirect) { window.location.assign(j.redirect); return; }
       setNote({ ok: false, text: j?.error?.message ?? "Google sign-in could not be completed. Please try again." });
@@ -234,15 +234,23 @@ export function ForgotPasswordForm() {
   );
 }
 
-export function StaffLoginForm() {
+const STAFF_MSG: Record<string, string> = {
+  google_staff: "This Google account is not on the Vishwaship staff list. Use the email your owner added in Admin → Staff.",
+  google: "Google sign-in could not be completed. Please try again.",
+};
+/** Admin login: Continue with Google / Login with Mobile OTP (existing active staff only) or staff email + password. */
+export function StaffLoginForm({ googleEnabled = false, googleFirebase = null, phone = null, err }: { googleEnabled?: boolean; googleFirebase?: PhoneOtpConfig | null; phone?: PhoneOtpConfig | null; err?: string }) {
   const [state, action, pending] = useActionState(staffLogin, undefined);
   return (
     <>
       <span className="pill">Admin &amp; franchise workspace</span>
       <h1 style={{ fontSize: 24, marginTop: 12 }}>Staff login</h1>
-      <p className="muted small" style={{ margin: "4px 0 18px" }}>Use the staff ID issued by your Vishwaship owner.</p>
+      <p className="muted small" style={{ margin: "4px 0 18px" }}>Use the Google account, mobile number or staff ID your Vishwaship owner added for you.</p>
+      {err && STAFF_MSG[err] && <p className="err small" role="alert">{STAFF_MSG[err]}</p>}
+      <GoogleButton enabled={googleEnabled} firebase={googleFirebase} next="/admin/" label="Continue with Google" staff />
+      <PhoneOtpLogin config={phone} next="/admin/" staff />
       <form className="col" style={{ gap: 14 }} action={action}>
-        <div className="field"><label htmlFor="email">Staff email</label><input id="email" name="email" type="email" className="input" required autoFocus autoComplete="username" /></div>
+        <div className="field"><label htmlFor="email">Staff email</label><input id="email" name="email" type="email" className="input" required autoComplete="username" /></div>
         <div className="field"><label htmlFor="password">Password</label><input id="password" name="password" className="input" type="password" required autoComplete="current-password" /></div>
         <Err s={state} />
         <button className="btn btn-navy btn-lg btn-block" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>

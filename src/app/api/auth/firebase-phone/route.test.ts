@@ -171,3 +171,40 @@ describe("Continue with Google through Firebase", () => {
     expect((await call({ op: "google", idToken: g("g100", "neha@example.test") })).status).toBe(200);
   });
 });
+
+describe("Admin login with mobile OTP / Google (staff only, no authenticator app)", () => {
+  it("signs in an active staff user by mobile or Google email, and never creates or links anything", async () => {
+    await db.insert(schema.users).values([
+      { id: "usr_own", kind: "staff", name: "Owner", email: "owner@vishwaship.test", mobile: "9811000001", staffRole: "owner" },
+      { id: "usr_gone", kind: "staff", name: "Gone", email: "gone@vishwaship.test", mobile: "9811000002", staffRole: "support", active: false },
+    ]);
+    const before = (await db.select().from(schema.users)).length;
+
+    const p = await call({ op: "staff_verify", idToken: tok("9811000001") });
+    expect(p).toMatchObject({ status: 200, json: { ok: true, redirect: "/admin/" } });
+    expect(sessions.at(-1)).toEqual({ userId: "usr_own", kind: "staff" });
+
+    const g = await call({ op: "staff_google", idToken: "g:gown123:Owner@Vishwaship.test:" + "x".repeat(20) });
+    expect(g).toMatchObject({ status: 200, json: { redirect: "/admin/" } });
+    expect(sessions.at(-1)).toEqual({ userId: "usr_own", kind: "staff" });
+
+    // a customer's number / email, an inactive staff user, or an unknown one: refused, no staff session
+    const n = sessions.length;
+    expect((await call({ op: "staff_verify", idToken: tok("9876543210") })).status).toBe(403);
+    expect((await call({ op: "staff_verify", idToken: tok("9811000002") })).status).toBe(403);
+    expect((await call({ op: "staff_verify", idToken: tok("9000000099") })).status).toBe(403);
+    expect((await call({ op: "staff_google", idToken: "g:gcust:a@example.test:" + "x".repeat(20) })).status).toBe(403);
+    expect((await call({ op: "staff_google", idToken: "g:gnew:stranger@gmail.test:" + "x".repeat(20) })).status).toBe(403);
+    expect((await call({ op: "staff_verify", idToken: "forged-token-xxxxxxxxxxxxxxxxxxxx" })).status).toBe(401);
+    expect(sessions.length).toBe(n);
+    expect((await db.select().from(schema.users)).length).toBe(before);
+    const [own] = await db.select().from(schema.users).where(eq(schema.users.id, "usr_own"));
+    expect(own.googleSub).toBeNull();
+  });
+
+  it("the customer OTP never signs in a staff number", async () => {
+    const r = await call({ op: "verify", idToken: tok("9811000001") });
+    expect(r.json.signup).toBe(true);
+    expect(sessions.at(-1)?.kind === "staff" && sessions.at(-1)?.userId === "usr_own" && r.json.redirect).toBeFalsy();
+  });
+});

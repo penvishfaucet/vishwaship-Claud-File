@@ -21,10 +21,14 @@ import { clientIp, rateLimit } from "@/server/security/rate-limit";
  * Continue with Google (through Firebase, used when the site's direct Google sign-in has no keys):
  *  google: Firebase ID token → same rules as /api/auth/google/callback: known Google id → signed in; email of an
  *          existing account → that customer logs in with their password once to link Google; new email → new account.
+ * Staff (Admin login page): staff_verify / staff_google sign in an ACTIVE staff user whose mobile / email matches exactly.
+ *          They never create or link an account; an unknown number or email is refused.
  */
 const Body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("verify"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
   z.object({ op: z.literal("google"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
+  z.object({ op: z.literal("staff_verify"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
+  z.object({ op: z.literal("staff_google"), idToken: z.string().min(20).max(4096), next: z.string().max(300).default("") }),
   z.object({
     op: z.literal("signup"),
     name: z.string().trim().min(2, "Enter your full name").max(80),
@@ -51,10 +55,24 @@ export async function POST(req: Request) {
   const p = await parseJson(req, Body); if (!p.ok) return p.res;
   const b = p.data;
   if (b.op === "google") return googleLogin(b.idToken, b.next, { ip, ua });
+  if (b.op === "staff_google") return staffGoogleLogin(b.idToken, { ip, ua });
   const cfg = await firebasePhoneConfig();
   if (!cfg) return apiError(503, "provider_error", "Login with mobile OTP is switched off right now. Use email instead.");
   const db = await getDb();
   const jar = await cookies();
+
+  if (b.op === "staff_verify") {
+    let mobile: string;
+    try { ({ mobile } = await verifyFirebasePhoneToken(b.idToken, cfg.projectId)); }
+    catch (e) {
+      if (e instanceof PhoneTokenError) return apiError(401, "unauthorized", "The OTP check could not be confirmed. Please request a new OTP.");
+      console.error("[staff-phone-login]", (e as Error).message);
+      return apiError(502, "provider_error", "Could not reach Google to confirm the OTP. Please try again.");
+    }
+    if (!(await rateLimit(`staff-phone-login:m:${mobile}`, 10, 900)).ok) return apiError(429, "rate_limited", "Too many attempts for this number. Please wait a few minutes.");
+    const [u] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "staff"), eq(schema.users.mobile, mobile)));
+    return staffSignIn(u, "phone_otp", { ip, ua }, { mobile });
+  }
 
   if (b.op === "verify") {
     let mobile: string;
@@ -122,6 +140,37 @@ async function googleLogin(idToken: string, next: string, meta: { ip: string; ua
   if (!userId) return apiError(409, "conflict", "An account with this email already exists. Please log in with your email and password.");
   await createSession(userId, "customer", meta);
   return NextResponse.json({ ok: true, redirect: "/portal/" });
+}
+
+type StaffRow = typeof schema.users.$inferSelect | undefined;
+/** Staff sign-in by Google / mobile OTP: only an existing, active staff user with a role; never creates an account. */
+async function staffSignIn(u: StaffRow, via: "google" | "phone_otp", meta: { ip: string; ua: string }, tried: Record<string, string>) {
+  if (!u || !u.staffRole || !u.active) {
+    await audit({ actorKind: "system", action: "auth.staff_login_failed", details: { via, ...tried } });
+    return apiError(403, "forbidden", via === "google"
+      ? "This Google account is not on the Vishwaship staff list. Use the email your owner added in Admin → Staff."
+      : "This mobile number is not on the Vishwaship staff list. Ask your owner to add it in Admin → Staff.");
+  }
+  if (via === "phone_otp" && !u.mobileVerifiedAt) { const db = await getDb(); await db.update(schema.users).set({ mobileVerifiedAt: new Date() }).where(eq(schema.users.id, u.id)); }
+  await createSession(u.id, "staff", meta);
+  await audit({ actorUserId: u.id, actorKind: "staff", action: "auth.staff_login", details: { via } });
+  return NextResponse.json({ ok: true, redirect: "/admin/" });
+}
+
+async function staffGoogleLogin(idToken: string, meta: { ip: string; ua: string }) {
+  const cfg = await firebasePhoneConfig();
+  if (!cfg) return apiError(503, "provider_error", "Google sign-in through Firebase is switched off. Use email and password.");
+  let id: { sub: string; email: string; name: string };
+  try { id = await verifyFirebaseGoogleToken(idToken, cfg.projectId); }
+  catch (e) {
+    if (e instanceof PhoneTokenError) return apiError(401, "unauthorized", "Google sign-in could not be confirmed. Please try again.");
+    console.error("[staff-google-login]", (e as Error).message);
+    return apiError(502, "provider_error", "Could not reach Google to confirm the sign-in. Please try again.");
+  }
+  if (!(await rateLimit(`staff-google-login:s:${id.sub}`, 10, 900)).ok) return apiError(429, "rate_limited", "Too many attempts for this Google account. Please wait a few minutes.");
+  const db = await getDb();
+  const [u] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "staff"), eq(schema.users.email, id.email)));
+  return staffSignIn(u, "google", meta, { email: id.email });
 }
 
 /** Public web config (these values are public by design) so OTP screens know whether mobile OTP is ON. */

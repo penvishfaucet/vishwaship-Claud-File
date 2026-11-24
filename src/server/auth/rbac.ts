@@ -39,5 +39,8 @@ export const ROLE_PERMISSIONS: Record<StaffRole, Permission[]> = {
 
 export const can = (role: StaffRole | null | undefined, p: Permission) => !!role && ROLE_PERMISSIONS[role].includes(p);
 
-/** Roles that must complete MFA before any admin access. */
-export const MFA_REQUIRED: StaffRole[] = ["owner", "finance", "operations"];
+/**
+ * Roles that must complete an authenticator-app (TOTP) step before any admin access.
+ * Empty by the owner's decision (2026-11-24): staff sign in with password, Google, or mobile OTP (Firebase), no authenticator app.
+ */
+export const MFA_REQUIRED: StaffRole[] = [];

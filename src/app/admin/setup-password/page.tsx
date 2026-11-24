@@ -27,7 +27,7 @@ async function setPassword(fd: FormData) {
   await revokeAllSessions(userId!);
   await audit({ actorUserId: userId, actorKind: "staff", action: "auth.password_set" });
   await createSession(userId!, "staff", {});
-  redirect("/admin/mfa/");
+  redirect("/admin/");
 }
 
 export default async function SetupPassword({ searchParams }: { searchParams: Promise<{ token?: string; err?: string }> }) {
