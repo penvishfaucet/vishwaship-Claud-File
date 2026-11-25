@@ -4,6 +4,7 @@ import { CopyLink } from "@/components/admin/CopyLink";
 import { FRANCHISE_ZONES, type CardService } from "@/lib/franchise-rates";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
+import { LIVE_ORIGIN, LIVE_ROUTES, isLiveRefreshing, readLivePriceList, startLiveRefresh } from "@/server/franchise-rates/live-list";
 import { getFranchiseRateSettings, saveFranchiseRateSettings } from "@/server/franchise-rates/settings";
 
 export const metadata = { title: "Franchise Rate List — Admin" };
@@ -35,18 +36,28 @@ async function save(fd: FormData) {
   redirect("/admin/franchise-rate-list/?saved=1");
 }
 
-export default async function FranchiseRateListAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string }> }) {
+async function refreshLive() {
+  "use server";
+  await requireStaff("pricing.write");
+  startLiveRefresh();
+  redirect("/admin/franchise-rate-list/?refreshing=1");
+}
+
+export default async function FranchiseRateListAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; refreshing?: string }> }) {
   const sp = await searchParams;
   const st = await requireStaff("pricing.read");
   const canWrite = can(st.role, "pricing.write");
   const s = await getFranchiseRateSettings();
+  const live = await readLivePriceList();
+  const liveCount = live ? Object.values(live.cells).flat().filter(Boolean).length : 0;
+  const running = isLiveRefreshing();
   return (
     <>
       <div className="page-h"><h1>Franchise Rate List</h1></div>
       <p className="small muted" style={{ marginTop: -6, maxWidth: 780 }}>
         Public page for franchise partners, bulk shippers, e-commerce, D2C and Shopify sellers. It is linked only from the website footer
         (not the header menu) and hidden from Google. The calculator shows the normal website price plus the margin below, on every charge
-        including COD. The zone-wise price list at the bottom of the page uses the base rates below, with the same margin added.
+        including COD. The zone-wise price list at the bottom of the page is built from live courier rates (cheapest courier per zone and weight), with the same margin added.
       </p>
 
       <section className="card mt16" style={{ padding: 18 }}>
@@ -55,6 +66,19 @@ export default async function FranchiseRateListAdmin({ searchParams }: { searchP
           <div style={{ flex: "1 1 420px", minWidth: 0 }}><CopyLink path="/franchise-rate-list/" /></div>
           <a className="btn btn-sm btn-outline" href="/franchise-rate-list/" target="_blank" rel="noreferrer">Open page</a>
         </div>
+      </section>
+
+      <section className="card mt16" style={{ padding: 18 }}>
+        <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Live price list</h2>
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Cheapest B2C prepaid rate from the active courier services, from {LIVE_ORIGIN.city} ({LIVE_ORIGIN.pin}) to {Object.entries(LIVE_ROUTES).map(([z, r]) => `Zone ${z} ${r.city}`).join(" · ")}, for 0.5 / 1 / 2 / 3 / 5 kg. Refreshes automatically once a day.
+        </p>
+        <p className="small" style={{ margin: "0 0 10px" }}>
+          {live ? <>Last updated <b>{new Date(live.updatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</b> · {liveCount} of 25 prices found.</> : <>Not loaded yet.</>}
+          {running && <> <b>Refreshing now…</b> (takes 1–3 minutes, then reload this page)</>}
+        </p>
+        {canWrite && <form action={refreshLive}><button className="btn btn-sm btn-outline" disabled={running}>Refresh now</button></form>}
+        {sp.refreshing && !running && <p className="small t-credit mt8" role="status">Refresh finished.</p>}
       </section>
 
       <form action={save}>
@@ -67,7 +91,7 @@ export default async function FranchiseRateListAdmin({ searchParams }: { searchP
         </section>
 
         <section className="card p0 mt16">
-          <div className="card-h"><h2 className="b small" style={{ margin: 0 }}>Base zone rates for the price list (₹, before margin and GST)</h2></div>
+          <div className="card-h"><h2 className="b small" style={{ margin: 0 }}>Fallback zone rates (₹, before margin and GST) — shown only until live rates have loaded</h2></div>
           {s.card.map((svc, si) => (
             <div key={svc.name} className="tbl-wrap">
               <table className="tbl">

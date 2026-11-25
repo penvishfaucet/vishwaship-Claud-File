@@ -43,7 +43,8 @@ const STATE_TEXT: Record<Service["state"], string> = {
   not_offered: "Not offered for this payment mode", inactive: "Not switched on yet", not_connected: "Not connected yet",
 };
 
-export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", endpoint = "/api/public/rates" }: { logos: Record<string, string>; signedIn?: boolean; loginHref?: string; /** Rates API; the Franchise Rate List page passes its own (margin-priced). */ endpoint?: string }) {
+export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", endpoint = "/api/public/rates", limit }: { logos: Record<string, string>; signedIn?: boolean; loginHref?: string; /** Rates API; the Franchise Rate List page passes its own (margin-priced). */ endpoint?: string; /** Show only the cheapest N options first, with a "Show more" button (Franchise Rate List). */ limit?: number }) {
+  const [showAll, setShowAll] = useState(false);
   const [origin, setOrigin] = useState("");
   const [dest, setDest] = useState("");
   const [oPin, setOPin] = useState<PinState>({ state: "idle" });
@@ -168,7 +169,7 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", end
         setBanner({ tone: "err", text: j?.error?.message ?? "We couldn't fetch rates right now. Your details are kept — please try again.", retry: r.status >= 500 || r.status === 429 });
         return;
       }
-      setOffers(j.offers ?? []); setServices(j.services ?? []); setPhase("done");
+      setOffers(j.offers ?? []); setServices(j.services ?? []); setShowAll(false); setPhase("done");
       if (!(j.offers ?? []).length) {
         const kind = j.empty?.kind as string | undefined;
         if (kind === "pickup") setErrs((x) => ({ ...x, origin: j.empty.message }));
@@ -330,7 +331,7 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", end
               <span>{list.length} option{list.length > 1 ? "s" : ""} · lowest price first</span>
             </header>
             <div className="rc-list">
-              {list.map((o, i) => {
+              {(limit && !showAll ? list.slice(0, limit) : list).map((o, i) => {
                 const logo = logos[o.carrierCode];
                 const isOpen = open === o.quoteId;
                 const fod = (o.payer?.receiver ?? 0) > 0;
@@ -368,10 +369,15 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", end
                 );
               })}
             </div>
+            {limit && !showAll && list.length > limit && (
+              <button type="button" className="w-btn out rc-more" onClick={() => setShowAll(true)} aria-expanded={false}>
+                Show more courier partner rates ({list.length - limit} more) <ChevronDown size={18} aria-hidden="true" />
+              </button>
+            )}
           </section>
         ))}
 
-        {phase === "done" && unavailable.length > 0 && (
+        {phase === "done" && unavailable.length > 0 && (!limit || showAll) && (
           <section className="rc-unavail" aria-labelledby="rc-un-h">
             <h3 id="rc-un-h">{offers.length ? "Services without a rate for this shipment" : "Service status"}</h3>
             <ul>

@@ -4,6 +4,7 @@ import { FranchiseRateChart } from "@/components/franchise-rates/FranchiseRateCh
 import { Reveal } from "@/components/franchise-rates/Reveal";
 import { RateCalcV3 } from "@/components/site/RateCalcV3";
 import { accountHref } from "@/lib/site-content";
+import { LIVE_ORIGIN, LIVE_ROUTES, getLivePriceList } from "@/server/franchise-rates/live-list";
 import { getFranchiseRateSettings } from "@/server/franchise-rates/settings";
 import { siteAuth } from "@/server/site/auth";
 import { getSiteContent } from "@/server/site/content";
@@ -30,7 +31,7 @@ const AUDIENCE = [
 ];
 
 export default async function FranchiseRateListPage() {
-  const [c, auth, s] = await Promise.all([getSiteContent(), siteAuth(), getFranchiseRateSettings()]);
+  const [c, auth, s, live] = await Promise.all([getSiteContent(), siteAuth(), getFranchiseRateSettings(), getLivePriceList()]);
   const logos = Object.fromEntries(c.partners.items.filter((p) => p.logoUrl).map((p) => [p.id, p.logoUrl]));
   const wa = `https://wa.me/${c.footer.phone.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}`;
   return (
@@ -60,7 +61,7 @@ export default async function FranchiseRateListPage() {
               <p className="w-lead">Enter pincodes and box details. Choose <b>COD</b> to see the price including the COD charge.</p>
             </div>
             {c.features.calculator
-              ? <RateCalcV3 logos={logos} signedIn={!!auth.customer} loginHref={accountHref(c.links.customerLogin, "/login/")} endpoint="/api/franchise-rate-list/rates" />
+              ? <RateCalcV3 logos={logos} signedIn={!!auth.customer} loginHref={accountHref(c.links.customerLogin, "/login/")} endpoint="/api/franchise-rate-list/rates" limit={4} />
               : <p className="w-card" role="status" style={{ padding: 24 }}>{c.features.unavailableText}</p>}
           </div>
         </div>
@@ -92,7 +93,7 @@ export default async function FranchiseRateListPage() {
         <div className="w-wrap">
           <span className="w-eyebrow">Shipping price list</span>
           <h2 className="w-h2">Zone-wise shipping rates.</h2>
-          <FranchiseRateChart card={s.card} marginBps={s.marginBps} />
+          <FranchiseRateChart live={live} routes={LIVE_ROUTES} origin={LIVE_ORIGIN} card={s.card} marginBps={s.marginBps} />
         </div>
       </section>
     </div>
