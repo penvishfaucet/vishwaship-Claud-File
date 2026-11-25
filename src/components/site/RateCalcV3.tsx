@@ -43,7 +43,7 @@ const STATE_TEXT: Record<Service["state"], string> = {
   not_offered: "Not offered for this payment mode", inactive: "Not switched on yet", not_connected: "Not connected yet",
 };
 
-export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/" }: { logos: Record<string, string>; signedIn?: boolean; loginHref?: string }) {
+export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/", endpoint = "/api/public/rates" }: { logos: Record<string, string>; signedIn?: boolean; loginHref?: string; /** Rates API; the Franchise Rate List page passes its own (margin-priced). */ endpoint?: string }) {
   const [origin, setOrigin] = useState("");
   const [dest, setDest] = useState("");
   const [oPin, setOPin] = useState<PinState>({ state: "idle" });
@@ -148,7 +148,7 @@ export function RateCalcV3({ logos, signedIn = false, loginHref = "/login/" }: {
     setPhase("loading"); setBanner(null); setOpen(null);
     lastSig.current = sig;
     try {
-      const r = await fetch("/api/public/rates", {
+      const r = await fetch(endpoint, {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           originPincode: origin, destinationPincode: dest, paymentType: pay, codAmountRupees: pay === "cod" ? num(cod) : 0, declaredValueRupees: num(value),

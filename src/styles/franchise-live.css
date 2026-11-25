@@ -1,0 +1,8 @@
+/* Franchise Rate List on the live site design (w-* classes). Loaded after franchise.css. */
+.fr-hero .w-eyebrow{color:var(--orange)}
+.fr-calc-h .w-h2{margin-top:10px}
+.fr-calc-card .w-lead{max-width:none}
+.fr-cta .w-eyebrow{color:#9fb0c8}
+.fr-cta .w-btn.ghost{color:#fff;border-color:rgba(255,255,255,.35);background:transparent}
+.fr-cta .w-btn.ghost:hover{background:rgba(255,255,255,.08)}
+.fr-int .w-eyebrow{color:var(--orange)}

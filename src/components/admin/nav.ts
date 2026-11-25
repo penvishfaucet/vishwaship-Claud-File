@@ -31,6 +31,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/billing-documents/", label: "Invoices & Notes", icon: FileSpreadsheet, perm: "finance.read" },
     { href: "/admin/finance-gst/", label: "Finance & GST", icon: Landmark, perm: "finance.read" },
     { href: "/admin/couriers/", label: "Couriers & Rate Cards", icon: TruckIcon, perm: "pricing.read" },
+    { href: "/admin/franchise-rate-list/", label: "Franchise Rate List", icon: Tags, perm: "pricing.read" },
     { href: "/admin/reports/", label: "Reports", icon: FileDown, perm: "reports.export" },
   ] },
   { group: "SETTINGS", items: [

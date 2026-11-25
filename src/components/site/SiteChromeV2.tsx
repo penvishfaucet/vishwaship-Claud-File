@@ -171,6 +171,7 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
             <b>Shipping</b>
             {SITE_NAV.filter((n) => n.href !== "/").map((n) => <Link key={n.href} href={n.href}>{n.label}</Link>)}
             <Link href="/book/">Book a Shipment</Link>
+            <Link href="/franchise-rate-list/">Franchise Rate List</Link>
           </div>
           <div>
             <b>Your account</b>
