@@ -5,6 +5,7 @@ import { getDb, schema } from "@/server/db/client";
 import { NAV_LABEL_DEFAULTS } from "@/components/portal/nav";
 import { SITE } from "@/lib/site";
 import { TAB_GROUPS } from "@/lib/order-view";
+import { POLICY_DEFAULTS } from "@/lib/policies";
 
 /**
  * Admin-editable customer-facing copy. Every key has a code default; Admin can save a draft and
@@ -39,11 +40,20 @@ const ORDER_KEYS: Record<string, { label: string; default: string }> = {
   "portal.orders.international": { label: "Orders - International not available message", default: "International shipping is not enabled for your account yet. Contact Vishwaship support to activate it." },
 };
 
+/** Public policy pages (long text; Admin → Website Content → Policies). */
+export const POLICY_KEYS: Record<string, { label: string; default: string }> = {
+  "public.policy.privacy": { label: "Policy — Privacy Policy (/privacy/)", default: POLICY_DEFAULTS.privacy },
+  "public.policy.terms": { label: "Policy — Terms & Conditions (/terms/)", default: POLICY_DEFAULTS.terms },
+  "public.policy.refund": { label: "Policy — Refund & Cancellation (/refund-policy/)", default: POLICY_DEFAULTS.refund },
+  "public.policy.shipping": { label: "Policy — Shipping & Delivery (/shipping-policy/)", default: POLICY_DEFAULTS.shipping },
+};
+export const isPolicyKey = (k: string) => k.startsWith("public.policy.");
+
 const NAV_KEYS = Object.fromEntries(Object.entries(NAV_LABEL_DEFAULTS).map(([id, label]) => [`nav.${id}`, { label: `Sidebar — ${label}`, default: label }]));
 
-export const CONTENT_KEYS: Record<string, { label: string; default: string }> = { ...STATIC_KEYS, ...ORDER_KEYS, ...NAV_KEYS };
+export const CONTENT_KEYS: Record<string, { label: string; default: string }> = { ...STATIC_KEYS, ...ORDER_KEYS, ...NAV_KEYS, ...POLICY_KEYS };
 
-export type ContentKey = keyof typeof STATIC_KEYS | `nav.${string}` | `portal.orders.${string}`;
+export type ContentKey = keyof typeof STATIC_KEYS | `nav.${string}` | `portal.orders.${string}` | `public.policy.${string}`;
 
 const loadPublished = cache(async (locale: string) => {
   const db = await getDb();

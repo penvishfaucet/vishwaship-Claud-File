@@ -66,7 +66,7 @@ describe("COD payouts to clients", () => {
     s.b1 = await ship({ org: B, cod: 60_000 });
     s.c1 = await ship({ org: C, cod: 20_000 });
     s.c2 = await ship({ org: C, cod: 30_000 }); // courier paid less
-    const rows = [s.a1, s.a2, s.b1, s.c1].map((x, i) => ({ line: i + 2, awb: x.awb, amountPaise: [100_000, 50_000, 60_000, 20_000][i], utr: "UTR1", remittedOn: at("2026-11-24") }));
+    const rows: import("./receipts").CodRow[] = [s.a1, s.a2, s.b1, s.c1].map((x, i) => ({ line: i + 2, awb: x.awb, amountPaise: [100_000, 50_000, 60_000, 20_000][i], utr: "UTR1", remittedOn: at("2026-11-24") }));
     rows.push({ line: 9, awb: s.c2.awb, amountPaise: 25_000, utr: "UTR1", remittedOn: null }, { line: 10, awb: "99999999999999", amountPaise: 1_000, utr: null, remittedOn: null });
     const preview = await rc.importCodReceipts(rows, { source: "courier_file", actorUserId: "st", commit: false });
     expect(preview.rows.map((r) => r.status)).toEqual(["matched", "matched", "matched", "matched", "short", "unknown_awb"]);

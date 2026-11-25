@@ -36,10 +36,11 @@ export const PUBLIC_PAGES: Array<{ path: string; name: string; about: string; pr
   { path: "/terms/", name: "Terms & Conditions", about: "Terms of service.", priority: 0.3, freq: "yearly" },
   { path: "/privacy/", name: "Privacy Policy", about: "How we handle personal data.", priority: 0.3, freq: "yearly" },
   { path: "/refund-policy/", name: "Refund & Cancellation", about: "Refund and cancellation rules.", priority: 0.3, freq: "yearly" },
+  { path: "/shipping-policy/", name: "Shipping & Delivery Policy", about: "Pickups, delivery times, tracking, returns and claims.", priority: 0.3, freq: "yearly" },
 ];
 
 /** Areas search engines and AI crawlers should not visit (accounts, consoles, APIs, one-time links). */
-export const PRIVATE_PATHS = ["/admin/", "/portal/", "/franchise/", "/api/", "/pay/", "/t/", "/r/", "/forgot-password/", "/account-deletion/"];
+export const PRIVATE_PATHS = ["/admin/", "/portal/", "/franchise/", "/api/", "/pay/", "/t/", "/r/", "/forgot-password/", "/account-deletion/", "/app/"];
 
 /**
  * Per-page metadata: its own title/description, canonical link on the main domain and matching Open Graph / X

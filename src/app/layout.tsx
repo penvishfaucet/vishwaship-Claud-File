@@ -30,7 +30,7 @@ export function generateMetadata(): Metadata {
     authors: [{ name: BRAND }],
     publisher: BRAND,
     category: "logistics",
-    icons: { icon: "/favicon.png", apple: "/brand/logo-icon.png" },
+    icons: { icon: [{ url: "/favicon.ico", sizes: "any" }, { url: "/favicon.png", type: "image/png" }], apple: "/brand/logo-icon.png" },
     // Open Graph / X tags are set per page (pageMeta in src/lib/seo.ts), so online stores under /s/ keep their own previews.
     robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
     verification: { ...(google ? { google } : {}), ...(bing ? { other: { "msvalidate.01": bing } } : {}) },

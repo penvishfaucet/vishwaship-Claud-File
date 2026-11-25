@@ -13,7 +13,7 @@ export default async function AboutPage({ searchParams }: { searchParams: Promis
   return (
     <>
       <section className="ab-hero" aria-labelledby="ab-h">
-        {a.imageUrl && <img src={a.imageUrl} alt="" fetchPriority="high" />}
+        {a.imageUrl && <img src={a.imageUrl} alt="The Vishwaship team and shipments" fetchPriority="high" />}
         <div className="w-wrap in">
           <span className="w-eyebrow">About us</span>
           <h1 id="ab-h">{a.heading}</h1>

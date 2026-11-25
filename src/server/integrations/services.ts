@@ -16,8 +16,8 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna";
-  group: "Email" | "Sign-in" | "WhatsApp" | "AI calling";
+  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics";
+  group: "Email" | "Sign-in" | "WhatsApp" | "AI calling" | "Analytics";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
   guide: string[]; links: Array<{ label: string; url: string }>;
@@ -28,6 +28,18 @@ export type ServiceDef = {
 const appUrl = () => (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/+$/, "");
 
 export const SERVICES: ServiceDef[] = [
+  {
+    adapter: "google_analytics", group: "Analytics", name: "Google Analytics 4 (website visitors)",
+    purpose: "Counts visitors and the pages they use on vishwaship.com. Loads only after a visitor accepts analytics cookies in the cookie banner.",
+    fields: [{ key: "measurementId", label: "Measurement ID", secret: false, required: true, placeholder: "G-XXXXXXXXXX", help: "Google Analytics → Admin → Data streams → your website stream → Measurement ID" }],
+    guide: [
+      "Open analytics.google.com and sign in with the company Google account.",
+      "Admin → Create → Property (name: Vishwaship, India, INR) → then Data streams → Add stream → Web → URL vishwaship.com.",
+      "Copy the Measurement ID (starts with G-) and paste it below → Save → Test connection → Turn ON.",
+      "Visitors see a cookie banner; analytics runs only for those who click Accept. Reports appear in Google Analytics within a day.",
+    ],
+    links: [{ label: "Google Analytics", url: "https://analytics.google.com/" }],
+  },
   {
     adapter: "resend", group: "Email", name: "Resend (email)",
     purpose: "Sends the signup OTP and shipment emails (Picked Up, In Transit, Delivered …).",
@@ -175,7 +187,7 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -227,6 +239,8 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   }
   const missing = def.fields.filter((f) => f.required && !v[f.key]).map((f) => f.label);
   if (missing.length) return { ok: false, message: `Fill in: ${missing.join(", ")}` };
+  if (adapter === "google_analytics") v.measurementId = v.measurementId.toUpperCase();
+  if (adapter === "google_analytics" && !/^G-[A-Z0-9]{6,14}$/.test(v.measurementId)) return { ok: false, message: "The Measurement ID looks like G-XXXXXXXXXX (Google Analytics → Admin → Data streams)" };
   if (adapter === "resend" && !/^re_[\w-]{8,}$/.test(v.apiKey)) return { ok: false, message: "A Resend API key starts with re_" };
   if (adapter === "google_oauth" && !/\.apps\.googleusercontent\.com$/.test(v.clientId)) return { ok: false, message: "The Client ID ends with .apps.googleusercontent.com" };
   if (adapter === "firebase_phone" && !/^AIza[\w-]{30,}$/.test(v.apiKey)) return { ok: false, message: "The Web API key starts with AIza (Firebase → Project settings → Your apps)" };
@@ -258,7 +272,10 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
   const call = (url: string, init: RequestInit = {}) => safeFetch(url, { ...init, allowedHosts, timeoutMs: 15_000 });
   let res: SaveResult;
   try {
-    if (adapter === "resend") {
+    if (adapter === "google_analytics") {
+      // nothing to call: Google has no key check for a public Measurement ID; the format was checked on save
+      res = /^G-[A-Z0-9]{6,14}$/.test(v.measurementId) ? { ok: true, message: `Measurement ID ${v.measurementId} is valid. After turning ON, open the site, accept cookies and check Google Analytics → Reports → Realtime.` } : { ok: false, message: "The Measurement ID looks like G-XXXXXXXXXX" };
+    } else if (adapter === "resend") {
       const x = await call("https://api.resend.com/domains", { headers: { authorization: `Bearer ${v.apiKey}` } });
       const j = (await x.json().catch(() => ({}))) as { data?: Array<{ name: string; status: string }>; message?: string; name?: string };
       const restricted = j.name === "restricted_api_key" || /restricted|only send/i.test(j.message ?? "");

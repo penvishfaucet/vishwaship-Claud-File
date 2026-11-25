@@ -1,10 +1,10 @@
 /* Vishwaship public website v4: light, warm theme matching vishwaship.com (off-white page, light-blue hero,
    deep navy text, bright orange) + entrance/scroll transitions + phone tab bar. Loaded after v2/v3.
    Selectors start with "html body .wv.v4" so they win over v3 and the app-wide brand layer (brand.css).
-   Button orange #E0550B keeps white text at 4.6:1 (AA). */
+   Text / button orange --o2 #C2410C: white on it and it on the light backgrounds are 5:1 or more (WCAG AA; #E0550B was 3.8:1). */
 
 html body .wv.v4{
-  --n:#0b1f3a;--n2:#13294b;--n3:#1d3a6b;--o:#f0712c;--o2:#E0550B;--o3:#C2410C;--os:#fff1e8;--ol:#ffd9c4;
+  --n:#0b1f3a;--n2:#13294b;--n3:#1d3a6b;--o:#f0712c;--o2:#C2410C;--o3:#9A3412;--os:#fff1e8;--ol:#ffd9c4;
   --ink:#0b1f3a;--mut:#5a6478;--ln:#e6e4dd;--bg:#f4f3ef;--bg2:#fbfaf7;--sky:#eef3f8;--sky2:#e3ebf5;
   --sh:0 1px 2px rgba(11,31,58,.05),0 8px 24px rgba(11,31,58,.06);--sh2:0 2px 6px rgba(11,31,58,.07),0 22px 48px rgba(11,31,58,.12);
   background:var(--bg);color:var(--ink);
@@ -25,7 +25,7 @@ html body .wv.v4 .w-burger{background:transparent;color:var(--n);border:1.5px so
 html body .wv.v4 .w-burger:hover{border-color:var(--n)}
 
 /* ---------- buttons ---------- */
-html body .wv.v4 .w-btn.pri{background:var(--o2)!important;border-color:var(--o2)!important;box-shadow:0 8px 20px rgba(224,85,11,.25)}
+html body .wv.v4 .w-btn.pri{background:var(--o2)!important;border-color:var(--o2)!important;box-shadow:0 8px 20px rgba(194,65,12,.25)}
 html body .wv.v4 .w-btn.pri:hover{background:var(--o3)!important;border-color:var(--o3)!important;transform:translateY(-2px)}
 html body .wv.v4 .w-btn.pri:active{transform:translateY(0)}
 html body .wv.v4 .w-btn.navy{background:var(--n)}

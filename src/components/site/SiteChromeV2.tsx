@@ -184,6 +184,8 @@ export function SiteFooterV2({ links, footer }: { links: Links; footer: Footer }
             <Link href="/privacy/">Privacy Policy</Link>
             <Link href="/refund-policy/">Refund &amp; Cancellation</Link>
             <Link href="/terms/">Terms &amp; Conditions</Link>
+            <Link href="/shipping-policy/">Shipping &amp; Delivery</Link>
+            <button type="button" className="v-cookie-link" style={{ background: "none", border: 0, padding: 0, color: "inherit", font: "inherit", cursor: "pointer", textAlign: "left" }} onClick={() => window.dispatchEvent(new Event("vs-cookie-settings"))}>Cookie settings</button>
           </div>
         </div>
         <div className="bottom"><span>© {new Date().getFullYear()} Vishwaship. All rights reserved.</span>{footer.hours && <span>Support: {footer.hours}</span>}</div>

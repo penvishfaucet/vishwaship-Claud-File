@@ -5,7 +5,7 @@ import { firebasePhoneConfig } from "@/server/auth/firebase-phone";
 import { googleAvailable } from "@/server/auth/google";
 import { readSession } from "@/server/auth/session";
 
-export const metadata = { title: "Admin login — Vishwaship" };
+export const metadata = { title: "Admin login — Vishwaship", description: "Vishwaship staff and franchise login." };
 export const dynamic = "force-dynamic";
 
 /** Staff sign in with Google, mobile OTP (Firebase) or email + password. No authenticator-app step. */

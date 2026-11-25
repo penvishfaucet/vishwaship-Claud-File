@@ -11,6 +11,8 @@ import { customerLogout, staffLogout } from "@/server/auth/actions";
 import { type SiteAuth, siteAuth } from "@/server/site/auth";
 import { getSiteContent } from "@/server/site/content";
 import { structuredData } from "@/lib/seo";
+import { CookieConsent } from "@/components/site/CookieConsent";
+import { activeService } from "@/server/integrations/services";
 
 // Header/footer links come from Admin → Website Content and the account menu from the session, so public pages render per request.
 export const dynamic = "force-dynamic";
@@ -18,9 +20,11 @@ export const dynamic = "force-dynamic";
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   let links = DEFAULTS.links, footer = DEFAULTS.footer;
   let auth: SiteAuth = { customer: null, staff: null };
+  let gaId: string | null = null;
   try {
     const [c, a] = await Promise.all([getSiteContent(), siteAuth()]);
     links = c.links; footer = c.footer; auth = a;
+    gaId = (await activeService("google_analytics"))?.measurementId ?? null;
   } catch (e) {
     console.error("[site] content unavailable, using defaults:", (e as Error).message);
   }
@@ -43,6 +47,7 @@ export default async function PublicLayout({ children }: { children: React.React
       <SiteFooterV2 links={links} footer={footer} />
       <MobileTabBar accountHref={acct} signedIn={signedIn} />
       <Reveal />
+      <CookieConsent gaId={gaId} />
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { newId } from "@/server/util/ids";
 import { SITE } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Delete your account — Vishwaship" };
+export const metadata = { title: "Delete your account — Vishwaship", description: "Ask Vishwaship to delete your account and personal data. Records the law requires us to keep (invoices, tax) are retained until that period ends." };
 
 /**
  * Public account-deletion page (the link entered in Google Play Console). Signed-in customers can submit the
