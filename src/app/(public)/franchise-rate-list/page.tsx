@@ -2,11 +2,10 @@ import { ArrowRight, Building2, Package, ShoppingBag, Store, Users } from "lucid
 import { FeatureShowcase } from "@/components/franchise-rates/FeatureShowcase";
 import { FranchiseRateChart } from "@/components/franchise-rates/FranchiseRateChart";
 import { Reveal } from "@/components/franchise-rates/Reveal";
-import { RateCalcV3 } from "@/components/site/RateCalcV3";
+import { FranchiseCalculator } from "@/components/franchise-rates/FranchiseCalculator";
 import { accountHref } from "@/lib/site-content";
 import { LIVE_ORIGIN, LIVE_ROUTES, getLivePriceList } from "@/server/franchise-rates/live-list";
 import { getFranchiseRateSettings } from "@/server/franchise-rates/settings";
-import { siteAuth } from "@/server/site/auth";
 import { getSiteContent } from "@/server/site/content";
 import "@/styles/franchise.css";
 import "@/styles/franchise-integrations.css";
@@ -31,8 +30,7 @@ const AUDIENCE = [
 ];
 
 export default async function FranchiseRateListPage() {
-  const [c, auth, s, live] = await Promise.all([getSiteContent(), siteAuth(), getFranchiseRateSettings(), getLivePriceList()]);
-  const logos = Object.fromEntries(c.partners.items.filter((p) => p.logoUrl).map((p) => [p.id, p.logoUrl]));
+  const [c, s, live] = await Promise.all([getSiteContent(), getFranchiseRateSettings(), getLivePriceList()]);
   const wa = `https://wa.me/${c.footer.phone.replace(/\D/g, "").replace(/^(\d{10})$/, "91$1")}`;
   return (
     <div className="fr">
@@ -61,7 +59,7 @@ export default async function FranchiseRateListPage() {
               <p className="w-lead">Enter pincodes and box details. Choose <b>COD</b> to see the price including the COD charge.</p>
             </div>
             {c.features.calculator
-              ? <RateCalcV3 logos={logos} signedIn={!!auth.customer} loginHref={accountHref(c.links.customerLogin, "/login/")} endpoint="/api/franchise-rate-list/rates" limit={4} />
+              ? <FranchiseCalculator />
               : <p className="w-card" role="status" style={{ padding: 24 }}>{c.features.unavailableText}</p>}
           </div>
         </div>

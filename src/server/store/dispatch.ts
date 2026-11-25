@@ -195,9 +195,7 @@ export async function packAndBook(orgId: string, userId: string, ids: string[], 
   const db = await getDb();
   const out: PackResult[] = [];
   const override = new Set(opts.shipWithoutCodConfirmation ?? []);
-  const [codSetting] = await db.select({ enabled: schema.notificationSettings.enabled }).from(schema.notificationSettings)
-    .where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codConfirmOn = !!codSetting?.enabled;
+  const codConfirmOn = await (await import("@/server/whatsapp/service")).codConfirmationOn(orgId);
   for (const o of await ordersFor(orgId, ids)) {
     const res = (ok: boolean, message: string, extra: Partial<PackResult> = {}): PackResult => ({ id: o.id, number: o.number, ok, message: hideProviders(message), shipmentId: null, awb: null, carrier: null, booked: false, ...extra });
     if (o.status !== "placed" || o.acceptance !== "accepted") { out.push(res(false, o.status === "cancelled" ? "Order is cancelled" : "Accept the order first")); continue; }

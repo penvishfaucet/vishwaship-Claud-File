@@ -18,6 +18,7 @@ import { getDb, schema } from "@/server/db/client";
 import { BUCKETS, type BucketKey, bucketCounts, dashRange, isBucket } from "@/server/portal/buckets";
 import { portalContext } from "@/server/portal/context";
 import { OfferStrip } from "@/components/site/OfferStrip";
+import { FreeTrialBanner } from "@/components/portal/FreeTrialBanner";
 import { DEFAULTS } from "@/lib/site-content";
 import { getSiteContent } from "@/server/site/content";
 import { listOrders } from "@/server/portal/queries";
@@ -88,6 +89,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       {/* desktop only — on phones Analytics follows the balance cards directly (owner request 2026-11-19) */}
       <div className="dash-desk">
         {announcement && <p className="note small mb12">{announcement}</p>}
+        <FreeTrialBanner orgId={ctx.org.id} />
         <div className="mb12"><OfferStrip offers={offers} where="dashboard" variant="compact" /></div>
         {kycNote}
       </div>

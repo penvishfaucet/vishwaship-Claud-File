@@ -1,5 +1,5 @@
 import { Plane, RefreshCw, Truck, Zap } from "lucide-react";
-import { type CardService, FRANCHISE_ZONES, addMargin, cardWithMargin } from "@/lib/franchise-rates";
+import { type CardService, FRANCHISE_ZONES, cardWithMargin } from "@/lib/franchise-rates";
 import { formatINR } from "@/lib/money";
 import type { LivePriceList } from "@/server/franchise-rates/live-list";
 
@@ -51,8 +51,8 @@ export function FranchiseRateChart({ live, routes, origin, card, marginBps }: {
                     {FRANCHISE_ZONES.map((z) => {
                       const c = live!.cells[z.code]?.[wi];
                       if (!c) return <td key={z.code} className="muted">—</td>;
-                      const m = addMargin(c, marginBps);
-                      return <td key={z.code}><b>{rs(Math.round(m.total / 100) * 100)}</b><div className="fr-cr">{c.carrierName}</div></td>;
+                      // cells are already courier cost + franchise margin, incl. GST
+                      return <td key={z.code}><b>{rs(Math.round(c.total / 100) * 100)}</b><div className="fr-cr">{c.carrierName}</div></td>;
                     })}
                   </tr>
                 ))}

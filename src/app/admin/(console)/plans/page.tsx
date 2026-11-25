@@ -6,6 +6,8 @@ import { savePlan } from "@/server/admin/module-actions";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { saveFreeTrial } from "@/server/admin/free-trial-actions";
+import { freeTrialConfig } from "@/server/free-trial";
 
 export default async function PlansPage({ searchParams }: { searchParams: Promise<{ ok?: string; err?: string; edit?: string }> }) {
   const sp = await searchParams;
@@ -17,12 +19,25 @@ export default async function PlansPage({ searchParams }: { searchParams: Promis
   const globals = await db.select().from(schema.featureOverrides).where(isNull(schema.featureOverrides.orgId));
   const custOverrides = await db.select({ module: schema.featureOverrides.module, n: sql<number>`count(*)::int` }).from(schema.featureOverrides).where(and(sql`${schema.featureOverrides.orgId} is not null`)).groupBy(schema.featureOverrides.module);
   const editing = plans.find((p) => p.id === sp.edit);
+  const ft = await freeTrialConfig();
+  const ftWrite = can(s.role, "pricing.write");
   const cur = editing ?? { id: "", name: "", description: "", pricePaise: 0, billingPeriodDays: 30, modules: [] as string[], events: [] as string[], active: true };
   return (
     <>
       <div className="page-h"><div><h1>Subscriptions &amp; Feature Access</h1><p className="small muted" style={{ margin: "4px 0 0" }}>Which modules each customer can use. Order of precedence: customer override → active plan → global setting → default. Enforced on the server for pages, APIs and downloads.</p></div></div>
       {sp.ok && <p className="note small mb12">{sp.ok}</p>}
       {sp.err && <p className="note small mb12 t-debit">{sp.err}</p>}
+
+      <section className="card mb16" style={{ padding: 16 }}>
+        <h2 className="b" style={{ fontSize: 15, margin: "0 0 4px" }}>Free first month (launch offer)</h2>
+        <p className="small muted" style={{ margin: "0 0 10px", maxWidth: 820 }}>While a client is in the free month: WhatsApp COD confirmation (Vishwaship number) and other WhatsApp updates, AI NDR calling, Online Store plan, store platform fee and buyer OTP are free — no credits or wallet charges, and plan limits on these are lifted. Existing clients get the month from the start date; new clients from their signup. COD confirmation and AI calling are on by default once the WhatsApp sender / Bolna are connected.</p>
+        <form action={saveFreeTrial} className="row wrap" style={{ gap: 12, alignItems: "end" }}>
+          <label className="row" style={{ gap: 6, alignItems: "center" }}><input type="checkbox" name="enabled" defaultChecked={ft.enabled} disabled={!ftWrite} /> Offer on</label>
+          <div className="field"><label htmlFor="ft-days">Free days</label><input id="ft-days" name="days" type="number" min="0" max="365" className="input" defaultValue={ft.days} style={{ width: 100 }} disabled={!ftWrite} /></div>
+          <div className="field"><label htmlFor="ft-start">Starts on</label><input id="ft-start" name="startsOn" type="date" className="input" defaultValue={ft.startsOn} disabled={!ftWrite} /></div>
+          {ftWrite && <button className="btn btn-orange btn-sm">Save</button>}
+        </form>
+      </section>
 
       <section className="card p0 mb16">
         <h2 className="b small card-h" style={{ margin: 0 }}>Global feature access</h2>

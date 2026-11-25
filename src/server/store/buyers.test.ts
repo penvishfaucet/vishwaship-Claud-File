@@ -43,6 +43,8 @@ async function order(mobile: string, extra: Partial<typeof schema.storeOrders.$i
 
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
+  // these tests check normal charging: switch the free first month (launch offer) off
+  await db.insert(schema.pricingSettings).values({ key: "free_trial", value: { enabled: false, days: 30, startsOn: "2026-11-26" } }).onConflictDoNothing();
   await db.insert(schema.orgs).values({ id: store.orgId, name: "A", businessName: "Asha" });
   await db.insert(schema.stores).values({ id: store.id, orgId: store.orgId, name: store.name, slug: store.slug, status: "live", settings });
 });

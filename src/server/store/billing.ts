@@ -93,7 +93,12 @@ export async function saveBillingConfig(staffId: string, input: z.infer<typeof B
 }
 
 // ---------------- plans & trial ----------------
-export const trialEndFor = async (from = new Date()) => new Date(from.getTime() + (await billingConfig()).trialDays * 86400_000);
+/** Store trial: the admin setting, but never shorter than the free first month (launch offer). */
+export const trialEndFor = async (from = new Date()) => {
+  const [cfg, free] = await Promise.all([billingConfig(), (await import("@/server/free-trial")).freeTrialConfig()]);
+  const days = Math.max(cfg.trialDays, free.enabled ? free.days : 0);
+  return new Date(from.getTime() + days * 86400_000);
+};
 
 export async function listPlans(activeOnly = true) {
   const db = await getDb();

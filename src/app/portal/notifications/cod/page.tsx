@@ -24,7 +24,8 @@ export default async function CodPage({ searchParams }: { searchParams: Promise<
   const db = await getDb();
   const [setting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, ctx.org.id), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
   const cfg = await codSettings();
-  const included = await eventIncluded(ctx.org.id, "whatsapp:cod_confirmation");
+  const included = (await (await import("@/server/free-trial")).orgInFreeTrial(ctx.org.id)) || (await eventIncluded(ctx.org.id, "whatsapp:cod_confirmation"));
+  const codOn = await (await import("@/server/whatsapp/service")).codConfirmationOn(ctx.org.id);
   const mode = await whatsappMode();
   const msg = ORG_SETTING_SCHEMAS.cod_message.parse((await orgSetting(ctx.org.id, "cod_message")) ?? {});
   const price = await creditPrice();
@@ -35,7 +36,7 @@ export default async function CodPage({ searchParams }: { searchParams: Promise<
   return (
     <>
       <Link className="small link-navy" href="/portal/notifications/?tab=whatsapp">← Shipping Notifications</Link>
-      <CodSetup enabled={!!setting?.enabled && included} included={included} msg={msg} businessName={ctx.org.businessName} defaultPhone={wh?.mobile ?? ""}
+      <CodSetup enabled={(setting ? setting.enabled : codOn) && included} included={included} msg={msg} businessName={ctx.org.businessName} defaultPhone={wh?.mobile ?? ""}
         credits={ctx.credits} perMessage={cfg.credits} paisePerCredit={price.paisePerCredit} expiryHours={Math.round(cfg.expiryMinutes / 60)} noReplyText={NO_REPLY[cfg.noReply]}
         demo={mode === "demo"} live={mode === "live"} />
       <h2 className="b mt16" style={{ fontSize: 17 }}>Confirmations</h2>

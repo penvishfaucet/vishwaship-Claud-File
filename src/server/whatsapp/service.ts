@@ -16,6 +16,7 @@ import { aisensySendTemplate, parseAisensyWebhook } from "./aisensy";
 import { ORG_SETTING_SCHEMAS } from "@/lib/org-settings";
 import { roughDelivery } from "@/lib/cod-template";
 import { orgSetting } from "@/server/couriers";
+import { orgInFreeTrial } from "@/server/free-trial";
 
 export type WaEvent = "out_for_delivery" | "cod_confirmation" | "store_order_accepted" | "store_order_cancelled" | "store_order_dispatched";
 export const WA_EVENT_LABEL: Record<WaEvent, string> = {
@@ -60,6 +61,20 @@ export async function aisensyAccount() {
 export async function whatsappMode(): Promise<"live" | "demo" | "unconfigured"> {
   if (await whatsappAccount()) return "live";
   return process.env.NODE_ENV === "production" ? "unconfigured" : "demo";
+}
+
+/**
+ * COD confirmation is ON by default for every client (owner 2026-11-26) — but only when a sender is really there
+ * (the client's own WhatsApp, or Vishwaship's live number). Otherwise COD orders would wait on a message that
+ * can never go out. A client who switches it off keeps it off.
+ */
+export async function codConfirmationOn(orgId: string): Promise<boolean> {
+  const db = await getDb();
+  const [row] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
+  if (row) return row.enabled;
+  const own = await (await import("@/server/own-providers")).ownWhatsapp(orgId, "cod_confirmation");
+  if (own) return true;
+  return !!(await whatsappAccount());
 }
 
 async function creditCost(event: WaEvent) {
@@ -124,9 +139,12 @@ export async function sendEvent(a: {
     return { status, reason: patch.error ?? undefined, messageId: msg.id } as SendOutcome;
   };
 
-  if (!(await eventIncluded(a.orgId, `whatsapp:${a.event}`))) return finish("skipped", { error: "Not included in the customer's plan" });
+  // Free first month: every WhatsApp update is included and costs no credits.
+  const freeTrial = await orgInFreeTrial(a.orgId);
+  if (!freeTrial && !(await eventIncluded(a.orgId, `whatsapp:${a.event}`))) return finish("skipped", { error: "Not included in the customer's plan" });
   const [toggle] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, a.orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, a.event)));
-  if (storeEvent ? toggle && !toggle.enabled : !toggle?.enabled) return finish("skipped", { error: "Turned off by the customer" });
+  const onByDefault = storeEvent || a.event === "cod_confirmation";
+  if (onByDefault ? toggle && !toggle.enabled : !toggle?.enabled) return finish("skipped", { error: "Turned off by the customer" });
   if (a.event === "out_for_delivery" || storeEvent) {
     const [master] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, a.orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "*")));
     if (master && !master.enabled) return finish("skipped", { error: "WhatsApp notifications switched off by the customer" });
@@ -145,7 +163,7 @@ export async function sendEvent(a: {
   if (!own && mode === "live" && !tpl?.providerTemplateName) return finish("failed", { error: "No approved WhatsApp template mapped for this event" });
   const templateName = own ? own.templateName : tpl?.providerTemplateName ?? `demo_${a.event}`;
 
-  const cost = mode === "demo" || own ? 0 : await creditCost(a.event);
+  const cost = mode === "demo" || own || freeTrial ? 0 : await creditCost(a.event);
   if (!(await chargeCredits(a.orgId, msg.id, cost))) return finish("failed", { error: "Insufficient notification credits", templateName });
 
   const [org] = await db.select().from(schema.orgs).where(eq(schema.orgs.id, a.orgId));

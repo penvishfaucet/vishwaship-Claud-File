@@ -71,7 +71,8 @@ export async function placeNdrCall(caseId: string): Promise<{ done: true } | { r
   const own = await (await import("@/server/own-providers")).ownCalling(row.c.orgId);
   const acct = own ? null : await bolnaAccount();
   if (!own && !acct) { await saveCall(caseId, { state: "skipped", attempts, note: "AI calling is being set up by Vishwaship", updatedAt: "" }); return { done: true }; }
-  const credits = own ? 0 : await ndrCallCredits(); // the client's own Bolna: no Vishwaship charge
+  // the client's own Bolna, or the free first month: no Vishwaship charge
+  const credits = own || (await (await import("@/server/free-trial")).orgInFreeTrial(row.c.orgId)) ? 0 : await ndrCallCredits();
   const key = `${caseId}:${attempts}`;
   if (!(await holdCredits(row.c.orgId, key, credits))) {
     await saveCall(caseId, { state: "skipped", attempts, note: "Not enough notification credits", updatedAt: "" });

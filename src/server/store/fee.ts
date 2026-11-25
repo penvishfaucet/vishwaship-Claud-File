@@ -4,6 +4,8 @@ import { getDb, schema } from "@/server/db/client";
 import { dbLedgerStore } from "@/server/ledger/db-store";
 import { debit } from "@/server/ledger/wallet";
 import { getSetting } from "@/server/quotes/service";
+import { orgInFreeTrial } from "@/server/free-trial";
+import { FREE_TRIAL_DEFAULTS, type FreeTrialConfig, inFreeTrial } from "@/lib/free-trial";
 
 /**
  * Vishwaship platform fee on Online Store orders (owner 2026-11-23): 1.5% of the order value on DELIVERED orders only,
@@ -32,7 +34,8 @@ export async function sweepStoreFees(limit = 200) {
   const gstBps = (await getSetting<number>("gst_bps", 1800)).value;
   let n = 0;
   for (const { o } of rows) {
-    const f = storeFee(o.totalPaise, feeBps, gstBps);
+    // orders placed in the client's free first month carry no platform fee
+    const f = (await orgInFreeTrial(o.orgId, o.createdAt)) ? { feePaise: 0, gstPaise: 0, totalPaise: 0 } : storeFee(o.totalPaise, feeBps, gstBps);
     if (f.totalPaise <= 0) {
       await db.update(O).set({ feeChargedAt: new Date(), feePaise: 0, feeGstPaise: 0, feeVia: "wallet" }).where(and(eq(O.id, o.id), isNull(O.feeChargedAt)));
       continue;
@@ -81,8 +84,18 @@ export async function codFeesFor(q: Q, shipmentIds: string[], rates: { feeBps: n
     .where(and(inArray(S.id, shipmentIds), eq(O.status, "placed"), eq(O.paymentMethod, "cod"), or(isNull(O.feeChargedAt), eq(O.feeVia, "cod"))));
   if (!rows.length) return { totalPaise: 0, gstPaise: 0, orders: 0 };
   const { feeBps, gstBps } = rates;
+  // free first month — read through q: callers run this inside a transaction (a second connection would wait on it)
+  const [ftRow] = await q.select().from(schema.pricingSettings).where(eq(schema.pricingSettings.key, "free_trial"));
+  const ft: FreeTrialConfig = { ...FREE_TRIAL_DEFAULTS, ...((ftRow?.value as Partial<FreeTrialConfig> | undefined) ?? {}) };
+  const orgIds = [...new Set(rows.map((r) => r.o.orgId))];
+  const created = new Map((await q.select({ id: schema.orgs.id, c: schema.orgs.createdAt }).from(schema.orgs).where(inArray(schema.orgs.id, orgIds))).map((r) => [r.id, r.c]));
   let total = 0, gst = 0, n = 0;
   for (const { o } of rows) {
+    const orgCreated = created.get(o.orgId);
+    if (o.feeVia !== "cod" && orgCreated && inFreeTrial(ft, orgCreated, o.createdAt)) { // free first month: no fee
+      if (mark) await q.update(O).set({ feeChargedAt: new Date(), feePaise: 0, feeGstPaise: 0, feeVia: "cod" }).where(eq(O.id, o.id));
+      continue;
+    }
     const f = o.feeVia === "cod" && o.feePaise !== null ? { totalPaise: o.feePaise, gstPaise: o.feeGstPaise ?? 0 } : storeFee(o.totalPaise, feeBps, gstBps);
     if (f.totalPaise <= 0) continue;
     total += f.totalPaise; gst += f.gstPaise; n++;

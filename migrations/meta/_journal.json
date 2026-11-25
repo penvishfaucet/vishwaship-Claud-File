@@ -330,6 +330,13 @@
       "when": 1795544387232,
       "tag": "0046_cod_receipts_payouts",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795650000000,
+      "tag": "0047_free_first_month",
+      "breakpoints": true
     }
   ]
 }

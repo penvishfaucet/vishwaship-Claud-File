@@ -4,6 +4,7 @@ import { FRANCHISE_ZONES } from "@/lib/franchise-rates";
 import { getDb, schema } from "@/server/db/client";
 import { toQuoteRequest } from "@/server/quotes/input";
 import { getQuotes } from "@/server/quotes/service";
+import { getFranchiseRateSettings } from "./settings";
 
 /**
  * Zone-wise price list built from LIVE courier rates: for each zone and weight, the cheapest B2C prepaid
@@ -21,9 +22,10 @@ export const LIVE_ROUTES: Record<string, { pin: string; city: string }> = {
 export const LIVE_WEIGHTS = [0.5, 1, 2, 3, 5];
 
 export interface LiveCell { carrierName: string; serviceName: string; lines: Array<{ code: string; label: string; sellPreTax: number }>; sellingSubtotal: number; gst: number; total: number }
-export interface LivePriceList { updatedAt: string; cells: Record<string, Array<LiveCell | null>> }
+export interface LivePriceList { updatedAt: string; marginBps?: number; cells: Record<string, Array<LiveCell | null>> }
 
-const KEY = "franchise_live_price_list";
+// v2: priced at courier cost + franchise margin (v1 added the margin on top of the public price)
+const KEY = "franchise_live_price_list_v2";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const g = globalThis as unknown as { __frLiveRefresh?: Promise<void> | null };
 
@@ -38,13 +40,13 @@ export async function readLivePriceList(): Promise<LivePriceList | null> {
   }
 }
 
-async function cheapest(destination: string, weightKg: number): Promise<LiveCell | null> {
+async function cheapest(destination: string, weightKg: number, marginBps: number): Promise<LiveCell | null> {
   const req = toQuoteRequest({
     mode: "B2C", originPincode: LIVE_ORIGIN.pin, destinationPincode: destination, paymentType: "prepaid",
     codAmountRupees: 0, declaredValueRupees: 1000,
     packages: [{ count: 1, lengthCm: 10, breadthCm: 10, heightCm: 10, weightKg }],
   });
-  const { offers } = await getQuotes(req, null, { persist: false });
+  const { offers } = await getQuotes(req, null, { persist: false, markupBps: marginBps });
   const best = offers.filter((o) => !o.isDemo && o.total > 0).sort((a, b) => a.sellingSubtotal - b.sellingSubtotal)[0];
   if (!best) return null;
   return {
@@ -57,10 +59,11 @@ async function cheapest(destination: string, weightKg: number): Promise<LiveCell
 /** Fetch every zone × weight from the live courier services (3 at a time) and save. */
 export async function refreshLivePriceList(): Promise<LivePriceList> {
   const jobs = FRANCHISE_ZONES.flatMap((z) => LIVE_WEIGHTS.map((w, wi) => ({ zone: z.code, wi, w })));
+  const { marginBps } = await getFranchiseRateSettings();
   const cells: LivePriceList["cells"] = Object.fromEntries(FRANCHISE_ZONES.map((z) => [z.code, LIVE_WEIGHTS.map(() => null)]));
   for (let i = 0; i < jobs.length; i += 3) {
     await Promise.all(jobs.slice(i, i + 3).map(async (j) => {
-      try { cells[j.zone][j.wi] = await cheapest(LIVE_ROUTES[j.zone].pin, j.w); }
+      try { cells[j.zone][j.wi] = await cheapest(LIVE_ROUTES[j.zone].pin, j.w, marginBps); }
       catch (e) { console.error("[franchise-live-list]", j.zone, j.w, (e as Error).message); }
     }));
   }
@@ -68,7 +71,7 @@ export async function refreshLivePriceList(): Promise<LivePriceList> {
   const filled = Object.values(cells).flat().filter(Boolean).length;
   // A failed run (all couriers unreachable) must not wipe a good list.
   if (!filled && prev) return prev;
-  const list: LivePriceList = { updatedAt: new Date().toISOString(), cells };
+  const list: LivePriceList = { updatedAt: new Date().toISOString(), marginBps, cells };
   const db = await getDb();
   await db.insert(schema.pricingSettings).values({ key: KEY, value: list })
     .onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value: list, updatedAt: new Date() } });

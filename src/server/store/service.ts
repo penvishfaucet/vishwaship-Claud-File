@@ -39,7 +39,7 @@ export async function createStore(orgId: string, a: { name: string; slug: string
   try {
     const [s] = await db.insert(schema.stores).values({
       id, orgId, name: a.name, slug: a.slug, themeKey: "bazaar", draftTheme: defaultTheme("bazaar"),
-      settings: readSettings({}), stepsDone: [1], onboardingStep: 2, trialEndsAt: new Date(Date.now() + (await storeBillingSetting()).trialDays * 86400_000),
+      settings: readSettings({}), stepsDone: [1], onboardingStep: 2, trialEndsAt: await (await import("./billing")).trialEndFor(), // never shorter than the free first month
     }).returning();
     return { ok: true, store: s };
   } catch {

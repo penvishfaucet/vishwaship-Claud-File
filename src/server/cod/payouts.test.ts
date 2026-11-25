@@ -32,6 +32,8 @@ const wallet = async (org: string) => (await db.select().from(schema.wallets).wh
 
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
+  // these tests check normal charging: switch the free first month (launch offer) off
+  await db.insert(schema.pricingSettings).values({ key: "free_trial", value: { enabled: false, days: 30, startsOn: "2026-11-26" } }).onConflictDoNothing();
   for (const o of [A, B, C]) {
     await db.insert(schema.orgs).values({ id: o, name: o, businessName: `Client ${o.slice(-1).toUpperCase()}` });
     await db.insert(schema.wallets).values({ id: `w_${o}`, orgId: o, postedPaise: o === B ? -30_000 : 50_000 });

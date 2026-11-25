@@ -132,7 +132,7 @@ export type ServiceStatus = {
   category?: string; message?: string; count: number;
 };
 
-export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string } = {}): Promise<{ offers: QuoteOffer[]; errors: string[]; statuses: ServiceStatus[] }> {
+export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string; /** Franchise Rate List: exact margin on the courier cost instead of the markup rules. */ markupBps?: number } = {}): Promise<{ offers: QuoteOffer[]; errors: string[]; statuses: ServiceStatus[] }> {
   const persist = opts.persist ?? true;
   const allowed = await (await import("@/server/couriers")).courierFilter(orgId);
   const db = await getDb();
@@ -173,7 +173,9 @@ export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: {
     }
 
     // KYC not approved yet → the non-KYC margin on every courier and service; approved → the normal rules
-    const markup = nonKyc ?? pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
+    const markup = opts.markupBps !== undefined
+      ? { bps: opts.markupBps, source: "global" as const, ruleId: "franchise_rate_list", ruleVersion: 0 }
+      : nonKyc ?? pickMarkup(markupRows, acct.adapter, req.mode, orgId, now);
     const partnerCode = partnerCodeFor(acct.adapter, acct.configPublic as Record<string, unknown>);
     // Owner rule (2026-11-19): margin on the whole verified carrier subtotal (freight + fuel + docket + ODA + FOD + other)
     // for every courier and service; GST once on the result. Older per-provider overrides are no longer applied.

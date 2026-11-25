@@ -176,7 +176,10 @@ export async function listOrderRows(orgId: string | null, f: OrderFilters, opts:
   ]);
   // WhatsApp COD confirmation access + switch, per account on the page (one account in the Customer Portal)
   const orgIds = [...new Set(base.map((r) => r.o.orgId))];
-  const included = new Map(await Promise.all(orgIds.map(async (id) => [id, await eventIncluded(id, "whatsapp:cod_confirmation")] as const)));
+  const { orgInFreeTrial } = await import("@/server/free-trial");
+  const { codConfirmationOn } = await import("@/server/whatsapp/service");
+  const included = new Map(await Promise.all(orgIds.map(async (id) => [id, (await orgInFreeTrial(id)) || (await eventIncluded(id, "whatsapp:cod_confirmation"))] as const)));
+  const codOn = new Map(await Promise.all(orgIds.map(async (id) => [id, await codConfirmationOn(id)] as const)));
   const toggles = orgIds.length ? await db.select({ orgId: schema.notificationSettings.orgId, enabled: schema.notificationSettings.enabled }).from(schema.notificationSettings)
     .where(and(inArray(schema.notificationSettings.orgId, orgIds), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation"))) : [];
 
@@ -204,7 +207,7 @@ export async function listOrderRows(orgId: string | null, f: OrderFilters, opts:
     const wh = warehouses.find((w) => w.id === o.warehouseId);
     const snap = (o.pickupSnapshot ?? null) as Addr | null;
     const pickup: Addr | null = snap ?? (wh ? { label: wh.label, contactName: wh.contactName, mobile: wh.mobile, line1: wh.line1, line2: wh.line2 ?? undefined, city: wh.city, state: wh.state, pincode: wh.pincode } : null);
-    const codIn: CodInputs = { paymentType: o.paymentType, codPaise: o.codAmountPaise, included: included.get(o.orgId) ?? false, enabled: toggle ? toggle.enabled : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
+    const codIn: CodInputs = { paymentType: o.paymentType, codPaise: o.codAmountPaise, included: included.get(o.orgId) ?? false, enabled: toggle ? toggle.enabled : codOn.get(o.orgId) ? true : null, confirmation: cod ? { status: cod.status, cancellationStatus: cod.cancellationStatus } : null, messageStatus: msg?.status ?? null };
     return {
       id: o.id, orderNumber: o.orderNumber, createdAt: o.createdAt.toISOString(), source: o.source, mode: o.mode, direction: o.direction,
       customer: org,

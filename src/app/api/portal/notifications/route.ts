@@ -22,7 +22,7 @@ export async function PUT(req: Request) {
   if (p.data.event === "cod_confirmation" && p.data.channel !== "whatsapp") return apiError(422, "validation_error", "COD confirmation is WhatsApp only");
   // WhatsApp OFD / COD confirmation are plan features: enforce on the server, not just in the UI.
   if (p.data.enabled && p.data.channel === "whatsapp" && (p.data.event === "cod_confirmation" || p.data.event === "out_for_delivery")
-    && !(await eventIncluded(s.orgId, `whatsapp:${p.data.event}`))) {
+    && !(await (await import("@/server/free-trial")).orgInFreeTrial(s.orgId)) && !(await eventIncluded(s.orgId, `whatsapp:${p.data.event}`))) {
     return apiError(403, "forbidden", "This WhatsApp notification is not included in your plan. Upgrade to enable it.");
   }
   const db = await getDb();

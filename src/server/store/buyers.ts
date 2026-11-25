@@ -91,6 +91,7 @@ export async function chargeOtpCredits(orgId: string, storeId: string, mobile: s
   const { getSetting } = await import("@/server/quotes/service");
   const n = (await getSetting<Record<string, number>>("notification_credit_cost", {})).value.store_otp ?? 4;
   if (n <= 0) return true;
+  if (await (await import("@/server/free-trial")).orgInFreeTrial(orgId)) return true; // free first month
   const key = `sfb-otp:${storeId}:${mobile}:${Math.floor(Date.now() / 600_000)}`;
   const db = await getDb();
   return db.transaction(async (tx) => {

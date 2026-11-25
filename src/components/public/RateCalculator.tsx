@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatINR } from "@/lib/money";
 import { carrierLogo } from "@/lib/site";
 
@@ -34,6 +34,31 @@ interface Props {
   layout?: "stacked" | "wide";
   bookHref?: (o: OfferView, input: CalcInput) => string;
   initial?: Partial<CalcInput>;
+  /** Quote API override (Franchise Rate List). */
+  endpoint?: string;
+  /** Show only the cheapest N options first, then a "Show more" button. */
+  limit?: number;
+  bookLabel?: string;
+  /** Show City, State under the pincodes as they are typed. */
+  pinLookup?: boolean;
+  hidePartnerCode?: boolean;
+}
+
+/** City, State for a 6-digit PIN (public lookup), shown under the pincode field. */
+function PinPlace({ pin }: { pin: string }) {
+  const [txt, setTxt] = useState("");
+  useEffect(() => {
+    if (!/^[1-9]\d{5}$/.test(pin)) { setTxt(""); return; }
+    let live = true;
+    setTxt("…");
+    fetch(`/api/public/pincode/${pin}/`).then(async (r) => {
+      const j = await r.json().catch(() => ({}));
+      if (!live) return;
+      setTxt(r.ok && j.city ? `${j.city}, ${j.state}` : r.status === 404 ? "Invalid pincode" : "");
+    }).catch(() => { if (live) setTxt(""); });
+    return () => { live = false; };
+  }, [pin]);
+  return txt ? <div className={txt === "Invalid pincode" ? "tiny err" : "tiny muted"} style={{ marginTop: 4 }}>{txt}</div> : null;
 }
 
 export interface CalcInput {
@@ -43,7 +68,8 @@ export interface CalcInput {
 
 const DEFAULTS: CalcInput = { mode: "B2C", origin: "110034", destination: "411001", weightKg: "1.2", payment: "prepaid", codAmount: "", l: "20", b: "15", h: "10" };
 
-export function RateCalculator({ scope, layout = "stacked", bookHref, initial }: Props) {
+export function RateCalculator({ scope, layout = "stacked", bookHref, initial, endpoint, limit, bookLabel, pinLookup, hidePartnerCode }: Props) {
+  const [showAll, setShowAll] = useState(false);
   const [f, setF] = useState<CalcInput>({ ...DEFAULTS, ...initial });
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [offers, setOffers] = useState<OfferView[]>([]);
@@ -58,7 +84,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
     }
     setState("loading"); setMsg("");
     try {
-      const r = await fetch(scope === "public" ? "/api/public/quote" : "/api/portal/quote", {
+      const r = await fetch(endpoint ?? (scope === "public" ? "/api/public/quote" : "/api/portal/quote"), {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           mode: f.mode, originPincode: f.origin, destinationPincode: f.destination, paymentType: f.payment,
@@ -69,6 +95,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.message ?? "Could not fetch rates");
       setOffers(j.offers);
+      setShowAll(false);
       setState("done");
       const why = (j.notices ?? []) as string[];
       if (!j.offers.length) setMsg(f.payment === "fod" ? "FOD (freight paid by the receiver) is not available yet for this route — it is offered on Delhivery B2B once activated. Choose Prepaid or COD." : `No courier currently services this route with these details.${why.length ? " " + why.join(" · ") : ""}`);
@@ -86,8 +113,8 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
         <button type="button" role="radio" aria-checked={f.mode === "B2B"} className={f.mode === "B2B" ? "on" : ""} onClick={() => set("mode", "B2B")}><b>B2B</b><span>More than 10 kg parcel</span></button>
       </div>
       <div className="grid2" style={{ gap: 12 }}>
-        <div className="field"><label htmlFor="c-o">Pickup pincode</label><input id="c-o" className="input" inputMode="numeric" maxLength={6} required value={f.origin} onChange={(e) => set("origin", e.target.value.replace(/\D/g, ""))} /></div>
-        <div className="field"><label htmlFor="c-d">Delivery pincode</label><input id="c-d" className="input hl" inputMode="numeric" maxLength={6} required value={f.destination} onChange={(e) => set("destination", e.target.value.replace(/\D/g, ""))} /></div>
+        <div className="field"><label htmlFor="c-o">Pickup pincode</label><input id="c-o" className="input" inputMode="numeric" maxLength={6} required value={f.origin} onChange={(e) => set("origin", e.target.value.replace(/\D/g, ""))} />{pinLookup && <PinPlace pin={f.origin} />}</div>
+        <div className="field"><label htmlFor="c-d">Delivery pincode</label><input id="c-d" className="input hl" inputMode="numeric" maxLength={6} required value={f.destination} onChange={(e) => set("destination", e.target.value.replace(/\D/g, ""))} />{pinLookup && <PinPlace pin={f.destination} />}</div>
         <div className="field"><label htmlFor="c-w">Weight (kg)</label><input id="c-w" className="input" type="number" step="0.01" min="0.01" required value={f.weightKg} onChange={(e) => set("weightKg", e.target.value)} /></div>
         <div className="field"><label htmlFor="c-p">Payment</label>
           <select id="c-p" className="select" value={f.payment} onChange={(e) => set("payment", e.target.value as "prepaid" | "cod" | "fod")}><option value="prepaid">Prepaid</option><option value="cod">COD</option><option value="fod">FOD — freight paid by receiver</option></select>
@@ -116,7 +143,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
   const results = state === "done" && offers.length > 0 && (
     <div className="calc-results" aria-label="Courier options">
       {offers.some((o) => o.isDemo) && <p className="tiny muted mb8">Demo rates — live courier accounts are not connected yet.</p>}
-      {offers.map((o) => {
+      {(limit && !showAll ? offers.slice(0, limit) : offers).map((o) => {
         const logo = carrierLogo(o.carrierCode);
         const expanded = open === o.quoteId;
         return (
@@ -126,7 +153,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
                 {logo ? <img className="clogo" src={logo} alt={o.carrierName} /> : <span className="b">{o.carrierName}</span>}
                 <div style={{ minWidth: 0 }}>
                   <div className="b small">{o.carrierName} · {o.serviceName}</div>
-                  <div className="tiny muted">{o.mode}{o.etaDays ? ` · ETA ${o.etaDays} day${o.etaDays > 1 ? "s" : ""}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg chargeable{o.isPilot ? " · verification service" : ""}{o.partnerCode ? ` · Partner code ${o.partnerCode}` : ""}</div>
+                  <div className="tiny muted">{o.mode}{o.etaDays ? ` · ETA ${o.etaDays} day${o.etaDays > 1 ? "s" : ""}` : ""} · {(o.chargeableWeightGrams / 1000).toFixed(1)} kg chargeable{o.isPilot ? " · verification service" : ""}{o.partnerCode && !hidePartnerCode ? ` · Partner code ${o.partnerCode}` : ""}</div>
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -142,7 +169,7 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
             </div>
             <div className="row between mt8" style={{ gap: 8 }}>
               <button type="button" className="link small" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : o.quoteId)}>{expanded ? "Hide" : "View"} charges</button>
-              {bookHref ? <a className="btn btn-sm btn-orange" href={bookHref(o, f)}>Book with this courier</a> : <a className="btn btn-sm btn-orange" href={`/login/?next=${encodeURIComponent("/portal/orders/new")}`}>Book now</a>}
+              {bookHref ? <a className="btn btn-sm btn-orange" href={bookHref(o, f)}>{bookLabel ?? "Book with this courier"}</a> : <a className="btn btn-sm btn-orange" href={`/login/?next=${encodeURIComponent("/portal/orders/new")}`}>Book now</a>}
             </div>
             {expanded && (
               <table className="tbl mt8 calc-breakdown"><tbody>
@@ -156,6 +183,11 @@ export function RateCalculator({ scope, layout = "stacked", bookHref, initial }:
           </div>
         );
       })}
+      {limit && !showAll && offers.length > limit && (
+        <button type="button" className="btn btn-outline btn-block calc-more" onClick={() => setShowAll(true)}>
+          Show more courier partner rates ({offers.length - limit} more)
+        </button>
+      )}
     </div>
   );
 

@@ -49,8 +49,8 @@ export async function createOrder(orgId: string, input: z.infer<typeof OrderInpu
   if (dup.length) return { ok: false as const, message: `Order ID ${orderNumber} already exists`, duplicateOf: dup[0].id };
 
   // COD confirmation hold applies to every source (manual, bulk, store, API) when subscribed.
-  const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && !!codSetting?.enabled;
+  const codOn = await (await import("@/server/whatsapp/service")).codConfirmationOn(orgId);
+  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && codOn;
 
   await db.insert(schema.orders).values({
     id, orgId, orderNumber, source, externalStoreId: external?.storeId, externalOrderId: external?.orderId,
@@ -95,8 +95,8 @@ export async function updateOrder(orgId: string, orderId: string, input: z.infer
     const dup = await db.select({ id: schema.orders.id }).from(schema.orders).where(and(eq(schema.orders.orgId, orgId), eq(schema.orders.orderNumber, orderNumber)));
     if (dup.length) return { ok: false as const, message: `Order ID ${orderNumber} already exists` };
   }
-  const [codSetting] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "whatsapp"), eq(schema.notificationSettings.event, "cod_confirmation")));
-  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && !!codSetting?.enabled;
+  const codOn = await (await import("@/server/whatsapp/service")).codConfirmationOn(orgId);
+  const codHold = input.saveAs !== "draft" && collectsCod(input.paymentType, rupeesToPaise(input.codAmountRupees)) && input.direction === "forward" && codOn;
   await db.update(schema.orders).set({
     orderNumber, mode: input.mode, direction: input.direction, paymentType: input.paymentType,
     status: input.saveAs === "draft" ? "draft" : codHold ? "cod_hold" : "ready",

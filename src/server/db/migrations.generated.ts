@@ -858,5 +858,14 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795544387232,
   "hash": "d5c4f39aaa1f38cbc4335a61c0f04b061f601f6e3543aaf0c6f3c731e9471f1a"
+ },
+ {
+  "tag": "0047_free_first_month",
+  "sql": [
+   "-- Launch offer (owner 2026-11-26): every client gets the first month free, Online Store included. Stores whose trial\n-- ends before 26 Dec 2026 (IST) — or has already ended — are extended to then. Paid periods are untouched.\nUPDATE \"stores\" SET \"trial_ends_at\" = '2026-12-26 00:00:00+05:30', \"updated_at\" = now()\nWHERE \"trial_ends_at\" IS NOT NULL AND \"trial_ends_at\" < '2026-12-26 00:00:00+05:30';\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795650000000,
+  "hash": "62efde00228434d624b047de11b7d286f35e6b545c0cbb9db086a630c67af2a2"
  }
 ];

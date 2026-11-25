@@ -30,6 +30,8 @@ const posted = async () => (await db.select().from(schema.wallets).where(eq(sche
 
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: "./migrations" });
+  // these tests check normal charging: switch the free first month (launch offer) off
+  await db.insert(schema.pricingSettings).values({ key: "free_trial", value: { enabled: false, days: 30, startsOn: "2026-11-26" } }).onConflictDoNothing();
   await db.insert(schema.orgs).values({ id: ORG, name: "F", businessName: "F" });
   await db.insert(schema.wallets).values({ id: "w_fee", orgId: ORG, postedPaise: 1_000 });
   await db.insert(schema.stores).values({ id: "st_f", orgId: ORG, slug: "fee-shop", name: "Fee shop" } as never);

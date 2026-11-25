@@ -33,11 +33,16 @@ export async function ndrCallCredits() {
   return Math.ceil(s.pricePaise / p.paisePerCredit);
 }
 
-/** Is AI NDR calling switched on for this client? */
+/**
+ * Is AI NDR calling switched on for this client? ON by default (owner 2026-11-26) once a caller is set up — the
+ * client's own Bolna or Vishwaship's. A client who switches it off keeps it off.
+ */
 export async function aiCallingEnabled(orgId: string) {
   const db = await getDb();
   const [row] = await db.select().from(schema.notificationSettings).where(and(eq(schema.notificationSettings.orgId, orgId), eq(schema.notificationSettings.channel, "voice"), eq(schema.notificationSettings.event, "ndr_ai_call")));
-  return !!row?.enabled;
+  if (row) return row.enabled;
+  if (await (await import("@/server/own-providers")).ownCalling(orgId)) return true;
+  return !!(await (await import("./ai-call")).bolnaAccount());
 }
 
 /** Shipment moved to NDR: open a case for this attempt, tell the client, and start the AI call if switched on. */
