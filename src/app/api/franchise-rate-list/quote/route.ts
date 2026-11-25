@@ -18,5 +18,7 @@ export async function POST(req: Request) {
   if (!p.ok) return p.res;
   const { marginBps } = await getFranchiseRateSettings();
   const { offers, errors } = await getQuotes(toQuoteRequest(p.data), null, { persist: false, markupBps: marginBps });
-  return NextResponse.json({ offers: offers.filter((o) => !o.isDemo).sort((a, b) => a.total - b.total).map(presentOffer), notices: presentNotices(errors) });
+  const list = offers.filter((o) => !o.isDemo).sort((a, b) => a.total - b.total).map(presentOffer);
+  // Public page: service set-up notes ("GST basis not set" etc.) are for Admin only; show them only when nothing priced.
+  return NextResponse.json({ offers: list, notices: list.length ? [] : presentNotices(errors).length ? ["No courier service could price this shipment right now."] : [] });
 }
