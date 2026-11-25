@@ -33,7 +33,7 @@ export function AddressForm({ verifyId, mobile, editing, onDone, onSaved, onVeri
 
   async function fbSend(m: string) {
     setBusy(true); setErr(null);
-    try { conf.current = await (await firebasePhone(fb!)).send(`+91${m}`, boxId); setFbMobile(m); setFbStep(true); setCode(""); }
+    try { conf.current = await (await firebasePhone(fb!)).send(`+91${m}`, boxId, "pickup"); setFbMobile(m); setFbStep(true); setCode(""); }
     catch (x) { setErr(fbError(x)); }
     setBusy(false);
   }

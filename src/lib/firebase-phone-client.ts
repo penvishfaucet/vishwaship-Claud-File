@@ -7,7 +7,20 @@ import { useEffect, useState } from "react";
  */
 export type PhoneOtpConfig = { apiKey: string; authDomain: string; projectId: string; appId?: string };
 export type Confirmation = { confirm: (code: string) => Promise<{ user: { getIdToken: () => Promise<string> } }> };
-type Fb = { signOut: () => Promise<void>; send: (phone: string, boxId: string) => Promise<Confirmation> };
+export type OtpPurpose = "login" | "staff" | "store" | "pickup";
+type Fb = { signOut: () => Promise<void>; send: (phone: string, boxId: string, purpose?: OtpPurpose) => Promise<Confirmation> };
+
+/** Thrown when our server refuses an OTP (limits); shown to the user as-is. */
+export class OtpLimitError extends Error {}
+
+/** Ask the server before Firebase sends an SMS (per-number / per-network / daily site limits). */
+async function otpPermission(phone: string, purpose: OtpPurpose) {
+  const r = await fetch("/api/auth/otp-request/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ mobile: phone, purpose }) });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new OtpLimitError(j?.error?.message ?? "Too many OTP requests. Please try again later.");
+  }
+}
 
 const SDK = "https://www.gstatic.com/firebasejs/13.2.0";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,9 +36,11 @@ export function firebasePhone(cfg: PhoneOtpConfig): Promise<Fb> {
     let verifier: { clear: () => void } | null = null;
     return {
       signOut: () => a.signOut(auth),
-      send: async (phone: string, boxId: string) => {
+      send: async (phone: string, boxId: string, purpose: OtpPurpose = "login") => {
+        await otpPermission(phone, purpose);
         verifier?.clear();
-        verifier = new a.RecaptchaVerifier(auth, boxId, { size: "invisible" });
+        // Visible "I'm not a robot" check before every SMS (owner 2026-11-26): the OTP goes out only after it is solved.
+        verifier = new a.RecaptchaVerifier(auth, boxId, { size: "normal" });
         return a.signInWithPhoneNumber(auth, phone, verifier);
       },
     };
@@ -97,7 +112,7 @@ const MSG: Record<string, string> = {
   "auth/billing-not-enabled": "Mobile OTP is not switched on yet. Contact support.",
   "auth/network-request-failed": "No internet connection. Check your network and try again.",
 };
-export const fbError = (e: unknown) => MSG[(e as { code?: string })?.code ?? ""] ?? "Could not send or check the OTP. Please try again.";
+export const fbError = (e: unknown) => e instanceof OtpLimitError ? e.message : MSG[(e as { code?: string })?.code ?? ""] ?? "Could not send or check the OTP. Please try again.";
 
 let cfgPromise: Promise<PhoneOtpConfig | null> | null = null;
 /** Public web config when Admin has switched mobile OTP ON (undefined while loading, null when off). */

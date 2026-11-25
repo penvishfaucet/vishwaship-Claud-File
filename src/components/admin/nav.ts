@@ -47,6 +47,7 @@ export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; labe
     { href: "/admin/content/", label: "Portal Text", icon: FileText, perm: "customers.read" },
     { href: "/admin/api-credentials/", label: "API Credentials", icon: KeyRound, perm: "api_keys.manage" },
     { href: "/admin/staff/", label: "Staff & Roles", icon: Activity, perm: "staff.manage" },
+    { href: "/admin/security/", label: "Security", icon: ShieldCheck, perm: "integrations.read" },
     { href: "/admin/audit/", label: "Audit Log", icon: ScrollText, perm: "audit.read" },
   ] },
 ];

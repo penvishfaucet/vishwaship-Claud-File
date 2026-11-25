@@ -31,7 +31,7 @@ export function BuyerLogin({ store, phone, next }: { store: string; phone: Phone
     if (!valid || busy) return;
     setBusy(true); setErr("");
     try {
-      if (mode === "mobile") { const fb = await firebasePhone(phone!); conf.current = await fb.send(`+91${val}`, "sfb-recaptcha"); setCool(30); }
+      if (mode === "mobile") { const fb = await firebasePhone(phone!); conf.current = await fb.send(`+91${val}`, "sfb-recaptcha", "store"); setCool(30); }
       else { const j = await post(store, { op: "email_code", email: val.trim() }); setCool(j.cooldownSec ?? 60); }
       setSent(true); setCode("");
     } catch (e) { setErr(mode === "mobile" ? fbError(e) : (e as Error).message); }

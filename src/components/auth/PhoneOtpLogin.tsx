@@ -27,7 +27,7 @@ export function PhoneOtpLogin({ config, next, staff }: { config: PhoneOtpConfig 
     setBusy(true); setErr("");
     try {
       const fb = await firebasePhone(config!);
-      conf.current = await fb.send(`+91${mobile}`, "vs-recaptcha");
+      conf.current = await fb.send(`+91${mobile}`, "vs-recaptcha", staff ? "staff" : "login");
       setStep("code"); setCode(""); setCool(30);
     } catch (e) { setErr(fbError(e)); }
     setBusy(false);
