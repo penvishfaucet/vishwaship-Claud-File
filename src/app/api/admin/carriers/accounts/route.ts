@@ -31,7 +31,7 @@ const Ops = z.discriminatedUnion("op", [
   z.object({ op: z.literal("environment"), id, mode: env }),
   z.object({ op: z.literal("config"), id, brandName: z.string().trim().max(60).default(""), logoCode: z.string().trim().max(60).default(""), baseUrlTest: z.string().trim().max(300).default(""), baseUrlLive: z.string().trim().max(300).default(""),
     typeOfPackage: z.string().trim().max(20).default(""), rovType: z.string().trim().max(30).default(""), gstTreatment: z.enum(["auto", "inclusive", "exclusive"]).default("auto"),
-    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), noAutoPickup: bool.default(false), webhookNote: z.string().trim().max(300).default(""), partnerCode: z.string().trim().max(20).regex(/^[A-Za-z0-9_-]*$/, "Letters, numbers, - and _ only").default("") }),
+    courierIds: z.string().trim().max(500).default(""), skipManualPickup: bool.default(false), mpsBookingVerified: bool.default(false), noAutoPickup: bool.default(false), webhookNote: z.string().trim().max(300).default(""), partnerCode: z.string().trim().max(20).regex(/^[A-Za-z0-9_-]*$/, "Letters, numbers, - and _ only").default("") }),
   z.object({ op: z.literal("test_auth"), id }),
   z.object({ op: z.literal("test_serviceability"), id, from: pin, to: pin }),
   z.object({ op: z.literal("rate_check"), id, from: pin, to: pin, weightKg: z.coerce.number().positive().max(5000), lengthCm: z.coerce.number().positive().max(500), widthCm: z.coerce.number().positive().max(500), heightCm: z.coerce.number().positive().max(500),
@@ -170,6 +170,8 @@ export async function POST(req: Request) {
         if (b.typeOfPackage && !["SPS", "MPS", "B2B"].includes(b.typeOfPackage.toUpperCase())) return apiError(422, "validation_error", "type_of_package must be SPS, MPS or B2B");
         b.typeOfPackage = b.typeOfPackage.toUpperCase();
         patch.typeOfPackage = b.typeOfPackage || null; patch.rovType = b.rovType || null; patch.gstTreatment = b.gstTreatment; patch.skipManualPickup = b.skipManualPickup;
+        // multi-carton (2+ boxes) rates and booking — B2B accounts only (Shipmozo B2C books one package per order)
+        patch.mpsBookingVerified = (acct.configPublic as Record<string, unknown> | null)?.service === "B2B" && b.mpsBookingVerified;
         patch.courierIds = b.courierIds.split(/[\s,]+/).map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,20}$/.test(x));
       }
       await saveCfg(patch);

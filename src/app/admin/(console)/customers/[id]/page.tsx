@@ -28,6 +28,7 @@ import { orgSetting } from "@/server/couriers";
 import { PnlSummary } from "@/components/admin/PnlViews";
 import { pnlByOrg } from "@/server/finance/pnl";
 import { OWN_ACCOUNTS_KEY, ownAccountIds } from "@/server/finance/own-accounts";
+import { setShiporaAccess, shiporaOrgIds } from "@/server/quotes/restricted";
 import { pnlPresets, pnlRange } from "@/server/finance/pnl-range";
 
 const TABS = ["overview", "shipments", "wallet", "pnl", "kyc", "pricing", "features", "notifications"] as const;
@@ -106,6 +107,17 @@ export default async function CustomerDetail({ params, searchParams }: { params:
   }
   const isOwn = (await ownAccountIds()).includes(id);
 
+  /** Shipora X rates: off for everyone until the owner switches them on for a (bulk) customer. */
+  async function setShipora(fd: FormData) {
+    "use server";
+    const st = await requireStaff("pricing.write");
+    const on = String(fd.get("on")) === "1";
+    await setShiporaAccess(id, on);
+    await audit({ actorUserId: st.userId, actorKind: "staff", orgId: id, action: on ? "pricing.shipora_on" : "pricing.shipora_off" });
+    redirect(`/admin/customers/${id}/?tab=pricing`);
+  }
+  const shiporaOn = (await shiporaOrgIds()).includes(id);
+
   const nk = await nonKycRule(id);
   const perms = { docs: can(s.role, "kyc.documents.read"), wallet: can(s.role, "finance.read"), adjust: can(s.role, "finance.adjust"), ship: can(s.role, "shipments.read") };
   const ob = await onboardingState(id);
@@ -122,7 +134,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
     <>
       <div className="page-h cu-head">
         <div><Link className="small link-navy" href="/admin/customers/">← Customers</Link><h1>{org.businessName}</h1>
-          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}><span className="tiny muted mono">{org.id}</span><span className={`chip ${org.status === "active" ? "c-active" : "c-cancelled"}`}>{org.status === "active" ? "Active" : "Suspended"}</span><span className={`chip ${KYC_CHIP[org.kycStatus] ?? "c-pending"}`}>{KYC_LABEL[org.kycStatus] ?? org.kycStatus}</span>{ob.step !== "active" && <span className="chip c-pending">Onboarding: {STEP_TEXT[ob.step].title}</span>}{isOwn && <span className="chip c-draft" title="Left out of the Admin dashboard and Profit & Loss totals">Own account · not in P&amp;L</span>}</div>
+          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}><span className="tiny muted mono">{org.id}</span><span className={`chip ${org.status === "active" ? "c-active" : "c-cancelled"}`}>{org.status === "active" ? "Active" : "Suspended"}</span><span className={`chip ${KYC_CHIP[org.kycStatus] ?? "c-pending"}`}>{KYC_LABEL[org.kycStatus] ?? org.kycStatus}</span>{ob.step !== "active" && <span className="chip c-pending">Onboarding: {STEP_TEXT[ob.step].title}</span>}{shiporaOn && <span className="chip c-active">Shipora X rates on</span>}{isOwn && <span className="chip c-draft" title="Left out of the Admin dashboard and Profit & Loss totals">Own account · not in P&amp;L</span>}</div>
         </div>
         <div className="actions">
           {can(s.role, "customers.write") && <form action={setStatus}><input type="hidden" name="status" value={org.status === "active" ? "suspended" : "active"} /><button className="btn btn-sm btn-outline">{org.status === "active" ? "Suspend" : "Activate"}</button></form>}
@@ -162,6 +174,16 @@ export default async function CustomerDetail({ params, searchParams }: { params:
       {tab === "pnl" && can(s.role, "shipments.cost.read") && <PnlTab orgId={id} sp={sp} />}
       {tab === "kyc" && <KycBilling orgId={id} org={org} showDocs={perms.docs} reasons={ob.reasons} />}
       {tab === "pricing" && (
+        <>
+        <section className="card mb16" style={{ padding: 18 }}>
+          <div className="row between wrap" style={{ gap: 12, alignItems: "center" }}>
+            <div>
+              <h2 className="b" style={{ fontSize: 15, margin: 0 }}>Shipora X rates <span className={`chip ${shiporaOn ? "c-active" : "c-cancelled"}`} style={{ marginLeft: 6 }}>{shiporaOn ? "On" : "Off"}</span></h2>
+              <p className="small muted" style={{ margin: "4px 0 0", maxWidth: 640 }}>{shiporaOn ? "This customer sees and can book Shipora X rates." : "Hidden from this customer. Switch on only for bulk clients — everyone else never sees Shipora X rates."}</p>
+            </div>
+            {can(s.role, "pricing.write") && <form action={setShipora}><input type="hidden" name="on" value={shiporaOn ? "0" : "1"} /><button className={`btn btn-sm ${shiporaOn ? "btn-outline" : "btn-orange"}`}>{shiporaOn ? "Turn off Shipora X" : "Turn on Shipora X"}</button></form>}
+          </div>
+        </section>
         <div className="split" style={{ gap: 16, alignItems: "start" }}>
           <section className="card" style={{ padding: 18 }}>
             <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Shipmozo markup</h2>
@@ -177,6 +199,7 @@ export default async function CustomerDetail({ params, searchParams }: { params:
           </section>
           <PreviewQuote defaultPct={(ov?.bps ?? settings.global.bps) / 100} />
         </div>
+        </>
       )}
       {tab === "features" && <FeaturesTab orgId={id} write={can(s.role, "modules.manage")} />}
       {tab === "notifications" && <p className="small muted">Customer channel settings and delivery logs: <Link className="link" href={`/admin/notifications/?org=${id}`}>open in Notifications</Link>.</p>}

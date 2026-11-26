@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getFranchiseRateSettings } from "@/server/franchise-rates/settings";
+import { getRateLink } from "@/server/franchise-rates/links";
 import { apiError, parseJson } from "@/server/http";
 import { QuoteInput, toQuoteRequest } from "@/server/quotes/input";
 import { presentNotices, presentOffer } from "@/server/quotes/present";
@@ -17,7 +18,9 @@ export async function POST(req: Request) {
   const p = await parseJson(req, QuoteInput);
   if (!p.ok) return p.res;
   const { marginBps } = await getFranchiseRateSettings();
-  const { offers, errors } = await getQuotes(toQuoteRequest(p.data), null, { persist: false, markupBps: marginBps });
+  // a personal link (?link=…) may include Shipora X rates; the standard page never does
+  const link = await getRateLink(new URL(req.url).searchParams.get("link"));
+  const { offers, errors } = await getQuotes(toQuoteRequest(p.data), null, { persist: false, markupBps: marginBps, includeRestricted: !!link?.shipora });
   const list = offers.filter((o) => !o.isDemo).sort((a, b) => a.total - b.total).map(presentOffer);
   // Public page: service set-up notes ("GST basis not set" etc.) are for Admin only; show them only when nothing priced.
   return NextResponse.json({ offers: list, notices: list.length ? [] : presentNotices(errors).length ? ["No courier service could price this shipment right now."] : [] });

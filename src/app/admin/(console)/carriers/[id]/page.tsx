@@ -181,6 +181,7 @@ export default async function CourierAccount({ params }: { params: Promise<{ id:
               { name: "gstTreatment", label: "Rate basis when GST is not in the response", type: "select" as const, value: String(cfg.gstTreatment ?? "auto"), options: [["auto", "Read from response (refuse if unclear)"], ["exclusive", "Rates exclude GST"], ["inclusive", "Rates include GST"]] as Array<[string, string]> },
               { name: "courierIds", label: "Offer only these courier_ids (blank = all)", value: ((cfg.courierIds as string[] | undefined) ?? []).join(", "), wide: true },
               { name: "skipManualPickup", label: "Don't auto-request pickup when Shipmozo says manual", type: "checkbox" as const, value: !!cfg.skipManualPickup },
+              ...(service === "B2B" ? [{ name: "mpsBookingVerified", label: "Offer rates and book orders with 2 or more cartons (check the first booking's package count in the Shipmozo panel)", type: "checkbox" as const, value: !!cfg.mpsBookingVerified, wide: true }] : []),
             ] : []),
             { name: "webhookNote", label: "Webhook notes", value: String(cfg.webhookNote ?? ""), wide: true },
           ]} />}

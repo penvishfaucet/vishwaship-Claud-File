@@ -2,12 +2,12 @@
 import { RateCalculator } from "@/components/public/RateCalculator";
 
 /** The Customer Portal rate calculator, priced at courier cost + franchise margin, 4 rates first, City/State lookup. */
-export function FranchiseCalculator() {
+export function FranchiseCalculator({ link }: { link?: string }) {
   return (
     <RateCalculator
       scope="public"
       layout="wide"
-      endpoint="/api/franchise-rate-list/quote/"
+      endpoint={`/api/franchise-rate-list/quote/${link ? `?link=${encodeURIComponent(link)}` : ""}`}
       limit={4}
       pinLookup
       hidePartnerCode

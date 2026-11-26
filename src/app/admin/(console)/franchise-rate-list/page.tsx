@@ -6,6 +6,8 @@ import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { LIVE_ORIGIN, LIVE_ROUTES, isLiveRefreshing, readLivePriceList, startLiveRefresh } from "@/server/franchise-rates/live-list";
 import { getFranchiseRateSettings, saveFranchiseRateSettings } from "@/server/franchise-rates/settings";
+import { createRateLink, deleteRateLink, getRateLink, listRateLinks, updateRateLink } from "@/server/franchise-rates/links";
+import { audit } from "@/server/audit";
 
 export const metadata = { title: "Franchise Rate List — Admin" };
 
@@ -40,10 +42,44 @@ async function refreshLive() {
   "use server";
   await requireStaff("pricing.write");
   startLiveRefresh();
+  startLiveRefresh(true);
   redirect("/admin/franchise-rate-list/?refreshing=1");
 }
 
-export default async function FranchiseRateListAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; refreshing?: string }> }) {
+/** Personal links: the same page made for one firm, with Shipora X rates on or off per link. */
+async function addLink(fd: FormData) {
+  "use server";
+  const s = await requireStaff("pricing.write");
+  const firm = String(fd.get("firm") ?? "").trim();
+  if (firm.length < 2 || firm.length > 80) redirect("/admin/franchise-rate-list/?err=firm#links");
+  const shipora = fd.get("shipora") === "on";
+  const link = await createRateLink(firm, shipora);
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "franchise_rate_link.created", targetType: "setting", targetId: link.id, details: { firm, shipora } });
+  if (shipora) startLiveRefresh(true);
+  redirect(`/admin/franchise-rate-list/?made=${link.id}#links`);
+}
+
+async function linkShipora(fd: FormData) {
+  "use server";
+  const s = await requireStaff("pricing.write");
+  const link = await getRateLink(String(fd.get("id")));
+  if (!link) redirect("/admin/franchise-rate-list/#links");
+  await updateRateLink(link.id, { shipora: !link.shipora });
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: link.shipora ? "franchise_rate_link.shipora_off" : "franchise_rate_link.shipora_on", targetType: "setting", targetId: link.id });
+  if (!link.shipora) startLiveRefresh(true);
+  redirect("/admin/franchise-rate-list/#links");
+}
+
+async function removeLink(fd: FormData) {
+  "use server";
+  const s = await requireStaff("pricing.write");
+  const id = String(fd.get("id"));
+  await deleteRateLink(id);
+  await audit({ actorUserId: s.userId, actorKind: "staff", action: "franchise_rate_link.deleted", targetType: "setting", targetId: id });
+  redirect("/admin/franchise-rate-list/#links");
+}
+
+export default async function FranchiseRateListAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; err?: string; refreshing?: string; made?: string }> }) {
   const sp = await searchParams;
   const st = await requireStaff("pricing.read");
   const canWrite = can(st.role, "pricing.write");
@@ -51,6 +87,7 @@ export default async function FranchiseRateListAdmin({ searchParams }: { searchP
   const live = await readLivePriceList();
   const liveCount = live ? Object.values(live.cells).flat().filter(Boolean).length : 0;
   const running = isLiveRefreshing();
+  const links = await listRateLinks();
   return (
     <>
       <div className="page-h"><h1>Franchise Rate List</h1></div>
@@ -66,6 +103,34 @@ export default async function FranchiseRateListAdmin({ searchParams }: { searchP
           <div style={{ flex: "1 1 420px", minWidth: 0 }}><CopyLink path="/franchise-rate-list/" /></div>
           <a className="btn btn-sm btn-outline" href="/franchise-rate-list/" target="_blank" rel="noreferrer">Open page</a>
         </div>
+      </section>
+
+      <section className="card mt16" style={{ padding: 18 }} id="links">
+        <h2 className="b" style={{ fontSize: 15, marginTop: 0 }}>Personal links</h2>
+        <p className="small muted" style={{ marginTop: 0, maxWidth: 780 }}>Make a link for one firm: the same page with their firm name on it (“Rates estimation designed for …”). Shipora X rates appear on that link only when you switch them on — the standard page never shows them.</p>
+        {canWrite && (
+          <form action={addLink} className="row wrap" style={{ gap: 10, alignItems: "end" }}>
+            <div className="field" style={{ flex: "1 1 260px" }}><label htmlFor="fr-firm">Firm name</label><input id="fr-firm" name="firm" className="input" required minLength={2} maxLength={80} placeholder="e.g. Maa Ganga Super Collection" /></div>
+            <label className="check small" style={{ paddingBottom: 8 }}><input type="checkbox" name="shipora" /> Include Shipora X rates</label>
+            <button className="btn btn-orange btn-sm">Create link</button>
+          </form>
+        )}
+        {sp.err === "firm" && <p className="small err mt8" role="alert">Enter the firm name (2 to 80 characters).</p>}
+        {sp.made && <p className="small t-credit mt8" role="status">Link created — copy it below and send it.</p>}
+        {links.length === 0 ? <p className="small muted mt12">No personal links yet.</p> : (
+          <div className="tbl-wrap mt12"><table className="tbl"><thead><tr><th>Firm</th><th>Link</th><th>Shipora X</th><th>Created</th><th /></tr></thead>
+            <tbody>{links.map((l) => (
+              <tr key={l.id} style={sp.made === l.id ? { background: "var(--orange-50, #fff7ed)" } : undefined}>
+                <td className="b small">{l.firm}</td>
+                <td style={{ minWidth: 320 }}><CopyLink path={`/franchise-rate-list/for/${l.id}/`} /></td>
+                <td>{canWrite
+                  ? <form action={linkShipora}><input type="hidden" name="id" value={l.id} /><button className={`btn btn-sm ${l.shipora ? "btn-orange" : "btn-outline"}`} title="Switch Shipora X rates on this link">{l.shipora ? "On" : "Off"}</button></form>
+                  : <span className={`chip ${l.shipora ? "c-active" : "c-cancelled"}`}>{l.shipora ? "On" : "Off"}</span>}</td>
+                <td className="tiny muted">{new Date(l.createdAt).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" })}</td>
+                <td><div className="row" style={{ gap: 6 }}><a className="btn btn-sm btn-outline" href={`/franchise-rate-list/for/${l.id}/`} target="_blank" rel="noreferrer">Open</a>{canWrite && <form action={removeLink}><input type="hidden" name="id" value={l.id} /><button className="btn btn-sm btn-outline" title="Delete this link — it stops working">Delete</button></form>}</div></td>
+              </tr>
+            ))}</tbody></table></div>
+        )}
       </section>
 
       <section className="card mt16" style={{ padding: 18 }}>

@@ -87,11 +87,15 @@ function defaultRules(adapter: string, global: Record<ComponentCode, ComponentRu
 }
 
 /** Accounts that may quote for this customer: Active ones, plus accounts in verification for their pilot customers. */
-async function quotingAccounts(orgId: string | null, only?: string) {
+async function quotingAccounts(orgId: string | null, only?: string, includeRestricted = false) {
   const db = await getDb();
+  // Shipora X: only for customers the owner switched on, or a personal rate link that includes it
+  const { RESTRICTED_ADAPTERS, shiporaOrgIds } = await import("@/server/quotes/restricted");
+  const restrictedOk = includeRestricted || (!!orgId && (await shiporaOrgIds()).includes(orgId));
   const rows = await db.select().from(schema.providerAccounts).where(and(eq(schema.providerAccounts.category, "shipping"), ne(schema.providerAccounts.status, "archived")));
   return rows.filter((a) => {
     if (only && a.id !== only) return false;
+    if (RESTRICTED_ADAPTERS.includes(a.adapter) && !restrictedOk) return false;
     if (!adapterFor(a)?.implemented.includes("book")) return false; // never show a rate the customer cannot book (e.g. Shipora X until order-create is documented)
     if (a.status === "enabled") return canTakeBookings(a); // never quote an unverified service, even if switched on
     if (a.status !== "disabled" || !orgId || !a.secretsEnc) return false; // paused accounts never quote
@@ -132,11 +136,11 @@ export type ServiceStatus = {
   category?: string; message?: string; count: number;
 };
 
-export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string; /** Franchise Rate List: exact margin on the courier cost instead of the markup rules. */ markupBps?: number } = {}): Promise<{ offers: QuoteOffer[]; errors: string[]; statuses: ServiceStatus[] }> {
+export async function getQuotes(req: QuoteRequest, orgId: string | null, opts: { persist?: boolean; onlyAccountId?: string; /** Franchise Rate List: exact margin on the courier cost instead of the markup rules. */ markupBps?: number; /** Personal Franchise Rate link with Shipora X switched on. */ includeRestricted?: boolean } = {}): Promise<{ offers: QuoteOffer[]; errors: string[]; statuses: ServiceStatus[] }> {
   const persist = opts.persist ?? true;
   const allowed = await (await import("@/server/couriers")).courierFilter(orgId);
   const db = await getDb();
-  const accounts = (await quotingAccounts(orgId, opts.onlyAccountId)).filter((a) => accountServes(a, req.mode, req));
+  const accounts = (await quotingAccounts(orgId, opts.onlyAccountId, opts.includeRestricted)).filter((a) => accountServes(a, req.mode, req));
   const gst = await getSetting<number>("gst_bps", 1800);
   const rules = await getSetting("component_rules", DEFAULT_COMPONENT_RULES);
   const markupRows = await loadMarkupRows();
