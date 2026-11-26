@@ -7,6 +7,7 @@ import { referralFromCookie } from "@/server/franchise/referral";
 import { googleAvailable, googleCallback, rememberPendingLink } from "@/server/auth/google";
 import { createSession } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { ipFromHeaders } from "@/server/security/rate-limit";
 
 /**
  * Google redirects here. Returning customer (same Google id) → signed in. Email of an existing account → the customer
@@ -24,7 +25,7 @@ export async function GET(req: Request) {
   if (!code || !state) return to("/login/?err=google");
   const r = await googleCallback(code, state);
   if (!r.ok) return to(`/login/?err=google&msg=${encodeURIComponent(r.message)}`);
-  const meta = { ip: (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: req.headers.get("user-agent") ?? "" };
+  const meta = { ip: ipFromHeaders(req.headers), ua: req.headers.get("user-agent") ?? "" };
   const db = await getDb();
   if (r.next === "/admin" || r.next.startsWith("/admin/")) {
     const [st] = await db.select().from(schema.users).where(and(eq(schema.users.kind, "staff"), eq(schema.users.email, r.id.email)));

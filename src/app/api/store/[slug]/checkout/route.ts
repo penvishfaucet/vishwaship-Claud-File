@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { readSettings } from "@/lib/store-themes";
 import { apiError, parseJson } from "@/server/http";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { currentBuyer, rememberAddress } from "@/server/store/buyers";
 import { CheckoutError, CheckoutInput, PAY_METHODS, assertOrdersOpen, confirmCheckoutPayment, liveStore, placeOrder, quoteCart } from "@/server/store/checkout";
 
 type Ctx = { params: Promise<{ slug: string }> };
-const ip = (req: Request) => (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+const ip = (req: Request) => ipFromHeaders(req.headers);
 const fail = (e: unknown) => {
   if (e instanceof CheckoutError) return apiError(422, "validation_error", e.message, e.field ? { field: e.field } : undefined);
   console.error("[store checkout]", (e as Error).message);

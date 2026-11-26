@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJson } from "@/server/http";
 import { PhoneTokenError, verifyFirebasePhoneToken } from "@/server/auth/firebase-phone";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { AddressInput, BuyerError, buyerOtpConfig, chargeOtpCredits, currentBuyer, deleteAddress, loginWithEmailCode, loginWithPhoneToken, logoutBuyer, sendEmailCode, updateProfile, upsertAddress } from "@/server/store/buyers";
 import { CheckoutError, liveStore } from "@/server/store/checkout";
 
@@ -22,7 +22,7 @@ const Body = z.discriminatedUnion("op", [
 
 export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
-  const ip = (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+  const ip = ipFromHeaders(req.headers);
   if (!(await rateLimit(`sf-account:${ip}`, 60, 600)).ok) return apiError(429, "rate_limited", "Too many attempts. Please wait a few minutes.");
   const p = await parseJson(req, Body); if (!p.ok) return p.res;
   const b = p.data;

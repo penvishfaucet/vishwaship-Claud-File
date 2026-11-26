@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
 import { audit } from "@/server/audit";
 import { hashPassword, verifyPassword } from "@/server/security/crypto";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { newId } from "@/server/util/ids";
 import { createSession, destroySession, readSession, revokeAllSessions } from "./session";
 import { consumeResetOtp, consumeSignupOtp } from "./signup-otp";
@@ -18,7 +18,7 @@ export type FormState = { error?: string; ok?: string } | undefined;
 
 async function meta() {
   const h = await headers();
-  return { ip: (h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: h.get("user-agent") ?? "" };
+  return { ip: ipFromHeaders(h), ua: h.get("user-agent") ?? "" };
 }
 
 const normalizeMobile = (s: string) => {

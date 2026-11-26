@@ -5,6 +5,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { audit } from "@/server/audit";
 import { createSession, destroySession, readSession, requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { ipFromHeaders } from "@/server/security/rate-limit";
 
 const IMPERSONATION_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -25,7 +26,7 @@ export async function loginAsCustomer(fd: FormData) {
   if (!user) redirect(`/admin/customers/${orgId}/?msg=nouser`);
   const h = await headers();
   await createSession(user.id, "customer", {
-    ip: (h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: h.get("user-agent") ?? "",
+    ip: ipFromHeaders(h), ua: h.get("user-agent") ?? "",
     impersonatorId: s.userId, ttlMs: IMPERSONATION_TTL_MS,
   });
   await audit({ actorUserId: s.userId, actorKind: "staff", orgId, action: "customer.impersonate_start", targetType: "user", targetId: user.id, details: { business: org.businessName } });

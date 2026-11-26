@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJson } from "@/server/http";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { currentBuyer } from "@/server/store/buyers";
 import { CheckoutError, liveStore } from "@/server/store/checkout";
 import { buyerOrder, buyerOwnOrder } from "@/server/store/orders";
@@ -12,7 +12,7 @@ const Body = z.object({ number: z.string().max(40), token: z.string().max(80).de
 
 export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
-  const ip = (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+  const ip = ipFromHeaders(req.headers);
   if (!(await rateLimit(`sf-return:${ip}`, 10, 600)).ok) return apiError(429, "rate_limited", "Too many attempts. Please wait a few minutes.");
   const p = await parseJson(req, Body); if (!p.ok) return p.res;
   try {

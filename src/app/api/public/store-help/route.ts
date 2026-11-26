@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/server/db/client";
 import { readSession } from "@/server/auth/session";
 import { apiError, parseJson } from "@/server/http";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { newId } from "@/server/util/ids";
 
 const Input = z.object({
@@ -16,7 +16,7 @@ const Input = z.object({
 
 /** "Request help" on the Create Your Online Store page. Shows up in Admin → Online Stores. */
 export async function POST(req: Request) {
-  const ip = (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+  const ip = ipFromHeaders(req.headers);
   if (!(await rateLimit(`store-help:${ip}`, 5, 3600)).ok) return apiError(429, "rate_limited", "Too many requests. Please try again later.");
   const p = await parseJson(req, Input); if (!p.ok) return p.res;
   if (p.data.website) return NextResponse.json({ ok: true }); // bot filled the honeypot

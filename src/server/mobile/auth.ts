@@ -6,6 +6,7 @@ import { sha256, verifyPassword } from "@/server/security/crypto";
 import { randomToken } from "@/server/util/ids";
 import { newId } from "@/server/util/ids";
 import { MOBILE_TOKEN_PREFIX } from "@/server/auth/session";
+import { ipFromHeaders } from "@/server/security/rate-limit";
 
 /**
  * Android app sessions. They live in the same `sessions` table as browser sessions (same user, same org,
@@ -94,5 +95,5 @@ export function isMobileRequest(req: Request) {
 }
 
 export function requestMeta(req: Request) {
-  return { ip: (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: req.headers.get("user-agent") ?? "" };
+  return { ip: ipFromHeaders(req.headers), ua: req.headers.get("user-agent") ?? "" };
 }

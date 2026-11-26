@@ -6,7 +6,7 @@ import { audit } from "@/server/audit";
 import { createSession, destroySession } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
 import { verifyPassword } from "@/server/security/crypto";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { franchiseForUser, consumeSetupToken } from "./portal";
 import { FranchiseError } from "./service";
 
@@ -14,7 +14,7 @@ export type FrFormState = { error?: string } | undefined;
 
 async function meta() {
   const h = await headers();
-  return { ip: (h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim(), ua: h.get("user-agent") ?? "" };
+  return { ip: ipFromHeaders(h), ua: h.get("user-agent") ?? "" };
 }
 
 export async function franchiseLogin(_: FrFormState, fd: FormData): Promise<FrFormState> {

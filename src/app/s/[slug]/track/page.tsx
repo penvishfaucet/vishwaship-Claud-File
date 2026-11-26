@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { StoreShell } from "@/components/store/Storefront";
-import { rateLimit } from "@/server/security/rate-limit";
+import { ipFromHeaders, rateLimit } from "@/server/security/rate-limit";
 import { ensurePublicRef } from "@/server/tracking/service";
 import { type PublicTrack, publicTrack } from "@/server/tracking/public";
 import { FULFILMENT_LABEL, PAYMENT_LABEL, buyerOrderByMobile } from "@/server/store/orders";
@@ -27,7 +27,7 @@ export default async function Track({ params, searchParams }: { params: SfParams
   let soMissing = false;
   let liveRef: string | null = null;
   if ((q || (orderNo && mob)) && !sf.demo) {
-    const ip = ((await headers()).get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+    const ip = ipFromHeaders(await headers());
     limited = !(await rateLimit(`track:${ip}`, 20, 600)).ok;
     if (!limited && q) { try { r = await publicTrack(q); } catch { r = null; } }
     if (!limited && orderNo && mob) { so = await buyerOrderByMobile(sf.id, orderNo, mob); soMissing = !so; }

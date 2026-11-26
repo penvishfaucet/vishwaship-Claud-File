@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { publicOrigin } from "@/server/public-origin";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { CheckoutError, confirmGatewayReturn } from "@/server/store/checkout";
 
 /**
@@ -12,7 +12,7 @@ async function handle(req: Request, ctx: { params: Promise<{ slug: string }> }) 
   const u = new URL(req.url);
   const o = u.searchParams.get("o") ?? "", t = u.searchParams.get("t") ?? "";
   const back = (path: string) => NextResponse.redirect(new URL(path, publicOrigin(req)), 303);
-  const ip = (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+  const ip = ipFromHeaders(req.headers);
   if (!(await rateLimit(`sf-payret:${ip}`, 40, 600)).ok || !/^[A-Za-z0-9_-]{4,60}$/.test(o) || !/^[A-Za-z0-9_-]{8,60}$/.test(t)) return back(`/s/${encodeURIComponent(slug)}/`);
   try {
     const r = await confirmGatewayReturn(slug, o, t);

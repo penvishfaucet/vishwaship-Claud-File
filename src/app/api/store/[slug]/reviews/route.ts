@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiError, parseJson } from "@/server/http";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { StoreError } from "@/server/store/catalog";
 import { CheckoutError, liveStore } from "@/server/store/checkout";
 import { ReviewInput, addReview } from "@/server/store/reviews";
 
 type Ctx = { params: Promise<{ slug: string }> };
-const ip = (req: Request) => (req.headers.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+const ip = (req: Request) => ipFromHeaders(req.headers);
 
 /** A buyer posts a product review (published at once). Capped per IP to stop floods. */
 export async function POST(req: Request, ctx: Ctx) {

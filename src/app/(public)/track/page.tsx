@@ -3,7 +3,7 @@ import { OneShipment } from "@/components/tracking/ShipmentTracking";
 import Link from "next/link";
 import { CheckCircle2, Clock, MapPin, PackageSearch, Search, Truck } from "lucide-react";
 import { carrierLogo } from "@/lib/site";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { type PublicTrack, publicTrack } from "@/server/tracking/public";
 import { getSiteContent } from "@/server/site/content";
 import { pageMeta } from "@/lib/seo";
@@ -22,7 +22,7 @@ export default async function TrackPage({ searchParams }: { searchParams: Promis
   let limited = false, failed = false;
   if (q && c.features.tracking) {
     const h = await headers();
-    const ip = (h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim();
+    const ip = ipFromHeaders(h);
     // Anti-enumeration: 20 lookups / 10 min per IP; the same "not found" for every unknown number.
     const rl = await rateLimit(`track:${ip}`, 20, 600);
     limited = !rl.ok;

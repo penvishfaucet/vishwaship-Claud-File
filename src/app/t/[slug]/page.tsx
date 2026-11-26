@@ -5,7 +5,7 @@ import { BuyerTracking } from "@/components/public/BuyerTracking";
 import { EmbedResize } from "@/components/public/EmbedResize";
 import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
-import { rateLimit } from "@/server/security/rate-limit";
+import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { buyerShipmentByRef } from "@/server/tracking/buyer";
 import { liveBranding } from "@/server/tracking/pages";
 import { ensurePublicRef } from "@/server/tracking/service";
@@ -33,7 +33,7 @@ export default async function TrackingEntry({ params, searchParams }: { params: 
   let notFoundMsg = false, limited = false;
   if (q?.trim()) {
     const h = await headers();
-    const rl = await rateLimit(`ptrack:${slug}:${(h.get("x-forwarded-for")?.split(",")[0] ?? "local").trim()}`, 20, 600);
+    const rl = await rateLimit(`ptrack:${slug}:${ipFromHeaders(h)}`, 20, 600);
     if (!rl.ok) limited = true;
     else {
       const v = q.trim();
