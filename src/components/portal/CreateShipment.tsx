@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { AddressForm, type SavedWarehouse } from "@/components/portal/AddressForm";
 import { formatINR } from "@/lib/money";
+import { DIM_UNITS, convertDim, toCm, type DimUnit } from "@/lib/dims";
 import { guessPincode } from "@/lib/pincodes";
 import { FOD_RULE_TEXT, fodAllowed, paymentTypeOf } from "@/lib/payment";
 import { carrierLogo } from "@/lib/site";
@@ -84,17 +85,24 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
   const [saved, setSaved] = useState<null | { id: string; as: "draft" | "ready"; codHold: boolean }>(null);
   const [done, setDone] = useState<{ awb: string | null; shipmentId: string; state: string } | null>(null);
 
+  // Box sizes are typed in cm, inch or feet; everything below (volumetric, rates, booking, couriers) uses cm.
+  const [unit, setUnit] = useState<DimUnit>("cm");
+  const u = DIM_UNITS.find((x) => x.id === unit)!.short;
+  const inUnit = (pk: Pkg): Pkg => ({ ...pk, l: convertDim(pk.l, "cm", unit), b: convertDim(pk.b, "cm", unit), h: convertDim(pk.h, "cm", unit) });
+  const changeUnit = (to: DimUnit) => { if (to === unit) return; setPkgs(pkgs.map((pk) => ({ ...pk, l: convertDim(pk.l, unit, to), b: convertDim(pk.b, unit, to), h: convertDim(pk.h, unit, to) }))); setUnit(to); };
+  const cmPkgs = useMemo(() => pkgs.map((p) => ({ ...p, l: toCm(p.l, unit), b: toCm(p.b, unit), h: toCm(p.h, unit) })), [pkgs, unit]);
+
   const wh = whs.find((w) => w.id === warehouseId) ?? whs[0];
   const weights = useMemo(() => {
     let actual = 0, vol = 0, boxes = 0;
-    const per = pkgs.map((p) => {
-      const n = Number(p.count) || 0, l = Number(p.l) || 0, b = Number(p.b) || 0, h = Number(p.h) || 0, w = Number(p.w) || 0;
+    const per = cmPkgs.map((p) => {
+      const n = Number(p.count) || 0, l = p.l, b = p.b, h = p.h, w = Number(p.w) || 0;
       const v = (l * b * h) / 5000;
       actual += w * n; vol += v * n; boxes += n;
       return { v, w, n };
     });
     return { actual, vol, boxes, per };
-  }, [pkgs]);
+  }, [cmPkgs]);
   const suggested: "B2C" | "B2B" = Math.max(weights.actual, weights.vol) * 1000 >= props.b2bThresholdGrams ? "B2B" : "B2C";
   const mode = suggested; // fixed by weight: the customer cannot switch it
   // FOD only for parcels over 15 kg: below that the freight goes back to Prepaid (COD stays as chosen)
@@ -236,7 +244,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       const r = await fetch("/api/portal/quote", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         mode, originPincode: wh.pincode, destinationPincode: c.pincode, paymentType: payment,
         codAmountRupees: codOn ? Number(cod) : 0, declaredValueRupees: declaredValue,
-        packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
+        packages: cmPkgs.map((p) => ({ count: Number(p.count), lengthCm: p.l, breadthCm: p.b, heightCm: p.h, weightKg: Number(p.w) })),
       }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error?.message ?? "Could not fetch rates");
@@ -256,7 +264,7 @@ export function CreateShipment(props: { warehouses: WH[]; walletPaise: number; b
       consignee: { ...c, mobile: c.mobile, email: c.email || undefined, line2: c.line2 || undefined },
       products: (as === "draft" && !named.length ? [{ name: "Item", qty: "1", price: "", hsn: "" }] : as === "draft" ? named : products)
         .map((p) => ({ name: p.name, qty: Number(p.qty) || 1, unitPriceRupees: Number(p.price) || 0, hsn: p.hsn || undefined })),
-      packages: pkgs.map((p) => ({ count: Number(p.count), lengthCm: Number(p.l), breadthCm: Number(p.b), heightCm: Number(p.h), weightKg: Number(p.w) })),
+      packages: cmPkgs.map((p) => ({ count: Number(p.count), lengthCm: p.l, breadthCm: p.b, heightCm: p.h, weightKg: Number(p.w) })),
       invoiceNumber: invoice || undefined, ewayBill: eway || undefined, tagIds, saveBuyer,
     };
     const r = await fetch(orderId ? `/api/portal/orders/${orderId}` : "/api/portal/orders", { method: orderId ? "PUT" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -504,7 +512,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                     const p = lib.products.find((x) => x.id === e.target.value); if (!p) return;
                     const row = { name: `${p.name} (${p.sku})`, qty: "1", price: String(p.price), hsn: p.hsn };
                     setProducts(products.length === 1 && !products[0].name ? [row] : [...products, row]);
-                    if (p.weightKg > 0 && pkgs.length === 1 && p.l > 0) setPkgs([{ count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(p.weightKg) }]);
+                    if (p.weightKg > 0 && pkgs.length === 1 && p.l > 0) setPkgs([inUnit({ count: "1", l: String(p.l), b: String(p.b), h: String(p.h), w: String(p.weightKg) })]);
                   }}><option value="">Add saved product…</option>{lib.products.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.sku}</option>)}</select></>}
                   <button type="button" className="btn btn-sm btn-outline" onClick={() => setProducts([...products, { name: "", qty: "1", price: "", hsn: "" }])}><Plus size={14} /> Add product</button></span></div>
                 {products.map((p, i) => (
@@ -522,11 +530,15 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                   <h2 className="b" style={{ fontSize: 15, margin: 0 }}>Packages</h2>
                   <div className="row wrap" style={{ gap: 6 }}>
                     <label className="sr-only" htmlFor="preset">Package preset</label>
-                    <select id="preset" className="select" style={{ maxWidth: 200 }} value="" onChange={(e) => { const p = allPresets[Number(e.target.value)]; if (p) setPkgs([...pkgs, { ...p.pkg }]); }}>
+                    <select id="preset" className="select" style={{ maxWidth: 200 }} value="" onChange={(e) => { const p = allPresets[Number(e.target.value)]; if (p) setPkgs([...pkgs, inUnit(p.pkg)]); }}>
                       <option value="">Add from preset…</option>{allPresets.map((p, i) => <option key={p.label + i} value={i}>{i < myPresets.length ? "★ " : ""}{p.label}</option>)}
                     </select>
-                    
                   </div>
+                </div>
+                <div className="row wrap mt12" style={{ gap: 8, alignItems: "center" }} role="radiogroup" aria-label="Box size unit">
+                  <span className="small b">Box size in</span>
+                  {DIM_UNITS.map((x) => <button key={x.id} type="button" role="radio" aria-checked={unit === x.id} className={`btn btn-sm ${unit === x.id ? "btn-orange" : "btn-outline"}`} onClick={() => changeUnit(x.id)}>{x.label}</button>)}
+                  {unit !== "cm" && <span className="tiny muted">Converted to cm for rates and booking</span>}
                 </div>
                 <div className="box-list mt12">
                   {pkgs.map((p, i) => {
@@ -535,14 +547,14 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                       <div key={i} className="box-card" aria-label={`Box ${i + 1}`}>
                         <div className="box-card-h"><b>Box {i + 1}</b>{pkgs.length > 1 && <button type="button" className="icon-btn" aria-label={`Remove box ${i + 1}`} onClick={() => setPkgs(pkgs.filter((_, j) => j !== i))}><Trash2 size={16} /></button>}</div>
                         <div className="box-dims">
-                          <div className="field"><label htmlFor={`bl${i}`}>Length (cm)</label><input id={`bl${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.l} onChange={(e) => set("l", e.target.value)} /></div>
-                          <div className="field"><label htmlFor={`bb${i}`}>Breadth (cm)</label><input id={`bb${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.b} onChange={(e) => set("b", e.target.value)} /></div>
-                          <div className="field"><label htmlFor={`bh${i}`}>Height (cm)</label><input id={`bh${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.h} onChange={(e) => set("h", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bl${i}`}>Length ({u})</label><input id={`bl${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.l} onChange={(e) => set("l", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bb${i}`}>Breadth ({u})</label><input id={`bb${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.b} onChange={(e) => set("b", e.target.value)} /></div>
+                          <div className="field"><label htmlFor={`bh${i}`}>Height ({u})</label><input id={`bh${i}`} className="input" type="number" min="0" inputMode="decimal" value={p.h} onChange={(e) => set("h", e.target.value)} /></div>
                         </div>
                         <div className="box-dims">
                           <div className="field"><label htmlFor={`bw${i}`}>Weight of this box (kg)</label><input id={`bw${i}`} className="input" type="number" min="0" step="0.01" inputMode="decimal" value={p.w} onChange={(e) => set("w", e.target.value)} /></div>
                           <div className="field"><label htmlFor={`bc${i}`}>Same boxes</label><input id={`bc${i}`} className="input" type="number" min="1" inputMode="numeric" value={p.count} onChange={(e) => set("count", e.target.value)} /></div>
-                          <div className="box-vol tiny muted">Volumetric {weights.per[i]?.v.toFixed(2) ?? "0.00"} kg</div>
+                          <div className="box-vol tiny muted">{unit !== "cm" && cmPkgs[i]?.l > 0 && cmPkgs[i]?.b > 0 && cmPkgs[i]?.h > 0 && <>{cmPkgs[i].l} × {cmPkgs[i].b} × {cmPkgs[i].h} cm · </>}Volumetric {weights.per[i]?.v.toFixed(2) ?? "0.00"} kg</div>
                         </div>
                       </div>
                     );
@@ -553,7 +565,7 @@ Book at ${formatINR(j.error.newTotal)}?`)) throw new Error("Booking not submitte
                 <div className="row wrap mt12" style={{ gap: 16 }}>
                   <span className="small">Boxes <b>{weights.boxes}</b></span>
                   <span className="small">Actual <b>{weights.actual.toFixed(2)} kg</b></span>
-                  <span className="small">Volumetric <b>{weights.vol.toFixed(2)} kg</b> <span className="muted tiny">(L×B×H ÷ 5000; courier divisor may differ)</span></span>
+                  <span className="small">Volumetric <b>{weights.vol.toFixed(2)} kg</b> <span className="muted tiny">(L×B×H in cm ÷ 5000; courier divisor may differ)</span></span>
                 </div>
                 <fieldset className="pay-box mt12">
                   <legend className="small b">Freight payment</legend>
