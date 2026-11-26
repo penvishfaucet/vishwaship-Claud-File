@@ -5,6 +5,9 @@ import { z } from "zod";
 import { audit } from "@/server/audit";
 import { getDb, schema } from "@/server/db/client";
 import { portalContext } from "@/server/portal/context";
+import { enqueue } from "@/server/jobs/runner";
+import { newId } from "@/server/util/ids";
+import { nextWarehouseCode } from "@/server/warehouses";
 
 export type ProfileState = { error?: string; field?: string } | undefined;
 
@@ -37,5 +40,14 @@ export async function saveProfile(_: ProfileState, fd: FormData): Promise<Profil
     address: { line1: v.line1, line2: v.line2, city: v.city, state: v.state, pincode: v.pincode }, profileCompletedAt: new Date(),
   }).where(eq(schema.orgs.id, ctx.org.id));
   await audit({ actorUserId: ctx.session.userId, actorKind: ctx.session.impersonatorId ? "staff" : "customer", orgId: ctx.org.id, action: "profile.completed" });
+  // No pickup address yet → this address becomes the default pickup address (registered with the couriers like any other).
+  const [wh] = await db.select({ id: schema.warehouses.id }).from(schema.warehouses).where(and(eq(schema.warehouses.orgId, ctx.org.id), eq(schema.warehouses.active, true))).limit(1);
+  if (!wh) {
+    const id = newId("wh");
+    await db.insert(schema.warehouses).values({ id, orgId: ctx.org.id, label: "Primary pickup", contactName: v.name, mobile: v.mobile, line1: v.line1, line2: v.line2 || null, pincode: v.pincode, city: v.city, state: v.state,
+      email: ctx.session.email || null, isDefault: true, code: await nextWarehouseCode(), createdBy: v.name });
+    await audit({ actorUserId: ctx.session.userId, actorKind: ctx.session.impersonatorId ? "staff" : "customer", orgId: ctx.org.id, action: "warehouse.create", targetType: "warehouse", targetId: id, details: { from: "profile" } });
+    await enqueue("warehouse.sync", { warehouseId: id }, { dedupeKey: `warehouse.sync:${id}:0` });
+  }
   redirect(ctx.org.kycStatus === "approved" ? "/portal/" : "/portal/kyc/");
 }

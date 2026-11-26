@@ -58,7 +58,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const offers = await getSiteContent().then((c) => c.offers).catch(() => DEFAULTS.offers);
   // Onboarding: a new account finishes its profile first; then KYC → admin review → Active.
   const ob = await onboardingState(ctx.org.id);
-  // no forced redirect: a new account sees the whole portal; the card below and the KYC reminder show the next step
+  // Profile not finished and no mobile number yet (e.g. signed up with Google) → Complete Your Profile first, so we can reach them.
+  if (ob.step === "profile" && !ctx.session.impersonatorId) {
+    const [me] = await getDb().then((db) => db.select({ mobile: schema.users.mobile }).from(schema.users).where(eq(schema.users.id, ctx.session.userId)));
+    if (!me?.mobile) redirect("/portal/onboarding/");
+  }
   const step = STEP_TEXT[ob.step];
   const kycNote = ob.step !== "active" ? (
     <div className="ob-card" role="status">

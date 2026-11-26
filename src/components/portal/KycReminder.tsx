@@ -5,10 +5,10 @@ import { BadgePercent, X } from "lucide-react";
 
 type Step = "profile" | "kyc" | "review" | "resubmit";
 const TEXT: Record<Step, { title: string; body: string; cta?: { label: string; href: string } }> = {
-  profile: { title: "Get the best rates with KYC", body: "Your account is ready — explore everything. Add your business details, then complete KYC to unlock our best (bulk) shipping rates.", cta: { label: "Complete Profile", href: "/portal/onboarding/" } },
-  kyc: { title: "Complete KYC for the best rates", body: "You can book shipments right now at standard rates. Get your KYC approved to unlock our best (bulk) shipping rates on every courier.", cta: { label: "Complete KYC", href: "/portal/kyc/" } },
-  review: { title: "KYC under review", body: "Thanks for submitting your KYC. Our best (bulk) rates apply as soon as it is approved — keep shipping at standard rates meanwhile." },
-  resubmit: { title: "KYC needs a quick update", body: "Some KYC details need changes. Resubmit them to unlock our best (bulk) shipping rates.", cta: { label: "Resubmit KYC", href: "/portal/kyc/" } },
+  profile: { title: "Please approve your KYC for the best business rates", body: "Your account is ready. Add your mobile number and pickup address, then upload your KYC — business rates are activated as soon as it is approved.", cta: { label: "Complete Profile", href: "/portal/onboarding/" } },
+  kyc: { title: "Please approve your KYC for the best business rates", body: "You can book shipments right now at standard rates. Upload your KYC — we activate business rates on every courier as soon as it is approved.", cta: { label: "Complete KYC", href: "/portal/kyc/" } },
+  review: { title: "KYC under review", body: "Thanks for submitting your KYC. Business rates are activated as soon as it is approved — keep shipping at standard rates meanwhile." },
+  resubmit: { title: "KYC needs a quick update", body: "Some KYC details need changes. Resubmit them to get business rates activated.", cta: { label: "Resubmit KYC", href: "/portal/kyc/" } },
 };
 
 /**

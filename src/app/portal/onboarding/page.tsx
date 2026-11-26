@@ -33,7 +33,7 @@ export default async function OnboardingPage() {
           {st.step === "active" && <>Your account is active. <Link className="link" href="/portal/orders/create/">Create an order</Link></>}
         </div>
       )}
-      <p className="small muted" style={{ margin: 0 }}>We use these details on invoices, pickups and KYC. Fields marked * are required.</p>
+      <p className="small muted" style={{ margin: 0 }}>We use these details on invoices, pickups and KYC, and call you on this mobile number for your queries. This address is also saved as your pickup address (you can add more under Addresses). Enter the PIN code and City / State fill in by themselves. Fields marked * are required.</p>
       <ProfileForm init={{ name: u?.name ?? "", mobile: u?.mobile ?? "", business: ctx.org.businessName === u?.name ? "" : ctx.org.businessName, gstin: ctx.org.gstin ?? "", volume: ctx.org.expectedMonthlyVolume ?? "",
         line1: a.line1 ?? "", line2: a.line2 ?? "", pincode: a.pincode ?? "", city: a.city ?? "", state: a.state ?? "" }} />
     </div>

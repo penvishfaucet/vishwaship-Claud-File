@@ -168,3 +168,5 @@ html body .gp-btns{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
   .gp *,.gp-run .track,.gp-pop{animation:none!important;transition:none!important}
   .gp-run{white-space:normal}.gp-run .track{flex-wrap:wrap}
 }
+.gp-run.portal.kyc{background:linear-gradient(90deg,#C94A0A,#FE6519)}
+.gp-run.portal.kyc .it b{color:#fff3c4}

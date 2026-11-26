@@ -12,6 +12,7 @@ import { resolveFeatures } from "@/server/features";
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 import { KycReminder } from "@/components/portal/KycReminder";
+import { KycRunBar } from "@/components/portal/KycRunBar";
 import { onboardingState } from "@/server/onboarding";
 import { sha256 } from "@/server/security/crypto";
 import { weightCounts } from "@/server/weight/courier-dispute";
@@ -74,6 +75,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       )}
       {kycPending && !viewingAsAdmin && <KycReminder step={ob.step as "profile" | "kyc" | "review" | "resubmit"} sessionKey={sha256(ctx.session.sessionId).slice(0, 16)} />}
+      {kycPending && !viewingAsAdmin && <KycRunBar step={ob.step as "profile" | "kyc" | "review" | "resubmit"} />}
       {shippingOnly && !viewingAsAdmin && <GrowthRunBar portal href={f.modules.online_store.enabled ? "/portal/store/" : "/online-store/"} />}
       {children}
     </PortalShell>

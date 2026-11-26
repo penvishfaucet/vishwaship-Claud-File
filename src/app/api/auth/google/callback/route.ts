@@ -52,5 +52,6 @@ export async function GET(req: Request) {
   const userId = await createCustomerAccount({ name: r.id.name, email: r.id.email, googleSub: r.id.sub, via: "google", referralCode: await referralFromCookie() });
   if (!userId) return to("/login/?err=google");
   await createSession(userId, "customer", meta);
-  return to("/portal/");
+  // new account: mobile number, name and pickup address first
+  return to("/portal/onboarding/");
 }
