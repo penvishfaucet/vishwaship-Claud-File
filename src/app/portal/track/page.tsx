@@ -14,6 +14,7 @@ import { OneShipment } from "@/components/tracking/ShipmentTracking";
 import { buildMilestones, buildScans } from "@/lib/tracking-timeline";
 import { hideProviders } from "@/server/customer-safe";
 import { podView } from "@/server/tracking/pod";
+import { ShareTracking } from "@/components/portal/ShareTracking";
 
 const fmt = (d: Date) => d.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -63,6 +64,7 @@ export default async function PortalTrack({ searchParams }: { searchParams: Prom
               <dt>Last update</dt><dd>{s.lastEventAt ? fmt(s.lastEventAt) : "—"}</dd>
               <dt>Buyer tracking link</dt><dd className="small" style={{ wordBreak: "break-all" }}><a className="link" href={shareUrl} target="_blank" rel="noopener">{shareUrl}</a></dd>
             </dl>
+            <ShareTracking url={shareUrl} orderNumber={o.orderNumber} business={ctx.org.businessName} buyerMobile={(o.consignee as { mobile?: string } | null)?.mobile ?? null} />
             <RefreshTracking shipmentId={s.id} />
             <div className="st-dialog mt12">
               <OneShipment labelled={false} s={{ id: s.id, awb: s.awb, carrierName: s.carrierName, statusLabel: statusLabel(s.status), milestones: buildMilestones(events, s.status, s.createdAt), scans: buildScans(events, (x) => hideProviders(x)),

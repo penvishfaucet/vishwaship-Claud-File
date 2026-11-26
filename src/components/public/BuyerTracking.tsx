@@ -72,7 +72,7 @@ export function BuyerTracking({ brand, shipment, footer, preview, children }: { 
           <section style={{ marginTop: 16, background: "#fff", border: "1px solid #e7e5df", borderRadius: 16, padding: 16, fontSize: 14 }}>
             <b style={{ color: primary }}>Need help with your order?</b>
             <div style={{ marginTop: 6 }}>
-              {brand.supportPhone && <div>Call <a href={`tel:${brand.supportPhone.replace(/\s/g, "")}`} style={{ color: accent, fontWeight: 700 }}>{brand.supportPhone}</a>{brand.supportHours ? ` (${brand.supportHours})` : ""}</div>}
+              {brand.supportPhone && <div>Call <a href={`tel:${brand.supportPhone.replace(/\s/g, "")}`} style={{ color: accent, fontWeight: 700 }}>{brand.supportPhone}</a>{brand.supportHours ? ` (${brand.supportHours})` : ""}{brand.supportPhone.replace(/\D/g, "").length >= 10 && <> · <a href={`https://wa.me/${(() => { const d = brand.supportPhone.replace(/\D/g, ""); return d.length === 10 ? `91${d}` : d; })()}`} target="_blank" rel="noopener" style={{ color: accent, fontWeight: 700 }}>WhatsApp</a></>}</div>}
               {brand.supportEmail && <div>Email <a href={`mailto:${brand.supportEmail}`} style={{ color: accent, fontWeight: 700 }}>{brand.supportEmail}</a></div>}
             </div>
           </section>

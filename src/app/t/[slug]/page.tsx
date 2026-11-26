@@ -7,7 +7,7 @@ import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
 import { rateLimit, ipFromHeaders } from "@/server/security/rate-limit";
 import { buyerShipmentByRef } from "@/server/tracking/buyer";
-import { liveBranding } from "@/server/tracking/pages";
+import { buyerBranding, liveBranding } from "@/server/tracking/pages";
 import { ensurePublicRef } from "@/server/tracking/service";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function TrackingEntry({ params, searchParams }: { params: 
   const { q } = await searchParams;
   const footer = await t("public.tracking.footer");
   const byRef = await buyerShipmentByRef(slug);
-  if (byRef) return <><EmbedResize /><BuyerTracking brand={await liveBranding(byRef.orgId)} shipment={byRef.shipment} footer={footer} /></>;
+  if (byRef) return <><EmbedResize /><BuyerTracking brand={await buyerBranding(byRef.orgId)} shipment={byRef.shipment} footer={footer} /></>;
 
   const db = await getDb();
   const [page] = await db.select().from(schema.trackingPages).where(eq(schema.trackingPages.slug, slug));

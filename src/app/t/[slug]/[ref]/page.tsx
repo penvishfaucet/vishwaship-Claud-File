@@ -5,7 +5,7 @@ import { EmbedResize } from "@/components/public/EmbedResize";
 import { t } from "@/server/content";
 import { getDb, schema } from "@/server/db/client";
 import { buyerShipmentByRef } from "@/server/tracking/buyer";
-import { liveBranding } from "@/server/tracking/pages";
+import { buyerBranding } from "@/server/tracking/pages";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Track your order", robots: { index: false } };
@@ -17,5 +17,5 @@ export default async function BrandedTracking({ params }: { params: Promise<{ sl
   const [page] = await db.select().from(schema.trackingPages).where(eq(schema.trackingPages.slug, slug));
   const found = await buyerShipmentByRef(ref);
   if (!page || !found || found.orgId !== page.orgId) notFound();
-  return <><EmbedResize /><BuyerTracking brand={await liveBranding(page.orgId)} shipment={found.shipment} footer={await t("public.tracking.footer")} /></>;
+  return <><EmbedResize /><BuyerTracking brand={await buyerBranding(page.orgId)} shipment={found.shipment} footer={await t("public.tracking.footer")} /></>;
 }
