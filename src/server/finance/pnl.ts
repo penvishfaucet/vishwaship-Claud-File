@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/server/db/client";
 import { getSetting } from "@/server/quotes/service";
+import { ownAccountIds } from "@/server/finance/own-accounts";
 
 /**
  * Profit & loss per customer and overall (Admin only — figures include Vishwaship's courier cost).
@@ -30,7 +31,7 @@ type Q = Record<string, string | number | null>;
 const rowsOf = (r: unknown) => (((r as { rows?: Q[] }).rows ?? (r as Q[])) as Q[]);
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
-export async function pnlByOrg(range: PnlRange, orgId?: string): Promise<{ rows: PnlRow[]; total: PnlRow; gstBps: number }> {
+export async function pnlByOrg(range: PnlRange, orgId?: string): Promise<{ rows: PnlRow[]; own: PnlRow[]; total: PnlRow; gstBps: number }> {
   const db = await getDb();
   const gstBps = Number((await getSetting<number>("gst_bps", 1800)).value) || 1800;
   const pre = (paise: number) => Math.round((paise * 10_000) / (10_000 + gstBps));
@@ -86,9 +87,13 @@ export async function pnlByOrg(range: PnlRange, orgId?: string): Promise<{ rows:
     };
   });
   rows.sort((a, b) => b.profit - a.profit);
+  // the owner's own accounts are left out of the overall P&L (a single customer's own P&L still shows them)
+  const ownIds = new Set(orgId ? [] : await ownAccountIds());
+  const own = rows.filter((r) => ownIds.has(r.orgId));
+  const counted = rows.filter((r) => !ownIds.has(r.orgId));
   const keys: Array<keyof PnlRow> = ["shipments", "shippingGross", "shippingRevenue", "courierCost", "quotedCost", "carrierExtra", "weightNet", "weightRevenue", "creditsRevenue", "adjustmentsNet", "revenue", "profit", "gstCollected", "recharged", "walletBalance", "consumed", "fodFreight", "openDisputes", "lossShipments"];
   const total = { orgId: "all", name: "All customers", marginPct: null } as PnlRow;
-  for (const k of keys) (total as Record<string, unknown>)[k] = rows.reduce((t, r) => t + (r[k] as number), 0);
+  for (const k of keys) (total as Record<string, unknown>)[k] = counted.reduce((t, r) => t + (r[k] as number), 0);
   total.marginPct = total.revenue > 0 ? Math.round((total.profit * 1000) / total.revenue) / 10 : null;
-  return { rows, total, gstBps };
+  return { rows: counted, own, total, gstBps };
 }

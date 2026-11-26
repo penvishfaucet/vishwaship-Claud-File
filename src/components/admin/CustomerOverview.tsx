@@ -24,7 +24,7 @@ const kycTone = (k: string) => (k === "approved" ? "c-delivered" : k === "reject
 const day = (d: Date) => d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" });
 
 /** contacts: staff with customers.read also see each customer's login, email, mobile and wallet. */
-export async function CustomerOverview({ sp, contacts }: { sp: { from?: string; to?: string; customer?: string; q?: string }; contacts: boolean }) {
+export async function CustomerOverview({ sp, contacts, own = [] }: { sp: { from?: string; to?: string; customer?: string; q?: string }; contacts: boolean; own?: string[] }) {
   const r = dashRange(sp);
   const db = await getDb();
   const orgs = await db.select({ id: schema.orgs.id, name: schema.orgs.name, businessName: schema.orgs.businessName, gstin: schema.orgs.gstin, status: schema.orgs.status, kycStatus: schema.orgs.kycStatus, address: schema.orgs.address, createdAt: schema.orgs.createdAt }).from(schema.orgs);
@@ -39,7 +39,7 @@ export async function CustomerOverview({ sp, contacts }: { sp: { from?: string; 
 
   const picked = orgs.find((o) => o.id === sp.customer) ?? null;
   const keys = [...new Set<BucketKey>([...CARDS.map((c) => c.key), ...COLS.map((c) => c.key)])];
-  const [counts, byOrg] = await Promise.all([bucketCounts(picked?.id ?? null, r, keys), picked ? Promise.resolve(null) : bucketCountsByOrg(r, keys)]);
+  const [counts, byOrg] = await Promise.all([bucketCounts(picked?.id ?? null, r, keys, picked ? [] : own), picked ? Promise.resolve(null) : bucketCountsByOrg(r, keys)]);
   const rq = `from=${r.fromStr}&to=${r.toStr}`;
   const list = (k: BucketKey, orgId?: string) => `/admin/shipments/?bucket=${k}&${rq}${orgId ? `&customer=${encodeURIComponent(orgId)}` : ""}`;
 
@@ -47,7 +47,8 @@ export async function CustomerOverview({ sp, contacts }: { sp: { from?: string; 
   const rows = byOrg ? orgs
     .map((o) => ({ o, c: byOrg.get(o.id) ?? {}, u: owner.get(o.id) }))
     .filter(({ o, u }) => !q || [label(o), o.name, u?.name, u?.email, u?.mobile, o.gstin].some((v) => v?.toLowerCase().includes(q)))
-    .sort((a, b) => (b.c.all ?? 0) - (a.c.all ?? 0) || label(a.o).localeCompare(label(b.o))) : [];
+    .sort((a, b) => Number(own.includes(a.o.id)) - Number(own.includes(b.o.id)) || (b.c.all ?? 0) - (a.c.all ?? 0) || label(a.o).localeCompare(label(b.o))) : [];
+  const counted = rows.filter((x) => !own.includes(x.o.id));
   const pu = picked ? owner.get(picked.id) : undefined;
   const addr = picked?.address as { city?: string; state?: string; pincode?: string } | null | undefined;
 
@@ -71,6 +72,7 @@ export async function CustomerOverview({ sp, contacts }: { sp: { from?: string; 
           <div className="co-cust-side">
             <span className={`chip ${kycTone(picked.kycStatus)}`}>KYC {(KYC[picked.kycStatus] ?? picked.kycStatus).toLowerCase()}</span>
             {picked.status !== "active" && <span className="chip c-ndr">{picked.status}</span>}
+            {own.includes(picked.id) && <span className="chip c-draft">Own account</span>}
             {contacts && <span className="small">Wallet <b>{formatINR(wallet.get(picked.id) ?? 0)}</b></span>}
             {contacts && <Link className="btn btn-sm btn-soft" href={`/admin/customers/${picked.id}/`}>Customer details</Link>}
             <Link className="btn btn-sm btn-outline" href={`/admin/?${rq}`}>All customers</Link>
@@ -106,13 +108,13 @@ export async function CustomerOverview({ sp, contacts }: { sp: { from?: string; 
               <thead><tr><th>Customer</th><th>KYC</th>{contacts && <th className="num">Wallet</th>}{COLS.map((c) => <th key={c.key} className="num">{c.short}</th>)}</tr></thead>
               <tbody>{rows.map(({ o, c, u }) => (
                 <tr key={o.id}>
-                  <td><Link className="b link-navy" href={`/admin/?customer=${encodeURIComponent(o.id)}&${rq}`}>{label(o)}</Link>{contacts && <div className="tiny muted">{[u?.name, u?.email, u?.mobile].filter(Boolean).join(" · ") || "No login yet"}</div>}</td>
+                  <td><Link className="b link-navy" href={`/admin/?customer=${encodeURIComponent(o.id)}&${rq}`}>{label(o)}</Link>{own.includes(o.id) && <span className="chip c-draft" style={{ marginLeft: 6 }}>Own account · not counted</span>}{contacts && <div className="tiny muted">{[u?.name, u?.email, u?.mobile].filter(Boolean).join(" · ") || "No login yet"}</div>}</td>
                   <td><span className={`chip ${kycTone(o.kycStatus)}`}>{KYC[o.kycStatus] ?? o.kycStatus}</span></td>
                   {contacts && <td className="num small">{formatINR(wallet.get(o.id) ?? 0)}</td>}
                   {COLS.map((k) => { const n = c[k.key] ?? 0; return <td key={k.key} className="num">{n ? <Link className="link" href={list(k.key, o.id)}>{n.toLocaleString("en-IN")}</Link> : <span className="muted">0</span>}</td>; })}
                 </tr>
               ))}</tbody>
-              <tfoot><tr><th colSpan={contacts ? 3 : 2}>Total ({rows.length} customers)</th>{COLS.map((k) => <th key={k.key} className="num">{rows.reduce((t, x) => t + (x.c[k.key] ?? 0), 0).toLocaleString("en-IN")}</th>)}</tr></tfoot>
+              <tfoot><tr><th colSpan={contacts ? 3 : 2}>Total ({counted.length} customers{rows.length > counted.length ? ", own accounts not counted" : ""})</th>{COLS.map((k) => <th key={k.key} className="num">{counted.reduce((t, x) => t + (x.c[k.key] ?? 0), 0).toLocaleString("en-IN")}</th>)}</tr></tfoot>
             </table></div>
           )}
         </div>

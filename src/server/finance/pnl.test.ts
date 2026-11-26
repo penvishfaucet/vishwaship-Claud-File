@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { eq } from "drizzle-orm";
 import * as schema from "@/server/db/schema";
 
 const client = new PGlite();
@@ -60,5 +61,15 @@ describe("profit & loss", () => {
     expect(b.lossShipments).toBe(1);
     expect(total.profit).toBe(15_475 - 3_000);
     expect(rows[0].orgId).toBe("good"); // most profitable first
+  });
+
+  it("own accounts are left out of the overall P&L but still have their own P&L", async () => {
+    await db.insert(schema.pricingSettings).values({ key: "own_accounts", value: ["bad"] });
+    const { rows, own, total } = await pnlByOrg(null);
+    expect(rows.map((r) => r.orgId)).toEqual(["good"]);
+    expect(own.map((r) => r.orgId)).toEqual(["bad"]);
+    expect(total.profit).toBe(15_475);
+    expect((await pnlByOrg(null, "bad")).total.profit).toBe(5_000 - 8_000);
+    await db.delete(schema.pricingSettings).where(eq(schema.pricingSettings.key, "own_accounts"));
   });
 });

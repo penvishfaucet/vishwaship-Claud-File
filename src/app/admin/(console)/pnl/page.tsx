@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatINR } from "@/lib/money";
 import { PnlSummary, PnlTable } from "@/components/admin/PnlViews";
 import { requireStaff } from "@/server/auth/session";
 import { pnlByOrg } from "@/server/finance/pnl";
@@ -11,7 +12,7 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
   const sp = await searchParams;
   await requireStaff("shipments.cost.read");
   const r = pnlRange(sp);
-  const { rows, total, gstBps } = await pnlByOrg(r.range);
+  const { rows, own, total, gstBps } = await pnlByOrg(r.range);
   const q = (sp.q ?? "").trim().toLowerCase();
   const shown = rows.filter((x) => (!q || x.name.toLowerCase().includes(q)) && (sp.only !== "loss" || x.profit < 0) && (sp.only !== "active" || x.shipments > 0));
   const losers = rows.filter((x) => x.profit < 0).length;
@@ -37,6 +38,14 @@ export default async function PnlPage({ searchParams }: { searchParams: Promise<
         </form>
       </div>
       <PnlTable rows={shown} total={total} rangeQs={r.qs} />
+      {own.length > 0 && (
+        <section className="card p0 mt16">
+          <h2 className="b small card-h" style={{ margin: 0 }}>Own accounts — not counted above</h2>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Account</th><th className="num">Shipments</th><th className="num">Revenue</th><th className="num">Courier cost</th><th className="num">Profit</th></tr></thead>
+            <tbody>{own.map((x) => <tr key={x.orgId}><td><Link className="link-navy" href={`/admin/customers/${x.orgId}/?tab=pnl${r.qs ? `&${r.qs}` : ""}`}>{x.name}</Link></td><td className="num">{x.shipments}</td><td className="num">{formatINR(x.revenue)}</td><td className="num">{formatINR(x.courierCost)}</td><td className={`num ${x.profit < 0 ? "pl-down" : "pl-up"}`}>{x.profit < 0 ? "−" : ""}{formatINR(Math.abs(x.profit))}</td></tr>)}</tbody></table></div>
+          <p className="tiny muted" style={{ padding: "8px 16px" }}>Your own businesses. Change this on the customer’s page (“Count in P&amp;L”).</p>
+        </section>
+      )}
       <p className="tiny muted mt12">Revenue = shipping charged (excl. GST) + weight discrepancy charged − refunded + notification credits sold + manual wallet adjustments. Courier cost = the courier’s confirmed charge where reported, else the quoted cost. Cancelled shipments are excluded (refunded). WhatsApp / AI-call provider bills are not included.</p>
     </>
   );

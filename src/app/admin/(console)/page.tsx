@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { and, count, desc, eq, gte, inArray, lt, sum } from "drizzle-orm";
+import { type Column, and, count, desc, eq, gte, inArray, lt, notInArray, sum } from "drizzle-orm";
 import { CustomerOverview } from "@/components/admin/CustomerOverview";
 import { formatINR } from "@/lib/money";
 import { pnlByOrg } from "@/server/finance/pnl";
+import { ownAccountIds } from "@/server/finance/own-accounts";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
@@ -13,11 +14,14 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
   const days = [1, 7, 30, 90].includes(Number(sp.days)) ? Number(sp.days) : 30;
   const since = new Date(Date.now() - days * 86400_000);
   const db = await getDb();
-  const [tot] = await db.select({ n: count(), sell: sum(schema.shipments.sellPaise), cost: sum(schema.shipments.costPaise) }).from(schema.shipments).where(gte(schema.shipments.createdAt, since));
-  const byStatus = await db.select({ status: schema.shipments.status, n: count() }).from(schema.shipments).where(gte(schema.shipments.createdAt, since)).groupBy(schema.shipments.status);
+  // the owner's own accounts are left out of the figures (they still show in their own customer pages)
+  const own = await ownAccountIds();
+  const notOwn = (col: Column) => (own.length ? notInArray(col, own) : undefined);
+  const [tot] = await db.select({ n: count(), sell: sum(schema.shipments.sellPaise), cost: sum(schema.shipments.costPaise) }).from(schema.shipments).where(and(gte(schema.shipments.createdAt, since), notOwn(schema.shipments.orgId)));
+  const byStatus = await db.select({ status: schema.shipments.status, n: count() }).from(schema.shipments).where(and(gte(schema.shipments.createdAt, since), notOwn(schema.shipments.orgId))).groupBy(schema.shipments.status);
   const st = (k: string[]) => byStatus.filter((r) => k.includes(r.status)).reduce((t, r) => t + Number(r.n), 0);
-  const [{ customers }] = await db.select({ customers: count() }).from(schema.orgs);
-  const [{ kyc }] = await db.select({ kyc: count() }).from(schema.orgs).where(eq(schema.orgs.kycStatus, "pending"));
+  const [{ customers }] = await db.select({ customers: count() }).from(schema.orgs).where(notOwn(schema.orgs.id));
+  const [{ kyc }] = await db.select({ kyc: count() }).from(schema.orgs).where(and(eq(schema.orgs.kycStatus, "pending"), notOwn(schema.orgs.id)));
   const [{ reconcile }] = await db.select({ reconcile: count() }).from(schema.orders).where(inArray(schema.orders.status, ["needs_reconcile", "booking_failed"]));
   const [{ overdueNdr }] = await db.select({ overdueNdr: count() }).from(schema.ndrCases).where(and(eq(schema.ndrCases.status, "open"), lt(schema.ndrCases.deadlineAt, new Date(Date.now() + 12 * 3600_000))));
   const [{ disputes }] = await db.select({ disputes: count() }).from(schema.weightDisputes).where(eq(schema.weightDisputes.status, "open"));
@@ -36,7 +40,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
     <>
       {sp.denied && <p className="err mb12" role="alert">Your role doesn’t have access to that section ({sp.denied}).</p>}
       <div className="page-h"><h1>Dashboard</h1></div>
-      <CustomerOverview sp={sp} contacts={can(s.role, "customers.read")} />
+      <CustomerOverview sp={sp} contacts={can(s.role, "customers.read")} own={own} />
       <div className="page-h">
         <h2 className="b" style={{ fontSize: 18, margin: 0 }}>Operations</h2>
         <div className="pills">{[1, 7, 30, 90].map((d) => <Link key={d} className={d === days ? "pill on" : "pill"} href={`/admin/?days=${d}`}>{d === 1 ? "Today" : `${d} days`}</Link>)}</div>
@@ -73,7 +77,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           </ul>
         </section>
       </div>
-      <p className="tiny muted mt12">All figures are across every customer; finance figures are shown only to roles with cost access.</p>
+      <p className="tiny muted mt12">All figures are across every customer except own accounts{own.length ? ` (${own.length})` : ""}, which are marked on the customer’s page; exception queues include them. Finance figures are shown only to roles with cost access.</p>
     </>
   );
 }

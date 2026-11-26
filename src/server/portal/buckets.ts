@@ -1,5 +1,5 @@
 import "server-only";
-import { type SQL, and, count, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
+import { type SQL, and, count, eq, gte, inArray, isNull, lte, ne, notInArray } from "drizzle-orm";
 import { getDb, schema } from "@/server/db/client";
 
 /**
@@ -55,11 +55,11 @@ export function dashRange(sp: { from?: string; to?: string }) {
 export const rangeCondition = (r: { from: Date; to: Date }) => and(gte(O.createdAt, r.from), lte(O.createdAt, r.to));
 
 /** Card counts for one customer, or for every customer when orgId is null (Admin dashboard). */
-export async function bucketCounts(orgId: string | null, r: { from: Date; to: Date }, keys: BucketKey[]) {
+export async function bucketCounts(orgId: string | null, r: { from: Date; to: Date }, keys: BucketKey[], excludeOrgs: string[] = []) {
   const db = await getDb();
   const out = {} as Record<BucketKey, number>;
   for (const k of keys) {
-    const [row] = await db.select({ n: count() }).from(O).leftJoin(S, eq(S.orderId, O.id)).where(and(orgId ? eq(O.orgId, orgId) : undefined, rangeCondition(r), bucketCondition(k)));
+    const [row] = await db.select({ n: count() }).from(O).leftJoin(S, eq(S.orderId, O.id)).where(and(orgId ? eq(O.orgId, orgId) : undefined, excludeOrgs.length ? notInArray(O.orgId, excludeOrgs) : undefined, rangeCondition(r), bucketCondition(k)));
     out[k] = Number(row?.n ?? 0);
   }
   return out;

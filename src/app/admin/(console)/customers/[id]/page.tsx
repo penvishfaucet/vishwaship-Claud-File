@@ -27,6 +27,7 @@ import { orderStatusText } from "@/lib/order-view";
 import { orgSetting } from "@/server/couriers";
 import { PnlSummary } from "@/components/admin/PnlViews";
 import { pnlByOrg } from "@/server/finance/pnl";
+import { OWN_ACCOUNTS_KEY, ownAccountIds } from "@/server/finance/own-accounts";
 import { pnlPresets, pnlRange } from "@/server/finance/pnl-range";
 
 const TABS = ["overview", "shipments", "wallet", "pnl", "kyc", "pricing", "features", "notifications"] as const;
@@ -89,6 +90,22 @@ export default async function CustomerDetail({ params, searchParams }: { params:
     redirect(`/admin/customers/${id}/`);
   }
 
+  /** Own account: the owner's own business. Works normally but is left out of the Admin dashboard and P&L totals. */
+  async function setOwn(fd: FormData) {
+    "use server";
+    const st = await requireStaff("customers.write");
+    const on = String(fd.get("own")) === "1";
+    const ids = new Set(await ownAccountIds());
+    if (on) ids.add(id); else ids.delete(id);
+    const value = [...ids];
+    await (await getDb()).insert(schema.pricingSettings).values({ key: OWN_ACCOUNTS_KEY, value })
+      .onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value, updatedAt: new Date() } });
+    await audit({ actorUserId: st.userId, actorKind: "staff", orgId: id, action: on ? "customer.own_account_on" : "customer.own_account_off" });
+    revalidatePath("/admin/");
+    redirect(`/admin/customers/${id}/`);
+  }
+  const isOwn = (await ownAccountIds()).includes(id);
+
   const nk = await nonKycRule(id);
   const perms = { docs: can(s.role, "kyc.documents.read"), wallet: can(s.role, "finance.read"), adjust: can(s.role, "finance.adjust"), ship: can(s.role, "shipments.read") };
   const ob = await onboardingState(id);
@@ -105,10 +122,11 @@ export default async function CustomerDetail({ params, searchParams }: { params:
     <>
       <div className="page-h cu-head">
         <div><Link className="small link-navy" href="/admin/customers/">← Customers</Link><h1>{org.businessName}</h1>
-          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}><span className="tiny muted mono">{org.id}</span><span className={`chip ${org.status === "active" ? "c-active" : "c-cancelled"}`}>{org.status === "active" ? "Active" : "Suspended"}</span><span className={`chip ${KYC_CHIP[org.kycStatus] ?? "c-pending"}`}>{KYC_LABEL[org.kycStatus] ?? org.kycStatus}</span>{ob.step !== "active" && <span className="chip c-pending">Onboarding: {STEP_TEXT[ob.step].title}</span>}</div>
+          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}><span className="tiny muted mono">{org.id}</span><span className={`chip ${org.status === "active" ? "c-active" : "c-cancelled"}`}>{org.status === "active" ? "Active" : "Suspended"}</span><span className={`chip ${KYC_CHIP[org.kycStatus] ?? "c-pending"}`}>{KYC_LABEL[org.kycStatus] ?? org.kycStatus}</span>{ob.step !== "active" && <span className="chip c-pending">Onboarding: {STEP_TEXT[ob.step].title}</span>}{isOwn && <span className="chip c-draft" title="Left out of the Admin dashboard and Profit & Loss totals">Own account · not in P&amp;L</span>}</div>
         </div>
         <div className="actions">
           {can(s.role, "customers.write") && <form action={setStatus}><input type="hidden" name="status" value={org.status === "active" ? "suspended" : "active"} /><button className="btn btn-sm btn-outline">{org.status === "active" ? "Suspend" : "Activate"}</button></form>}
+          {can(s.role, "customers.write") && <form action={setOwn}><input type="hidden" name="own" value={isOwn ? "0" : "1"} /><button className="btn btn-sm btn-outline" title={isOwn ? "Count this customer in the dashboard and P&L again" : "Your own business: leave it out of the dashboard and P&L totals"}>{isOwn ? "Count in P&L" : "Mark as own account"}</button></form>}
           {can(s.role, "customers.impersonate") && <form action={loginAsCustomer}><input type="hidden" name="orgId" value={org.id} /><button className="btn btn-sm btn-orange"><LogIn size={14} /> Login as customer</button></form>}
         </div>
       </div>
