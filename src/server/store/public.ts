@@ -24,8 +24,10 @@ export type Storefront = {
   base: string; preview: boolean; demo: boolean; indexable: boolean;
   /** False when the trial ended and no plan is running (no new orders). */
   ordersOpen: boolean;
-  /** Trial / plan over: buyers see a neutral "store unavailable" page instead of the store (the owner's preview still works). */
+  /** Not launched yet, or trial / plan over: buyers see a neutral page instead of the store (the owner's preview still works). */
   unavailable: boolean;
+  /** Not launched yet (draft): that page says "opening soon". */
+  comingSoon: boolean;
   /** Biggest running sale, for the top bar countdown. */
   sale: { name: string; text: string; endsAt: string } | null;
   /** Coupons the merchant shows as offers on product pages. */
@@ -49,7 +51,6 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     const sess = await readSession("customer");
     preview = !!sess && sess.orgId === s.orgId;
   }
-  if (!preview && s.status !== "live") return null;
   const theme = preview ? readTheme(s.draftTheme, s.themeKey) : readTheme(s.publishedTheme, s.themeKey);
   const cats = await db.select().from(schema.storeCategories).where(eq(schema.storeCategories.storeId, s.id)).orderBy(asc(schema.storeCategories.sort));
   const prods = await db.select().from(schema.storeProducts)
@@ -101,7 +102,7 @@ export const loadStorefront = cache(async (slug: string, opts: { preview?: boole
     sale: banner ? { name: banner.name, text: banner.bannerText || `${banner.name}: ${banner.percentOff}% off`, endsAt: banner.endsAt.toISOString() } : null,
     offers,
     base: `/s/${s.slug}`, preview, demo: false, indexable: !preview && s.status === "live" && planState(s).state !== "expired", ordersOpen: planState(s).ordersOpen,
-    unavailable: !preview && planState(s).state === "expired", onlinePay: preview ? false : (await onlineMethods(s.orgId)).length > 0,
+    unavailable: !preview && (s.status !== "live" || planState(s).state === "expired"), comingSoon: !preview && s.status !== "live" && s.status !== "suspended", onlinePay: preview ? false : (await onlineMethods(s.orgId)).length > 0,
     tags: preview ? NO_TAGS : await publicTags(s.orgId),
   };
 });
@@ -211,7 +212,7 @@ function demoStore(themeKey?: string): Storefront {
   });
   return {
     id: "demo", name: "Vishwa Crafts", slug: "demo", status: "live", settings, theme, themeKey: key,
-    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true, unavailable: false, onlinePay: true,
+    categories: cats, products, base: "/s/demo", preview: false, demo: true, indexable: false, tags: NO_TAGS, ordersOpen: true, unavailable: false, comingSoon: false, onlinePay: true,
     sale: { name: "Festive Sale", text: "Festive Sale is on: up to 30% off", endsAt: new Date(Date.now() + 2 * 86400_000 + 5 * 3600_000).toISOString() },
     offers: [{ code: "WELCOME10", text: "10% off on orders above ₹999 (up to ₹200)" }, { code: "FREESHIP", text: "Free shipping" }],
   };

@@ -48,14 +48,16 @@ describe("store lifecycle", () => {
     expect((await svc.createStore(B, { name: "Bina Store", slug: "bina-store" })).ok).toBe(true);
   });
 
-  it("draft store is hidden from buyers; owner preview works only for the same org", async () => {
-    expect(await pub.loadStorefront("asha-crafts")).toBeNull();
+  it("draft store shows buyers \"opening soon\" (not a 404); owner preview works only for the same org", async () => {
+    const pubView = (sf: Awaited<ReturnType<typeof pub.loadStorefront>>) => ({ unavailable: sf?.unavailable, comingSoon: sf?.comingSoon, preview: sf?.preview, indexable: sf?.indexable });
+    expect(pubView(await pub.loadStorefront("asha-crafts"))).toEqual({ unavailable: true, comingSoon: true, preview: false, indexable: false });
     currentSession = { orgId: B };
-    expect(await pub.loadStorefront("asha-crafts", { preview: true })).toBeNull();
+    expect(pubView(await pub.loadStorefront("asha-crafts", { preview: true }))).toEqual({ unavailable: true, comingSoon: true, preview: false, indexable: false });
     currentSession = { orgId: A };
     const sf = await pub.loadStorefront("asha-crafts", { preview: true });
     expect(sf?.preview).toBe(true);
     expect(sf?.indexable).toBe(false);
+    expect(sf?.unavailable).toBe(false);
     currentSession = null;
   });
 

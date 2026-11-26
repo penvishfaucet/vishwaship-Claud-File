@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** Shown instead of every store page while the store's trial / plan is over. Neutral: no products, prices or reasons. */
 export async function generateMetadata({ params }: { params: SfParams }): Promise<Metadata> {
   const sf = await resolveSf(params, undefined, { allowUnavailable: true });
-  return { title: `${sf.name} — currently unavailable`, robots: { index: false, follow: false } };
+  return { title: sf.comingSoon ? `${sf.name} — opening soon` : `${sf.name} — currently unavailable`, robots: { index: false, follow: false } };
 }
 
 export default async function StoreUnavailable({ params }: { params: SfParams }) {
@@ -18,8 +18,10 @@ export default async function StoreUnavailable({ params }: { params: SfParams })
     <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24, background: "#f5f7fc", color: "#102a5c", fontFamily: "system-ui, sans-serif" }}>
       <div style={{ maxWidth: 440, textAlign: "center", background: "#fff", borderRadius: 16, padding: "32px 24px", boxShadow: "0 10px 30px rgba(11,44,106,.08)" }}>
         <h1 style={{ fontSize: 22, margin: "0 0 8px" }}>{sf.name}</h1>
-        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>This store is not available right now. Please check back later.</p>
-        <p style={{ margin: "14px 0 0", fontSize: 13, color: "#56637d" }}>Placed an order here already? Your order and its tracking are not affected.</p>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5 }}>{sf.comingSoon ? "This store is opening soon. Please check back in a little while." : "This store is not available right now. Please check back later."}</p>
+        {sf.comingSoon
+          ? <p style={{ margin: "14px 0 0", fontSize: 13, color: "#56637d" }}>Store owner? <a href={`${sf.base}/?preview=1`} style={{ color: "#C94A0A" }}>Log in and open the preview</a> to see your store before launch.</p>
+          : <p style={{ margin: "14px 0 0", fontSize: 13, color: "#56637d" }}>Placed an order here already? Your order and its tracking are not affected.</p>}
       </div>
     </main>
   );

@@ -51,12 +51,12 @@ export default async function StoreOverview() {
           <h1>{store.name}</h1>
           <p className="small" style={{ margin: "4px 0 0" }}>
             <span className={`chip ${live && plan.state !== "expired" ? "c-active" : store.status === "suspended" || plan.state === "expired" ? "c-cancelled" : "c-draft"}`}>{live ? (plan.state === "expired" ? "Hidden from buyers: plan ended" : "Live") : store.status === "suspended" ? "Paused by Vishwaship" : store.status === "paused" ? "Unpublished" : "Draft — not visible to buyers"}</span>
-            {" "}<a href={live ? url : `${url}?preview=1`} target="_blank" rel="noopener" className="orange">{url.replace(/^https?:\/\//, "")} <ExternalLink size={12} aria-hidden /></a>
+            {" "}<a href={live ? url : `/s/${store.slug}/?preview=1`} target="_blank" rel="noopener" className="orange">{url.replace(/^https?:\/\//, "")} <ExternalLink size={12} aria-hidden /></a>
           </p>
           {store.status === "suspended" && store.suspendedReason && <p className="small red" style={{ margin: "6px 0 0" }}>{store.suspendedReason}</p>}
         </div>
         <div className="row" style={{ gap: 6 }}>
-          <a className="btn btn-outline" href={`${url}?preview=1`} target="_blank" rel="noopener">Preview</a>
+          <a className="btn btn-outline" href={`/s/${store.slug}/?preview=1`} target="_blank" rel="noopener">Preview</a>
           <a className="btn btn-orange" href="/portal/store/setup/7/">{live ? "Publish changes" : "Launch checklist"}</a>
         </div>
       </div>

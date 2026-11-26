@@ -52,7 +52,7 @@ export default async function SetupStep({ params }: { params: Promise<{ step: st
     const doms = await listDomains(ctx.org.id);
     body = (
       <div className="card" style={{ padding: 20, maxWidth: 760 }}>
-        <p style={{ marginTop: 0 }}>Your store already has a free link: <a className="orange" href={`${url}?preview=1`} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, "")}</a></p>
+        <p style={{ marginTop: 0 }}>Your store already has a free link: <a className="orange" href={`/s/${store.slug}/?preview=1`} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, "")}</a></p>
         <p className="small muted">Want your own domain like <b>shop.yourbrand.com</b>? Connect it now or any time later.</p>
         {doms.length > 0 && <p className="small">Connected: {doms.map((d) => `${d.hostname} (${d.status === "verified" ? "verified" : "waiting for DNS"})`).join(", ")}</p>}
         <div className="row wrap" style={{ gap: 8 }}>
@@ -78,7 +78,7 @@ export default async function SetupStep({ params }: { params: Promise<{ step: st
           {checklist.map((c) => <li key={c.key} className="row" style={{ gap: 8 }}>{c.ok ? <CheckCircle2 size={18} className="green" aria-label="Done" /> : <Circle size={18} className={c.required ? "orange" : "muted"} aria-label="To do" />}<span>{c.label}</span>{!c.ok && <a className="orange small" href={c.href}>Fix</a>}{!c.required && <span className="tiny muted">recommended</span>}</li>)}
         </ul>
         <div className="row wrap" style={{ gap: 8, alignItems: "flex-start" }}>
-          <a className="btn btn-outline btn-lg" href={`${url}?preview=1`} target="_blank" rel="noopener">Preview store</a>
+          <a className="btn btn-outline btn-lg" href={`/s/${store.slug}/?preview=1`} target="_blank" rel="noopener">Preview store</a>
           <PublishButton disabled={blocking.length > 0 || store.status === "suspended"} live={store.status === "live"} />
         </div>
         {store.status === "live" && <p className="small" style={{ marginTop: 12 }}>Your store is live at <a className="orange" href={url} target="_blank" rel="noopener">{url.replace(/^https?:\/\//, "")}</a></p>}
