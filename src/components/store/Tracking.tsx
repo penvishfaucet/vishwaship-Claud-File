@@ -65,9 +65,10 @@ function startGtag(tags: Tags, c: Consent) {
 
 function startPixel(pixelId: string) {
   if (window.fbq) return;
-  const f = function (...a: unknown[]) { (f.q = f.q || []).push(a); } as NonNullable<Window["fbq"]>;
-  // Meta's loader replaces fbq with the real one and replays the queue
-  (f as unknown as { push: unknown }).push = f; f.loaded = true; (f as unknown as { version: string }).version = "2.0"; f.q = [];
+  type Fbq = NonNullable<Window["fbq"]>;
+  // Meta's official base-code stub: calls wait in fbq.queue until fbevents.js loads and replays them
+  const f = function (...a: unknown[]) { const self = f as unknown as { callMethod?: (...x: unknown[]) => void; queue: unknown[] }; if (self.callMethod) self.callMethod(...a); else self.queue.push(a); } as Fbq;
+  Object.assign(f, { push: f, loaded: true, version: "2.0", queue: [] });
   window.fbq = f;
   loadScript("https://connect.facebook.net/en_US/fbevents.js");
   window.fbq("init", pixelId);

@@ -16,7 +16,7 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics";
+  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics" | "meta_pixel";
   group: "Email" | "Sign-in" | "WhatsApp" | "AI calling" | "Analytics";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
@@ -39,6 +39,18 @@ export const SERVICES: ServiceDef[] = [
       "Visitors see a cookie banner; analytics runs only for those who click Accept. Reports appear in Google Analytics within a day.",
     ],
     links: [{ label: "Google Analytics", url: "https://analytics.google.com/" }],
+  },
+  {
+    adapter: "meta_pixel", group: "Analytics", name: "Meta Pixel (Facebook / Instagram ads)",
+    purpose: "Tells Meta which ad visitors sign up, so Facebook / Instagram ads find more sellers. Sends PageView on the website and CompleteRegistration when a new account is created. Loads only after a visitor accepts cookies in the cookie banner.",
+    fields: [{ key: "pixelId", label: "Pixel (Dataset) ID", secret: false, required: true, placeholder: "e.g. 1234567890123456", help: "Meta Events Manager → Data sources → your pixel → Settings → Dataset ID" }],
+    guide: [
+      "Open business.facebook.com → Events Manager → Connect data sources → Web → name it Vishwaship Pixel → Create.",
+      "Copy the Dataset (Pixel) ID — a long number — and paste it below → Save → Turn ON.",
+      "Visitors see a cookie banner; the pixel runs only for those who click Accept.",
+      "Check it in Events Manager → Test events: open vishwaship.in, accept cookies — PageView should appear within a minute.",
+    ],
+    links: [{ label: "Meta Events Manager", url: "https://business.facebook.com/events_manager2/" }],
   },
   {
     adapter: "resend", group: "Email", name: "Resend (email)",
@@ -187,7 +199,7 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", meta_pixel: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -241,6 +253,8 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (missing.length) return { ok: false, message: `Fill in: ${missing.join(", ")}` };
   if (adapter === "google_analytics") v.measurementId = v.measurementId.toUpperCase();
   if (adapter === "google_analytics" && !/^G-[A-Z0-9]{6,14}$/.test(v.measurementId)) return { ok: false, message: "The Measurement ID looks like G-XXXXXXXXXX (Google Analytics → Admin → Data streams)" };
+  if (adapter === "meta_pixel") v.pixelId = v.pixelId.replace(/\s/g, "");
+  if (adapter === "meta_pixel" && !/^\d{10,20}$/.test(v.pixelId)) return { ok: false, message: "The Pixel (Dataset) ID is a long number (Events Manager → your pixel → Settings)" };
   if (adapter === "resend" && !/^re_[\w-]{8,}$/.test(v.apiKey)) return { ok: false, message: "A Resend API key starts with re_" };
   if (adapter === "google_oauth" && !/\.apps\.googleusercontent\.com$/.test(v.clientId)) return { ok: false, message: "The Client ID ends with .apps.googleusercontent.com" };
   if (adapter === "firebase_phone" && !/^AIza[\w-]{30,}$/.test(v.apiKey)) return { ok: false, message: "The Web API key starts with AIza (Firebase → Project settings → Your apps)" };
@@ -275,6 +289,8 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
     if (adapter === "google_analytics") {
       // nothing to call: Google has no key check for a public Measurement ID; the format was checked on save
       res = /^G-[A-Z0-9]{6,14}$/.test(v.measurementId) ? { ok: true, message: `Measurement ID ${v.measurementId} is valid. After turning ON, open the site, accept cookies and check Google Analytics → Reports → Realtime.` } : { ok: false, message: "The Measurement ID looks like G-XXXXXXXXXX" };
+    } else if (adapter === "meta_pixel") {
+      res = /^\d{10,20}$/.test(v.pixelId) ? { ok: true, message: `Pixel ${v.pixelId} is saved. After turning ON, open the site, accept cookies and check Events Manager → Test events.` } : { ok: false, message: "The Pixel ID is a long number" };
     } else if (adapter === "resend") {
       const x = await call("https://api.resend.com/domains", { headers: { authorization: `Bearer ${v.apiKey}` } });
       const j = (await x.json().catch(() => ({}))) as { data?: Array<{ name: string; status: string }>; message?: string; name?: string };

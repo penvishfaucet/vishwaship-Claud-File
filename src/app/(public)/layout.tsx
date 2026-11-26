@@ -20,11 +20,12 @@ export const dynamic = "force-dynamic";
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   let links = DEFAULTS.links, footer = DEFAULTS.footer;
   let auth: SiteAuth = { customer: null, staff: null };
-  let gaId: string | null = null;
+  let gaId: string | null = null, pixelId: string | null = null;
   try {
     const [c, a] = await Promise.all([getSiteContent(), siteAuth()]);
     links = c.links; footer = c.footer; auth = a;
     gaId = (await activeService("google_analytics"))?.measurementId ?? null;
+    pixelId = (await activeService("meta_pixel"))?.pixelId ?? null;
   } catch (e) {
     console.error("[site] content unavailable, using defaults:", (e as Error).message);
   }
@@ -47,7 +48,7 @@ export default async function PublicLayout({ children }: { children: React.React
       <SiteFooterV2 links={links} footer={footer} />
       <MobileTabBar accountHref={acct} signedIn={signedIn} />
       <Reveal />
-      <CookieConsent gaId={gaId} />
+      <CookieConsent gaId={gaId} pixelId={pixelId} />
     </div>
   );
 }

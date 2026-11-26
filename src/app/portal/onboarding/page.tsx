@@ -5,6 +5,8 @@ import { ProfileForm } from "@/components/portal/ProfileForm";
 import { getDb, schema } from "@/server/db/client";
 import { onboardingState, STEP_TEXT, type OnboardingStep } from "@/server/onboarding";
 import { portalContext } from "@/server/portal/context";
+import { SignupPixel } from "@/components/portal/SignupPixel";
+import { activeService } from "@/server/integrations/services";
 
 export const metadata = { title: "Complete Your Profile — Vishwaship" };
 const ORDER: OnboardingStep[] = ["profile", "kyc", "review", "active"];
@@ -17,8 +19,11 @@ export default async function OnboardingPage() {
   const st = await onboardingState(ctx.org.id);
   const a = (ctx.org.address ?? {}) as { line1?: string; line2?: string; city?: string; state?: string; pincode?: string };
   const now = st.step === "resubmit" ? 1 : ORDER.indexOf(st.step);
+  // new account (last 2 days, not an admin viewing it): tell Meta ads a seller signed up
+  const pixelId = !ctx.session.impersonatorId && u && Date.now() - u.createdAt.getTime() < 2 * 86_400_000 ? (await activeService("meta_pixel").catch(() => null))?.pixelId ?? null : null;
   return (
     <div className="tk-page" style={{ maxWidth: 820 }}>
+      {pixelId && u && <SignupPixel pixelId={pixelId} userId={u.id} />}
       <h1 style={{ fontSize: 22, margin: 0 }}>{st.step === "profile" ? "Complete Your Profile" : STEP_TEXT[st.step].title}</h1>
       <ol className="ob-steps" aria-label="Account activation">
         {["Profile", "KYC", "Admin review", "Account Active"].map((t, i) => (
