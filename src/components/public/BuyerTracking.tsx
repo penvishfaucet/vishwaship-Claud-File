@@ -27,7 +27,7 @@ export function BuyerTracking({ brand, shipment, footer, preview, children }: { 
     <div style={{ minHeight: "100vh", background: "#f4f3ef", fontFamily: "var(--font-roboto), Roboto, system-ui, sans-serif" }}>
       <header style={{ background: primary, color: "#fff", padding: "18px 20px" }}>
         <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
-          {brand?.logo ? <img src={brand.logo} alt="" style={{ height: 40, width: "auto", borderRadius: 6, background: "#fff", padding: 2 }} /> : <BrandLogo height={52} />}
+          {brand?.logo ? <img src={brand.logo} alt="" style={{ height: 40, width: "auto", borderRadius: 6, background: "#fff", padding: 2 }} /> : <BrandLogo height={52} onDark />}
           <b style={{ fontSize: 20 }}>{brand?.businessName ?? "Vishwaship"}</b>
           {preview && <span style={{ marginLeft: "auto", background: accent, color: "#fff", borderRadius: 999, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>PREVIEW</span>}
         </div>
