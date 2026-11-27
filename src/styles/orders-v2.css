@@ -415,3 +415,5 @@ html .oc-split .oc-btn:disabled{background:#e6ebf2!important;color:#4f5d78!impor
 tr.orow.has-wd > td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
 .ov-mc.has-wd, .ov-sc.has-wd, .oc.has-wd { border-left: 4px solid #dc2626 !important; }
 .oc-wd { padding: 0 14px 4px; }
+.tk-share{display:flex;flex-direction:column;gap:4px;border:1px solid #dbe3ee;border-radius:12px;padding:12px 14px;background:#f5f8ff}
+.tk-share b{font-size:15px}

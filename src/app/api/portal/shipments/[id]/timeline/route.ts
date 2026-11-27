@@ -3,6 +3,7 @@ import { apiCustomer } from "@/server/auth/session";
 import { hasFeature } from "@/server/features";
 import { apiError } from "@/server/http";
 import { shipmentTimeline } from "@/server/orders/detail-views";
+import { shareInfo } from "@/server/tracking/share";
 
 /** Tracking timeline for the Track dialog (own shipments only). */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,5 +12,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!(await hasFeature(s.orgId, "tracking"))) return apiError(403, "forbidden", "Tracking is not enabled for your account");
   const { id } = await params;
   const t = await shipmentTimeline(id, s.orgId, { customerSafe: true });
-  return t ? NextResponse.json(t) : apiError(404, "not_found", "Shipment not found");
+  return t ? NextResponse.json({ ...t, share: await shareInfo(id) }) : apiError(404, "not_found", "Shipment not found");
 }

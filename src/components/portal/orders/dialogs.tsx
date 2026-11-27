@@ -8,6 +8,7 @@ import type { OrderRow } from "@/server/orders/view";
 import { CodStatusText, CopyBtn, Dialog, ago, inr, istFull } from "./ui";
 import { OneShipment, type PodCardData } from "@/components/tracking/ShipmentTracking";
 import type { Milestone, ScanLine } from "@/lib/tracking-timeline";
+import { ShareTracking } from "@/components/portal/ShareTracking";
 
 type Timeline = {
   orderNumber: string; carrier: string; service: string; awb: string | null; lr: string | null; status: string; etaDate: string | null; deliveredAt: string | null;
@@ -18,6 +19,7 @@ type Timeline = {
   events: Array<{ status: string; raw: string | null; location: string | null; at: string; remark: string | null; source: string }>;
   amendments: Array<{ at: string; previous: string; next: string }>;
   milestones?: Milestone[]; scans?: ScanLine[]; pod?: Omit<PodCardData, "href"> | null;
+  share?: { url: string; orderNumber: string; buyerMobile: string | null; business: string; supportPhone: string; supportEmail: string } | null;
 };
 
 /** Track: provider events, timestamps, locations, current status, ETA and sync health with Retry. */
@@ -77,6 +79,15 @@ export function TrackDialog({ shipmentId, onClose, onChanged, admin }: { shipmen
             <button type="button" className="ov-btn ghost sm" onClick={retry} disabled={busy || !d.awb}><RefreshCw size={14} aria-hidden /> {busy ? "Checking courier…" : d.lastSyncError ? "Retry sync" : "Refresh from courier"}</button>
             {note && <span className="small muted" role="status">{note}</span>}
           </div>
+          {d.share && (
+            <section className="tk-share" aria-label="Buyer tracking page">
+              <span className="tiny">Buyer tracking page</span>
+              <b>{d.share.business || "Your store"}</b>
+              <span className="small muted">{[d.share.supportPhone, d.share.supportEmail].filter(Boolean).join(" · ") || "Add a mobile and email in your profile so buyers can reach you"}</span>
+              <a className="small link" href={d.share.url} target="_blank" rel="noopener" style={{ wordBreak: "break-all" }}>{d.share.url}</a>
+              <ShareTracking url={d.share.url} orderNumber={d.share.orderNumber} business={d.share.business} buyerMobile={d.share.buyerMobile} />
+            </section>
+          )}
           {d.demo && <p className="tiny muted">Demo courier: scans are simulated for testing.</p>}
           {d.amendments.length > 0 && (
             <section>
