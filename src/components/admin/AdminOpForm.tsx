@@ -9,7 +9,7 @@ export type OpField =
   | { name: string; label: string; type: "hidden"; value: string };
 
 /** One admin action form → POST /api/admin/commercial {op, ...fields}. Shows the server's message and refreshes. */
-export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, endpoint = "/api/admin/commercial" }: { op: string; fields: OpField[]; submit: string; confirmText?: string; disabled?: boolean; extra?: Record<string, unknown>; endpoint?: string }) {
+export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, endpoint = "/api/admin/commercial", resetOnSuccess }: { op: string; fields: OpField[]; submit: string; confirmText?: string; disabled?: boolean; extra?: Record<string, unknown>; endpoint?: string; resetOnSuccess?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const router = useRouter();
@@ -17,7 +17,8 @@ export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, 
     <form className="row wrap" style={{ gap: 8, alignItems: "end" }} onSubmit={async (e) => {
       e.preventDefault();
       if (confirmText && !confirm(confirmText)) return;
-      const fd = new FormData(e.currentTarget);
+      const form = e.currentTarget;
+      const fd = new FormData(form);
       const body: Record<string, unknown> = { op, ...extra };
       for (const f of fields) body[f.name] = f.type === "checkbox" ? fd.get(f.name) === "on" : fd.get(f.name) ?? "";
       setBusy(true); setMsg(null);
@@ -25,7 +26,7 @@ export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, 
       const j = await r.json().catch(() => ({}));
       setBusy(false);
       setMsg(r.ok ? { ok: true, text: j.message ?? "Saved" } : { ok: false, text: j.error?.message ?? "Failed" });
-      if (r.ok) router.refresh();
+      if (r.ok) { if (resetOnSuccess) form.reset(); router.refresh(); }
     }}>
       {fields.map((f) => {
         const id = `${op}-${f.name}-${String(f.value ?? "").slice(0, 8)}`;

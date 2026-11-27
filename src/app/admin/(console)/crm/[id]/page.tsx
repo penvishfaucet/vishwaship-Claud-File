@@ -47,7 +47,7 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
           <section className="card crm-box" aria-labelledby="h-log">
             <h2 id="h-log">Log the conversation</h2>
             <p className="tiny muted" style={{ marginTop: 0 }}>What was said, what they want, when to call back — everyone on the team sees it here.</p>
-            <AdminOpForm endpoint="/api/admin/crm" op="log" extra={{ id: l.id }} submit="Save" fields={[
+            <AdminOpForm endpoint="/api/admin/crm" op="log" extra={{ id: l.id }} submit="Save" resetOnSuccess fields={[
               { name: "kind", label: "Type", type: "select", value: "call", options: [["call", "Call"], ["whatsapp", "WhatsApp chat"], ["note", "Note"]] },
               { name: "followUp", label: "Next follow-up (optional)", type: "datetime-local" },
               { name: "body", label: "What happened", type: "textarea", placeholder: "e.g. 150 orders/month, uses Delhivery, wants COD D+5. Call back Monday evening." },
@@ -71,7 +71,7 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
           <section className="card crm-box" aria-labelledby="h-fu">
             <h2 id="h-fu">Next follow-up</h2>
             <p className="small" style={{ marginTop: 0 }}>{l.nextFollowUpAt ? <b className={overdue ? "red" : ""}>⏰ {istShort(l.nextFollowUpAt)}{overdue ? " (due)" : ""}</b> : <span className="muted">Not set</span>}{l.preferredTime && <span className="muted"> · Best time: {l.preferredTime}</span>}</p>
-            <AdminOpForm endpoint="/api/admin/crm" op="followup" extra={{ id: l.id }} submit="Set follow-up" fields={[
+            <AdminOpForm key={`fu-${l.nextFollowUpAt?.toISOString() ?? ""}-${l.preferredTime ?? ""}`} endpoint="/api/admin/crm" op="followup" extra={{ id: l.id }} submit="Set follow-up" fields={[
               { name: "at", label: "Date & time", type: "datetime-local", value: l.nextFollowUpAt ? istInput(l.nextFollowUpAt) : "" },
               { name: "preferredTime", label: "Best time they gave", value: l.preferredTime ?? "", placeholder: "e.g. after 7 PM, Sunday" },
               { name: "note", label: "Note (optional)", type: "textarea" },
@@ -80,7 +80,7 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
 
           <section className="card crm-box" aria-labelledby="h-st">
             <h2 id="h-st">Status</h2>
-            <AdminOpForm endpoint="/api/admin/crm" op="status" extra={{ id: l.id }} submit="Update" fields={[
+            <AdminOpForm key={`st-${l.status}`} endpoint="/api/admin/crm" op="status" extra={{ id: l.id }} submit="Update" fields={[
               { name: "status", label: "Status", type: "select", value: l.status, options: LEAD_STATUSES.map((x) => [x, STATUS_LABEL[x]] as [string, string]) },
               { name: "note", label: "Reason / note (optional)", type: "textarea" },
             ]} />
@@ -89,7 +89,7 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
           {manager && (
             <section className="card crm-box" aria-labelledby="h-as">
               <h2 id="h-as">Assign to staff</h2>
-              <AdminOpForm endpoint="/api/admin/crm" op="assign" extra={{ id: l.id }} submit="Assign" fields={[
+              <AdminOpForm key={`as-${l.assignedTo ?? ""}`} endpoint="/api/admin/crm" op="assign" extra={{ id: l.id }} submit="Assign" fields={[
                 { name: "assignedTo", label: "Staff member", type: "select", value: l.assignedTo ?? "", options: [["", "— Unassigned —"], ...staff.map((u) => [u.id, `${u.name} (${u.role})`] as [string, string])] },
               ]} />
               <p className="tiny muted" style={{ margin: "6px 0 0" }}>Add staff in <Link className="link" href="/admin/staff/">Staff &amp; Roles</Link> — role <b>sales</b> sees only CRM Leads assigned to them.</p>

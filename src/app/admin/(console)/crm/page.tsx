@@ -71,7 +71,7 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
 
       <details className="card crm-add mb12">
         <summary className="b">+ Add lead</summary>
-        <AdminOpForm endpoint="/api/admin/crm" op="create" submit="Add lead" fields={[
+        <AdminOpForm endpoint="/api/admin/crm" op="create" submit="Add lead" resetOnSuccess fields={[
           { name: "name", label: "Name", required: true },
           { name: "mobile", label: "Mobile / WhatsApp", type: "tel", placeholder: "10-digit mobile" },
           { name: "city", label: "City" },
