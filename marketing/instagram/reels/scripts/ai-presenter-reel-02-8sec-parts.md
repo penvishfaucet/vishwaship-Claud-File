@@ -1,5 +1,7 @@
 # Vishwaship reel #2: 9 parts × 8 seconds (Google Flow / Veo)
 
+> **Why Veo repeats words:** if a word from the DIALOGUE also appears in quotes in the ACTION, Veo often says it twice. So ACTION lines here never quote dialogue words. CAPS and long dashes are also kept out of the dialogue, because they can cause pauses or repeats.
+
 Total about 72 seconds, 9:16. Each **Veo prompt** is complete: paste it as-is and you get an 8-second talking clip with voice.
 Each **B-roll prompt** makes a silent clip. In editing, put 2–3 seconds of it on top of the presenter at the time shown (his voice keeps playing underneath).
 **Flow tip:** create the presenter's face once, save it as an **Ingredient**, and attach it to all 9 presenter prompts.
@@ -10,8 +12,8 @@ Each **B-roll prompt** makes a silent clip. In editing, put 2–3 seconds of it 
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: The clip starts mid-motion as he bursts into frame from the left, slams both palms toward the camera, then points hard at the viewer with an angry, shocked face. A crash-zoom happens on "burn". On "ye platform try karo" he smirks and nods.
-DIALOGUE: "Kab tak apna profit shipping fee ke naam par BURN karte rahoge?! Isse accha hai — ye platform try karo!"
+ACTION: The clip starts mid-motion as he bursts into frame from the left, slams both palms toward the camera and points hard at the viewer with an angry, shocked face, with a fast crash-zoom in the first second. In the last two seconds he smirks and nods confidently. He speaks the line below exactly once, in one continuous breath, and does not repeat any word.
+DIALOGUE: "Kab tak apna profit shipping fee ke naam par burn karte rahoge? Ab bas, ye platform try karo!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -21,7 +23,7 @@ Vertical 9:16 slow-motion close-up: Indian rupee notes curling and burning with 
 **Edit timeline**
 - 0.0–2.5s: presenter crash-zoom, red flash on "BURN", bass-hit SFX, middle text **SHIPPING FEE 🔥**
 - 2.5–4.5s: burning-notes B-roll (voice continues)
-- 4.5–8.0s: back to the presenter, caption **"YE PLATFORM TRY KARO"**
+- 4.5–8.0s: back to the presenter, caption **"AB BAS — YE PLATFORM TRY KARO"**
 
 ---
 
@@ -29,8 +31,8 @@ Vertical 9:16 slow-motion close-up: Indian rupee notes curling and burning with 
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He leans forward, shakes his head hard, counts on his fingers, then wags his index finger "no" right at the lens on "mat karo", irritated.
-DIALOGUE: "Agar aapka bhi e-commerce business hai, toh customer tak product pahunchane ke liye koi bhi random courier use MAT karo!"
+ACTION: He leans forward, shakes his head hard, counts on his fingers, then wags his index finger "no" right at the lens at the end of the line, irritated. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Agar aapka bhi e-commerce business hai, toh customer tak product pahunchane ke liye koi bhi random courier use mat karo!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -48,8 +50,8 @@ Vertical 9:16 handheld shot: a messy pile of white courier polybags and brown bo
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: His face switches to a huge confident smile, he snaps his fingers loudly, spreads his hands wide like presenting something big, then raises his hand high on "85%".
-DIALOGUE: "Isse accha hai VISHWASHIP try karo — ek smart shipping aggregator, jiska 85% se zyada successful delivery rate hai!"
+ACTION: His face switches to a huge confident smile, he snaps his fingers loudly, spreads his hands wide like presenting something big, then raises his hand high near the end. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Isse accha hai Vishwaship try karo, ek smart shipping aggregator, jiska 85% se zyada successful delivery rate hai!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -67,8 +69,8 @@ Vertical 9:16 daylight shot: a delivery van with its doors open outside a wareho
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He throws his hand away dismissively on "khatam", then holds up three fingers and opens both hands wide, nodding fast, and points to the side as if showing a list.
-DIALOGUE: "Matlab RTO ka load hi KHATAM! Aur yahan aapko 30 se zyada courier options milte hain — BEST price par delivery!"
+ACTION: He throws his hand away dismissively at the start, then holds up three fingers and opens both hands wide, nodding fast, and points to the side as if showing a list. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Matlab RTO ka load hi khatam! Aur yahan aapko 30 se zyada courier options milte hain, best price par delivery!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -86,8 +88,8 @@ Vertical 9:16 macro shot: a hand scrolls a smartphone shipping app showing a lis
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He raises one eyebrow and asks with a challenging face, then points at the viewer with a big smile, then counts quickly on his fingers for "sale, orders, shipping".
-DIALOGUE: "Shopify store NAHI hai? Ye aapko proper online store bana ke dete hain — sale, orders, shipping, sab INKI zimmedari!"
+ACTION: He raises one eyebrow and asks with a challenging face, then points at the viewer with a big smile, then counts quickly on three fingers near the end. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Shopify store nahi hai? Ye aapko proper online store bana ke dete hain. Sale, orders, shipping, sab inki zimmedari!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -105,8 +107,8 @@ Vertical 9:16 over-the-shoulder shot: a young Indian woman entrepreneur excitedl
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He puts his hand on his chest on "sirf product aapka", then leans in like revealing a secret, holds up one finger, and smacks the back of his hand into his palm on "delivered".
-DIALOGUE: "Sirf product AAPKA! Aur charge? Sirf 1.5% plus GST — woh bhi sirf DELIVERED orders pe!"
+ACTION: He puts his hand on his chest at the start, then leans in like revealing a secret, holds up one finger, and smacks the back of his hand into his palm at the end. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Sirf product aapka! Aur charge? Sirf 1.5% plus GST, woh bhi sirf delivered orders pe!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -124,8 +126,8 @@ Vertical 9:16 cinematic shot: a courier hands a brown parcel to a smiling Indian
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He places his hand on his heart sincerely, shakes his finger firmly on "koi bot nahi", then gives a big confident thumbs up at the end.
-DIALOGUE: "Aur haan — DEDICATED manager milta hai! Koi bot nahi — ek REAL banda, jo aapke shipment ka khayal rakhega!"
+ACTION: He places his hand on his heart sincerely, shakes his finger firmly in the middle, then gives a big confident thumbs up at the end. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Aur haan, dedicated manager milta hai! Koi bot nahi, ek real banda jo aapke shipment ka khayal rakhega!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -143,8 +145,8 @@ Vertical 9:16 shot: a friendly Indian account manager with a headset at an offic
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He steps toward the camera with full intensity, makes a "swap" gesture with both hands on "change karo", then taps an imaginary screen in the air on "dashboard".
-DIALOGUE: "Profitable business karna hai? Toh product nahi — apna SHIPPING AGGREGATOR change karo! Sab kuch ek DASHBOARD mein!"
+ACTION: He steps toward the camera with full intensity, makes a swapping gesture with both hands in the middle, then taps an imaginary screen in the air at the end. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Profitable business karna hai? Toh product nahi, apna shipping aggregator change karo! Sab kuch ek dashboard mein!"
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll:** none. Use a **screen recording of your Vishwaship panel** (orders, P&L) instead.
@@ -159,8 +161,8 @@ No on-screen text, no subtitles, no logos.
 **Veo prompt**
 ```
 A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: He points down toward the bottom of the screen with both hands, nodding hard, says the last line with a big grin, then ends with a quick wink and freezes smiling.
-DIALOGUE: "Uske liye VISHWASHIP try karo! Baaki details ke liye — check the link below!"
+ACTION: He points down toward the bottom of the screen with both hands, nodding hard, says the last line with a big grin, then ends with a quick wink and stays silent, smiling, for the last second. He speaks the line exactly once, without repeating any word.
+DIALOGUE: "Uske liye Vishwaship try karo! Baaki details ke liye check the link below!"
 No on-screen text, no subtitles, no logos.
 ```
 **Edit timeline**
