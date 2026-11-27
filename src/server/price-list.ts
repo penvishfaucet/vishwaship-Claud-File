@@ -17,15 +17,17 @@ export const DEFAULT_ZONES = [
   { zone: "D", label: "North-East & J&K", pin: "781001" },
 ];
 export const SLABS_GRAMS = [500, 1000, 2000, 5000, 10000];
+/** Bumped when the cached list's shape changes, so older caches are rebuilt. */
+const LIST_VERSION = 2;
 
-export interface PriceRow { carrierCode: string; carrierName: string; serviceName: string; mode: string; zone: string; cells: Record<number, number | null>; codFee: number | null; eta: number | null }
-export interface PriceList { generatedAt: string; origin: string; zones: typeof DEFAULT_ZONES; rows: PriceRow[]; markupPct: number; personalized: boolean; effectiveFrom: string | null; gstPct: number; nonKyc?: boolean }
+export interface PriceRow { carrierCode: string; carrierName: string; serviceName: string; mode: string; zone: string; cells: Record<number, number | null>; codFee: number | null; codPct?: number | null; eta: number | null }
+export interface PriceList { generatedAt: string; origin: string; zones: typeof DEFAULT_ZONES; rows: PriceRow[]; markupPct: number; personalized: boolean; effectiveFrom: string | null; gstPct: number; nonKyc?: boolean; v?: number }
 
 export async function priceList(orgId: string, refresh = false): Promise<PriceList | { error: string }> {
   const cached = await orgSetting<PriceList>(orgId, "price_list_cache");
   const nonKyc = await nonKycRule(orgId);
   // the margin changes when KYC is approved: a list cached under the other margin is rebuilt
-  if (!refresh && cached && Date.now() - new Date(cached.generatedAt).getTime() < 12 * 3600_000 && !!cached.nonKyc === !!nonKyc) return cached;
+  if (!refresh && cached && Date.now() - new Date(cached.generatedAt).getTime() < 12 * 3600_000 && !!cached.nonKyc === !!nonKyc && cached.v === LIST_VERSION) return cached;
   const db = await getDb();
   const [wh] = await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, orgId), eq(schema.warehouses.active, true), eq(schema.warehouses.isDefault, true)));
   const [anyWh] = wh ? [wh] : await db.select().from(schema.warehouses).where(and(eq(schema.warehouses.orgId, orgId), eq(schema.warehouses.active, true)));
@@ -45,11 +47,20 @@ export async function priceList(orgId: string, refresh = false): Promise<PriceLi
         rows.set(k, r);
       }
     }
-    // COD fee per courier on this zone (₹1,000 COD, 500 g)
-    const { offers: cod } = await getQuotes({ mode: "B2C", originPincode: origin, destinationPincode: dest, paymentType: "cod", codAmount: 100_000, declaredValue: 100_000, direction: "forward", packages: pkg(500) }, orgId, { persist: false });
-    for (const o of cod) {
-      const r = rows.get(`${o.carrierCode}|${o.serviceName}|${z.zone}`);
-      if (r) r.codFee = o.lines.filter((l) => l.code === "cod_fee").reduce((t, l) => t + l.sellPreTax, 0) || null;
+    // COD charge per courier on this zone, shown like "₹30 or 1.5%": the flat minimum from a small COD
+    // order (₹100) and the percentage from a large one (₹20,000), when the fee grows with the amount.
+    const codFees = async (codPaise: number) => {
+      const { offers: cod } = await getQuotes({ mode: "B2C", originPincode: origin, destinationPincode: dest, paymentType: "cod", codAmount: codPaise, declaredValue: codPaise, direction: "forward", packages: pkg(500) }, orgId, { persist: false });
+      return new Map(cod.map((o) => [`${o.carrierCode}|${o.serviceName}|${z.zone}`, o.lines.filter((l) => l.code === "cod_fee").reduce((t, l) => t + l.sellPreTax, 0)]));
+    };
+    const small = await codFees(10_000);
+    const large = await codFees(2_000_000);
+    for (const [k, flat] of small) {
+      const r = rows.get(k);
+      if (!r) continue;
+      const big = large.get(k) ?? 0;
+      r.codFee = flat || null;
+      r.codPct = big > flat + 100 ? Math.round((big / 2_000_000) * 10_000) / 100 : null;
     }
   }
   const settings = await loadMarkupSettings();
@@ -58,7 +69,7 @@ export async function priceList(orgId: string, refresh = false): Promise<PriceLi
   const gst = await getSetting<number>("gst_bps", 1800);
   const list: PriceList = {
     generatedAt: new Date().toISOString(), origin, zones, rows: [...rows.values()].sort((a, b) => a.carrierName.localeCompare(b.carrierName) || a.zone.localeCompare(b.zone)),
-    markupPct: m.bps / 100, personalized: m.source === "customer_override", nonKyc: !!nonKyc, effectiveFrom: ov ? ov.effectiveFrom.toISOString() : null, gstPct: gst.value / 100,
+    markupPct: m.bps / 100, personalized: m.source === "customer_override", nonKyc: !!nonKyc, effectiveFrom: ov ? ov.effectiveFrom.toISOString() : null, gstPct: gst.value / 100, v: LIST_VERSION,
   };
   await saveOrgSetting(orgId, "price_list_cache", list);
   return list;

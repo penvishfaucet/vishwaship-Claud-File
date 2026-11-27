@@ -55,7 +55,7 @@ export const CUSTOMER_NAV_GROUPS: NavEntry[] = [
   ] },
   { id: "tools", group: "Tools", icon: Wrench, items: [
     { id: "tools.rates", href: "/portal/rates/", label: "Rate Calculator", icon: Calculator },
-    { id: "tools.price_list", href: "/portal/tools/price-list/", label: "Shipment Price List", icon: ListOrdered },
+    { id: "tools.price_list", href: "/portal/tools/price-list/", label: "Rate Chart", icon: ListOrdered },
     { id: "tools.activity", href: "/portal/tools/activity/", label: "Activity logs", icon: Activity },
     { id: "tools.couriers", href: "/portal/tools/couriers/", label: "Manage Courier", icon: Truck },
     { id: "tools.downloads", href: "/portal/tools/downloads/", label: "Report Download", icon: Download, module: "reports" },
