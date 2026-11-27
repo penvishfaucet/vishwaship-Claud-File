@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     if (!(await okStaff(assignedTo))) return apiError(422, "validation_error", "Pick a staff member with CRM access");
     const at = b.followUp ? fromIstInput(b.followUp) : null;
     const r = await createLead({ name: b.name, mobile: b.mobile || null, email: b.email, city: b.city, company: b.company, source: (LEAD_SOURCES as readonly string[]).includes(b.source) ? b.source : "manual", interest: b.interest, volume: b.volume, preferredTime: b.preferredTime, nextFollowUpAt: at, note: b.note, assignedTo: assignedTo || null }, s.userId);
-    if (r.existing) return apiError(409, "exists", `This mobile is already an open lead — open it: /admin/crm/${r.id}/`);
+    if (r.existing) return apiError(409, "conflict", `This mobile is already an open lead — open it: /admin/crm/${r.id}/`);
     await audit({ actorUserId: s.userId, actorKind: "staff", action: "crm.lead_created", targetType: "crm_lead", targetId: r.id, details: {} });
     return NextResponse.json({ ok: true, id: r.id, message: "Lead added" });
   }
