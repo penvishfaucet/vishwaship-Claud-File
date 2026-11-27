@@ -7,7 +7,7 @@ import { getDb, schema } from "@/server/db/client";
 import { sha256 } from "@/server/security/crypto";
 import { newId, randomToken } from "@/server/util/ids";
 
-const ROLES: StaffRole[] = ["owner", "operations", "finance", "support", "readonly"];
+const ROLES: StaffRole[] = ["owner", "operations", "finance", "support", "sales", "readonly"];
 /** 10-digit Indian mobile (the form Firebase OTP login returns), "" when empty, null when invalid. */
 const cleanMobile = (v: FormDataEntryValue | null) => {
   const d = String(v ?? "").replace(/\D/g, "").replace(/^(91|0)(?=\d{10}$)/, "");

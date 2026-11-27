@@ -337,6 +337,13 @@
       "when": 1795650000000,
       "tag": "0047_free_first_month",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795800000000,
+      "tag": "0048_crm_leads",
+      "breakpoints": true
     }
   ]
 }

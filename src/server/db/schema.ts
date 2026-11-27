@@ -15,7 +15,7 @@ const created = () => ts("created_at").notNull().default(sql`now()`);
 const paise = (n: string) => bigint(n, { mode: "number" });
 
 // ---------- identity ----------
-export const staffRole = pgEnum("staff_role", ["owner", "operations", "finance", "support", "readonly"]);
+export const staffRole = pgEnum("staff_role", ["owner", "operations", "finance", "support", "readonly", "sales"]);
 export const kycStatus = pgEnum("kyc_status", ["not_started", "pending", "approved", "changes_requested", "rejected"]);
 
 export const orgs = pgTable("orgs", {
@@ -1971,3 +1971,52 @@ export const franchisePayouts = pgTable("franchise_payouts", {
   createdAt: created(),
   updatedAt: ts("updated_at").notNull().default(sql`now()`),
 }, (t) => [uniqueIndex("franchise_payouts_statement").on(t.statementNumber), uniqueIndex("franchise_payouts_live_period").on(t.franchiseId, t.period).where(sql`status <> 'cancelled'`)]);
+
+// ---------- sales CRM (Admin → CRM Leads) ----------
+/**
+ * One prospective client (seller / B2B shipper). Comes from Meta Lead Ads forms automatically, or is added by staff
+ * (WhatsApp / call / website enquiries). Staff work it from Admin → CRM Leads: WhatsApp / call, notes, follow-ups.
+ */
+export const crmLeads = pgTable("crm_leads", {
+  id: id(),
+  name: text("name").notNull(),
+  mobile: text("mobile"), // 10-digit Indian mobile when it is one, else the number as given
+  email: text("email"),
+  city: text("city"),
+  company: text("company"),
+  source: text("source").notNull().default("manual"), // meta_form | whatsapp | instagram | website | call | referral | manual
+  campaign: text("campaign"),
+  adName: text("ad_name"),
+  metaLeadId: text("meta_lead_id"),
+  interest: text("interest"), // what they sell / ship
+  volume: text("volume"), // monthly orders / shipping volume
+  currentCourier: text("current_courier"),
+  answers: jsonb("answers").notNull().default([]), // [{ q, a }] every form answer as received
+  status: text("status").notNull().default("new"), // new | contacted | follow_up | interested | signed_up | not_interested | lost
+  assignedTo: text("assigned_to").references(() => users.id),
+  nextFollowUpAt: ts("next_follow_up_at"),
+  preferredTime: text("preferred_time"), // "Evening 6–8 PM", as the lead said
+  lastActivityAt: ts("last_activity_at"),
+  lastNote: text("last_note"),
+  orgId: text("org_id"), // the customer account once they sign up
+  createdBy: text("created_by"),
+  createdAt: created(),
+  updatedAt: ts("updated_at").notNull().default(sql`now()`),
+}, (t) => [
+  uniqueIndex("crm_leads_meta").on(t.metaLeadId),
+  index("crm_leads_status").on(t.status, t.updatedAt),
+  index("crm_leads_assigned").on(t.assignedTo, t.status),
+  index("crm_leads_follow_up").on(t.nextFollowUpAt),
+  index("crm_leads_mobile").on(t.mobile),
+]);
+
+/** Timeline of a lead: notes, calls, WhatsApp chats, status / owner / follow-up changes. */
+export const crmActivities = pgTable("crm_activities", {
+  id: id(),
+  leadId: text("lead_id").notNull().references(() => crmLeads.id),
+  kind: text("kind").notNull(), // created | note | call | whatsapp | status | assign | follow_up | form
+  body: text("body"),
+  meta: jsonb("meta").notNull().default({}),
+  byUserId: text("by_user_id"),
+  createdAt: created(),
+}, (t) => [index("crm_activities_lead").on(t.leadId, t.createdAt)]);

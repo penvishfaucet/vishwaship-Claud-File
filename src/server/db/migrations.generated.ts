@@ -867,5 +867,22 @@ export const EMBEDDED_MIGRATIONS: EmbeddedMigration[] = [
   "bps": true,
   "folderMillis": 1795650000000,
   "hash": "62efde00228434d624b047de11b7d286f35e6b545c0cbb9db086a630c67af2a2"
+ },
+ {
+  "tag": "0048_crm_leads",
+  "sql": [
+   "-- Admin → CRM Leads (owner 2026-11-28): Meta Lead Ads leads and staff-added enquiries, worked by staff with notes,\n-- WhatsApp / call logs and follow-ups. New staff role \"sales\" sees only the CRM leads assigned to them.\nALTER TYPE \"public\".\"staff_role\" ADD VALUE IF NOT EXISTS 'sales';",
+   "\nCREATE TABLE IF NOT EXISTS \"crm_leads\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"mobile\" text,\n\t\"email\" text,\n\t\"city\" text,\n\t\"company\" text,\n\t\"source\" text DEFAULT 'manual' NOT NULL,\n\t\"campaign\" text,\n\t\"ad_name\" text,\n\t\"meta_lead_id\" text,\n\t\"interest\" text,\n\t\"volume\" text,\n\t\"current_courier\" text,\n\t\"answers\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"status\" text DEFAULT 'new' NOT NULL,\n\t\"assigned_to\" text,\n\t\"next_follow_up_at\" timestamp with time zone,\n\t\"preferred_time\" text,\n\t\"last_activity_at\" timestamp with time zone,\n\t\"last_note\" text,\n\t\"org_id\" text,\n\t\"created_by\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"crm_leads_assigned_to_users_id_fk\" FOREIGN KEY (\"assigned_to\") REFERENCES \"public\".\"users\"(\"id\")\n);",
+   "\nCREATE TABLE IF NOT EXISTS \"crm_activities\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"lead_id\" text NOT NULL,\n\t\"kind\" text NOT NULL,\n\t\"body\" text,\n\t\"meta\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n\t\"by_user_id\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"crm_activities_lead_id_crm_leads_id_fk\" FOREIGN KEY (\"lead_id\") REFERENCES \"public\".\"crm_leads\"(\"id\")\n);",
+   "\nCREATE UNIQUE INDEX IF NOT EXISTS \"crm_leads_meta\" ON \"crm_leads\" USING btree (\"meta_lead_id\");",
+   "\nCREATE INDEX IF NOT EXISTS \"crm_leads_status\" ON \"crm_leads\" USING btree (\"status\",\"updated_at\");",
+   "\nCREATE INDEX IF NOT EXISTS \"crm_leads_assigned\" ON \"crm_leads\" USING btree (\"assigned_to\",\"status\");",
+   "\nCREATE INDEX IF NOT EXISTS \"crm_leads_follow_up\" ON \"crm_leads\" USING btree (\"next_follow_up_at\");",
+   "\nCREATE INDEX IF NOT EXISTS \"crm_leads_mobile\" ON \"crm_leads\" USING btree (\"mobile\");",
+   "\nCREATE INDEX IF NOT EXISTS \"crm_activities_lead\" ON \"crm_activities\" USING btree (\"lead_id\",\"created_at\");\n"
+  ],
+  "bps": true,
+  "folderMillis": 1795800000000,
+  "hash": "26e7db5396beb1853ab150ae666b145d5377c8f89cb48ff477d66fcb55f3ab6a"
  }
 ];

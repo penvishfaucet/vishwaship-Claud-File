@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { type Column, and, count, desc, eq, gte, inArray, lt, notInArray, sum } from "drizzle-orm";
 import { CustomerOverview } from "@/components/admin/CustomerOverview";
 import { formatINR } from "@/lib/money";
@@ -10,6 +11,9 @@ import { getDb, schema } from "@/server/db/client";
 
 export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ days?: string; denied?: string; from?: string; to?: string; customer?: string; q?: string }> }) {
   const sp = await searchParams;
+  // sales staff (CRM only) land on their leads
+  const me = await requireStaff();
+  if (!can(me.role, "shipments.read") && can(me.role, "crm.read")) redirect("/admin/crm/");
   const s = await requireStaff("shipments.read");
   const days = [1, 7, 30, 90].includes(Number(sp.days)) ? Number(sp.days) : 30;
   const since = new Date(Date.now() - days * 86400_000);

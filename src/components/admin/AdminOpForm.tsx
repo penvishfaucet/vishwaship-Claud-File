@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export type OpField =
-  | { name: string; label: string; type?: "text" | "number" | "date" | "email" | "textarea"; value?: string | number; step?: string; placeholder?: string; wide?: boolean }
+  | { name: string; label: string; type?: "text" | "number" | "date" | "email" | "textarea" | "tel" | "datetime-local"; value?: string | number; step?: string; placeholder?: string; wide?: boolean; required?: boolean }
   | { name: string; label: string; type: "select"; value?: string; options: Array<[string, string]>; wide?: boolean }
   | { name: string; label: string; type: "checkbox"; value?: boolean; wide?: boolean }
   | { name: string; label: string; type: "hidden"; value: string };
@@ -33,7 +33,7 @@ export function AdminOpForm({ op, fields, submit, confirmText, disabled, extra, 
         if (f.type === "checkbox") return <label key={f.name} className="check small" style={f.wide ? { flexBasis: "100%" } : undefined}><input type="checkbox" name={f.name} defaultChecked={!!f.value} disabled={disabled} /> {f.label}</label>;
         if (f.type === "select") return <div key={f.name} className="field" style={f.wide ? { flexBasis: "100%" } : undefined}><label htmlFor={id}>{f.label}</label><select id={id} name={f.name} className="select" defaultValue={f.value} disabled={disabled}>{f.options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>;
         if (f.type === "textarea") return <div key={f.name} className="field" style={{ flexBasis: "100%" }}><label htmlFor={id}>{f.label}</label><textarea id={id} name={f.name} className="input" rows={2} defaultValue={f.value} placeholder={f.placeholder} disabled={disabled} /></div>;
-        return <div key={f.name} className="field" style={f.wide ? { flex: 1, minWidth: 220 } : undefined}><label htmlFor={id}>{f.label}</label><input id={id} name={f.name} type={f.type ?? "text"} step={f.step} className="input" defaultValue={f.value} placeholder={f.placeholder} disabled={disabled} /></div>;
+        return <div key={f.name} className="field" style={f.wide ? { flex: 1, minWidth: 220 } : undefined}><label htmlFor={id}>{f.label}</label><input id={id} name={f.name} type={f.type ?? "text"} step={f.step} className="input" defaultValue={f.value} placeholder={f.placeholder} disabled={disabled} required={f.required} inputMode={f.type === "tel" ? "tel" : undefined} /></div>;
       })}
       {!disabled && <button className="btn btn-orange btn-sm" disabled={busy}>{busy ? "Working…" : submit}</button>}
       {msg && <span className={`small ${msg.ok ? "t-credit" : "t-debit"}`} role="status" style={{ flexBasis: "100%" }}>{msg.text}</span>}

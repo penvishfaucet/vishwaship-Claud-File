@@ -1,9 +1,12 @@
 import { Landmark,
-  Activity, AlertTriangle, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Handshake, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Store, Tags, Ticket, Truck, Users, Wallet, TrendingUp,
+  Activity, AlertTriangle, Contact, BadgeIndianRupee, Banknote, Bell, CreditCard, Boxes, FileSpreadsheet, Truck as TruckIcon, FileText, Layers, Mail, MapPin, MessageCircle, Palette, KeyRound, CornerUpLeft, FileDown, Handshake, Home, Package, Plug, Scale, ScrollText, ShieldCheck, Store, Tags, Ticket, Truck, Users, Wallet, TrendingUp,
 } from "lucide-react";
 import type { Permission } from "@/server/auth/rbac";
 
 export const ADMIN_NAV: Array<{ group: string; items: Array<{ href: string; label: string; icon: typeof Home; perm: Permission }> }> = [
+  { group: "SALES", items: [
+    { href: "/admin/crm/", label: "CRM Leads", icon: Contact, perm: "crm.read" },
+  ] },
   { group: "OPERATIONS", items: [
     { href: "/admin/", label: "Dashboard", icon: Home, perm: "shipments.read" },
     { href: "/admin/shipments/", label: "All Shipments", icon: Package, perm: "shipments.read" },

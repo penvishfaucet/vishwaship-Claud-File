@@ -89,6 +89,24 @@ registerHandler("store.meta.sync", async (p): Promise<JobResult> => {
   return { done: true };
 });
 
+/** metaleads.poll — every 5 minutes: new Meta Lead Ads leads of the Page (safety net behind the webhook). */
+registerHandler("metaleads.poll", async (): Promise<JobResult> => {
+  const { pollLeads } = await import("@/server/marketing/meta-leads");
+  await pollLeads();
+  return { done: true };
+});
+
+/** metaleads.lead — one Meta lead added to Admin → CRM Leads (once per lead). */
+registerHandler("metaleads.lead", async (p, attempt): Promise<JobResult> => {
+  const { deliverLead } = await import("@/server/marketing/meta-leads");
+  try {
+    await deliverLead(p as { leadId: string });
+    return { done: true };
+  } catch (e) {
+    return attempt >= 8 ? { dead: (e as Error).message } : { retryInSec: Math.min(3600, 30 * 2 ** attempt), error: (e as Error).message };
+  }
+});
+
 registerHandler("cod.send", async (p, attempt): Promise<JobResult> => {
   const { orderId } = p as { orderId: string };
   const r = await sendCodConfirmation(orderId);
@@ -168,6 +186,13 @@ export async function scheduleSweeps() {
     const auto = await db.select({ id: schema.storeConnections.id }).from(schema.storeConnections).where(and(eq(schema.storeConnections.autoSync, true), eq(schema.storeConnections.status, "connected")));
     for (const c of auto) await enqueue("store.sync", { connectionId: c.id }, { dedupeKey: `store.sync:${c.id}:${slot}` });
   } catch (e) { console.error("[store.sync]", (e as Error).message); }
+  // Meta Lead Ads → Google Sheet: poll every 5 minutes while the service is ON
+  try {
+    const { activeService } = await import("@/server/integrations/services");
+    if (await activeService("meta_leads")) await enqueue("metaleads.poll", {}, { dedupeKey: `metaleads.poll:${Math.floor(minute / 5)}` });
+  } catch (e) { console.error("[meta leads]", (e as Error).message); }
+  // CRM Leads: a lead whose mobile has signed up as a customer becomes "Signed up"
+  if (minute % 5 === 0) { try { const { sweepSignedUp } = await import("@/server/crm/leads"); await sweepSignedUp(); } catch (e) { console.error("[crm]", (e as Error).message); } }
   try { await sweepNoResponse(); } catch (e) { console.error("[cod no-response]", (e as Error).message); }
   // online store: expire unpaid checkouts (after re-checking Razorpay) and mirror cancelled shipping orders
   try { const { sweepStoreOrders } = await import("@/server/store/checkout"); await sweepStoreOrders(); }

@@ -16,8 +16,8 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics" | "meta_pixel";
-  group: "Email" | "Sign-in" | "WhatsApp" | "AI calling" | "Analytics";
+  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics" | "meta_pixel" | "meta_leads";
+  group: "Email" | "Sign-in" | "WhatsApp" | "AI calling" | "Analytics" | "Marketing";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
   guide: string[]; links: Array<{ label: string; url: string }>;
@@ -28,6 +28,25 @@ export type ServiceDef = {
 const appUrl = () => (process.env.APP_URL ?? (process.env.NODE_ENV === "production" ? "https://vishwaship.in" : "http://localhost:3000")).replace(/\/+$/, "");
 
 export const SERVICES: ServiceDef[] = [
+  {
+    adapter: "meta_leads", group: "Marketing", name: "Meta Lead Ads → CRM Leads",
+    purpose: "Every lead from a Facebook / Instagram Instant Form ad is added to Admin → CRM Leads automatically — instantly through the webhook, and a 5-minute check catches anything missed. Each lead is stored once.",
+    fields: [
+      { key: "pageId", label: "Facebook Page ID", secret: false, required: true, placeholder: "1510965878756741", help: "Page → About → Page transparency, or Business Settings → Pages" },
+      { key: "accessToken", label: "Access token (system user or Page)", secret: true, required: true, placeholder: "EAA…", help: "System user token with leads_retrieval, pages_show_list, pages_read_engagement, pages_manage_metadata, pages_manage_ads, ads_management" },
+      { key: "appSecret", label: "App secret (for the instant webhook)", secret: true, required: false, help: "App settings → Basic → App secret. Without it, leads still arrive by the 5-minute check." },
+      { key: "verifyToken", label: "Webhook verify token", secret: true, required: false, help: "Any long random text you choose (at least 16 characters)" },
+    ],
+    guide: [
+      "developers.facebook.com → My Apps → Create app (Business) in the Vishwaship business portfolio. App settings → Basic: privacy policy URL https://vishwaship.in/privacy/ → copy the App secret → switch the app to Live.",
+      "business.facebook.com → Settings → Users → System users → add one (Admin) → Assign assets: the Page (full control) and the app → Generate token for the app with the permissions listed under the Access token field, never expiring.",
+      "Settings → Integrations → Leads access: give the app / system user access to the Page leads (if leads access is restricted).",
+      "Paste everything below → Save → Test connection → Turn ON. Leads of the last 30 days are added on the first check.",
+      "Instant webhook (optional): the app → Webhooks → Page → Callback URL and Verify token from below → subscribe to “leadgen”. Then subscribe the Page: Graph API Explorer → POST /<page id>/subscribed_apps?subscribed_fields=leadgen with the Page token.",
+      "Check it with the Lead Ads Testing Tool: a test lead appears in CRM Leads within a minute (or 5 minutes without the webhook).",
+    ],
+    links: [{ label: "Meta for Developers", url: "https://developers.facebook.com/apps" }, { label: "Lead Ads Testing Tool", url: "https://developers.facebook.com/tools/lead-ads-testing" }, { label: "Business Settings", url: "https://business.facebook.com/settings" }],
+  },
   {
     adapter: "google_analytics", group: "Analytics", name: "Google Analytics 4 (website visitors)",
     purpose: "Counts visitors and the pages they use on vishwaship.com. Loads only after a visitor accepts analytics cookies in the cookie banner.",
@@ -196,10 +215,11 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   if (adapter === "aisensy") return [{ label: "Webhook URL", value: `${u}/api/webhooks/aisensy?token=<your webhook token>` }];
   if (adapter === "bolna") return [{ label: "Webhook URL", value: `${u}/api/webhooks/bolna?token=<your webhook token>` }];
   if (adapter === "meta_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
+  if (adapter === "meta_leads") return [{ label: "Webhook callback URL", value: `${u}/api/webhooks/meta-leads` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", meta_pixel: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", meta_pixel: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging", meta_leads: "marketing" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -230,6 +250,7 @@ function hostsFor(adapter: string, v: Record<string, string>): string[] {
   if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
   if (adapter === "firebase_phone") return ["www.googleapis.com"];
   if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
+  if (adapter === "meta_leads") return ["graph.facebook.com"];
   if (adapter === "aisensy") return ["backend.aisensy.com"];
   if (adapter === "bolna") return ["api.bolna.ai"];
   if (adapter === "wati") { try { const h = new URL(v.apiEndpoint).hostname.toLowerCase(); return /(^|\.)wati\.io$/.test(h) ? [h] : []; } catch { return []; } }
@@ -262,6 +283,10 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (adapter === "firebase_phone" && !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(v.authDomain.toLowerCase())) return { ok: false, message: "The Auth domain looks like your-project.firebaseapp.com" };
   if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
   if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
+  if (adapter === "meta_leads") v.pageId = v.pageId.replace(/\s/g, "");
+  if (adapter === "meta_leads" && !/^\d{6,20}$/.test(v.pageId)) return { ok: false, message: "The Page ID is a long number (Page → About → Page transparency)" };
+  if (adapter === "meta_leads" && v.verifyToken && v.verifyToken.length < 16) return { ok: false, message: "Choose a webhook verify token of at least 16 characters" };
+  if (adapter === "meta_leads" && !!v.verifyToken !== !!v.appSecret) return { ok: false, message: "For the instant webhook fill in both the App secret and the verify token (or leave both empty)" };
   if (adapter === "aisensy" && v.apiKey.length < 20) return { ok: false, message: "Copy the full AiSensy API key (Manage → API Key)" };
   if (((adapter === "wati" || adapter === "aisensy" || adapter === "bolna") && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
   const changed = def.fields.some((f) => (old[f.key] ?? "") !== v[f.key]);
@@ -343,6 +368,9 @@ export async function testService(adapter: ServiceDef["adapter"], by: string): P
         ? { ok: false, message: "AiSensy rejected the API key — copy it again from Manage → API Key" }
         : x.status >= 500 ? { ok: false, message: `AiSensy HTTP ${x.status} — try again` }
         : { ok: true, message: "AiSensy accepted the API key (test campaign not found, nothing was sent)" };
+    } else if (adapter === "meta_leads") {
+      const { testMetaLeads } = await import("@/server/marketing/meta-leads");
+      res = await testMetaLeads(v);
     } else {
       const x = await call(`https://graph.facebook.com/v21.0/${encodeURIComponent(v.phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`, { headers: { authorization: `Bearer ${v.accessToken}` } });
       const j = (await x.json().catch(() => ({}))) as { display_phone_number?: string; verified_name?: string; error?: { message?: string } };
