@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { AdminOpForm } from "@/components/admin/AdminOpForm";
 import { CrmWhatsAppComposer } from "@/components/admin/CrmWhatsApp";
+import { CrmDeleteLead } from "@/components/admin/CrmDeleteLead";
 import { requireStaff } from "@/server/auth/session";
 import { canSee, crmStaff, getLead, isManager, staffNames } from "@/server/crm/leads";
 import { getDb, schema } from "@/server/db/client";
@@ -118,6 +119,14 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
                 { name: "assignedTo", label: "Staff member", type: "select", value: l.assignedTo ?? "", options: [["", "— Unassigned —"], ...staff.map((u) => [u.id, `${u.name} (${u.role})`] as [string, string])] },
               ]} />
               <p className="tiny muted" style={{ margin: "6px 0 0" }}>Add staff in <Link className="link" href="/admin/staff/">Staff &amp; Roles</Link> — role <b>sales</b> sees only CRM Leads assigned to them.</p>
+            </section>
+          )}
+
+          {manager && (
+            <section className="card crm-box" aria-labelledby="h-del">
+              <h2 id="h-del">Delete lead</h2>
+              <p className="tiny muted" style={{ marginTop: 0 }}>For test or junk entries only. The lead and its whole timeline are removed for good (recorded in the Audit Log). For a real person who said no, set the status to Not interested / Lost instead.</p>
+              <CrmDeleteLead id={l.id} name={l.name} />
             </section>
           )}
 

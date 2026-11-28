@@ -18,6 +18,7 @@ const Body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("assign"), id: z.string().max(40), assignedTo: str(40) }),
   z.object({ op: z.literal("followup"), id: z.string().max(40), at: str(20), preferredTime: str(120), note: str(2000) }),
   z.object({ op: z.literal("log"), id: z.string().max(40), kind: z.enum(["note", "call", "whatsapp"]), outcome: str(20), body: str(2000), followUp: str(20) }),
+  z.object({ op: z.literal("delete"), id: z.string().max(40) }),
   z.object({ op: z.literal("wa_open"), id: z.string().max(40), template: str(20) }),
   z.object({ op: z.literal("wa_template"), id: z.string().max(40), template: z.string().min(1).max(512), mediaUrl: str(1000) }),
   z.object({ op: z.literal("wa_text"), id: z.string().max(40), text: str(4096), mediaType: z.enum(["", "image", "video"]).optional().default(""), mediaUrl: str(1000) }),
@@ -60,6 +61,17 @@ export async function POST(req: Request) {
 
   const lead = await getLead(b.id);
   if (!lead || !canSee(s, lead)) return apiError(404, "not_found", "Lead not found");
+
+  if (b.op === "delete") {
+    // owner / CRM manager only: removes the lead and its timeline for good (test or junk entries)
+    if (!isManager(s)) return apiError(403, "forbidden", "Only the owner / a CRM manager can delete leads");
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.crmActivities).where(eq(schema.crmActivities.leadId, lead.id));
+      await tx.delete(L).where(eq(L.id, lead.id));
+    });
+    await audit({ actorUserId: s.userId, actorKind: "staff", action: "crm.lead_deleted", targetType: "crm_lead", targetId: lead.id, details: { name: lead.name, mobile: lead.mobile, source: lead.source, metaLeadId: lead.metaLeadId } });
+    return NextResponse.json({ ok: true, message: "Lead deleted" });
+  }
 
   if (b.op === "wa_template" || b.op === "wa_text") {
     const r = b.op === "wa_template"
