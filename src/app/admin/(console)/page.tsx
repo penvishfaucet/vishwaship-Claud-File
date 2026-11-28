@@ -8,6 +8,9 @@ import { ownAccountIds } from "@/server/finance/own-accounts";
 import { can } from "@/server/auth/rbac";
 import { requireStaff } from "@/server/auth/session";
 import { getDb, schema } from "@/server/db/client";
+import { crmToday } from "@/server/crm/leads";
+import { CrmQuickActions } from "@/components/admin/CrmWhatsApp";
+import { callOutcome, istShort } from "@/lib/crm";
 
 export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ days?: string; denied?: string; from?: string; to?: string; customer?: string; q?: string }> }) {
   const sp = await searchParams;
@@ -36,6 +39,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
   const showMoney = can(s.role, "shipments.cost.read");
   const sell = Number(tot.sell ?? 0), cost = Number(tot.cost ?? 0);
   const pnl = showMoney ? (await pnlByOrg({ from: since, to: new Date() })).total : null;
+  const crm = can(s.role, "crm.read") ? await crmToday(s, 10).catch(() => null) : null;
 
   const Tile = ({ href, label, value, tone }: { href: string; label: string; value: string | number; tone: string }) => (
     <Link className={`stat ${tone} stat-link`} href={href}><div className="t">{label}</div><div className="v">{value}</div></Link>
@@ -44,6 +48,30 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
     <>
       {sp.denied && <p className="err mb12" role="alert">Your role doesn’t have access to that section ({sp.denied}).</p>}
       <div className="page-h"><h1>Dashboard</h1></div>
+      {crm && (crm.dueCount > 0 || crm.waCount > 0) && (
+        <section className="card crm-today" aria-labelledby="crm-today-h">
+          <div className="row wrap" style={{ justifyContent: "space-between", gap: 8 }}>
+            <h2 id="crm-today-h">📞 Aaj ke follow-ups — {crm.dueCount} call / message{crm.waCount ? <> · <Link className="link" href="/admin/crm/?tab=wa">💬 {crm.waCount} new WhatsApp {crm.waCount === 1 ? "reply" : "replies"}</Link></> : null}</h2>
+            <Link className="btn btn-sm btn-navy" href="/admin/crm/?tab=due">Open all</Link>
+          </div>
+          {crm.due.length > 0 && (
+            <ul>
+              {crm.due.map((l) => (
+                <li key={l.id}>
+                  <span className="small">
+                    <Link className="b link-navy" href={`/admin/crm/${l.id}/`}>{l.name}</Link>
+                    <span className="muted">{l.company ? ` · ${l.company}` : ""}{l.city ? ` · ${l.city}` : ""}</span>
+                    {" · "}<b className={l.nextFollowUpAt && l.nextFollowUpAt < new Date() ? "red" : ""}>⏰ {istShort(l.nextFollowUpAt!)}</b>
+                    {l.lastCallOutcome && <span className="muted"> · last call: {callOutcome(l.lastCallOutcome)?.label ?? l.lastCallOutcome}</span>}
+                    {l.lastNote && <span className="tiny muted" style={{ display: "block" }}>{l.lastNote.slice(0, 120)}</span>}
+                  </span>
+                  {l.mobile && <CrmQuickActions id={l.id} mobile={l.mobile} name={l.name} template="followup" />}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <CustomerOverview sp={sp} contacts={can(s.role, "customers.read")} own={own} />
       <div className="page-h">
         <h2 className="b" style={{ fontSize: 18, margin: 0 }}>Operations</h2>

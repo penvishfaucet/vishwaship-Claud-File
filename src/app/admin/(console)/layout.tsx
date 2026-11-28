@@ -2,7 +2,8 @@ import { AdminShell } from "@/components/admin/AdminShell";
 import { after } from "next/server";
 import { kickJobsIfIdle } from "@/server/jobs/kick";
 import { staffLogout } from "@/server/auth/actions";
-import { ROLE_PERMISSIONS } from "@/server/auth/rbac";
+import { ROLE_PERMISSIONS, can } from "@/server/auth/rbac";
+import { crmToday } from "@/server/crm/leads";
 import { requireStaff } from "@/server/auth/session";
 import { markStaffAlertsSeen, staffBell } from "@/server/admin/alerts";
 import { weightCounts } from "@/server/weight/courier-dispute";
@@ -16,7 +17,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const s = await requireStaff();
   const bell = await staffBell().catch(() => ({ items: [], unseen: 0, pendingRecharges: 0 }));
   const wc = await weightCounts().catch(() => ({ open: 0, disputed: 0 }));
-  const navBadges = { "/admin/disputes/": wc.disputed ? { n: wc.disputed, tone: "red" as const, title: `${wc.disputed} client dispute(s) to review` } : { n: wc.open, tone: "green" as const, title: `${wc.open} open weight discrepancies` } };
+  const crm = can(s.role, "crm.read") ? await crmToday(s, 0).catch(() => ({ dueCount: 0, waCount: 0 })) : { dueCount: 0, waCount: 0 };
+  const navBadges = {
+    "/admin/disputes/": wc.disputed ? { n: wc.disputed, tone: "red" as const, title: `${wc.disputed} client dispute(s) to review` } : { n: wc.open, tone: "green" as const, title: `${wc.open} open weight discrepancies` },
+    "/admin/crm/": { n: crm.dueCount + crm.waCount, tone: "red" as const, title: `${crm.dueCount} follow-up(s) due today · ${crm.waCount} lead(s) with new WhatsApp replies` },
+  };
   return (
     <AdminShell user={{ name: s.name, role: s.role }} allowed={ROLE_PERMISSIONS[s.role]} logout={staffLogout} bell={bell} markSeen={markStaffAlertsSeen} navBadges={navBadges}>
       {children}

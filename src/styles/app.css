@@ -686,3 +686,16 @@ html.dark .uav-emoji{background:#22365e}
 @media (max-width:900px){.crm-grid{grid-template-columns:1fr}.crm-list{grid-template-columns:1fr}}
 @media (max-width:520px){.crm-filters .select,.crm-filters .input{flex:1 1 100%}.crm-answers{grid-template-columns:1fr}.crm-card-f{flex-direction:column;align-items:stretch}.crm-card-f .row{justify-content:flex-end}}
 .crm-filters .input,.crm-filters .select{width:auto}.crm-filters .input{flex:1 1 220px}
+/* CRM WhatsApp chat (Cloud API) */
+.crm-chat{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow-y:auto;padding:10px;background:#efeae2;border-radius:10px}
+.crm-bub{max-width:85%;padding:7px 10px;border-radius:10px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.08);align-self:flex-start}
+.crm-bub.out{align-self:flex-end;background:#d9fdd3}.crm-bub.manual{align-self:center;background:#fff8e1}
+.crm-bub.preview{align-self:stretch;max-width:none;border:1px dashed #1fa855}
+.crm-bub-media{display:block;max-width:100%;max-height:220px;border-radius:8px;margin-bottom:6px}
+.crm-bub-f{color:var(--muted);margin-top:3px;text-align:right}
+.crm-wa-tpl{padding-top:8px;border-top:1px solid var(--line)}
+.crm-unread{display:inline-block;padding:1px 7px;border-radius:9px;background:#1fa855;color:#fff;font-size:10.5px;font-weight:600}
+.crm-tl li.k-wa_in::before{background:#1fa855}.crm-tl li.k-wa_out::before{background:#128c7e}
+.crm-today{padding:14px;margin-bottom:16px;border-left:4px solid var(--orange)}.crm-today h2{font-size:15px;margin:0 0 8px}
+.crm-today ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.crm-today li{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px solid var(--line)}

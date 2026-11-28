@@ -15,7 +15,25 @@ export const SOURCE_LABEL: Record<string, string> = {
 
 export const ACTIVITY_LABEL: Record<string, string> = {
   created: "Lead added", note: "Note", call: "Call", whatsapp: "WhatsApp", status: "Status", assign: "Assigned", follow_up: "Follow-up", form: "Ad form",
+  wa_out: "WhatsApp sent", wa_in: "WhatsApp reply",
 };
+
+/**
+ * What happened on a call. `status` moves the lead (only forward from New / Contacted / Follow-up);
+ * `retryDays` sets the next follow-up when none was given (no answer → try again tomorrow).
+ */
+export const CALL_OUTCOMES = [
+  { key: "interested", label: "Baat hui — interested", status: "interested", retryDays: 0 },
+  { key: "callback", label: "Baat hui — baad me call karo", status: "follow_up", retryDays: 1 },
+  { key: "info_sent", label: "Baat hui — details bhejni hain", status: "contacted", retryDays: 1 },
+  { key: "no_answer", label: "Phone nahi uthaya", status: "contacted", retryDays: 1 },
+  { key: "busy", label: "Busy / call cut", status: "contacted", retryDays: 1 },
+  { key: "switched_off", label: "Switched off / not reachable", status: "contacted", retryDays: 1 },
+  { key: "not_interested", label: "Not interested", status: "not_interested", retryDays: 0 },
+  { key: "wrong_number", label: "Wrong number", status: "lost", retryDays: 0 },
+] as const;
+export type CallOutcome = (typeof CALL_OUTCOMES)[number]["key"];
+export const callOutcome = (k: string | null | undefined) => CALL_OUTCOMES.find((o) => o.key === k);
 
 /** 10-digit Indian mobile when it is one (drops +91 / 91 / 0), else just the digits. */
 export function normMobile(raw: string): string {

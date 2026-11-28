@@ -6,7 +6,9 @@ import { apiStaff } from "@/server/auth/session";
 import { addActivity, canSee, createLead, crmStaff, getLead, isManager } from "@/server/crm/leads";
 import { getDb, schema } from "@/server/db/client";
 import { apiError, parseJson } from "@/server/http";
-import { LEAD_SOURCES, STATUS_LABEL, WA_TEMPLATES, fromIstInput, isLeadStatus, istShort, normMobile } from "@/lib/crm";
+import { LEAD_SOURCES, STATUS_LABEL, WA_TEMPLATES, callOutcome, fromIstInput, isLeadStatus, istInput, istShort, normMobile } from "@/lib/crm";
+import { type CrmWaMedia, MEDIA_SETTING, sendSession, sendTemplate } from "@/server/crm/whatsapp";
+import { getSetting } from "@/server/quotes/service";
 
 const str = (max: number) => z.string().max(max).optional().default("");
 const Body = z.discriminatedUnion("op", [
@@ -15,8 +17,11 @@ const Body = z.discriminatedUnion("op", [
   z.object({ op: z.literal("status"), id: z.string().max(40), status: z.string().max(20), note: str(2000) }),
   z.object({ op: z.literal("assign"), id: z.string().max(40), assignedTo: str(40) }),
   z.object({ op: z.literal("followup"), id: z.string().max(40), at: str(20), preferredTime: str(120), note: str(2000) }),
-  z.object({ op: z.literal("log"), id: z.string().max(40), kind: z.enum(["note", "call", "whatsapp"]), body: z.string().min(1).max(2000), followUp: str(20) }),
+  z.object({ op: z.literal("log"), id: z.string().max(40), kind: z.enum(["note", "call", "whatsapp"]), outcome: str(20), body: str(2000), followUp: str(20) }),
   z.object({ op: z.literal("wa_open"), id: z.string().max(40), template: str(20) }),
+  z.object({ op: z.literal("wa_template"), id: z.string().max(40), template: z.string().min(1).max(512), mediaUrl: str(1000) }),
+  z.object({ op: z.literal("wa_text"), id: z.string().max(40), text: str(4096), mediaType: z.enum(["", "image", "video"]).optional().default(""), mediaUrl: str(1000) }),
+  z.object({ op: z.literal("wa_media"), template: z.string().min(1).max(512), url: str(1000) }),
 ]);
 
 /** Admin → CRM Leads. crm.read works the caller's own leads; crm.manage works every lead and assigns them. */
@@ -41,8 +46,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, id: r.id, message: "Lead added" });
   }
 
+  if (b.op === "wa_media") {
+    if (!isManager(s)) return apiError(403, "forbidden", "Only the owner / a CRM manager can change WhatsApp settings");
+    const url = b.url.trim();
+    if (url && !/^https:\/\/\S+$/i.test(url)) return apiError(422, "validation_error", "The link must start with https://");
+    const cur = (await getSetting<CrmWaMedia>(MEDIA_SETTING, {})).value;
+    const value: CrmWaMedia = { ...cur };
+    if (url) value[b.template] = { url }; else delete value[b.template];
+    await db.insert(schema.pricingSettings).values({ key: MEDIA_SETTING, value }).onConflictDoUpdate({ target: schema.pricingSettings.key, set: { value, updatedAt: new Date() } });
+    await audit({ actorUserId: s.userId, actorKind: "staff", action: "crm.wa_media", targetType: "setting", targetId: MEDIA_SETTING, details: { template: b.template, url } });
+    return NextResponse.json({ ok: true, message: url ? "Photo / video link saved" : "Link removed" });
+  }
+
   const lead = await getLead(b.id);
   if (!lead || !canSee(s, lead)) return apiError(404, "not_found", "Lead not found");
+
+  if (b.op === "wa_template" || b.op === "wa_text") {
+    const r = b.op === "wa_template"
+      ? await sendTemplate(lead.id, b.template, s.userId, b.mediaUrl || undefined)
+      : await sendSession(lead.id, b.text, s.userId, b.mediaType && b.mediaUrl ? { type: b.mediaType, url: b.mediaUrl.trim() } : undefined);
+    return r.ok ? NextResponse.json({ ok: true, message: r.message }) : apiError(422, "validation_error", r.message);
+  }
 
   if (b.op === "update") {
     const mobile = b.mobile ? normMobile(b.mobile) : null;
@@ -75,15 +99,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, message: at ? `Follow-up set for ${istShort(at)}` : "Follow-up cleared" });
   }
   if (b.op === "log") {
-    const label = { note: "", call: "📞 Call: ", whatsapp: "💬 WhatsApp: " }[b.kind];
-    await addActivity(lead.id, b.kind, `${label}${b.body.trim()}`, s.userId);
-    const at = b.followUp ? fromIstInput(b.followUp) : null;
-    if (at) {
+    const oc = b.kind === "call" ? callOutcome(b.outcome) : undefined;
+    if (b.kind === "call" && !oc) return apiError(422, "validation_error", "Pick what happened on the call");
+    if (b.kind !== "call" && !b.body.trim()) return apiError(422, "validation_error", "Write what happened");
+    const label = { note: "", call: `📞 Call — ${oc?.label ?? ""}${b.body.trim() ? ": " : ""}`, whatsapp: "💬 WhatsApp: " }[b.kind];
+    await addActivity(lead.id, b.kind, `${label}${b.body.trim()}`, s.userId, oc ? { outcome: oc.key } : {});
+    let at = b.followUp ? fromIstInput(b.followUp) : null;
+    if (b.followUp && !at) return apiError(422, "validation_error", "Pick a valid date and time");
+    // no answer / busy / call back without a date → try again tomorrow at 11 AM (IST)
+    if (!at && oc && oc.retryDays) at = fromIstInput(`${istInput(new Date(Date.now() + oc.retryDays * 86400_000)).slice(0, 10)}T11:00`);
+    const closing = oc && (oc.status === "not_interested" || oc.status === "lost");
+    if (at && !closing) {
       await db.update(L).set({ nextFollowUpAt: at, updatedAt: new Date() }).where(eq(L.id, lead.id));
       await addActivity(lead.id, "follow_up", `Next follow-up: ${istShort(at)}`, s.userId, { at: at.toISOString() });
     }
-    if (lead.status === "new" && b.kind !== "note") await db.update(L).set({ status: at ? "follow_up" : "contacted" }).where(eq(L.id, lead.id));
-    return NextResponse.json({ ok: true, message: "Saved to the timeline" });
+    const movable = ["new", "contacted", "follow_up"].includes(lead.status);
+    const next = lead.status === "signed_up" ? null : oc ? (closing ? oc.status : movable ? (at && oc.status === "contacted" ? "follow_up" : oc.status) : null)
+      : lead.status === "new" && b.kind !== "note" ? (at ? "follow_up" : "contacted") : null;
+    await db.update(L).set({
+      ...(next && next !== lead.status ? { status: next } : {}), ...(closing ? { nextFollowUpAt: null } : {}),
+      ...(oc ? { lastCallOutcome: oc.key } : {}), updatedAt: new Date(),
+    }).where(eq(L.id, lead.id));
+    if (next && next !== lead.status) await addActivity(lead.id, "status", `${STATUS_LABEL[lead.status as keyof typeof STATUS_LABEL] ?? lead.status} → ${STATUS_LABEL[next as keyof typeof STATUS_LABEL]} (call: ${oc?.label ?? b.kind})`, s.userId, { from: lead.status, to: next, auto: true });
+    return NextResponse.json({ ok: true, message: at && !closing ? `Saved — next follow-up ${istShort(at)}` : "Saved to the timeline" });
   }
   // wa_open: the WhatsApp chat was opened from the CRM (the message itself is sent from the staff member's WhatsApp)
   const t = WA_TEMPLATES.find((x) => x.key === b.template);

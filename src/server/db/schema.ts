@@ -2000,6 +2000,11 @@ export const crmLeads = pgTable("crm_leads", {
   preferredTime: text("preferred_time"), // "Evening 6–8 PM", as the lead said
   lastActivityAt: ts("last_activity_at"),
   lastNote: text("last_note"),
+  /** WhatsApp (CRM Cloud API): last message from / to the lead; replies not yet seen by staff. */
+  lastWaInAt: ts("last_wa_in_at"),
+  lastWaOutAt: ts("last_wa_out_at"),
+  waUnread: integer("wa_unread").notNull().default(0),
+  lastCallOutcome: text("last_call_outcome"), // CALL_OUTCOMES key of the latest logged call
   orgId: text("org_id"), // the customer account once they sign up
   createdBy: text("created_by"),
   createdAt: created(),

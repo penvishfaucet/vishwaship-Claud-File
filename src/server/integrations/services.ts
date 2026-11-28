@@ -16,7 +16,7 @@ import { safeFetch } from "@/server/security/safe-fetch";
 
 export type ServiceField = { key: string; label: string; secret: boolean; required: boolean; placeholder?: string; help?: string };
 export type ServiceDef = {
-  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics" | "meta_pixel" | "meta_leads";
+  adapter: "resend" | "google_oauth" | "firebase_phone" | "wati" | "meta_whatsapp" | "aisensy" | "bolna" | "google_analytics" | "meta_pixel" | "meta_leads" | "crm_whatsapp";
   group: "Email" | "Sign-in" | "WhatsApp" | "AI calling" | "Analytics" | "Marketing";
   name: string; purpose: string; fields: ServiceField[];
   /** How to get the keys — shown on the page so anyone on the team can set it up. */
@@ -202,6 +202,26 @@ export const SERVICES: ServiceDef[] = [
     ],
     links: [{ label: "Meta for Developers", url: "https://developers.facebook.com/apps" }, { label: "WhatsApp Manager", url: "https://business.facebook.com/wa/manage/home" }],
   },
+  {
+    adapter: "crm_whatsapp", group: "Marketing", name: "WhatsApp for CRM Leads (Cloud API)",
+    purpose: "Your business number (e.g. 99974 04427) on Meta's Cloud API: send the intro message with photo / video to leads from Admin → CRM Leads and see every reply there. Separate from the COD WhatsApp above.",
+    fields: [
+      { key: "phoneNumberId", label: "Phone number ID", secret: false, required: true, placeholder: "1234567890…", help: "WhatsApp Manager → Phone numbers → your number → Phone number ID" },
+      { key: "wabaId", label: "WhatsApp Business Account ID", secret: false, required: true, placeholder: "1234567890…", help: "Needed to list your approved message templates" },
+      { key: "accessToken", label: "Permanent access token", secret: true, required: true, placeholder: "EAA…", help: "System user token with whatsapp_business_messaging + whatsapp_business_management" },
+      { key: "appSecret", label: "App secret", secret: true, required: true, help: "App settings → Basic → App secret (checks webhook signatures)" },
+      { key: "verifyToken", label: "Webhook verify token", secret: true, required: true, help: "Any long random text you choose (16+ characters)" },
+    ],
+    guide: [
+      "WhatsApp Manager → Add phone number → “Use your WhatsApp Business app number” (coexistence) → scan the QR code with the WhatsApp Business app on the phone. The app keeps working; chats also reach the CRM.",
+      "Copy the Phone number ID and the WhatsApp Business Account ID.",
+      "business.facebook.com → Settings → System users → Generate token for your app with whatsapp_business_messaging and whatsapp_business_management (never expires).",
+      "App settings → Basic → App secret. Choose a verify token. Paste everything below → Save → Test connection → Turn ON.",
+      "App → WhatsApp → Configuration → Webhook: the Callback URL and verify token below → Verify and save → subscribe to “messages”.",
+      "WhatsApp Manager → Message templates: create the intro template (Marketing, header Image or Video). Once Approved it appears in CRM Leads → WhatsApp settings.",
+    ],
+    links: [{ label: "WhatsApp Manager", url: "https://business.facebook.com/wa/manage/home" }, { label: "Meta for Developers", url: "https://developers.facebook.com/apps" }],
+  },
 ];
 
 export const serviceDef = (adapter: string) => SERVICES.find((s) => s.adapter === adapter);
@@ -214,12 +234,12 @@ export function serviceInfo(adapter: string): Array<{ label: string; value: stri
   if (adapter === "wati") return [{ label: "Webhook URL", value: `${u}/api/webhooks/wati?token=<your webhook token>` }];
   if (adapter === "aisensy") return [{ label: "Webhook URL", value: `${u}/api/webhooks/aisensy?token=<your webhook token>` }];
   if (adapter === "bolna") return [{ label: "Webhook URL", value: `${u}/api/webhooks/bolna?token=<your webhook token>` }];
-  if (adapter === "meta_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
+  if (adapter === "meta_whatsapp" || adapter === "crm_whatsapp") return [{ label: "Callback URL", value: `${u}/api/webhooks/meta-whatsapp` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
   if (adapter === "meta_leads") return [{ label: "Webhook callback URL", value: `${u}/api/webhooks/meta-leads` }, { label: "Verify token", value: "the Webhook verify token you entered below" }];
   return [];
 }
 
-const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", meta_pixel: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging", meta_leads: "marketing" };
+const CATEGORY: Record<ServiceDef["adapter"], string> = { google_analytics: "analytics", meta_pixel: "analytics", resend: "email", google_oauth: "login", firebase_phone: "login", wati: "messaging", meta_whatsapp: "messaging", aisensy: "messaging", bolna: "messaging", meta_leads: "marketing", crm_whatsapp: "marketing" };
 
 /** The account row for a service (created on first use; an older WATI row is reused). */
 export async function serviceRow(adapter: ServiceDef["adapter"]) {
@@ -249,7 +269,7 @@ function hostsFor(adapter: string, v: Record<string, string>): string[] {
   if (adapter === "resend") return ["api.resend.com"];
   if (adapter === "google_oauth") return ["oauth2.googleapis.com"];
   if (adapter === "firebase_phone") return ["www.googleapis.com"];
-  if (adapter === "meta_whatsapp") return ["graph.facebook.com"];
+  if (adapter === "meta_whatsapp" || adapter === "crm_whatsapp") return ["graph.facebook.com"];
   if (adapter === "meta_leads") return ["graph.facebook.com"];
   if (adapter === "aisensy") return ["backend.aisensy.com"];
   if (adapter === "bolna") return ["api.bolna.ai"];
@@ -282,13 +302,13 @@ export async function saveService(adapter: ServiceDef["adapter"], input: Record<
   if (adapter === "firebase_phone" && !/^[a-z0-9-]{4,40}$/.test(v.projectId)) return { ok: false, message: "The Project ID is lowercase letters, numbers and dashes (e.g. vishwaship-app)" };
   if (adapter === "firebase_phone" && !/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(v.authDomain.toLowerCase())) return { ok: false, message: "The Auth domain looks like your-project.firebaseapp.com" };
   if (adapter === "wati" && !hostsFor("wati", v).length) return { ok: false, message: "The WATI API endpoint must be an https://…wati.io URL (copy it from WATI → API Docs)" };
-  if (adapter === "meta_whatsapp" && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
+  if ((adapter === "meta_whatsapp" || adapter === "crm_whatsapp") && !/^\d{6,}$/.test(v.phoneNumberId)) return { ok: false, message: "The Phone number ID is a number (Meta → WhatsApp → API Setup)" };
   if (adapter === "meta_leads") v.pageId = v.pageId.replace(/\s/g, "");
   if (adapter === "meta_leads" && !/^\d{6,20}$/.test(v.pageId)) return { ok: false, message: "The Page ID is a long number (Page → About → Page transparency)" };
   if (adapter === "meta_leads" && v.verifyToken && v.verifyToken.length < 16) return { ok: false, message: "Choose a webhook verify token of at least 16 characters" };
   if (adapter === "meta_leads" && !!v.verifyToken !== !!v.appSecret) return { ok: false, message: "For the instant webhook fill in both the App secret and the verify token (or leave both empty)" };
   if (adapter === "aisensy" && v.apiKey.length < 20) return { ok: false, message: "Copy the full AiSensy API key (Manage → API Key)" };
-  if (((adapter === "wati" || adapter === "aisensy" || adapter === "bolna") && v.webhookToken.length < 16) || (adapter === "meta_whatsapp" && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
+  if (((adapter === "wati" || adapter === "aisensy" || adapter === "bolna") && v.webhookToken.length < 16) || ((adapter === "meta_whatsapp" || adapter === "crm_whatsapp") && v.verifyToken.length < 16)) return { ok: false, message: "Choose a webhook token of at least 16 characters" };
   const changed = def.fields.some((f) => (old[f.key] ?? "") !== v[f.key]);
   const cleaned = Object.fromEntries(Object.entries(v).filter(([, x]) => x));
   const db = await getDb();

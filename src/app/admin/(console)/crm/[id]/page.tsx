@@ -6,7 +6,10 @@ import { CrmWhatsAppComposer } from "@/components/admin/CrmWhatsApp";
 import { requireStaff } from "@/server/auth/session";
 import { canSee, crmStaff, getLead, isManager, staffNames } from "@/server/crm/leads";
 import { getDb, schema } from "@/server/db/client";
-import { ACTIVITY_LABEL, LEAD_STATUSES, SOURCE_LABEL, STATUS_LABEL, type LeadStatus, istInput, istShort } from "@/lib/crm";
+import { ACTIVITY_LABEL, CALL_OUTCOMES, LEAD_STATUSES, SOURCE_LABEL, STATUS_LABEL, type LeadStatus, callOutcome, istInput, istShort } from "@/lib/crm";
+import { CrmWaChat, type ChatMsg, type TemplateOpt } from "@/components/admin/CrmWaChat";
+import { type CrmWaMedia, MEDIA_SETTING, WA_WINDOW_MS, approvedTemplates, crmWaConfig, markSeen, windowOpen } from "@/server/crm/whatsapp";
+import { getSetting } from "@/server/quotes/service";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lead — CRM — Vishwaship Admin" };
@@ -26,6 +29,20 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
   const b2b = /b2b|cargo/i.test(`${l.campaign ?? ""} ${l.interest ?? ""}`);
   const overdue = l.nextFollowUpAt && l.nextFollowUpAt < new Date();
 
+  // WhatsApp for CRM (Cloud API): the chat with this lead and the approved templates
+  const wa = await crmWaConfig();
+  const tl = wa && l.mobile ? await approvedTemplates(wa).catch((e: Error) => ({ ok: false as const, message: e.message })) : null;
+  const mediaMap = wa ? (await getSetting<CrmWaMedia>(MEDIA_SETTING, {})).value : {};
+  const templates: TemplateOpt[] = tl?.ok ? tl.templates.map((t) => ({ name: t.name, language: t.language, header: t.header, body: t.body, vars: t.vars, buttons: t.buttons, mediaUrl: mediaMap[t.name]?.url ?? "" })) : [];
+  const chat: ChatMsg[] = acts.filter((a) => a.kind === "wa_in" || a.kind === "wa_out" || a.kind === "whatsapp").map((a) => {
+    const m = (a.meta as Record<string, unknown>) ?? {};
+    return { id: a.id, dir: a.kind === "wa_in" ? "in" : a.kind === "wa_out" ? "out" : "manual", text: a.body ?? "", at: a.createdAt.toISOString(),
+      status: (m.status as string) ?? null, error: (m.error as string) ?? null, mediaType: (m.mediaType as string) ?? null, mediaUrl: (m.mediaUrl as string) ?? null,
+      by: a.byUserId ? names.get(a.byUserId) ?? "Staff" : null };
+  });
+  if (l.waUnread > 0) await markSeen(l.id);
+  const firstTemplate = templates.find((t) => (b2b ? /b2b|cargo/i : /intro|welcome|pehla/i).test(t.name))?.name;
+
   return (
     <>
       <p className="small"><Link className="link" href="/admin/crm/">← CRM Leads</Link></p>
@@ -40,18 +57,26 @@ export default async function CrmLead({ params }: { params: Promise<{ id: string
       <div className="crm-grid">
         <div className="col" style={{ gap: 12 }}>
           <section className="card crm-box" aria-labelledby="h-wa">
-            <h2 id="h-wa">WhatsApp / Call</h2>
-            {l.mobile ? <CrmWhatsAppComposer id={l.id} mobile={l.mobile} name={l.name} b2b={b2b} /> : <p className="small muted">No mobile number — add it under Details.</p>}
+            <h2 id="h-wa">WhatsApp / Call{l.lastWaInAt && <span className="tiny muted" style={{ fontWeight: 400 }}> · last reply {istShort(l.lastWaInAt)}</span>}</h2>
+            {!l.mobile ? <p className="small muted">No mobile number — add it under Details.</p>
+              : wa ? <CrmWaChat id={l.id} mobile={l.mobile} name={l.name} chat={chat} templates={templates} templatesError={tl && !tl.ok ? tl.message : undefined}
+                  windowOpen={windowOpen(l.lastWaInAt)} windowEndsAt={l.lastWaInAt ? new Date(l.lastWaInAt.getTime() + WA_WINDOW_MS).toISOString() : null} firstTemplate={firstTemplate} />
+              : <>
+                  <CrmWhatsAppComposer id={l.id} mobile={l.mobile} name={l.name} b2b={b2b} />
+                  {manager && <p className="tiny muted" style={{ margin: "8px 0 0" }}>To send the intro with photo / video in one click and see replies here, connect <Link className="link" href="/admin/services/">WhatsApp for CRM Leads</Link> in API Keys &amp; Services.</p>}
+                </>}
           </section>
 
           <section className="card crm-box" aria-labelledby="h-log">
             <h2 id="h-log">Log the conversation</h2>
-            <p className="tiny muted" style={{ marginTop: 0 }}>What was said, what they want, when to call back — everyone on the team sees it here.</p>
+            <p className="tiny muted" style={{ marginTop: 0 }}>Call result, what was said, when to call back — everyone on the team sees it here. No answer / busy without a date → follow-up tomorrow 11 AM.</p>
             <AdminOpForm endpoint="/api/admin/crm" op="log" extra={{ id: l.id }} submit="Save" resetOnSuccess fields={[
               { name: "kind", label: "Type", type: "select", value: "call", options: [["call", "Call"], ["whatsapp", "WhatsApp chat"], ["note", "Note"]] },
+              { name: "outcome", label: "Call result", type: "select", value: "", options: [["", "— (for calls) —"], ...CALL_OUTCOMES.map((o) => [o.key, o.label] as [string, string])] },
               { name: "followUp", label: "Next follow-up (optional)", type: "datetime-local" },
               { name: "body", label: "What happened", type: "textarea", placeholder: "e.g. 150 orders/month, uses Delhivery, wants COD D+5. Call back Monday evening." },
             ]} />
+            {l.lastCallOutcome && <p className="tiny muted" style={{ margin: "6px 0 0" }}>Last call: <b>{callOutcome(l.lastCallOutcome)?.label ?? l.lastCallOutcome}</b></p>}
           </section>
 
           <section className="card crm-box" aria-labelledby="h-tl">

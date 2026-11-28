@@ -135,6 +135,28 @@ export async function sweepSignedUp() {
   return rows.length;
 }
 
+/** End of today in IST (follow-ups due "today" include everything overdue). */
+export const endOfTodayIst = (now = new Date()) => new Date(Math.ceil((now.getTime() + 5.5 * 3600_000) / 86400_000) * 86400_000 - 5.5 * 3600_000);
+
+/**
+ * Today's work for this staff member (managers: everyone's): open leads whose follow-up is due by tonight (overdue first)
+ * and leads with unread WhatsApp replies. Shown on the Admin dashboard and as the CRM Leads badge.
+ */
+export async function crmToday(s: Staff, limit = 12) {
+  const db = await getDb();
+  const L = schema.crmLeads;
+  const mine = isManager(s) ? undefined : eq(L.assignedTo, s.userId);
+  const open = notInArray(L.status, [...CLOSED_STATUSES]);
+  const dueCond = and(mine, open, isNotNull(L.nextFollowUpAt), sql`${L.nextFollowUpAt} <= ${endOfTodayIst()}`);
+  const waCond = and(mine, sql`${L.waUnread} > 0`);
+  const [due, [{ n: dueCount }], [{ n: waCount }]] = await Promise.all([
+    db.select().from(L).where(dueCond).orderBy(L.nextFollowUpAt).limit(limit),
+    db.select({ n: sql<number>`count(*)::int` }).from(L).where(dueCond),
+    db.select({ n: sql<number>`count(*)::int` }).from(L).where(waCond),
+  ]);
+  return { due, dueCount: Number(dueCount), waCount: Number(waCount) };
+}
+
 /** Active staff who can be given leads (CRM access). */
 export async function crmStaff() {
   const db = await getDb();

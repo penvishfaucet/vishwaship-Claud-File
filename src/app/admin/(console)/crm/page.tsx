@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { type SQL, and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { type SQL, and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, lte, notInArray, or, sql } from "drizzle-orm";
+import { CrmWaSettings } from "./wa-settings";
 import { AdminOpForm } from "@/components/admin/AdminOpForm";
 import { CrmQuickActions } from "@/components/admin/CrmWhatsApp";
 import { AutoRefresh } from "@/components/portal/AutoRefresh";
 import { requireStaff } from "@/server/auth/session";
 import { crmStaff, isManager, staffNames } from "@/server/crm/leads";
 import { getDb, schema } from "@/server/db/client";
-import { CLOSED_STATUSES, LEAD_SOURCES, LEAD_STATUSES, SOURCE_LABEL, STATUS_LABEL, type LeadStatus, istShort } from "@/lib/crm";
+import { CLOSED_STATUSES, LEAD_SOURCES, LEAD_STATUSES, SOURCE_LABEL, STATUS_LABEL, type LeadStatus, callOutcome, istShort } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "CRM Leads — Vishwaship Admin" };
 
 const TABS = [
-  ["due", "Follow-up due"], ["new", "New"], ["open", "All open"], ["won", "Signed up"], ["closed", "Lost / not interested"], ["all", "All"],
+  ["due", "Aaj ke follow-ups"], ["wa", "WhatsApp replies"], ["new", "New"], ["open", "All open"], ["won", "Signed up"], ["closed", "Lost / not interested"], ["all", "All"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -39,6 +40,7 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
   const open = notInArray(L.status, [...CLOSED_STATUSES]);
   const tabCond: Record<Tab, SQL | undefined> = {
     due: and(open, isNotNull(L.nextFollowUpAt), lte(L.nextFollowUpAt, endOfDay)),
+    wa: gt(L.waUnread, 0),
     new: eq(L.status, "new"),
     open,
     won: eq(L.status, "signed_up"),
@@ -46,7 +48,7 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
     all: undefined,
   };
   const rows = await db.select().from(L).where(and(...scope, tabCond[tab]))
-    .orderBy(...(tab === "due" ? [asc(L.nextFollowUpAt)] : [desc(sql`coalesce(${L.lastActivityAt}, ${L.createdAt})`)])).limit(300);
+    .orderBy(...(tab === "due" ? [asc(L.nextFollowUpAt)] : tab === "wa" ? [desc(L.lastWaInAt)] : [desc(sql`coalesce(${L.lastActivityAt}, ${L.createdAt})`)])).limit(300);
   const counts = Object.fromEntries(await Promise.all(TABS.map(async ([k]) => {
     const [c] = await db.select({ n: count() }).from(L).where(and(...scope, tabCond[k]));
     return [k, Number(c.n)] as const;
@@ -86,6 +88,8 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
         ]} />
       </details>
 
+      {manager && <CrmWaSettings />}
+
       <div className="row wrap" style={{ gap: 8, marginBottom: 10 }}>
         <nav className="seg-tabs crm-tabs" aria-label="Lead filter">
           {TABS.map(([k, label]) => <a key={k} href={qs({ tab: k === "open" ? undefined : k })} className={tab === k ? "on" : ""} aria-current={tab === k ? "page" : undefined}>{label} <span className="crm-n">{counts[k]}</span></a>)}
@@ -112,7 +116,10 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
               <li key={l.id} className={`card crm-card${overdue ? " crm-overdue" : ""}`}>
                 <div className="crm-card-h">
                   <Link href={`/admin/crm/${l.id}/`} className="crm-name">{l.name}</Link>
-                  <span className={`crm-st st-${l.status}`}>{STATUS_LABEL[l.status as LeadStatus] ?? l.status}</span>
+                  <span className="row" style={{ gap: 4 }}>
+                    {l.waUnread > 0 && <span className="crm-unread" title="New WhatsApp replies">💬 {l.waUnread}</span>}
+                    <span className={`crm-st st-${l.status}`}>{STATUS_LABEL[l.status as LeadStatus] ?? l.status}</span>
+                  </span>
                 </div>
                 <div className="tiny muted">{SOURCE_LABEL[l.source] ?? l.source}{l.campaign ? ` · ${l.campaign}` : ""} · added {istShort(l.createdAt)}</div>
                 <div className="small crm-facts">
@@ -123,6 +130,10 @@ export default async function CrmLeads({ searchParams }: { searchParams: Promise
                   {l.volume && <span>{l.volume}</span>}
                 </div>
                 {l.lastNote && <p className="small crm-last">{l.lastNote}</p>}
+                {(l.lastWaInAt || l.lastCallOutcome) && <div className="tiny muted">
+                  {l.lastWaInAt && <>💬 last WhatsApp reply {istShort(l.lastWaInAt)}</>}{l.lastWaInAt && l.lastCallOutcome && " · "}
+                  {l.lastCallOutcome && <>📞 {callOutcome(l.lastCallOutcome)?.label ?? l.lastCallOutcome}</>}
+                </div>}
                 <div className="crm-card-f">
                   <span className="tiny">
                     {l.nextFollowUpAt && <b className={overdue ? "red" : ""}>⏰ {istShort(l.nextFollowUpAt)}</b>}
