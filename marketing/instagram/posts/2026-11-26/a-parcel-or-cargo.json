@@ -1,0 +1,10 @@
+{
+  "slides": [
+    { "kicker": "Shipping basics", "title": "Parcel or *cargo?*", "rule": true, "sub": "Choosing wrong = paying more." },
+    { "title": "Ship as a *parcel* when…", "box": ["Single boxes to buyers.", "Documents & small items.", "You need COD or prepaid."], "foot": ["Parcels from *₹28*"] },
+    { "title": "Ship as *cargo* when…", "box": ["Multi-carton orders.", "Heavier B2B consignments.", "Bulk stock to a warehouse."], "foot": ["Cargo from *₹8/kg*"] },
+    { "title": "Not sure? *Compare first.*", "box": ["Enter pickup PIN.", "Enter delivery PIN.", "Add weight & size."], "foot": ["See available rates before you book."] },
+    { "title": "Both in *one account.*", "rule": true, "foot": ["Parcel + Cargo", "Book, track & manage together"], "cta": "Check your rate →" }
+  ],
+  "caption": "Parcel bhejein ya cargo? 📦🚚\n\nGalat option chuna toh shipping ka kharcha badh jaata hai.\n\n📦 Parcel — single box, documents, chhote items, COD ya prepaid orders ke liye (₹28 se)\n🚚 Cargo — multi-carton aur heavy B2B consignments ke liye (₹8/kg se)\n\nConfused ho? Booking se pehle rate compare karo:\n1️⃣ Pickup PIN code\n2️⃣ Delivery PIN code\n3️⃣ Weight aur size\n…aur available courier rates turant dekho.\n\nParcel aur cargo — dono ek hi Vishwaship account mein.\n👉 vishwaship.in/shipping-rate-calculator\n*Final rates route, weight, size, service aur taxes par depend karte hain.\n\n#Vishwaship #CargoShipping #ParcelDelivery #CourierService #B2BShipping #EcommerceIndia #OnlineSeller #Logistics #ShippingRates #SmallBusinessIndia"
+}

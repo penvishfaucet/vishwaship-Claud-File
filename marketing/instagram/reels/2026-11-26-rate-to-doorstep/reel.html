@@ -1,0 +1,105 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#051C46;--orange:#FE6519;--btn:#C94A0A;--muted:#4a5a78;--line:#dbe3ee}
+*{box-sizing:border-box;margin:0}
+body{width:1080px;height:1920px;overflow:hidden;font-family:Archivo,sans-serif;color:var(--navy);
+  background:linear-gradient(rgba(5,28,70,.05) 1px,transparent 1px) 0 0/60px 60px,
+   linear-gradient(90deg,rgba(5,28,70,.05) 1px,transparent 1px) 0 0/60px 60px,
+   linear-gradient(180deg,#fffaf6 0%,#ffe9db 100%)}
+.logo{position:absolute;top:150px;left:50%;transform:translateX(-50%);height:140px}
+.bar{position:absolute;top:110px;left:90px;right:90px;height:8px;border-radius:4px;background:rgba(5,28,70,.1)}
+.bar i{display:block;height:100%;width:0;background:var(--orange);border-radius:4px}
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:300px 80px 260px;text-align:center;opacity:0}
+.step{display:inline-block;background:var(--navy);color:#fff;font-size:44px;font-weight:700;padding:16px 40px;border-radius:60px;margin-bottom:50px;letter-spacing:.04em}
+h1{font-size:112px;line-height:1.08;font-weight:800;letter-spacing:-.02em}
+h1 em,h2 em{font-style:normal;color:var(--orange)}
+h2{font-size:76px;line-height:1.15;font-weight:800}
+.sub{margin-top:50px;font-size:56px;font-weight:500;color:var(--muted);line-height:1.3}
+.card{margin-top:70px;width:100%;background:#fff;border:4px solid var(--navy);border-radius:48px;box-shadow:0 16px 0 var(--navy);padding:56px 40px}
+.field{display:flex;justify-content:space-between;align-items:center;font-size:52px;font-weight:600;padding:26px 10px;border-bottom:3px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field b{color:var(--btn)}
+.logos{display:grid;grid-template-columns:repeat(3,1fr);gap:34px;margin-top:70px}
+.logos img{width:240px;height:240px;object-fit:contain;background:#fff;border:3px solid var(--line);border-radius:50%;padding:34px}
+.ticks{margin-top:60px;font-size:64px;font-weight:700;line-height:1.6;text-align:left}
+.ticks span{color:var(--orange)}
+.price{margin-top:60px;font-size:68px;font-weight:700;line-height:1.45}
+.price em{font-style:normal;color:var(--orange)}
+.cta{margin-top:70px;background:var(--btn);color:#fff;font-size:60px;font-weight:700;padding:40px 80px;border-radius:28px}
+.url{margin-top:40px;font-size:56px;font-weight:700}
+.fine{position:absolute;bottom:120px;left:0;right:0;text-align:center;font-size:30px;color:var(--muted)}
+</style></head><body>
+<div class="bar"><i id="bar"></i></div>
+<img class="logo" src="../../logo.png" alt="">
+
+<section class="scene" data-in="0" data-out="3.2">
+  <h1>Shipping pe <em>zyada</em> pay kar rahe ho?</h1>
+  <p class="sub">Booking se pehle rate check karo —<br>sirf 4 steps mein 👇</p>
+</section>
+
+<section class="scene" data-in="3.2" data-out="6.4">
+  <div class="step">STEP 1</div>
+  <h2>PIN codes <em>daalo</em></h2>
+  <div class="card">
+    <div class="field">Pickup PIN <b>249402</b></div>
+    <div class="field">Delivery PIN <b>110001</b></div>
+  </div>
+</section>
+
+<section class="scene" data-in="6.4" data-out="9.6">
+  <div class="step">STEP 2</div>
+  <h2>Weight & size <em>batao</em></h2>
+  <div class="card">
+    <div class="field">Weight <b>0.5 kg</b></div>
+    <div class="field">Size <b>20×15×10 cm</b></div>
+  </div>
+</section>
+
+<section class="scene" data-in="9.6" data-out="12.8">
+  <div class="step">STEP 3</div>
+  <h2><em>20+ couriers</em> ke rates compare karo</h2>
+  <div class="logos">
+    <img src="../../../../public/couriers/delhivery.webp"><img src="../../../../public/couriers/blue-dart.webp"><img src="../../../../public/couriers/dtdc.webp">
+    <img src="../../../../public/couriers/xpressbees.webp"><img src="../../../../public/couriers/ekart.webp"><img src="../../../../public/couriers/shadowfax.webp">
+  </div>
+</section>
+
+<section class="scene" data-in="12.8" data-out="16">
+  <div class="step">STEP 4</div>
+  <h2>Book karo, <em>pickup & track</em></h2>
+  <div class="ticks">
+    <div><span>✓</span> Label ready</div>
+    <div><span>✓</span> Warehouse se pickup</div>
+    <div><span>✓</span> Har AWB track</div>
+  </div>
+</section>
+
+<section class="scene" data-in="16" data-out="99">
+  <h1>Ship smarter with <em>Vishwaship</em></h1>
+  <p class="price">COD Available<br>Parcels <em>₹28</em> se<br>Cargo <em>₹8/kg</em> se</p>
+  <div class="cta">Rate check karo →</div>
+  <p class="url">vishwaship.in</p>
+  <p class="fine">*Final rates route, weight, size, service aur taxes par depend karte hain.</p>
+</section>
+
+<script>
+const scenes=[...document.querySelectorAll('.scene')];
+const ease=t=>1-Math.pow(1-Math.min(Math.max(t,0),1),3);
+window.TOTAL=19.5;
+window.render=(t)=>{
+  document.getElementById('bar').style.width=Math.min(t/window.TOTAL*100,100)+'%';
+  for(const s of scenes){
+    const a=+s.dataset.in,b=+s.dataset.out;
+    const tin=ease((t-a)/0.45), tout=ease((t-(b-0.35))/0.35);
+    const vis=t>=a&&t<b;
+    s.style.opacity=vis?Math.min(tin,1-tout):0;
+    s.style.transform=`translateY(${(1-tin)*80 - tout*80}px)`;
+    // stagger children
+    [...s.children].forEach((c,i)=>{const k=ease((t-a-0.15-i*0.18)/0.4);c.style.opacity=k;c.style.transform=`translateY(${(1-k)*50}px) scale(${0.96+0.04*k})`;});
+  }
+};
+window.render(0);
+</script>
+</body></html>
