@@ -8,12 +8,13 @@ Each **B-roll prompt** makes a silent clip. In editing, put 2–3 seconds of it 
 
 ---
 
-## PART 1 · 00:00–00:08 · HOOK
+## PART 1 · 00:00–00:08 · HOOK (calm, clear version)
 **Veo prompt**
 ```
-A high-energy Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up, slight handheld, punch-in zooms. He speaks loud, fast, hyped Hinglish with a North-Indian accent from the very first frame.
-ACTION: The clip starts mid-motion as he bursts into frame from the left, slams both palms toward the camera and points hard at the viewer with an angry, shocked face, with a fast crash-zoom in the first second. In the last two seconds he smirks and nods confidently. He speaks the line below exactly once, in one continuous breath, and does not repeat any word.
-DIALOGUE: "Kab tak apna profit shipping fee ke naam par burn karte rahoge? Ab bas, ye platform try karo!"
+A friendly, confident Indian man, about 28, styled-up short black hair, trimmed full beard, fitted navy-blue t-shirt with a thin orange chest stripe, clip-on mic. Night content-creator studio: shelves of brown parcels, warm orange neon lights, navy glow, ring light behind him. Vertical 9:16, medium close-up at eye level, steady camera with one slow gentle push-in.
+ACTION: He is already in frame, looking straight into the camera with a calm, slightly concerned expression, like he is giving honest advice to a friend. He uses small, natural hand gestures, one open palm toward the viewer in the middle of the line, and gives a small reassuring nod with a light smile at the end. Relaxed body, no shouting, no sudden moves.
+VOICE: Clear, warm, conversational Hinglish at a normal speaking pace, with a natural North-Indian accent. Every word is easy to understand. He speaks the line below exactly once, in one smooth flow, with a short natural pause after the question, and does not repeat any word.
+DIALOGUE: "Kab tak apna profit shipping fee ke naam par burn karte rahoge? Ab bas, ye platform try karo."
 No on-screen text, no subtitles, no logos.
 ```
 **B-roll prompt**
@@ -21,7 +22,7 @@ No on-screen text, no subtitles, no logos.
 Vertical 9:16 slow-motion close-up: Indian rupee notes curling and burning with orange flames on a dark table beside a brown shipping box. Dramatic cinematic lighting. No text, no logos.
 ```
 **Edit timeline**
-- 0.0–2.5s: presenter crash-zoom, red flash on "BURN", bass-hit SFX, middle text **SHIPPING FEE 🔥**
+- 0.0–2.5s: presenter with a slow push-in, soft "whoosh" SFX, middle text **SHIPPING FEE 🔥**
 - 2.5–4.5s: burning-notes B-roll (voice continues)
 - 4.5–8.0s: back to the presenter, caption **"AB BAS — YE PLATFORM TRY KARO"**
 
