@@ -157,7 +157,22 @@ export async function sendSession(leadId: string, text: string, by: string, medi
 // ---------- webhook (messages to / statuses from the CRM number) ----------
 type WaMsg = { from?: string; id?: string; type?: string; text?: { body?: string }; image?: { caption?: string }; video?: { caption?: string };
   document?: { caption?: string; filename?: string }; audio?: unknown; sticker?: unknown; location?: { name?: string; address?: string };
-  button?: { text?: string }; interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } }; reaction?: { emoji?: string } };
+  button?: { text?: string }; interactive?: { button_reply?: { title?: string }; list_reply?: { title?: string } }; reaction?: { emoji?: string };
+  /** Set when the chat was opened from a Click-to-WhatsApp ad (or a Page post): which ad it came from. */
+  referral?: { source_type?: string; source_id?: string; source_url?: string; headline?: string; body?: string; ctwa_clid?: string } };
+
+/** "Meta ad (WhatsApp): <headline>" for a message that came from a Click-to-WhatsApp ad, else null. */
+export function adReferral(m: WaMsg): { campaign: string; adName: string | null; note: string } | null {
+  const r = m.referral;
+  if (!r || (!r.source_id && !r.headline && !r.ctwa_clid)) return null;
+  const what = r.source_type === "post" ? "Facebook / Instagram post" : "Meta ad";
+  const title = (r.headline || r.body || "").trim().slice(0, 120);
+  return {
+    campaign: `${what} (WhatsApp)${title ? `: ${title}` : ""}`.slice(0, 200),
+    adName: r.source_id ? `ad ${r.source_id}` : null,
+    note: `📣 Came from ${what.toLowerCase()} → WhatsApp${title ? ` — “${title}”` : ""}${r.source_url ? ` (${r.source_url})` : ""}`.slice(0, 500),
+  };
+}
 type WaStatus = { id?: string; status?: string; errors?: Array<{ title?: string; message?: string }> };
 type WaValue = { metadata?: { phone_number_id?: string }; contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>; messages?: WaMsg[]; statuses?: WaStatus[] };
 
@@ -185,12 +200,16 @@ const findActivity = async (waMsgId: string) => {
 };
 
 /** The lead for a WhatsApp number: the most recently active one with that mobile, or a new WhatsApp lead. */
-async function leadFor(mobile: string, profileName: string) {
+async function leadFor(mobile: string, profileName: string, ad: ReturnType<typeof adReferral> = null) {
   const db = await getDb();
   const m = normMobile(mobile);
   const [l] = await db.select().from(schema.crmLeads).where(eq(schema.crmLeads.mobile, m)).orderBy(desc(schema.crmLeads.updatedAt)).limit(1);
-  if (l) return l.id;
-  const r = await createLead({ name: profileName || m, mobile: m, source: "whatsapp", campaign: "WhatsApp message" }, null);
+  if (l) {
+    if (ad) await addActivity(l.id, "note", ad.note, null, { adReferral: true });
+    return l.id;
+  }
+  const r = await createLead({ name: profileName || m, mobile: m, source: "whatsapp", campaign: ad?.campaign ?? "WhatsApp message", adName: ad?.adName ?? null }, null);
+  if (ad) await addActivity(r.id, "note", ad.note, null, { adReferral: true });
   return r.id;
 }
 
@@ -207,7 +226,7 @@ export async function handleCrmWebhook(body: Record<string, unknown>, phoneNumbe
     for (const m of v.messages ?? []) {
       if (!m.id || !m.from || (await findActivity(m.id))) continue;
       const profile = v.contacts?.find((c) => c.wa_id === m.from)?.profile?.name ?? "";
-      const leadId = await leadFor(m.from, profile);
+      const leadId = await leadFor(m.from, profile, adReferral(m));
       const text = messageText(m).slice(0, 2000);
       await db.insert(schema.crmActivities).values({ id: newId("cra"), leadId, kind: "wa_in", body: text, meta: { waMsgId: m.id, type: m.type ?? null }, byUserId: null });
       await db.update(schema.crmLeads).set({ lastWaInAt: new Date(), waUnread: sql`${schema.crmLeads.waUnread} + 1`, lastActivityAt: new Date(), lastNote: `💬 ${text}`.slice(0, 300), updatedAt: new Date() })
