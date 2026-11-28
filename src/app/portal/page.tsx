@@ -69,10 +69,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       <ShieldAlert size={22} aria-hidden />
       <div className="grow">
         <b>{step.title}</b>
-        <p>{ob.step === "profile" ? "Add your business name and address to start booking shipments. Then approve KYC for the best rates."
-          : ob.step === "kyc" ? "You can book shipments now at standard rates. Upload your KYC documents and get the best (bulk) rates once Vishwaship approves them."
-          : ob.step === "review" ? "Your KYC is under review. The best rates apply as soon as it is approved — keep shipping meanwhile."
-          : <>Admin asked for changes{ob.reasons.length ? <>: <b>{ob.reasons.join(" · ")}</b></> : null}. Resubmit KYC to get the best rates.</>}</p>
+        <p>{ob.step === "profile" ? "Add your business name and pickup address, then upload your KYC. You can book your first shipment as soon as KYC is approved."
+          : ob.step === "kyc" ? "Your rates are ready. Upload your KYC documents — you can book your first shipment as soon as Vishwaship approves them."
+          : ob.step === "review" ? "Your KYC is under review. You can book shipments as soon as it is approved."
+          : <>Admin asked for changes{ob.reasons.length ? <>: <b>{ob.reasons.join(" · ")}</b></> : null}. Resubmit KYC — you can book shipments once it is approved.</>}</p>
       </div>
       {step.action && <Link className="btn btn-orange" href={step.action.href}>{step.action.label}</Link>}
     </div>

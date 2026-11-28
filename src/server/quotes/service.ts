@@ -33,12 +33,17 @@ export async function loadMarkupRows(): Promise<MarkupRow[]> {
 export type NonKycMarkup = { enabled: boolean; bps: number };
 export const NON_KYC_DEFAULT: NonKycMarkup = { enabled: true, bps: 3000 };
 
-/** The non-KYC margin rule for this account, or null when its KYC is approved (or the rule is off / public). */
+/**
+ * The non-KYC margin rule for this account, or null when its KYC is approved (or the rule is off / public).
+ * Owner 2026-11-28: rates Admin activates for this customer (a customer markup) apply before KYC too —
+ * KYC is needed to book the first shipment, not to see the activated rates.
+ */
 export async function nonKycRule(orgId: string | null): Promise<MarkupRule | null> {
   if (!orgId) return null;
   const db = await getDb();
   const [o] = await db.select({ kyc: schema.orgs.kycStatus }).from(schema.orgs).where(eq(schema.orgs.id, orgId));
   if (!o || o.kyc === "approved") return null;
+  if (pickMarkup(await loadMarkupRows(), "-", "B2C", orgId).source === "customer_override") return null;
   const s = await getSetting<NonKycMarkup>("non_kyc_markup", NON_KYC_DEFAULT);
   const v = { ...NON_KYC_DEFAULT, ...s.value };
   return v.enabled ? { bps: v.bps, source: "non_kyc", ruleId: "non_kyc_markup", ruleVersion: s.version } : null;

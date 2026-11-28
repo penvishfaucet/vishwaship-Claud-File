@@ -47,7 +47,7 @@ export default async function PortalLayout({ children }: { children: React.React
   const ob = await onboardingState(ctx.org.id);
   const kycPending = ob.step !== "active";
   // reminder in the bell until KYC is approved (not stored: disappears by itself once approved)
-  const kycAlert = kycPending ? [{ id: "kyc-reminder", title: ob.step === "review" ? "KYC under review — the best (bulk) rates apply once it is approved" : "Complete KYC to unlock the best (bulk) shipping rates", href: ob.step === "profile" ? "/portal/onboarding/" : "/portal/kyc/", createdAt: new Date().toISOString() }] : [];
+  const kycAlert = kycPending ? [{ id: "kyc-reminder", title: ob.step === "review" ? "KYC under review — you can book shipments once it is approved" : "Complete KYC to ship your first parcel", href: ob.step === "profile" ? "/portal/onboarding/" : "/portal/kyc/", createdAt: new Date().toISOString() }] : [];
   const wc = await weightCounts(ctx.org.id).catch(() => ({ open: 0, disputed: 0 }));
   const storePending = f.modules.online_store.enabled ? await pendingAcceptanceCount(ctx.org.id).catch(() => 0) : 0;
   const storeLow = f.modules.online_store.enabled ? await lowStockCount(ctx.org.id) : 0;

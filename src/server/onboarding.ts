@@ -31,8 +31,8 @@ export async function onboardingState(orgId: string): Promise<{ step: Onboarding
 }
 
 export const ACTIVATION_MESSAGE: Record<Exclude<OnboardingStep, "active">, string> = {
-  profile: "Complete your profile (business name and address) before booking shipments. KYC is optional — approve it for the best rates.",
-  kyc: "Complete KYC for the best rates. You can book shipments meanwhile at standard rates.",
-  review: "Your KYC is under review. The best rates apply as soon as it is approved.",
-  resubmit: "Your KYC needs changes. Resubmit it to get the best rates.",
+  profile: "Complete your profile and KYC to ship your first parcel. Your rates are ready — shipping starts as soon as KYC is approved.",
+  kyc: "Upload your KYC to ship your first parcel. Your rates are ready — shipping starts as soon as KYC is approved.",
+  review: "Your KYC is under review. You can book shipments as soon as it is approved.",
+  resubmit: "Your KYC needs changes. Resubmit it — you can book shipments once it is approved.",
 };

@@ -32,8 +32,8 @@ export default async function OnboardingPage() {
       </ol>
       {st.step !== "profile" && (
         <div className="note small">
-          {st.step === "kyc" && <>Your profile is saved — you can book shipments now. <Link className="link" href="/portal/kyc/">Complete KYC</Link> for the best rates.</>}
-          {st.step === "review" && <>Your KYC is under review. The best rates apply as soon as Vishwaship approves it. You can still update your profile below.</>}
+          {st.step === "kyc" && <>Your profile is saved. <Link className="link" href="/portal/kyc/">Complete KYC</Link> — you can book your first shipment as soon as it is approved.</>}
+          {st.step === "review" && <>Your KYC is under review. You can book shipments as soon as Vishwaship approves it. You can still update your profile below.</>}
           {st.step === "resubmit" && <>KYC needs changes{st.reasons.length ? <>: <b>{st.reasons.join(" · ")}</b></> : null}. <Link className="link" href="/portal/kyc/">Resubmit KYC</Link></>}
           {st.step === "active" && <>Your account is active. <Link className="link" href="/portal/orders/create/">Create an order</Link></>}
         </div>

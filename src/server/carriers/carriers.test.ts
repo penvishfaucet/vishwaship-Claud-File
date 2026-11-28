@@ -240,9 +240,22 @@ describe("booking through Shipmozo", () => {
     const before = calls.length;
     const r = await bookOrder({ orgId: ORG, orderId: "ord_gate", quoteId, actorUserId: "usr_c" });
     await db.update(schema.orgs).set({ profileCompletedAt: new Date() }).where(eq(schema.orgs.id, ORG));
-    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/Complete your profile/) });
+    expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/Complete your profile and KYC/) });
     expect(calls.length).toBe(before);
     expect(await debits("ord_gate")).toBe(0);
+  });
+
+  it("KYC not approved: rates can be quoted but the first shipment cannot be booked — nothing sent, nothing charged", async () => {
+    const quoteId = await newOrder("ord_kyc");
+    for (const kyc of ["not_started", "pending", "changes_requested"] as const) {
+      await db.update(schema.orgs).set({ kycStatus: kyc }).where(eq(schema.orgs.id, ORG));
+      const before = calls.length;
+      const r = await bookOrder({ orgId: ORG, orderId: "ord_kyc", quoteId, actorUserId: "usr_c" });
+      expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/KYC/) });
+      expect(calls.length).toBe(before);
+    }
+    await db.update(schema.orgs).set({ kycStatus: "approved" }).where(eq(schema.orgs.id, ORG));
+    expect(await debits("ord_kyc")).toBe(0);
   });
   it("books the exact service behind the quote: push-order → assign-courier (courier_id) → AWB, one charge", async () => {
     const quoteId = await newOrder("ord_1");
