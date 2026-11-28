@@ -1,0 +1,256 @@
+<title>Vishwaship कॉलिंग स्क्रिप्ट</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Mukta:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow reading column with a sticky section bar, built to be read aloud from a phone during a call */
+:root{
+  --bg:#fbf8f5; --surface:#ffffff; --ink:#051C46; --muted:#4a5a78; --line:#e6dcd3;
+  --accent:#C94A0A; --accent-soft:#fff0e6; --navy:#051C46; --say:#f4f7fc; --say-line:#c9d6ea;
+  --hot:#15803d; --hot-soft:#e8f6ec; --warm:#b45309; --warm-soft:#fdf3e3; --cold:#64748b; --cold-soft:#eef1f5;
+  --f-display:"Archivo","Mukta",system-ui,sans-serif; --f-body:"Mukta","Noto Sans Devanagari",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0c1322; --surface:#131c2f; --ink:#e8edf7; --muted:#a3b0c8; --line:#26324a;
+  --accent:#ff8a4c; --accent-soft:#2a1d16; --navy:#e8edf7; --say:#17223a; --say-line:#2e3f62;
+  --hot:#4ade80; --hot-soft:#13261b; --warm:#fbbf24; --warm-soft:#2a2112; --cold:#94a3b8; --cold-soft:#1c2433; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1322; --surface:#131c2f; --ink:#e8edf7; --muted:#a3b0c8; --line:#26324a;
+  --accent:#ff8a4c; --accent-soft:#2a1d16; --navy:#e8edf7; --say:#17223a; --say-line:#2e3f62;
+  --hot:#4ade80; --hot-soft:#13261b; --warm:#fbbf24; --warm-soft:#2a2112; --cold:#94a3b8; --cold-soft:#1c2433; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:17px;line-height:1.6;margin:0}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 64px}
+header h1{font-family:var(--f-display);font-size:clamp(28px,6vw,40px);line-height:1.1;margin:6px 0 10px;text-wrap:balance}
+.eyebrow{font-family:var(--f-display);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.lede{color:var(--muted);margin:0;max-width:62ch}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:22px 0 8px;padding-block:10px;overflow-x:auto}
+nav ol{display:flex;gap:8px;list-style:none;margin:0;padding:0;white-space:nowrap}
+nav a{display:inline-block;font-size:14px;font-weight:600;color:var(--ink);text-decoration:none;border:1px solid var(--line);background:var(--surface);padding:4px 12px;border-radius:999px}
+nav a:focus-visible,button:focus-visible,label:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+section{padding-top:26px;scroll-margin-top:64px}
+h2{font-family:var(--f-display);font-size:23px;line-height:1.25;margin:0 0 4px;display:flex;gap:10px;align-items:baseline}
+h2 .n{color:var(--accent);font-size:16px}
+h3{font-size:18px;margin:18px 0 6px}
+.note{color:var(--muted);font-size:15px;margin:2px 0 12px}
+.say{background:var(--say);border-left:4px solid var(--say-line);border-radius:4px 10px 10px 4px;padding:12px 16px;margin:10px 0;font-size:18px}
+.say b{color:var(--accent)}
+.say .who{display:block;font-family:var(--f-display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin:12px 0}
+.fact{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.fact .k{font-family:var(--f-display);font-weight:700;font-size:15px}
+.fact .v{font-size:22px;font-weight:700;color:var(--accent);line-height:1.2;margin:4px 0}
+.fact p{margin:0;color:var(--muted);font-size:15px}
+.qs{counter-reset:q;list-style:none;padding:0;margin:8px 0}
+.qs li{counter-increment:q;position:relative;padding:10px 0 10px 44px;border-bottom:1px dashed var(--line)}
+.qs li::before{content:counter(q);position:absolute;left:0;top:10px;width:30px;height:30px;border-radius:50%;background:var(--navy);color:var(--bg);font-family:var(--f-display);font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center}
+.qs .why{display:block;color:var(--muted);font-size:14.5px}
+.tag{display:inline-block;font-size:12.5px;font-weight:700;border-radius:999px;padding:1px 10px;margin-left:6px;vertical-align:2px;font-family:var(--f-display)}
+.t-b2c{background:var(--accent-soft);color:var(--accent)}
+.t-b2b{background:var(--say);color:var(--ink);border:1px solid var(--say-line)}
+.t-d2c{background:var(--hot-soft);color:var(--hot)}
+.grade{display:grid;gap:10px;margin:12px 0}
+.g{border-radius:12px;padding:12px 16px;border:1px solid var(--line)}
+.g h4{margin:0 0 4px;font-family:var(--f-display);font-size:17px}
+.g p{margin:0;font-size:15.5px}
+.g.hot{background:var(--hot-soft);border-color:transparent}.g.hot h4{color:var(--hot)}
+.g.warm{background:var(--warm-soft);border-color:transparent}.g.warm h4{color:var(--warm)}
+.g.cold{background:var(--cold-soft);border-color:transparent}.g.cold h4{color:var(--cold)}
+.checker{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px 0}
+.checker label{display:flex;gap:10px;align-items:flex-start;padding:6px 0;font-size:16px;cursor:pointer}
+.checker input{width:20px;height:20px;margin-top:4px;accent-color:var(--accent);flex:none}
+.result{margin-top:12px;padding:12px 14px;border-radius:10px;font-weight:600;font-size:16.5px}
+.obj{border-top:1px solid var(--line);padding:12px 0}
+.obj summary{cursor:pointer;font-weight:700;font-size:17px;list-style-position:outside}
+.obj .say{margin-top:8px}
+.handover{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;font-family:ui-monospace,Menlo,monospace;font-size:14.5px;white-space:pre-wrap;overflow-x:auto;margin:10px 0}
+.btn{font-family:var(--f-display);font-weight:700;font-size:15px;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.rules ul{margin:6px 0 0;padding-left:20px}
+.rules li{margin:4px 0}
+.do,.dont{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.do h4{color:var(--hot);margin:0;font-family:var(--f-display)}.dont h4{color:#dc2626;margin:0;font-family:var(--f-display)}
+footer{margin-top:36px;color:var(--muted);font-size:14px;border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+<header>
+  <div class="eyebrow">Vishwaship · Telecalling</div>
+  <h1>Lead कॉलिंग स्क्रिप्ट</h1>
+  <p class="lede">काम एक ही है: 50 लोगों में से <b>इंटरेस्टेड क्लाइंट छाँटना</b> और उन्हें owner को ट्रांसफ़र करना। पूरी जानकारी, rate फ़ाइनल करना और plan समझाना owner करेंगे। एक कॉल 3–5 मिनट से ज़्यादा न खींचें।</p>
+</header>
+
+<nav aria-label="Sections"><ol>
+  <li><a href="#prep">तैयारी</a></li>
+  <li><a href="#open">शुरुआत</a></li>
+  <li><a href="#ask">सवाल</a></li>
+  <li><a href="#pitch">पिच</a></li>
+  <li><a href="#grade">छँटाई</a></li>
+  <li><a href="#transfer">ट्रांसफ़र</a></li>
+  <li><a href="#objections">आपत्तियाँ</a></li>
+  <li><a href="#close">कॉल ख़त्म</a></li>
+  <li><a href="#rules">नियम</a></li>
+</ol></nav>
+
+<section id="prep">
+  <h2><span class="n">0</span> कॉल से पहले याद रखें</h2>
+  <p class="note">ये 3 सर्विस हैं। ग्राहक के जवाब से पता चलेगा कि उसके लिए कौन-सी है।</p>
+  <div class="facts">
+    <div class="fact"><div class="k">B2C पार्सल <span class="tag t-b2c">B2C</span></div><div class="v">10 kg तक</div><p>सीधे ग्राहक के घर तक पार्सल। COD और prepaid दोनों। 20+ courier पार्टनर, rate compare करके सबसे सही चुनते हैं।</p></div>
+    <div class="fact"><div class="k">B2B कार्गो <span class="tag t-b2b">B2B</span></div><div class="v">₹8 – ₹15 / kg</div><p>भारी और multi-carton माल, दुकान/गोदाम/डीलर तक। rate रूट और वज़न पर तय होता है।</p></div>
+    <div class="fact"><div class="k">D2C ग्रोथ पैकेज <span class="tag t-d2c">D2C</span></div><div class="v">1.5% + GST</div><p>सिर्फ़ <b>delivered</b> ऑर्डर पर। वेबसाइट बनाना, Insta/FB पोस्ट, Meta Ads, शिपिंग और पूरा P&amp;L डैशबोर्ड।</p></div>
+  </div>
+  <p class="note">एक्सेल शीट खुली रखें: नाम, नंबर, बिज़नेस, सेगमेंट, महीने के पार्सल, अभी का courier, परेशानी, नतीजा (Hot / Warm / Cold), अगली कॉल का समय।</p>
+</section>
+
+<section id="open">
+  <h2><span class="n">1</span> कॉल की शुरुआत (पहले 20 सेकंड)</h2>
+  <div class="say"><span class="who">आप</span>नमस्ते सर/मैम, मैं <b>[आपका नाम]</b> बोल रहा हूँ <b>Vishwaship</b> से, हरिद्वार से। हम ऑनलाइन और होलसेल बिज़नेस के लिए कूरियर और कार्गो शिपिंग करते हैं। क्या आपसे 2 मिनट बात हो सकती है?</div>
+  <h3>अगर “हाँ, बोलिए”</h3>
+  <div class="say"><span class="who">आप</span>धन्यवाद! सर, बस 3–4 छोटे सवाल पूछूँगा, ताकि समझ सकूँ कि आपकी शिपिंग में हम कुछ बचत करा सकते हैं या नहीं।</div>
+  <h3>अगर “अभी बिज़ी हूँ”</h3>
+  <div class="say"><span class="who">आप</span>कोई बात नहीं सर। आज शाम या कल किस टाइम कॉल करूँ? <span class="note">(टाइम लिखें, नतीजा = Warm / Callback)</span></div>
+  <h3>अगर “किस बारे में है?”</h3>
+  <div class="say"><span class="who">आप</span>सर, जो भी सेलर पार्सल या माल भेजते हैं, उनका शिपिंग खर्च कम करने और RTO कम करने में हम मदद करते हैं। आप भी पार्सल भेजते हैं क्या?</div>
+</section>
+
+<section id="ask">
+  <h2><span class="n">2</span> छँटाई वाले सवाल</h2>
+  <p class="note">क्रम से पूछें। जवाब शीट में लिखते जाएँ। हर सवाल के नीचे लिखा है कि उससे क्या पता चलता है।</p>
+  <ol class="qs">
+    <li>सर, आप क्या बेचते हैं? आपका बिज़नेस किस चीज़ का है?<span class="why">प्रोडक्ट और बिज़नेस का टाइप।</span></li>
+    <li>आपके ऑर्डर कहाँ से आते हैं? Amazon/Flipkart/Meesho, अपनी वेबसाइट, Instagram/WhatsApp, या दुकानों/डीलरों को होलसेल?<span class="why">मार्केटप्लेस/Insta/WhatsApp = <span class="tag t-b2c">B2C</span>, दुकान/डीलर = <span class="tag t-b2b">B2B</span>, अपना ब्रांड = <span class="tag t-d2c">D2C</span></span></li>
+    <li>महीने में लगभग कितने पार्सल या कितना माल भेज देते हैं?<span class="why">वॉल्यूम। जितना ज़्यादा, उतनी बड़ी लीड।</span></li>
+    <li>एक पार्सल का वज़न आमतौर पर कितना होता है? 10 किलो से कम, या बड़े कार्टन?<span class="why">10 kg तक = पार्सल, उससे भारी या कई कार्टन = कार्गो।</span></li>
+    <li>अभी कौन-सा कूरियर या कंपनी यूज़ करते हैं? एक पार्सल या एक किलो का लगभग कितना दे रहे हैं?<span class="why">अभी का खर्च। owner इसी से बचत बताएँगे। (B2B में ₹15/kg से ज़्यादा दे रहे हैं तो अच्छी लीड।)</span></li>
+    <li>शिपिंग में सबसे बड़ी परेशानी क्या है? रेट, RTO/रिटर्न, COD का पैसा देर से आना, पिकअप, या सपोर्ट?<span class="why">दर्द का पॉइंट। पिच इसी पर करनी है।</span></li>
+    <li>COD ऑर्डर ज़्यादा होते हैं या prepaid?<span class="why">COD ज़्यादा = RTO की परेशानी, इसलिए अच्छी लीड।</span></li>
+    <li><span class="tag t-d2c">D2C</span> आपकी अपनी वेबसाइट है? Instagram/Facebook पर Ads चलाते हैं? सेल बढ़ाने में मदद चाहिए?<span class="why">ग्रोथ पैकेज की लीड। अपना ब्रांड है पर वेबसाइट या Ads नहीं हैं, तो बड़ी लीड।</span></li>
+    <li>शिपिंग या मार्केटिंग का फ़ैसला आप ही लेते हैं, या कोई और भी है?<span class="why">फ़ैसला लेने वाला कौन है। कोई और है तो उसका नाम और नंबर लें।</span></li>
+  </ol>
+</section>
+
+<section id="pitch">
+  <h2><span class="n">3</span> छोटी पिच (जवाब के हिसाब से एक चुनें)</h2>
+  <p class="note">सिर्फ़ 2–3 लाइन बोलें। ज़्यादा डिटेल owner देंगे।</p>
+  <h3><span class="tag t-b2c">B2C</span> पार्सल भेजने वाले के लिए</h3>
+  <div class="say"><span class="who">आप</span>सर, हमारे पास 20 से ज़्यादा कूरियर पार्टनर हैं। हर पार्सल पर रेट compare होता है, तो आप सबसे सही रेट चुन सकते हैं। COD और prepaid दोनों, और डिलीवरी फ़ेल हो तो re-attempt का ऑप्शन भी है, जिससे RTO कम होता है।</div>
+  <h3><span class="tag t-b2b">B2B</span> कार्गो वाले के लिए</h3>
+  <div class="say"><span class="who">आप</span>सर, भारी और बल्क माल के लिए हमारी कार्गो सर्विस है। रेट <b>₹8 से ₹15 प्रति किलो</b> के बीच रहता है, रूट और वज़न के हिसाब से। पिकअप आपके गोदाम से होता है और हर शिपमेंट ट्रैक होता है।</div>
+  <h3><span class="tag t-d2c">D2C</span> अपने ब्रांड वाले के लिए</h3>
+  <div class="say"><span class="who">आप</span>सर, जिनका अपना ब्रांड है उनके लिए हमारा ग्रोथ पैकेज है। हमारी टीम आपकी वेबसाइट बनाती है, Instagram और Facebook पोस्ट संभालती है, Meta Ads चलाकर सेल बढ़ाती है, और शिपिंग भी हम करते हैं। कोई मंथली फ़ीस नहीं। हम सिर्फ़ <b>डिलीवर हुए ऑर्डर पर 1.5% + GST</b> लेते हैं। पोर्टल में आपको पूरा प्रॉफ़िट-लॉस, खर्च, RTO का खर्च, सब साफ़ दिखता है।</div>
+</section>
+
+<section id="grade">
+  <h2><span class="n">4</span> छँटाई: Hot, Warm या Cold</h2>
+  <div class="grade">
+    <div class="g hot"><h4>🟢 Hot = अभी ट्रांसफ़र करें</h4><p>बिज़नेस चल रहा है, अभी पार्सल/माल भेज रहे हैं (या D2C में सेल बढ़ाना चाहते हैं), फ़ैसला ख़ुद लेते हैं, और आगे बात करना चाहते हैं।</p></div>
+    <div class="g warm"><h4>🟡 Warm = callback</h4><p>इंटरेस्ट है पर अभी बिज़ी हैं, पार्टनर से पूछना है, या 1–2 महीने में शुरू करेंगे। टाइम तय करें।</p></div>
+    <div class="g cold"><h4>⚪ Cold = धन्यवाद बोलकर बंद करें</h4><p>कुछ नहीं भेजते, बिज़नेस बंद है, या साफ़ मना कर दिया। “दोबारा कॉल न करें” बोला हो तो शीट में <b>DNC</b> लिखें।</p></div>
+  </div>
+  <div class="checker" id="checker">
+    <strong>फटाफट चेक</strong>
+    <label for="c1"><input type="checkbox" id="c1"> अभी पार्सल/माल भेजते हैं, या अपना ब्रांड चलाते हैं</label>
+    <label for="c2"><input type="checkbox" id="c2"> महीने में 50+ पार्सल, या B2B में नियमित माल, या D2C में सेल बढ़ाना चाहते हैं</label>
+    <label for="c3"><input type="checkbox" id="c3"> फ़ैसला ख़ुद लेते हैं</label>
+    <label for="c4"><input type="checkbox" id="c4"> आगे बात करने को तैयार हैं</label>
+    <div class="result" id="result" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="transfer">
+  <h2><span class="n">5</span> ट्रांसफ़र कैसे करें</h2>
+  <h3>Hot लीड को बोलें</h3>
+  <div class="say"><span class="who">आप</span>सर, आपकी ज़रूरत के हिसाब से एक्ज़ैक्ट रेट और प्लान हमारे सीनियर <b>[Owner का नाम]</b> बताएँगे। मैं अभी आपकी बात उनसे करवा देता हूँ, बस एक मिनट होल्ड कीजिए।</div>
+  <h3>अगर owner उस टाइम फ़्री नहीं हैं</h3>
+  <div class="say"><span class="who">आप</span>सर, हमारे सीनियर अभी एक मीटिंग में हैं। वो आपको आज <b>[टाइम]</b> तक ख़ुद कॉल करेंगे। क्या यही नंबर WhatsApp पर भी है?</div>
+  <h3>Owner को WhatsApp पर भेजें (हर Hot लीड के लिए)</h3>
+  <div class="handover" id="handover">🔥 HOT LEAD
+नाम:
+नंबर:
+बिज़नेस / प्रोडक्ट:
+सेगमेंट: B2C पार्सल / B2B कार्गो / D2C ग्रोथ
+महीने के पार्सल / माल:
+वज़न:
+अभी का कूरियर + रेट:
+परेशानी:
+COD % :
+अपनी वेबसाइट / Ads: हाँ / नहीं
+फ़ैसला: ख़ुद / [नाम]
+बात करने का सही टाइम: </div>
+  <button class="btn" id="copyBtn" type="button">फ़ॉर्मेट कॉपी करें</button>
+</section>
+
+<section id="objections">
+  <h2><span class="n">6</span> आम आपत्तियाँ और जवाब</h2>
+  <details class="obj"><summary>“हमारे पास पहले से कूरियर है”</summary>
+    <div class="say"><span class="who">आप</span>बिल्कुल सर, ज़्यादातर सेलर्स के पास होता है। हमारे यहाँ 20+ कूरियर एक ही जगह हैं, तो हर पार्सल पर compare करके सस्ता चुन सकते हैं। बस एक बार अपने अभी के रेट से तुलना कर लीजिए, फ़र्क़ ख़ुद दिख जाएगा। सीनियर से 2 मिनट बात करवा दूँ?</div></details>
+  <details class="obj"><summary>“रेट क्या है? अभी बताओ”</summary>
+    <div class="say"><span class="who">आप</span>सर, कार्गो का रेट ₹8 से ₹15 प्रति किलो के बीच है, और पार्सल का रेट पिनकोड और वज़न पर तय होता है। आपका एक्ज़ैक्ट रेट सीनियर अभी निकाल देंगे। आपका पिकअप पिनकोड क्या है?</div>
+    <p class="note">कोई पक्का रेट या “सबसे सस्ता” का वादा न करें। फ़ाइनल रेट owner बताएँगे।</p></details>
+  <details class="obj"><summary>“ये 1.5% के अलावा कोई और चार्ज?”</summary>
+    <div class="say"><span class="who">आप</span>सर, कोई मंथली फ़ीस नहीं है। ₹2,499 + GST का एक बार का refundable सिक्योरिटी डिपॉज़िट होता है, और Ads का बजट सीधे आपके अपने Meta अकाउंट से जाता है। बाकी पूरी डिटेल सीनियर समझा देंगे।</div></details>
+  <details class="obj"><summary>“भरोसा कैसे करें?”</summary>
+    <div class="say"><span class="who">आप</span>सर, हमारा हेड-ऑफ़िस हरिद्वार में है और आपको एक डेडिकेटेड अकाउंट मैनेजर मिलता है। पोर्टल पर आप हर शिपमेंट और हर पैसे का हिसाब ख़ुद देख सकते हैं। आप vishwaship.in पर भी देख सकते हैं।</div></details>
+  <details class="obj"><summary>“WhatsApp पर डिटेल भेज दो”</summary>
+    <div class="say"><span class="who">आप</span>ज़रूर सर, अभी भेज रहा हूँ। एक बात बता दीजिए, आप महीने में कितने पार्सल भेजते हैं? ताकि सही रेट वाली डिटेल भेजूँ। <span class="note">(जवाब मिले तो Warm, कल फ़ॉलो-अप करें)</span></div></details>
+  <details class="obj"><summary>“इंटरेस्ट नहीं है”</summary>
+    <div class="say"><span class="who">आप</span>कोई बात नहीं सर, आपका टाइम देने के लिए धन्यवाद। कभी शिपिंग या ऑनलाइन सेल में मदद चाहिए हो तो Vishwaship याद रखिएगा। आपका दिन अच्छा हो! <span class="note">(Cold, आगे ज़िद न करें)</span></div></details>
+</section>
+
+<section id="close">
+  <h2><span class="n">7</span> कॉल ख़त्म करना</h2>
+  <div class="say"><span class="who">Hot</span>धन्यवाद सर! सीनियर से आपकी बात हो रही है / वो <b>[टाइम]</b> तक कॉल करेंगे।</div>
+  <div class="say"><span class="who">Warm</span>ठीक है सर, मैं आपको <b>[दिन, टाइम]</b> पर दोबारा कॉल करूँगा। तब तक WhatsApp पर डिटेल भेज रहा हूँ।</div>
+  <div class="say"><span class="who">Cold</span>धन्यवाद सर, आपका दिन अच्छा हो!</div>
+  <p class="note">हर कॉल के तुरंत बाद शीट भरें। दिन के आख़िर में owner को भेजें: कुल कॉल, Hot, Warm, Cold, DNC।</p>
+</section>
+
+<section id="rules">
+  <h2><span class="n">8</span> नियम</h2>
+  <div class="rules">
+    <div class="do"><h4>✅ करें</h4><ul>
+      <li>मुस्कुराकर, धीरे और साफ़ बोलें</li>
+      <li>ज़्यादा सुनें, कम बोलें</li>
+      <li>ग्राहक के शब्द ही शीट में लिखें</li>
+      <li>सुबह 10 से शाम 7 बजे के बीच ही कॉल करें</li>
+      <li>Hot लीड उसी दिन owner तक पहुँचाएँ</li>
+    </ul></div>
+    <div class="dont"><h4>❌ न करें</h4><ul>
+      <li>पक्का रेट, “सबसे सस्ता” या “गारंटीड सेल” का वादा</li>
+      <li>दूसरी कंपनियों की बुराई</li>
+      <li>मना करने के बाद भी ज़िद करना</li>
+      <li>“दोबारा कॉल मत करो” बोलने वाले को फिर कॉल करना (DNC लिखें)</li>
+      <li>ग्राहक का डेटा किसी और के साथ शेयर करना</li>
+    </ul></div>
+  </div>
+</section>
+
+<footer>रेट रूट, वज़न, साइज़, सर्विस और टैक्स पर निर्भर करते हैं। फ़ाइनल रेट और प्लान owner बताएँगे। · vishwaship.in</footer>
+</div>
+
+<script>
+(function(){
+  var boxes=[1,2,3,4].map(function(i){return document.getElementById('c'+i)});
+  var out=document.getElementById('result');
+  function grade(){
+    var n=boxes.filter(function(b){return b.checked}).length;
+    var all=boxes.every(function(b){return b.checked});
+    var s,bg,fg;
+    if(n===0){s='ऊपर के बॉक्स टिक करें, नतीजा यहाँ दिखेगा।';bg='var(--cold-soft)';fg='var(--muted)'}
+    else if(all){s='🟢 Hot: अभी owner को ट्रांसफ़र करें और WhatsApp फ़ॉर्मेट भेजें।';bg='var(--hot-soft)';fg='var(--hot)'}
+    else if(boxes[0].checked&&(boxes[3].checked||n>=2)){s='🟡 Warm: callback का टाइम तय करें।';bg='var(--warm-soft)';fg='var(--warm)'}
+    else{s='⚪ Cold: धन्यवाद बोलकर कॉल ख़त्म करें।';bg='var(--cold-soft)';fg='var(--cold)'}
+    out.textContent=s;out.style.background=bg;out.style.color=fg;
+  }
+  boxes.forEach(function(b){b.addEventListener('change',grade)});grade();
+  var btn=document.getElementById('copyBtn'),pre=document.getElementById('handover');
+  btn.addEventListener('click',function(){
+    var t=pre.textContent;
+    function sel(){var r=document.createRange();r.selectNodeContents(pre);var w=getSelection();w.removeAllRanges();w.addRange(r);btn.textContent='सेलेक्ट हो गया, कॉपी करें'}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){btn.textContent='कॉपी हो गया ✓';setTimeout(function(){btn.textContent='फ़ॉर्मेट कॉपी करें'},1800)},sel)}else sel();
+  });
+})();
+</script>
