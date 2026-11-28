@@ -11,7 +11,8 @@ import { newId } from "@/server/util/ids";
 import { createSession, destroySession, readSession, revokeAllSessions } from "./session";
 import { consumeResetOtp, consumeSignupOtp } from "./signup-otp";
 import { linkPendingGoogle } from "./google";
-import { createCustomerAccount } from "./accounts";
+import { createCustomerAccount, customerMobileTaken, signupLead } from "./accounts";
+import { indianMobile, isDailyParcels } from "@/lib/signup-details";
 import { referralFromCookie } from "@/server/franchise/referral";
 
 export type FormState = { error?: string; ok?: string } | undefined;
@@ -51,9 +52,17 @@ export async function customerLogin(_: FormState, fd: FormData): Promise<FormSta
   redirect(safeNext(fd.get("next"), "/portal/"));
 }
 
+/** Mobile, business name and parcels per day — required on email sign-up and on /welcome/. */
+const DetailsFields = {
+  mobile: z.string().transform((s, ctx) => indianMobile(s) ?? (ctx.addIssue({ code: "custom", message: "Enter a valid 10-digit mobile number" }), z.NEVER)),
+  business: z.string().trim().min(2, "Enter your business / brand name").max(120),
+  daily: z.string().refine(isDailyParcels, "Select how many parcels you ship per day"),
+};
+
 const SignupSchema = z.object({
   name: z.string().trim().min(2, "Enter your full name").max(80),
   email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  ...DetailsFields,
   otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code sent to your email"),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
   confirm: z.string(),
@@ -71,13 +80,41 @@ export async function customerSignup(_: FormState, fd: FormData): Promise<FormSt
   const db = await getDb();
   const dup = await db.select({ id: schema.users.id }).from(schema.users).where(and(eq(schema.users.kind, "customer"), eq(schema.users.email, v.email)));
   if (dup.length) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
+  if (await customerMobileTaken(v.mobile)) return { error: "This mobile number already has a Vishwaship account. Log in with it, or use a different number." };
   // The account exists only after the email code is verified (single use, expiry and attempts checked on the server).
   const otp = await consumeSignupOtp(v.email, v.otp);
   if (!otp.ok) return { error: otp.message };
-  const userId = await createCustomerAccount({ name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp", referralCode: await referralFromCookie() });
-  if (!userId) return { error: "An account with this email already exists. Log in, or use Forgot password to recover it." };
+  const userId = await createCustomerAccount({
+    name: v.name, email: v.email, passwordHash: await hashPassword(v.password), via: "email_otp", referralCode: await referralFromCookie(),
+    mobile: v.mobile, mobileVerified: false, businessName: v.business, dailyParcels: v.daily,
+  });
+  if (!userId) return { error: "An account with this email or mobile already exists. Log in, or use Forgot password to recover it." };
   await createSession(userId, "customer", m);
   redirect("/portal/");
+}
+
+const WelcomeSchema = z.object({ name: z.string().trim().min(2, "Enter your full name").max(80), ...DetailsFields });
+
+/**
+ * /welcome/: Google and mobile-OTP sign-ups (and older accounts without a mobile) give mobile, name, business name and
+ * parcels per day once, before using the portal. A mobile verified by OTP is kept as it is.
+ */
+export async function saveWelcomeDetails(_: FormState, fd: FormData): Promise<FormState> {
+  const s = await readSession("customer");
+  if (!s) redirect("/login/");
+  const p = WelcomeSchema.safeParse(Object.fromEntries(fd));
+  if (!p.success) return { error: p.error.issues[0].message };
+  const v = p.data;
+  const db = await getDb();
+  const [u] = await db.select().from(schema.users).where(eq(schema.users.id, s.userId));
+  if (!u?.orgId) redirect("/login/");
+  const mobile = u.mobileVerifiedAt && u.mobile ? u.mobile : v.mobile;
+  if (mobile !== u.mobile && (await customerMobileTaken(mobile, u.id))) return { error: "This mobile number already has a Vishwaship account. Use a different number, or log in with that account." };
+  await db.update(schema.users).set({ name: v.name, mobile, ...(mobile !== u.mobile ? { mobileVerifiedAt: null } : {}) }).where(eq(schema.users.id, u.id));
+  await db.update(schema.orgs).set({ name: v.name, businessName: v.business, dailyParcels: v.daily }).where(eq(schema.orgs.id, u.orgId));
+  await audit({ actorUserId: u.id, actorKind: "customer", orgId: u.orgId, action: "auth.signup_details" });
+  if (!s.impersonatorId) await signupLead(u.orgId, { name: v.name, mobile, email: u.email, business: v.business, dailyParcels: v.daily, via: u.googleSub ? "google" : u.mobileVerifiedAt ? "phone_otp" : "email_otp" });
+  redirect(safeNext(fd.get("next"), "/portal/"));
 }
 
 const ResetSchema = z.object({

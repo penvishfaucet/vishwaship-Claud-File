@@ -21,6 +21,8 @@ import { lowStockCount } from "@/server/store/inventory";
 import { readAvatar } from "@/server/portal/avatar";
 import { storeForOrg } from "@/server/store/service";
 import { GrowthRunBar } from "@/components/site/Growth";
+import { redirect } from "next/navigation";
+import { needsSignupDetails } from "@/server/auth/signup-details";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +31,15 @@ export default async function PortalLayout({ children }: { children: React.React
   after(() => kickJobsIfIdle());
   const ctx = await portalContext();
   const viewingAsAdmin = !!ctx.session.impersonatorId;
+  const db = await getDb();
+  // Sign-up details (mobile, business, parcels per day) are required once — Google / mobile-OTP sign-ups give them on /welcome/.
+  if (!viewingAsAdmin) {
+    const [me] = await db.select({ mobile: schema.users.mobile }).from(schema.users).where(eq(schema.users.id, ctx.session.userId));
+    if (me && needsSignupDetails(me, ctx.org)) redirect("/welcome/");
+  }
   const f = await resolveFeatures(ctx.org.id);
   const modules = Object.fromEntries(MODULES.map((m) => [m.key, { enabled: f.modules[m.key].enabled, lockable: m.needsPlan }]));
   const labels = Object.fromEntries(await Promise.all(Object.keys(NAV_LABEL_DEFAULTS).filter((id) => `nav.${id}` in CONTENT_KEYS).map(async (id) => [id, await t(`nav.${id}`)])));
-  const db = await getDb();
   const tk = await db.select({ id: schema.tickets.id, number: schema.tickets.number, subject: schema.tickets.subject, status: schema.tickets.status, createdAt: schema.tickets.createdAt,
     last: sql<string | null>`(select max(${schema.ticketMessages.createdAt}) from ${schema.ticketMessages} where ${schema.ticketMessages.ticketId} = ${schema.tickets.id})` })
     .from(schema.tickets).where(eq(schema.tickets.orgId, ctx.org.id)).orderBy(desc(schema.tickets.createdAt)).limit(30);

@@ -24,6 +24,8 @@ export const orgs = pgTable("orgs", {
   businessName: text("business_name").notNull(),
   gstin: text("gstin"),
   expectedMonthlyVolume: text("expected_monthly_volume"),
+  /** Parcels per day, as told at sign-up / on /welcome/ (one of DAILY_PARCELS). */
+  dailyParcels: text("daily_parcels"),
   status: text("status").notNull().default("active"), // active | suspended
   kycStatus: kycStatus("kyc_status").notNull().default("not_started"),
   bankAccountMasked: text("bank_account_masked"),

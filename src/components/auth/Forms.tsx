@@ -4,7 +4,8 @@ import { type FormEvent, startTransition, useActionState, useEffect, useState } 
 import { Eye, EyeOff, Info } from "lucide-react";
 import { PhoneOtpLogin, type PhoneOtpConfig } from "./PhoneOtpLogin";
 import { firebaseGoogleSignIn, googleCancelled, googleError, preloadFirebaseGoogle } from "@/lib/firebase-phone-client";
-import { type FormState, customerLogin, customerResetPassword, customerSignup, staffLogin } from "@/server/auth/actions";
+import { type FormState, customerLogin, customerResetPassword, customerSignup, saveWelcomeDetails, staffLogin } from "@/server/auth/actions";
+import { DAILY_PARCELS } from "@/lib/signup-details";
 
 /** Keep the return path (e.g. a booking started in the Rate Calculator) when switching between Login and Sign up. */
 const withNext = (path: string, next?: string) => (next && next.startsWith("/") && !next.startsWith("//") ? `${path}?next=${encodeURIComponent(next)}` : path);
@@ -151,7 +152,53 @@ export function LoginForm({ next, googleEnabled, googleFirebase, err, msg, linkE
   );
 }
 
-/** Sign up: email → Send OTP → code + name + password. The account is created only after the code is verified. */
+/** Name, mobile, business name and parcels per day — required at sign-up so the team can call back (also on /welcome/). */
+function DetailsFields({ init, mobileLocked }: { init?: { name?: string; mobile?: string; business?: string; daily?: string }; mobileLocked?: boolean }) {
+  return (
+    <>
+      <div className="grid2">
+        <div className="field"><label htmlFor="name">Full name <span className="req" aria-hidden>*</span></label><input id="name" name="name" className="input" placeholder="Rahul Kumar" required minLength={2} maxLength={80} autoComplete="name" defaultValue={init?.name ?? ""} /></div>
+        <div className="field">
+          <label htmlFor="mobile">Mobile number <span className="req" aria-hidden>*</span></label>
+          <input id="mobile" name="mobile" className="input" type="tel" inputMode="numeric" placeholder="10-digit mobile" required pattern="(\+?91|0)?[6-9]\d{9}" maxLength={14} autoComplete="tel-national" defaultValue={init?.mobile ?? ""} readOnly={mobileLocked} title="10-digit Indian mobile number" />
+        </div>
+      </div>
+      <div className="grid2">
+        <div className="field"><label htmlFor="business">Business / brand name <span className="req" aria-hidden>*</span></label><input id="business" name="business" className="input" placeholder="Rahul Fashion Store" required minLength={2} maxLength={120} autoComplete="organization" defaultValue={init?.business ?? ""} /></div>
+        <div className="field">
+          <label htmlFor="daily">Parcels you ship per day <span className="req" aria-hidden>*</span></label>
+          <select id="daily" name="daily" className="select" required defaultValue={init?.daily ?? ""}>
+            <option value="" disabled>Select</option>
+            {DAILY_PARCELS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      </div>
+      <p className="tiny muted" style={{ margin: "-6px 0 0" }}>Our team will call you on this number to set up your shipping account and best rates.</p>
+    </>
+  );
+}
+
+/**
+ * /welcome/: Google and mobile-OTP sign-ups (and older accounts with no mobile) give the same details once before using
+ * the portal. A mobile already verified by OTP is shown but cannot be changed here.
+ */
+export function WelcomeDetailsForm({ init, mobileLocked, next }: { init: { name: string; mobile: string; business: string; daily: string }; mobileLocked: boolean; next?: string }) {
+  const [state, action, pending] = useActionState(saveWelcomeDetails, undefined);
+  return (
+    <>
+      <h1 style={{ fontSize: 24 }}>Almost done — tell us about your business</h1>
+      <p className="muted small" style={{ margin: "4px 0 18px" }}>We need these once, so our team can help you start shipping.</p>
+      <form className="col" style={{ gap: 14 }} onSubmit={keepValues(action)}>
+        <input type="hidden" name="next" value={next ?? ""} />
+        <DetailsFields init={init} mobileLocked={mobileLocked} />
+        <Err s={state} />
+        <button className="btn btn-orange btn-lg btn-block" disabled={pending}>{pending ? "Saving…" : "Continue to my account"}</button>
+      </form>
+    </>
+  );
+}
+
+/** Sign up: email → Send OTP → code + name + mobile + business + parcels per day + password. The account is created only after the code is verified. */
 export function SignupForm({ next, googleEnabled, googleFirebase, phone }: { next?: string; googleEnabled: boolean; googleFirebase?: PhoneOtpConfig | null; phone?: PhoneOtpConfig | null }) {
   const [state, action, pending] = useActionState(customerSignup, undefined);
   const { email, setEmail, sentTo, cool, busy, note, send, change, valid } = useEmailOtp("signup");
@@ -182,7 +229,7 @@ export function SignupForm({ next, googleEnabled, googleFirebase, phone }: { nex
               <input id="otp" name="otp" className="input otp-in" inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="\d{6}" placeholder="6-digit code" required autoFocus />
               <p className="tiny muted">Didn&apos;t get it? Check spam, or <button type="button" className="link" onClick={send} disabled={cool > 0 || busy}>{cool > 0 ? `Resend OTP in ${cool}s` : "Resend OTP"}</button></p>
             </div>
-            <div className="field"><label htmlFor="name">Full name <span className="req" aria-hidden>*</span></label><input id="name" name="name" className="input" placeholder="Rahul Kumar" required autoComplete="name" /></div>
+            <DetailsFields />
             <PasswordPair />
             <label className="check"><input type="checkbox" name="terms" required /> I agree to the <Link className="link" target="_blank" href="/terms/">Terms &amp; shipping policy</Link></label>
             <Err s={state} />
